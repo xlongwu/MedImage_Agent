@@ -1,0 +1,9 @@
+{
+  "TaskName": "rest",
+  "RepetitionTime": 2.0,
+  "SliceTiming": [
+    0.0,
+    1.0
+  ],
+  "Manufacturer": "Synthetic"
+}

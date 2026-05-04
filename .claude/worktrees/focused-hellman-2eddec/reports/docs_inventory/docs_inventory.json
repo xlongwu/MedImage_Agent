@@ -1,0 +1,20 @@
+{
+  "ok": true,
+  "node_id": "docs_inventory",
+  "backend": "python",
+  "docs_found": 6,
+  "docs_missing": 0,
+  "specs_count": 52,
+  "docs_md_count": 6,
+  "found": [
+    "README.md",
+    "specs/",
+    "docs/architecture.md",
+    "docs/user_guide.md",
+    "docs/developer_guide.md",
+    "docs/safety_and_limitations.md"
+  ],
+  "missing": [],
+  "warnings": [],
+  "errors": []
+}

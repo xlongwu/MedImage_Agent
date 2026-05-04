@@ -1,0 +1,34 @@
+project:
+  name: medimage_agent_dataset_mvp
+  root_dir: "."
+
+third_party:
+  spm_dir: "./third_party/spm12"
+  dpabi_dir: "./third_party/DPABI_V8.2_240510"
+
+data:
+  rawdata_dir: "./examples/synthetic_bids/rawdata"
+
+runtime:
+  matlab_command: "matlab"
+  work_dir: "./work"
+  log_dir: "./logs"
+  report_dir: "./reports"
+  derivatives_dir: "./derivatives"
+
+safety:
+  rawdata_readonly: true
+  allow_overwrite_derivatives: false
+  require_confirmation_for_matlab_run: true
+
+scheduler:
+  mode: "sequential"
+  max_workers: 1
+  matlab_max_workers: 1
+
+gpu:
+  enabled: true
+  prefer_gpu: true
+  require_gpu: false
+  fallback_to_cpu: true
+  benchmark_compare_cpu_gpu: true

@@ -1,0 +1,110 @@
+pipeline_id: rsfmri_spm_realign_motion_qc_pipeline
+version: "0.1.0"
+modality: rs-fMRI
+description: "Run approved SPM realignment on synthetic rs-fMRI data and compute motion QC."
+
+execution:
+  stop_on_failure: true
+  run_id: "run_rsfmri_spm_realign_motion_qc_001"
+  scheduler:
+    mode: "local_parallel"
+    max_workers: 2
+    matlab_max_workers: 1
+
+nodes:
+  - id: create_synthetic_bids
+    name: Create Synthetic BIDS Dataset
+    agent: data-inspector
+    backend: python
+    depends_on: []
+    inputs: []
+    outputs:
+      - "./examples/synthetic_bids/rawdata/dataset_description.json"
+      - "./examples/synthetic_bids/rawdata/participants.tsv"
+    params:
+      output_dir: "./examples/synthetic_bids/rawdata"
+      subjects:
+        - sub-001
+        - sub-002
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: data_inspection
+    name: Data Inspection
+    agent: data-inspector
+    backend: python
+    depends_on:
+      - create_synthetic_bids
+    inputs:
+      - "./examples/synthetic_bids/rawdata"
+    outputs:
+      - "./work/dataset_index/dataset_index.json"
+      - "./work/dataset_index/data_completeness_report.json"
+      - "./work/dataset_index/subject_table.csv"
+    params:
+      rawdata_dir: "./examples/synthetic_bids/rawdata"
+      output_dir: "./work/dataset_index"
+      read_nifti_metadata: true
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: environment_check
+    name: Environment Check
+    agent: system
+    backend: matlab
+    depends_on: []
+    inputs: []
+    outputs:
+      - "./work/environment_check.json"
+    params: {}
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: spm_realign_subject
+    name: Approved SPM Realignment
+    agent: spm-runner
+    backend: matlab-spm
+    depends_on:
+      - data_inspection
+      - environment_check
+    inputs:
+      - "./work/dataset_index/dataset_index.json"
+    outputs: []
+    params:
+      approved: false
+    parallel_level: subject
+    gpu_supported: false
+    cache: false
+
+  - id: motion_qc_subject
+    name: Motion QC
+    agent: qc-runner
+    backend: python
+    depends_on:
+      - spm_realign_subject
+    inputs: []
+    outputs: []
+    params:
+      fd_threshold: 0.5
+      head_radius_mm: 50.0
+    parallel_level: subject
+    gpu_supported: false
+    cache: false
+
+  - id: motion_qc_dataset_report
+    name: Motion QC Dataset Report
+    agent: report-runner
+    backend: python
+    depends_on:
+      - motion_qc_subject
+    inputs: []
+    outputs:
+      - "./reports/rsfmri/motion_qc_summary.json"
+      - "./reports/rsfmri/motion_qc_report.md"
+    params: {}
+    parallel_level: project
+    gpu_supported: false
+    cache: false

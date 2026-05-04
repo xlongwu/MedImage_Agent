@@ -1,0 +1,9 @@
+[警告: 无法识别的命令行选项: nodisplay。] 
+[警告: 函数 iscolumn 与某个 MATLAB 内置函数同名。建议您重命名该函数以避免潜在的名称冲突。] 
+[警告: 函数 ismatrix 与某个 MATLAB 内置函数同名。建议您重命名该函数以避免潜在的名称冲突。] 
+[警告: 函数 isrow 与某个 MATLAB 内置函数同名。建议您重命名该函数以避免潜在的名称冲突。] 
+[警告: 函数 narginchk 与某个 MATLAB 内置函数同名。建议您重命名该函数以避免潜在的名称冲突。] 
+[警告: 函数 isequaln 与某个 MATLAB 内置函数同名。建议您重命名该函数以避免潜在的名称冲突。] 
+[警告: 函数 istable 与某个 MATLAB 内置函数同名。建议您重命名该函数以避免潜在的名称冲突。] 
+Duplicate application tag in applications 'SPM' and 'SPM'.
+Duplicate application tag in applications 'BasicIO' and 'BasicIO'.

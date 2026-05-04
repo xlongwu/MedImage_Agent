@@ -1,0 +1,40 @@
+pipeline_id: medimage_mvp_pipeline
+version: "0.1.0"
+modality: test
+description: "Minimal MVP pipeline: environment check followed by SPM smoke test."
+
+execution:
+  stop_on_failure: true
+  run_id: "run_mvp_001"
+
+nodes:
+  - id: environment_check
+    name: Environment Check
+    agent: system
+    backend: matlab
+    depends_on: []
+    inputs: []
+    outputs:
+      - "./work/environment_check.json"
+    params: {}
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: spm_smoke_test
+    name: SPM Smoke Test
+    agent: spm-runner
+    backend: matlab-spm
+    depends_on:
+      - environment_check
+    inputs:
+      - "./work/environment_check.json"
+    outputs:
+      - "./work/spm_smoke_test/result.json"
+      - "./work/spm_smoke_test/smoothed.nii"
+    params:
+      image_shape: [20, 20, 20]
+      smooth_fwhm: [4, 4, 4]
+    parallel_level: project
+    gpu_supported: false
+    cache: false

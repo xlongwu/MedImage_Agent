@@ -1,0 +1,59 @@
+version: "0.1.0"
+errors:
+  - id: matlab_not_found
+    source: matlab
+    pattern: "No such file or directory: matlab"
+    probable_causes:
+      - MATLAB is not installed
+      - MATLAB is not in PATH
+      - matlab_command is incorrect in project_config
+    suggested_fixes:
+      - Set runtime.matlab_command to the full MATLAB executable path
+      - Add MATLAB to PATH
+    retryable: false
+
+  - id: spm_path_missing
+    source: spm
+    pattern: "SPM directory not found"
+    probable_causes:
+      - third_party/spm12 is missing
+      - project_config points to the wrong SPM path
+    suggested_fixes:
+      - Check third_party/spm12 exists
+      - Update third_party.spm_dir in project_config
+    retryable: false
+
+  - id: dpabi_path_missing
+    source: dpabi
+    pattern: "DPABI directory not found"
+    probable_causes:
+      - third_party/DPABI_V8.2_240510 is missing
+      - project_config points to the wrong DPABI path
+    suggested_fixes:
+      - Check third_party/DPABI_V8.2_240510 exists
+      - Update third_party.dpabi_dir in project_config
+    retryable: false
+
+  - id: nifti_dependency_missing
+    source: python
+    pattern: "Missing dependency: nibabel"
+    probable_causes:
+      - Python dependency nibabel is not installed
+    suggested_fixes:
+      - pip install nibabel
+      - pip install numpy nibabel pyyaml
+    retryable: true
+
+  - id: matlab_returncode_nonzero
+    source: matlab
+    pattern: "MATLAB exited with return code"
+    probable_causes:
+      - MATLAB script failed
+      - SPM path is invalid
+      - input NIfTI could not be read
+      - output path is not writable
+    suggested_fixes:
+      - Inspect stdout_log and stderr_log
+      - Inspect node result JSON
+      - Re-run environment check
+    retryable: depends

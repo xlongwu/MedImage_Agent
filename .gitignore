@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Project runtime
+outputs/work/
+outputs/logs/
+outputs/derivatives/
+outputs/exports/
+outputs/reports/
+outputs/demo_runs/
+outputs/memory/
+
+# Node / Frontend
+node_modules/
+src/frontend/dist/
+src/frontend/.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose.override.yml

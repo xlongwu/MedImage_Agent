@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "node_id": "subject_qc",
+  "backend": "python",
+  "subject_id": "sub-001",
+  "input": "derivatives\\spm_smooth\\sub-001\\func\\sub-001_task-rest_bold_smoothed.nii",
+  "outputs": [
+    "derivatives\\qc\\sub-001\\subject_qc.json"
+  ],
+  "metrics": {
+    "shape": [
+      16,
+      16,
+      16,
+      10
+    ],
+    "dtype": "float32",
+    "mean": -0.002021811669692397,
+    "std": 0.06455639749765396,
+    "min": -0.2451571524143219,
+    "max": 0.26995307207107544,
+    "nan_count": 0,
+    "finite_voxel_count": 40960
+  },
+  "errors": []
+}

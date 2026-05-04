@@ -1,0 +1,16 @@
+{
+  "run_id": "run_dataset_evaluation_001",
+  "subject": "project",
+  "node": "create_synthetic_bids",
+  "status": "SUCCESS",
+  "started_at": "2026-05-01T13:42:09.764716+00:00",
+  "ended_at": "2026-05-01T13:42:10.224515+00:00",
+  "log_path": null,
+  "stderr_log": null,
+  "outputs": [],
+  "metrics": {},
+  "warnings": [],
+  "errors": [],
+  "result_json": null,
+  "returncode": null
+}

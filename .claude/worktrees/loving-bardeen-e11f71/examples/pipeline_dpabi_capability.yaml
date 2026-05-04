@@ -1,0 +1,37 @@
+pipeline_id: dpabi_capability_pipeline
+version: "0.1.0"
+modality: integration-test
+description: "Inspect DPABI capabilities and generate wrapper scaffold without running full preprocessing."
+
+execution:
+  stop_on_failure: true
+  run_id: "run_dpabi_capability_001"
+  scheduler:
+    mode: "sequential"
+    max_workers: 1
+    matlab_max_workers: 1
+
+nodes:
+  - id: environment_check
+    name: Environment Check
+    description: Check MATLAB, SPM, and DPABI availability
+    type: project
+    params: {}
+    dependencies: []
+
+  - id: dpabi_capability_inspection
+    name: DPABI Capability Inspection
+    description: Inspect DPABI function availability via MATLAB
+    type: project
+    params: {}
+    dependencies:
+      - environment_check
+
+  - id: dpabi_wrapper_scaffold
+    name: DPABI Wrapper Scaffold
+    description: Generate DPABI wrapper config template and dry-run plan
+    type: project
+    params:
+      capabilities_path: "./work/dpabi/dpabi_capabilities.json"
+    dependencies:
+      - dpabi_capability_inspection

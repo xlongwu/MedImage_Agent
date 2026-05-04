@@ -1,0 +1,168 @@
+{
+  "ok": true,
+  "node_id": "group_dataset_summary",
+  "backend": "python",
+  "subjects_total": 2,
+  "subjects_with_any_qc": 2,
+  "stage_order": [
+    "slice_timing",
+    "motion",
+    "registration",
+    "segmentation",
+    "normalization",
+    "smoothing",
+    "confounds",
+    "nuisance_regression",
+    "temporal_filtering",
+    "alff_falff",
+    "reho",
+    "functional_connectivity"
+  ],
+  "stage_status_counts": {
+    "slice_timing": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "motion": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "registration": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "segmentation": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "normalization": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "smoothing": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "confounds": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "nuisance_regression": {
+      "PASS": 0,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 2,
+      "UNKNOWN": 0
+    },
+    "temporal_filtering": {
+      "PASS": 2,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 0,
+      "UNKNOWN": 0
+    },
+    "alff_falff": {
+      "PASS": 0,
+      "WARNING": 2,
+      "FAIL": 0,
+      "MISSING": 0,
+      "UNKNOWN": 0
+    },
+    "reho": {
+      "PASS": 2,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 0,
+      "UNKNOWN": 0
+    },
+    "functional_connectivity": {
+      "PASS": 2,
+      "WARNING": 0,
+      "FAIL": 0,
+      "MISSING": 0,
+      "UNKNOWN": 0
+    }
+  },
+  "warnings_total": 2,
+  "errors_total": 0,
+  "metric_means": {
+    "mean_fd": null,
+    "max_fd": null,
+    "gm_volume_mm3": null,
+    "wm_volume_mm3": null,
+    "csf_volume_mm3": null,
+    "normalization_finite_fraction": null,
+    "smoothing_variance_ratio": null,
+    "regression_variance_ratio": null,
+    "filtering_retained_frequency_fraction": null,
+    "filtering_variance_ratio": null,
+    "alff_mean": 3.739657402038574,
+    "falff_mean": 1.0955212116241455,
+    "reho_mean": 0.061445336788892746,
+    "reho_valid_voxel_count": 8.0,
+    "fc_roi_count": 2.0,
+    "fc_empty_roi_count": 0.0,
+    "fc_diagonal_mean": 1.0
+  },
+  "contracts_overview": {
+    "contracts_total": 0,
+    "contracts": []
+  },
+  "pipeline_runs": [
+    {
+      "path": "work\\pipeline_runs\\run_dataset_evaluation_001\\summary.json",
+      "status": "SUCCESS",
+      "pipeline_id": "dataset_evaluation_pipeline",
+      "run_id": "run_dataset_evaluation_001",
+      "started_at": "2026-05-01T13:42:09.725329+00:00",
+      "finished_at": null
+    },
+    {
+      "path": "work\\pipeline_runs\\run_subject_preprocess_001\\summary.json",
+      "status": "SUCCESS",
+      "pipeline_id": "subject_preprocess_pipeline",
+      "run_id": "run_subject_preprocess_001",
+      "started_at": "2026-05-01T13:51:11.211458+00:00",
+      "finished_at": null
+    },
+    {
+      "path": "work\\pipeline_runs\\unknown\\summary.json",
+      "status": "INVALID",
+      "pipeline_id": "unknown",
+      "run_id": "unknown",
+      "started_at": "2026-05-02T16:22:58.822906+00:00",
+      "finished_at": null
+    }
+  ],
+  "outputs": [
+    "reports\\rsfmri\\group_summary\\dataset_summary.json",
+    "reports\\rsfmri\\group_summary\\dashboard_data.json",
+    "reports\\rsfmri\\group_summary\\subject_metrics_table.csv",
+    "reports\\rsfmri\\group_summary\\pipeline_completeness.json",
+    "reports\\rsfmri\\group_summary\\contracts_overview.json",
+    "reports\\rsfmri\\group_summary\\dataset_summary_report.md"
+  ],
+  "warnings": [],
+  "errors": []
+}

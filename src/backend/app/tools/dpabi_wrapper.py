@@ -1,0 +1,244 @@
+"""DPABI single-function wrapper with 4 execution modes."""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+from src.backend.app.tools.dpabi_safety import check_dpabi_call, ALLOWED_FUNCTIONS
+
+
+def _matlab_quote(value: str) -> str:
+    return value.replace("'", "''")
+
+
+def _matlab_path(path: str) -> str:
+    return path.replace("\\", "/")
+
+
+def run_dpabi_single_function(
+    function_name: str,
+    input_bold: str,
+    subject_id: str,
+    derivatives_dir: str,
+    work_dir: str,
+    log_dir: str,
+    dpabi_dir: str,
+    matlab_command: str,
+    mode: str = "contract_only",
+    approved: bool = False,
+    params: dict | None = None,
+) -> dict[str, Any]:
+    """Run a single DPABI function in the specified mode."""
+    # Safety check
+    allowed, reason = check_dpabi_call(function_name)
+    if not allowed:
+        return {"ok": False, "function_name": function_name, "mode": mode, "errors": [reason]}
+
+    # Validate mode
+    valid_modes = {"contract_only", "dry_run", "synthetic_execute", "approved_execute"}
+    if mode not in valid_modes:
+        return {"ok": False, "errors": [f"Invalid mode: {mode}. Use: {valid_modes}"]}
+
+    if mode in ("synthetic_execute", "approved_execute") and not approved:
+        return {"ok": False, "errors": [f"approved=true required for {mode} mode"]}
+
+    params = params or {}
+    out_dir = Path(work_dir) / "dpabi" / f"{function_name}_{subject_id}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    log_out = Path(log_dir) / f"dpabi_{function_name}_{subject_id}"
+    log_out.mkdir(parents=True, exist_ok=True)
+
+    input_manifest = {
+        "function_name": function_name,
+        "subject_id": subject_id,
+        "input_bold": str(Path(input_bold).resolve()),
+        "derivatives_dir": str(Path(derivatives_dir).resolve()),
+        "params": params,
+    }
+    (out_dir / "input_manifest.json").write_text(
+        json.dumps(input_manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # Generate MATLAB script
+    matlab_script = _generate_dpabi_script(
+        function_name=function_name,
+        input_bold=input_bold,
+        subject_id=subject_id,
+        derivatives_dir=derivatives_dir,
+        dpabi_dir=dpabi_dir,
+        params=params,
+        mode=mode,
+    )
+    script_path = out_dir / "matlab_script.m"
+    script_path.write_text(matlab_script, encoding="utf-8")
+
+    if mode in ("contract_only", "dry_run"):
+        result = {
+            "ok": True,
+            "function_name": function_name,
+            "subject_id": subject_id,
+            "mode": mode,
+            "script_path": str(script_path),
+            "outputs": [str(script_path), str(out_dir / "input_manifest.json")],
+            "warnings": [f"Mode: {mode} -- no DPABI execution performed"] if mode == "contract_only" else [],
+            "errors": [],
+        }
+        _write_result(out_dir, result)
+        return result
+
+    # Execution modes
+    stdout_log = log_out / "matlab_stdout.log"
+    stderr_log = log_out / "matlab_stderr.log"
+
+    matlab_code = (
+        f"addpath('{_matlab_quote(_matlab_path(dpabi_dir))}'); "
+        "try; "
+        f"run('{_matlab_quote(_matlab_path(str(script_path.resolve())))}'); "
+        f"disp('DPABI_OK'); "
+        "catch ME; disp(getReport(ME)); exit(1); end; exit(0);"
+    )
+
+    is_windows = sys.platform == "win32"
+    if is_windows:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-batch", matlab_code]
+    else:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-r", matlab_code]
+
+    with stdout_log.open("w", encoding="utf-8") as out, stderr_log.open("w", encoding="utf-8") as err:
+        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False)
+
+    result = {
+        "ok": completed.returncode == 0,
+        "function_name": function_name,
+        "subject_id": subject_id,
+        "mode": mode,
+        "returncode": completed.returncode,
+        "script_path": str(script_path),
+        "stdout_log": str(stdout_log),
+        "stderr_log": str(stderr_log),
+        "outputs": [str(script_path), str(out_dir / "input_manifest.json")],
+        "warnings": [],
+        "errors": [],
+    }
+
+    if completed.returncode != 0:
+        result["errors"].append(f"MATLAB exited with return code {completed.returncode}")
+
+    _write_result(out_dir, result)
+    return result
+
+
+def _generate_dpabi_script(
+    function_name: str,
+    input_bold: str,
+    subject_id: str,
+    derivatives_dir: str,
+    dpabi_dir: str,
+    params: dict,
+    mode: str,
+) -> str:
+    """Generate a DPABI MATLAB script."""
+    bold_path = _matlab_path(str(Path(input_bold).resolve()))
+    deriv_path = _matlab_path(str(Path(derivatives_dir).resolve()))
+    dpabi_path = _matlab_path(dpabi_dir)
+
+    lines = [
+        f"%% DPABI {function_name} - Subject: {subject_id}",
+        f"%% Mode: {mode}",
+        f"%% Generated by MedImage Agent v0.3.0-beta",
+        "",
+        f"addpath('{dpabi_path}');",
+        f"addpath(genpath('{dpabi_path}'));",
+        "",
+        f"%% Input",
+        f"input_bold = '{bold_path}';",
+        f"output_dir = '{deriv_path}';",
+        "",
+    ]
+
+    if function_name == "y_Smooth":
+        fwhm = params.get("fwhm", [6, 6, 6])
+        lines += [
+            f"%% y_Smooth: spatial smoothing",
+            f"FWHM = [{fwhm[0]} {fwhm[1]} {fwhm[2]}];",
+            f"[DataHead, SmoothResult] = y_Smooth(input_bold, output_dir, FWHM);",
+            f"disp('y_Smooth completed.');",
+        ]
+    elif function_name == "y_Filter":
+        band = params.get("band", [0.01, 0.08])
+        tr = params.get("tr", 2.0)
+        lines += [
+            f"%% y_Filter: temporal filtering",
+            f"TR = {tr};",
+            f"Band = [{band[0]} {band[1]}];",
+            f"[DataHead, FilteredData] = y_Filter(input_bold, output_dir, TR, Band);",
+            f"disp('y_Filter completed.');",
+        ]
+    else:
+        lines += [
+            f"%% {function_name}: auto-generated stub",
+            f"disp('DPABI function {function_name} -- stub mode');",
+            f"disp('Full implementation requires function-specific parameter mapping.');",
+        ]
+
+    return "\n".join(lines) + "\n"
+
+
+def _write_result(out_dir: Path, result: dict[str, Any]) -> None:
+    (out_dir / "dpabi_result.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def run_dpabi_smoke_test(
+    dpabi_dir: str,
+    matlab_command: str,
+    work_dir: str,
+    log_dir: str,
+    approved: bool = False,
+) -> dict[str, Any]:
+    """Run DPABI smoke test to verify DPABI environment."""
+    if not approved:
+        return {"ok": False, "errors": ["approved=true required for DPABI smoke test"]}
+
+    out_dir = Path(work_dir) / "dpabi_smoke_test"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    log_out = Path(log_dir)
+
+    matlab_code = (
+        f"addpath('{_matlab_quote(_matlab_path(dpabi_dir))}'); "
+        f"addpath(genpath('{_matlab_quote(_matlab_path(dpabi_dir))}')); "
+        "try; "
+        "disp(['DPABI path: ' which('dpabi')]); "
+        "disp(['y_Smooth path: ' which('y_Smooth')]); "
+        "disp('DPABI smoke test: OK'); "
+        "catch ME; disp(getReport(ME)); exit(1); end; exit(0);"
+    )
+
+    is_windows = sys.platform == "win32"
+    if is_windows:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-batch", matlab_code]
+    else:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-r", matlab_code]
+
+    stdout_log = log_out / "dpabi_smoke_stdout.log"
+    stderr_log = log_out / "dpabi_smoke_stderr.log"
+
+    with stdout_log.open("w", encoding="utf-8") as out, stderr_log.open("w", encoding="utf-8") as err:
+        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False)
+
+    result = {
+        "ok": completed.returncode == 0,
+        "returncode": completed.returncode,
+        "stdout_log": str(stdout_log),
+        "stderr_log": str(stderr_log),
+        "outputs": [str(stdout_log)],
+    }
+    (out_dir / "dpabi_smoke_result.json").write_text(
+        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return result

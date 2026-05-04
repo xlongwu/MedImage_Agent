@@ -1,0 +1,24 @@
+pipeline_id: dpabi_wrapper_validation_pipeline
+version: "0.1.0"
+modality: integration-test
+description: "Generate DPABI wrapper compatibility matrix from signatures, contracts, sandbox tests, and subject wrapper results."
+
+execution:
+  stop_on_failure: true
+  run_id: "run_dpabi_wrapper_validation_001"
+  scheduler:
+    mode: "sequential"
+    max_workers: 1
+    matlab_max_workers: 1
+
+nodes:
+  - id: dpabi_wrapper_validation_matrix
+    name: DPABI Wrapper Validation Matrix
+    description: Generate DPABI wrapper compatibility matrix
+    type: project
+    params:
+      signatures_path: "./work/dpabi/dpabi_function_signatures.json"
+      contracts_path: "./work/dpabi/dpabi_wrapper_contracts.json"
+      sandbox_result_path: "./work/dpabi/single_function_sandbox/dpabi_single_function_result.json"
+      subject_wrapper_summary_path: "./reports/dpabi/dpabi_subject_wrapper_summary.json"
+    dependencies: []

@@ -1,0 +1,15 @@
+{
+  "ok": true,
+  "agent_run_id": "agent_run_001",
+  "agent": "orchestrator",
+  "mode": "EXECUTE",
+  "approved": true,
+  "plan_path": "work\\agent_runs\\agent_run_001\\plan.json",
+  "pipeline_id": "subject_preprocess_pipeline",
+  "pipeline_status": "SUCCESS",
+  "pipeline_summary_path": "work\\pipeline_runs\\run_subject_preprocess_001\\summary.json",
+  "outputs": [],
+  "metrics": {},
+  "warnings": [],
+  "errors": []
+}

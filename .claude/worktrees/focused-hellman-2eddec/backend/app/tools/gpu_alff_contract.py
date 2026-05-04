@@ -1,0 +1,27 @@
+from __future__ import annotations
+import json
+from pathlib import Path
+from typing import Any
+
+def write_alff_falff_gpu_candidate_contract(work_dir: str = "./work") -> dict[str, Any]:
+    out_dir = Path(work_dir) / "gpu" / "contracts"; out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "alff_falff_gpu_candidate_contract.json"
+    payload = {
+        "ok": True, "node_id": "alff_falff_gpu_candidate_contract", "backend": "python",
+        "backend_id": "gpu_candidate_alff_falff", "status": "CONTRACT_ONLY",
+        "execution_allowed": False, "gpu_executed": False, "required_approval": True,
+        "description": "GPU candidate contract for future ALFF/fALFF acceleration. This step does not execute GPU code.",
+        "candidate_backends": [
+            {"name": "cupy_fft", "language": "python", "requirement": "cupy", "notes": "Potential drop-in replacement for NumPy FFT when CUDA is available."},
+            {"name": "torch_fft", "language": "python", "requirement": "torch with CUDA", "notes": "Potential backend for batched voxel-wise FFT."},
+            {"name": "matlab_gpuarray_fft", "language": "matlab", "requirement": "Parallel Computing Toolbox", "notes": "Potential MATLAB GPU backend for FFT-based metrics."}
+        ],
+        "planned_inputs": ["derivatives/rsfmri_preproc/{subject_id}/func/resid_swr*.nii", "derivatives/rsfmri_preproc/{subject_id}/func/filt_resid_swr*.nii"],
+        "planned_outputs": ["derivatives/rsfmri_metrics/{subject_id}/alff_gpu.nii", "derivatives/rsfmri_metrics/{subject_id}/falff_gpu.nii"],
+        "safety": {"gpu_executed": False, "rawdata_modified": False, "files_deleted": False},
+        "outputs": [str(path)],
+        "warnings": ["Contract only. GPU execution not implemented in Step 44."],
+        "errors": [],
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload

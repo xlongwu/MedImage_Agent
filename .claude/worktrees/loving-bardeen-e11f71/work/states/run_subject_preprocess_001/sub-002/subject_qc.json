@@ -1,0 +1,32 @@
+{
+  "run_id": "run_subject_preprocess_001",
+  "subject": "sub-002",
+  "node": "subject_qc",
+  "status": "SUCCESS",
+  "started_at": "2026-05-01T13:51:49.054459+00:00",
+  "ended_at": "2026-05-01T13:51:49.055454+00:00",
+  "log_path": null,
+  "stderr_log": null,
+  "outputs": [
+    "derivatives\\qc\\sub-002\\subject_qc.json"
+  ],
+  "metrics": {
+    "shape": [
+      16,
+      16,
+      16,
+      10
+    ],
+    "dtype": "float32",
+    "mean": 0.00017909900634549558,
+    "std": 0.06763957440853119,
+    "min": -0.323646605014801,
+    "max": 0.3021901547908783,
+    "nan_count": 0,
+    "finite_voxel_count": 40960
+  },
+  "warnings": [],
+  "errors": [],
+  "result_json": null,
+  "returncode": null
+}

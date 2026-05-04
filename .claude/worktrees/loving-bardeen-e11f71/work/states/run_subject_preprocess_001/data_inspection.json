@@ -1,0 +1,23 @@
+{
+  "run_id": "run_subject_preprocess_001",
+  "subject": "project",
+  "node": "data_inspection",
+  "status": "SUCCESS",
+  "started_at": "2026-05-01T13:51:11.498301+00:00",
+  "ended_at": "2026-05-01T13:51:11.510869+00:00",
+  "log_path": null,
+  "stderr_log": null,
+  "outputs": [
+    "work\\dataset_index\\dataset_index.json",
+    "work\\dataset_index\\data_completeness_report.json",
+    "work\\dataset_index\\subject_table.csv"
+  ],
+  "metrics": {
+    "subjects_total": 2,
+    "subjects_complete": 2
+  },
+  "warnings": [],
+  "errors": [],
+  "result_json": null,
+  "returncode": null
+}

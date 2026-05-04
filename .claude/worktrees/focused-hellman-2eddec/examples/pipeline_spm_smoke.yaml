@@ -1,0 +1,20 @@
+pipeline_id: spm_smoke_pipeline
+version: "0.1.0"
+modality: test
+description: "Minimal SPM smoke test pipeline using synthetic NIfTI data."
+
+nodes:
+  - id: spm_smoke_test
+    name: SPM Smoke Test
+    agent: spm-runner
+    backend: matlab-spm
+    inputs: []
+    outputs:
+      - "./work/spm_smoke_test/result.json"
+      - "./work/spm_smoke_test/smoothed.nii"
+    params:
+      image_shape: [20, 20, 20]
+      smooth_fwhm: [4, 4, 4]
+    parallel_level: project
+    gpu_supported: false
+    cache: false

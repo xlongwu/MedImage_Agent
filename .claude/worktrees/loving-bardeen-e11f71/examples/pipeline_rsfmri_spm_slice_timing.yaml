@@ -1,0 +1,98 @@
+pipeline_id: rsfmri_spm_slice_timing_pipeline
+version: "0.1.0"
+modality: rs-fMRI
+description: "Run approved SPM slice timing correction on synthetic rs-fMRI data and validate acquisition metadata."
+
+execution:
+  stop_on_failure: true
+  run_id: "run_rsfmri_spm_slice_timing_001"
+  scheduler:
+    mode: "local_parallel"
+    max_workers: 2
+    matlab_max_workers: 1
+
+nodes:
+  - id: create_synthetic_bids
+    name: Create Synthetic BIDS Dataset
+    agent: data-inspector
+    backend: python
+    depends_on: []
+    inputs: []
+    outputs:
+      - "./examples/synthetic_bids/rawdata/dataset_description.json"
+      - "./examples/synthetic_bids/rawdata/participants.tsv"
+    params:
+      output_dir: "./examples/synthetic_bids/rawdata"
+      subjects:
+        - sub-001
+        - sub-002
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: data_inspection
+    name: Data Inspection
+    agent: data-inspector
+    backend: python
+    depends_on:
+      - create_synthetic_bids
+    inputs:
+      - "./examples/synthetic_bids/rawdata"
+    outputs:
+      - "./work/dataset_index/dataset_index.json"
+      - "./work/dataset_index/data_completeness_report.json"
+      - "./work/dataset_index/subject_table.csv"
+    params:
+      rawdata_dir: "./examples/synthetic_bids/rawdata"
+      output_dir: "./work/dataset_index"
+      read_nifti_metadata: true
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: environment_check
+    name: Environment Check
+    agent: system
+    backend: matlab
+    depends_on: []
+    inputs: []
+    outputs:
+      - "./work/environment_check.json"
+    params: {}
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: spm_slice_timing_subject
+    name: Approved SPM Slice Timing
+    agent: spm-runner
+    backend: matlab-spm
+    depends_on:
+      - data_inspection
+      - environment_check
+    inputs:
+      - "./work/dataset_index/dataset_index.json"
+    outputs: []
+    params:
+      approved: false
+      tr: null
+      slice_order: null
+      reference_slice: null
+    parallel_level: subject
+    gpu_supported: false
+    cache: false
+
+  - id: slice_timing_qc_dataset_report
+    name: Slice Timing QC Dataset Report
+    agent: report-runner
+    backend: python
+    depends_on:
+      - spm_slice_timing_subject
+    inputs: []
+    outputs:
+      - "./reports/rsfmri/slice_timing_qc_summary.json"
+      - "./reports/rsfmri/slice_timing_qc_report.md"
+    params: {}
+    parallel_level: project
+    gpu_supported: false
+    cache: false

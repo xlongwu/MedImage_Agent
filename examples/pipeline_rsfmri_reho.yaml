@@ -1,0 +1,22 @@
+pipeline_id: rsfmri_reho_pipeline
+version: "0.1.0"
+modality: rs-fMRI
+description: "Run Python ReHo on filtered synthetic derivatives."
+execution: {stop_on_failure: true, run_id: "run_rsfmri_reho_001", scheduler: {mode: "local_parallel", max_workers: 2, matlab_max_workers: 1}}
+nodes:
+  - {id: create_synthetic_bids, backend: python, depends_on: [], params: {output_dir: "./examples/synthetic_bids/rawdata", subjects: [sub-001, sub-002]}, parallel_level: project}
+  - {id: data_inspection, backend: python, depends_on: [create_synthetic_bids], params: {rawdata_dir: "./examples/synthetic_bids/rawdata", output_dir: "./work/dataset_index"}, parallel_level: project}
+  - {id: environment_check, backend: matlab, depends_on: [], params: {}, parallel_level: project}
+  - {id: spm_slice_timing_subject, backend: matlab-spm, depends_on: [data_inspection, environment_check], params: {approved: false}, parallel_level: subject}
+  - {id: spm_realign_subject, backend: matlab-spm, depends_on: [spm_slice_timing_subject], params: {approved: false, use_slice_timing_output: true}, parallel_level: subject}
+  - {id: motion_qc_subject, backend: python, depends_on: [spm_realign_subject], params: {fd_threshold: 0.5}, parallel_level: subject}
+  - {id: spm_coregister_subject, backend: matlab-spm, depends_on: [spm_realign_subject], params: {approved: false}, parallel_level: subject}
+  - {id: spm_segment_subject, backend: matlab-spm, depends_on: [spm_coregister_subject], params: {approved: false}, parallel_level: subject}
+  - {id: spm_normalize_subject, backend: matlab-spm, depends_on: [spm_segment_subject], params: {approved: false, voxel_size: [3.0, 3.0, 3.0]}, parallel_level: subject}
+  - {id: spm_smooth_subject, backend: matlab-spm, depends_on: [spm_normalize_subject], params: {approved: false, fwhm: [6.0, 6.0, 6.0]}, parallel_level: subject}
+  - {id: nuisance_regression_subject, backend: python, depends_on: [spm_smooth_subject, motion_qc_subject, spm_segment_subject], params: {backend: python, model: friston24}, parallel_level: subject}
+  - {id: temporal_filtering_subject, backend: python, depends_on: [nuisance_regression_subject], params: {backend: python, low_hz: 0.01, high_hz: 0.08, fallback_tr: 2.0}, parallel_level: subject}
+  - {id: reho_subject, backend: python, depends_on: [temporal_filtering_subject], params: {backend: python, neighborhood: 27, use_gm_mask: false}, parallel_level: subject}
+  - {id: reho_gpu_candidate_contract, backend: python, depends_on: [reho_subject], params: {}, parallel_level: project}
+  - {id: dpabi_reho_contract, backend: python, depends_on: [reho_subject], params: {}, parallel_level: project}
+  - {id: reho_qc_dataset_report, backend: python, depends_on: [reho_subject], params: {}, parallel_level: project}

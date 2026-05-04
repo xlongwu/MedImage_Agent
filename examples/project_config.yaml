@@ -1,0 +1,18 @@
+project:
+  name: medimage_agent_mvp
+  root_dir: "."
+
+third_party:
+  spm_dir: "./third_party/spm12"
+  dpabi_dir: "./third_party/DPABI_V8.2_240510"
+
+runtime:
+  matlab_command: "matlab"
+  work_dir: "./work"
+  log_dir: "./logs"
+  report_dir: "./reports"
+
+safety:
+  rawdata_readonly: true
+  allow_overwrite_derivatives: false
+  require_confirmation_for_matlab_run: true

@@ -1,0 +1,69 @@
+{
+  "ok": true,
+  "generated_at": "2026-05-04T10:00:16.229903",
+  "summary": {
+    "total_runs": 2,
+    "success": 2,
+    "failed": 0,
+    "success_rate": 100.0,
+    "failure_rate": 0.0,
+    "avg_duration_seconds": 64.3,
+    "median_duration_seconds": 64.3,
+    "max_duration_seconds": 64.3,
+    "total_errors_logged": 0
+  },
+  "slowest_nodes": [
+    {
+      "node_id": "real_pipeline_Sub_002",
+      "avg_duration": 21.7,
+      "count": 1,
+      "failure_rate": 0.0
+    },
+    {
+      "node_id": "real_pipeline_Sub_003",
+      "avg_duration": 21.5,
+      "count": 1,
+      "failure_rate": 0.0
+    },
+    {
+      "node_id": "real_pipeline_Sub_001",
+      "avg_duration": 21.1,
+      "count": 1,
+      "failure_rate": 0.0
+    }
+  ],
+  "most_failed_nodes": [
+    {
+      "node_id": "real_pipeline_Sub_001",
+      "failed": 0,
+      "total": 1,
+      "failure_rate": 0.0
+    },
+    {
+      "node_id": "real_pipeline_Sub_002",
+      "failed": 0,
+      "total": 1,
+      "failure_rate": 0.0
+    },
+    {
+      "node_id": "real_pipeline_Sub_003",
+      "failed": 0,
+      "total": 1,
+      "failure_rate": 0.0
+    }
+  ],
+  "top_error_categories": [],
+  "recent_trend": [
+    {
+      "run_id": "real_1777859766",
+      "status": "SUCCESS",
+      "started_at": "1777859766"
+    },
+    {
+      "run_id": "demo_20260504_095354",
+      "status": "SUCCESS",
+      "started_at": ""
+    }
+  ],
+  "subject_failure_map": {}
+}

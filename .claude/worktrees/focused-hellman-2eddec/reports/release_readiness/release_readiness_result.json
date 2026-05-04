@@ -1,0 +1,235 @@
+{
+  "ok": true,
+  "node_id": "project_release_readiness",
+  "backend": "python",
+  "release_readiness_status": "PASS",
+  "checks_total": 37,
+  "checks_pass": 37,
+  "checks_fail": 0,
+  "checks": [
+    {
+      "category": "project_structure",
+      "name": "dir:backend",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "dir:frontend",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "dir:specs",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "dir:examples",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "dir:tests",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "dir:matlab",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "dir:reports",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "dir:work",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "project_structure",
+      "name": "README.md",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "specs",
+      "name": "specs count >= 10",
+      "status": "PASS",
+      "detail": "Found 52"
+    },
+    {
+      "category": "backend_tools",
+      "name": "tools count >= 30",
+      "status": "PASS",
+      "detail": "Found 115"
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:synthetic_bids.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:spm_realign_runner.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:confound_matrix.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:nuisance_regression.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:temporal_filtering.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:alff_falff.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:reho.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:functional_connectivity.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:group_dataset_summary.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:report_exporter.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "backend_tools",
+      "name": "tool:report_package_validator.py",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "runtime_registry",
+      "name": "node:group_dataset_summary",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "runtime_registry",
+      "name": "node:rsfmri_report_exporter",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "runtime_registry",
+      "name": "node:rsfmri_report_package_validator",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "pipelines",
+      "name": "pipeline YAML count >= 15",
+      "status": "PASS",
+      "detail": "Found 36"
+    },
+    {
+      "category": "api",
+      "name": "endpoint:/api/rsfmri/group-summary",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "api",
+      "name": "endpoint:/api/rsfmri/report-export",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "api",
+      "name": "endpoint:/api/rsfmri/report-validator",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "frontend",
+      "name": "file:App.tsx",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "frontend",
+      "name": "file:api.ts",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "tests",
+      "name": "unit test count >= 10",
+      "status": "PASS",
+      "detail": "Found 24"
+    },
+    {
+      "category": "documentation",
+      "name": "README.md > 500 lines",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "safety_boundaries",
+      "name": "no DPARSF_run in codebase",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "safety_boundaries",
+      "name": "approved=false default",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "report_package",
+      "name": "exports dir exists",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "category": "release_artifacts",
+      "name": "reports dir exists",
+      "status": "PASS",
+      "detail": ""
+    }
+  ],
+  "warnings": [],
+  "errors": []
+}

@@ -1,0 +1,31 @@
+{
+  "run_id": "run_dataset_evaluation_001",
+  "subject": "project",
+  "node": "dataset_evaluation",
+  "status": "SUCCESS",
+  "started_at": "2026-05-01T13:42:47.377963+00:00",
+  "ended_at": "2026-05-01T13:42:47.392195+00:00",
+  "log_path": null,
+  "stderr_log": null,
+  "outputs": [
+    "reports\\dataset_evaluation\\dataset_summary.json",
+    "reports\\dataset_evaluation\\subject_qc_table.csv",
+    "reports\\dataset_evaluation\\exclusion_recommendations.csv",
+    "reports\\dataset_evaluation\\dataset_evaluation_report.md",
+    "reports\\dataset_evaluation\\dataset_evaluation_report.html"
+  ],
+  "metrics": {
+    "subjects_total": 2,
+    "subjects_complete": 2,
+    "subjects_preprocess_success": 2,
+    "subjects_qc_success": 2,
+    "subjects_include": 2,
+    "subjects_manual_review": 0,
+    "subjects_exclude": 0,
+    "dataset_quality_score": 100
+  },
+  "warnings": [],
+  "errors": [],
+  "result_json": null,
+  "returncode": null
+}

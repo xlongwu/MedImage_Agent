@@ -1,0 +1,32 @@
+{
+  "run_id": "run_dataset_evaluation_001",
+  "subject": "sub-001",
+  "node": "subject_qc",
+  "status": "SUCCESS",
+  "started_at": "2026-05-01T13:42:47.365833+00:00",
+  "ended_at": "2026-05-01T13:42:47.371876+00:00",
+  "log_path": null,
+  "stderr_log": null,
+  "outputs": [
+    "derivatives\\qc\\sub-001\\subject_qc.json"
+  ],
+  "metrics": {
+    "shape": [
+      16,
+      16,
+      16,
+      10
+    ],
+    "dtype": "float32",
+    "mean": 0.002404946368187666,
+    "std": 0.06465598940849304,
+    "min": -0.2575776278972626,
+    "max": 0.29332107305526733,
+    "nan_count": 0,
+    "finite_voxel_count": 40960
+  },
+  "warnings": [],
+  "errors": [],
+  "result_json": null,
+  "returncode": null
+}

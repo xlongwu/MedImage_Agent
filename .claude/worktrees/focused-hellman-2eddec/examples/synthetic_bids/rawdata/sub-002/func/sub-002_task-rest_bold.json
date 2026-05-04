@@ -1,0 +1,24 @@
+{
+  "TaskName": "rest",
+  "RepetitionTime": 2.0,
+  "SliceTiming": [
+    0.0,
+    1.0,
+    0.125,
+    1.125,
+    0.25,
+    1.25,
+    0.375,
+    1.375,
+    0.5,
+    1.5,
+    0.625,
+    1.625,
+    0.75,
+    1.75,
+    0.875,
+    1.875
+  ],
+  "PhaseEncodingDirection": "j",
+  "Manufacturer": "Synthetic"
+}

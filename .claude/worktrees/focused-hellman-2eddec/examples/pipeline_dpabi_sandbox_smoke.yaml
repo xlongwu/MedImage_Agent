@@ -1,0 +1,79 @@
+pipeline_id: dpabi_sandbox_smoke_pipeline
+version: "0.1.0"
+modality: integration-test
+description: "Generate DPABI run plan and execute an approved DPABI sandbox smoke run without full preprocessing."
+
+execution:
+  stop_on_failure: true
+  run_id: "run_dpabi_sandbox_smoke_001"
+  scheduler:
+    mode: "sequential"
+    max_workers: 1
+    matlab_max_workers: 1
+
+nodes:
+  - id: environment_check
+    name: Environment Check
+    description: Check MATLAB, SPM, and DPABI availability
+    type: project
+    params: {}
+    dependencies: []
+
+  - id: dpabi_capability_inspection
+    name: DPABI Capability Inspection
+    description: Inspect DPABI function availability via MATLAB
+    type: project
+    params: {}
+    dependencies:
+      - environment_check
+
+  - id: dpabi_wrapper_scaffold
+    name: DPABI Wrapper Scaffold
+    description: Generate DPABI wrapper config template
+    type: project
+    params:
+      capabilities_path: "./work/dpabi/dpabi_capabilities.json"
+    dependencies:
+      - dpabi_capability_inspection
+
+  - id: dpabi_input_manifest
+    name: DPABI Input Manifest
+    description: Build DPABI input manifest from dataset index
+    type: project
+    params:
+      dataset_index: "./work/dataset_index/dataset_index.json"
+    dependencies:
+      - dpabi_wrapper_scaffold
+
+  - id: dpabi_preflight
+    name: DPABI Preflight
+    description: Run DPABI preflight checks
+    type: project
+    params:
+      capabilities_path: "./work/dpabi/dpabi_capabilities.json"
+      manifest_path: "./work/dpabi/dpabi_input_manifest.json"
+      wrapper_config_template_path: "./work/dpabi/dpabi_wrapper_config_template.yaml"
+    dependencies:
+      - dpabi_input_manifest
+
+  - id: dpabi_run_plan
+    name: DPABI Run Plan
+    description: Generate DPABI parameter schema, review template, and run plan
+    type: project
+    params:
+      capabilities_path: "./work/dpabi/dpabi_capabilities.json"
+      manifest_path: "./work/dpabi/dpabi_input_manifest.json"
+      preflight_path: "./work/dpabi/dpabi_preflight_report.json"
+      params_path: "./work/dpabi/dpabi_params_review.yaml"
+    dependencies:
+      - dpabi_preflight
+
+  - id: dpabi_sandbox_smoke_run
+    name: DPABI Sandbox Smoke Run
+    description: Execute approved DPABI sandbox smoke run with synthetic NIfTI
+    type: project
+    params:
+      approved: true
+      approved_by: "local-user"
+    dependencies:
+      - dpabi_run_plan

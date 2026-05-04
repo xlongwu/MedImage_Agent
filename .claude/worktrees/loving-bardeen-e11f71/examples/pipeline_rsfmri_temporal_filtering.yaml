@@ -1,0 +1,22 @@
+pipeline_id: rsfmri_temporal_filtering_pipeline
+version: "0.1.0"
+modality: rs-fMRI
+description: "Run Python temporal filtering on nuisance-regressed synthetic derivatives and generate DPABI backend contract."
+
+execution: {stop_on_failure: true, run_id: "run_rsfmri_temporal_filtering_001", scheduler: {mode: "local_parallel", max_workers: 2, matlab_max_workers: 1}}
+
+nodes:
+  - {id: create_synthetic_bids, name: Create Synthetic BIDS Dataset, agent: data-inspector, backend: python, depends_on: [], params: {output_dir: "./examples/synthetic_bids/rawdata", subjects: [sub-001, sub-002]}, parallel_level: project, gpu_supported: false, cache: false}
+  - {id: data_inspection, name: Data Inspection, agent: data-inspector, backend: python, depends_on: [create_synthetic_bids], params: {rawdata_dir: "./examples/synthetic_bids/rawdata", output_dir: "./work/dataset_index", read_nifti_metadata: true}, parallel_level: project, gpu_supported: false, cache: false}
+  - {id: environment_check, name: Environment Check, agent: system, backend: matlab, depends_on: [], params: {}, parallel_level: project, gpu_supported: false, cache: false}
+  - {id: spm_slice_timing_subject, name: Approved SPM Slice Timing, agent: spm-runner, backend: matlab-spm, depends_on: [data_inspection, environment_check], params: {approved: false}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: spm_realign_subject, name: Approved SPM Realignment, agent: spm-runner, backend: matlab-spm, depends_on: [spm_slice_timing_subject], params: {approved: false, use_slice_timing_output: true}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: motion_qc_subject, name: Motion QC, agent: qc-runner, backend: python, depends_on: [spm_realign_subject], params: {fd_threshold: 0.5, head_radius_mm: 50.0}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: spm_coregister_subject, name: Approved SPM Coregistration, agent: spm-runner, backend: matlab-spm, depends_on: [spm_realign_subject], params: {approved: false}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: spm_segment_subject, name: Approved SPM Segmentation, agent: spm-runner, backend: matlab-spm, depends_on: [spm_coregister_subject], params: {approved: false}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: spm_normalize_subject, name: Approved SPM Normalization, agent: spm-runner, backend: matlab-spm, depends_on: [spm_segment_subject], params: {approved: false, voxel_size: [3.0, 3.0, 3.0]}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: spm_smooth_subject, name: Approved SPM Smoothing, agent: spm-runner, backend: matlab-spm, depends_on: [spm_normalize_subject], params: {approved: false, fwhm: [6.0, 6.0, 6.0]}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: nuisance_regression_subject, name: Python Nuisance Regression, agent: regression-runner, backend: python, depends_on: [spm_smooth_subject, motion_qc_subject, spm_segment_subject], params: {backend: python, model: friston24}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: temporal_filtering_subject, name: Python Temporal Filtering, agent: filtering-runner, backend: python, depends_on: [nuisance_regression_subject], params: {backend: python, low_hz: 0.01, high_hz: 0.08, tr: null, fallback_tr: 2.0}, parallel_level: subject, gpu_supported: false, cache: false}
+  - {id: dpabi_temporal_filtering_contract, name: DPABI Temporal Filtering Contract, agent: contract-runner, backend: python, depends_on: [temporal_filtering_subject], params: {}, parallel_level: project, gpu_supported: false, cache: false}
+  - {id: temporal_filtering_qc_dataset_report, name: Temporal Filtering QC Dataset Report, agent: report-runner, backend: python, depends_on: [temporal_filtering_subject], params: {}, parallel_level: project, gpu_supported: false, cache: false}
