@@ -7,14 +7,15 @@
 - **Derivative-Only Output**: Writes only under `derivatives/`, `work/`, `reports/`, `logs/`, `exports/`
 - **No Rawdata Modification**: Raw data files are never read, written, or deleted
 - **No DPABI Execution**: DPABI functions blocked; single-function wrappers only; no DPARSF_run/DPARSFA_run/DPABI GUI
-- **No GPU Execution**: GPU contracts are CONTRACT_ONLY; no CUDA/CuPy/Torch requirements
+- **GPU Execution**: GPU acceleration is available via CuPy backend with `gpu_mode` (prefer/require/off). `require_gpu=True` fails safely when GPU unavailable. All GPU nodes auto-fallback to CPU NumPy when `prefer_gpu=True` (default).
 - **No File Deletion**: Files are never deleted by any pipeline step
 
 ## Limitations
 
 - **Not Clinical**: This is engineering validation for synthetic data; no clinical interpretation or statistical inference
-- **Synthetic Data Only**: 16x16x16 synthetic volumes; not representative of real anatomy
+- **Synthetic Data Only**: Synthetic BIDS volumes used by default; not representative of real anatomy or fMRI signal
 - **No Group Statistics**: Group-level aggregation is read-only engineering summary, not statistical testing
-- **Contract-Only Backends**: DPABI and GPU contracts are placeholders; real execution not implemented
-- **MATLAB/SPM Required**: SPM preprocessing stages require MATLAB + SPM12 installation
-- **Python-Only Postprocessing**: Nuisance regression, filtering, ALFF/fALFF, ReHo, FC are Python-only
+- **GPU Optional**: GPU acceleration requires CuPy installation (`pip install cupy-cuda12x`). Without CuPy, all modules fall back to CPU NumPy automatically.
+- **Contract-Only DPABI**: DPABI contracts are placeholders; real DPABI execution not implemented
+- **MATLAB/SPM Required**: SPM preprocessing stages require MATLAB + SPM12 installation (contract-only without MATLAB)
+- **Python-Only Postprocessing**: Nuisance regression, filtering, ALFF/fALFF, ReHo, FC are Python/CuPy-only

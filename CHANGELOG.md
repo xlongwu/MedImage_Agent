@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.0] - 2026-05-23
+
+### Added
+- GPU-accelerated ReHo computation (`reho_compute.py`) with CuPy backend and z-slice chunking
+- GPU-accelerated Nuisance Regression (`nuisance_regression_compute.py`) with cuBLAS GEMM
+- GPU-accelerated Temporal Filtering (`temporal_filtering_compute.py`) with cuFFT batch FFT
+- GPU-accelerated Functional Connectivity (`functional_connectivity_compute.py`) with matrix-based correlation
+- GPU memory monitoring utility (`gpu_memory.py`) with estimation and safety checks
+- 5 GPU runner modules (gpu_reho_runner, gpu_nuisance_regression_runner, gpu_temporal_filtering_runner, gpu_functional_connectivity_runner)
+- 5 GPU pipeline node handlers under `src/backend/app/nodes/`
+- 4 GPU pipeline YAML examples (`pipeline_gpu_*.yaml`)
+- GPU-aware scheduler: `gpu_max_workers`, `gpu_mode` (prefer/require/off), `gpu_subject_nodes` in scheduler plan
+- Pipeline executor GPU support: reads `gpu_supported`, injects `_gpu_info`, manages GPU worker pool
+- CPU vs GPU benchmark comparison (max_abs_diff, mean_abs_diff, speedup) in all runners
+- 6 new unit test files + 1 benchmark test file (22 new tests, all passing)
+- ReHo and FC GPU contracts updated from CONTRACT_ONLY to IMPLEMENTED
+
+### Changed
+- All `*_runner.py` (reho, nuisance_regression, temporal_filtering, functional_connectivity) now support `backend="gpu"` dispatch
+- Default scheduler config includes `gpu_max_workers: 1` and `gpu_mode: "prefer"`
+- GPU max workers capped at 4 for memory safety
+- Node registry expanded with 5 new GPU node entries
+
 ## [0.1.0] - 2026-05-03
 
 ### Added

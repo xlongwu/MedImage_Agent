@@ -140,6 +140,16 @@ def run_pipeline(
     scheduler_mode = scheduler_config.get("mode", "sequential")
     max_workers = scheduler_config.get("max_workers", 1)
     matlab_max_workers = scheduler_config.get("matlab_max_workers", 1)
+    gpu_max_workers = scheduler_config.get("gpu_max_workers", 1)
+    gpu_mode = scheduler_config.get("gpu_mode", "prefer")
+
+    gpu_info: dict[str, Any] | None = None
+    if gpu_mode != "off":
+        try:
+            from src.backend.app.tools.gpu_utils import detect_gpu
+            gpu_info = detect_gpu()
+        except ImportError:
+            gpu_info = {"ok": True, "gpu_available": False, "warnings": ["Cannot import GPU detection."], "errors": []}
 
     for node in pipeline.nodes:
         node_started_at = now_iso()
@@ -259,10 +269,38 @@ def run_pipeline(
 
             # Determine worker count for this node
             is_matlab = "matlab" in node.backend
+            is_gpu = node.gpu_supported
             if scheduler_mode == "local_parallel":
-                worker_count = matlab_max_workers if is_matlab else max_workers
+                if is_matlab:
+                    worker_count = matlab_max_workers
+                elif is_gpu and gpu_mode != "off":
+                    worker_count = gpu_max_workers
+                else:
+                    worker_count = max_workers
             else:
                 worker_count = 1
+
+            # Inject _gpu_info into node params for GPU nodes
+            if is_gpu and gpu_mode != "off":
+                node.params["_gpu_info"] = gpu_info
+                node.params["_gpu_mode"] = gpu_mode
+
+                if gpu_mode == "require" and (gpu_info is None or not gpu_info.get("gpu_available")):
+                    error_msg = f"Node '{node.id}' requires GPU but no GPU is available."
+                    errors.append(error_msg)
+                    node_result = {"ok": False, "errors": [error_msg]}
+                    node_results.append(node_result)
+                    status = "FAILED"
+                    node_status_map[node.id] = status
+                    state_path = write_node_state(
+                        run_id=run_id, node_id=node.id, subject="project",
+                        status=status, started_at=node_started_at, ended_at=now_iso(),
+                        result=node_result, work_dir=work_dir,
+                    )
+                    node_states.append(str(state_path))
+                    if stop_on_failure:
+                        break
+                    continue
 
             # Filter out subjects that have failed in previous subject-level nodes
             eligible_subjects = [
@@ -468,6 +506,8 @@ def run_pipeline(
             "mode": scheduler_mode,
             "max_workers": max_workers,
             "matlab_max_workers": matlab_max_workers,
+            "gpu_max_workers": gpu_max_workers,
+            "gpu_mode": gpu_mode,
         },
         duration_seconds=duration_seconds,
     )
@@ -485,6 +525,8 @@ def run_pipeline(
             "mode": scheduler_mode,
             "max_workers": max_workers,
             "matlab_max_workers": matlab_max_workers,
+            "gpu_max_workers": gpu_max_workers,
+            "gpu_mode": gpu_mode,
         },
         "errors": errors,
     }

@@ -4,6 +4,7 @@ from typing import Any
 from src.backend.app.tools.confound_matrix import build_confound_matrix_for_subject
 from src.backend.app.tools.dpabi_nuisance_contract import write_dpabi_nuisance_regression_contract
 from src.backend.app.tools.nuisance_regression import run_python_nuisance_regression_subject
+from src.backend.app.tools.gpu_nuisance_regression_runner import run_nuisance_regression_subject as run_gpu_nuisance_regression
 
 def _find_smoothed_functional(subject_id: str, derivatives_dir: str) -> Path | None:
     func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
@@ -29,7 +30,19 @@ def run_nuisance_regression_subject(
     subject_id: str, derivatives_dir: str, backend: str = "python",
     model: str = "friston24", include_intercept: bool = True,
     include_linear_trend: bool = True, include_global_signal: bool = False,
+    prefer_gpu: bool = True, require_gpu: bool = False,
 ) -> dict[str, Any]:
+    if backend == "gpu":
+        input_func = _find_smoothed_functional(subject_id, derivatives_dir)
+        if not input_func:
+            return {"ok": False, "node_id": "nuisance_regression_subject", "backend": backend, "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No smoothed functional input found for subject {subject_id}."]}
+        motion = _find_motion_params(subject_id, derivatives_dir)
+        if not motion:
+            return {"ok": False, "node_id": "nuisance_regression_subject", "backend": backend, "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No motion parameter file found for subject {subject_id}."]}
+        confounds = build_confound_matrix_for_subject(subject_id=subject_id, motion_parameter_file=str(motion), output_dir=derivatives_dir, model=model, include_intercept=include_intercept, include_linear_trend=include_linear_trend, include_global_signal=include_global_signal)
+        if not confounds.get("ok"): confounds["node_id"] = "nuisance_regression_subject"; return confounds
+        r = run_gpu_nuisance_regression(subject_id=subject_id, input_nii=str(input_func), confounds_tsv=confounds["confounds_tsv"], derivatives_dir=derivatives_dir, prefer_gpu=prefer_gpu, require_gpu=require_gpu)
+        r["node_id"] = "nuisance_regression_subject"; return r
     if backend == "dpabi_contract":
         contract = write_dpabi_nuisance_regression_contract(work_dir="./work")
         contract["subject_id"] = subject_id

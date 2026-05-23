@@ -7,6 +7,8 @@ DEFAULT_SCHEDULER = {
     "mode": "sequential",
     "max_workers": 1,
     "matlab_max_workers": 1,
+    "gpu_max_workers": 1,
+    "gpu_mode": "prefer",
 }
 
 
@@ -63,15 +65,41 @@ def validate_scheduler_config(config: dict[str, Any]) -> dict[str, Any]:
         warnings.append("matlab_max_workers > max_workers; capped to max_workers.")
         matlab_max_workers = max_workers
 
+    gpu_mode = str(config.get("gpu_mode", "prefer"))
+    if gpu_mode not in {"prefer", "require", "off"}:
+        warnings.append(f"Invalid gpu_mode '{gpu_mode}'; fallback to 'prefer'.")
+        gpu_mode = "prefer"
+
+    try:
+        gpu_max_workers = int(config.get("gpu_max_workers", 1))
+    except Exception:
+        gpu_max_workers = 1
+        warnings.append("Invalid gpu_max_workers; fallback to 1.")
+
+    if gpu_max_workers < 1:
+        warnings.append("gpu_max_workers < 1; fallback to 1.")
+        gpu_max_workers = 1
+
+    if gpu_max_workers > 4:
+        warnings.append("gpu_max_workers > 4; capped to 4 for GPU memory safety.")
+        gpu_max_workers = 4
+
+    if gpu_max_workers > max_workers:
+        warnings.append("gpu_max_workers > max_workers; capped to max_workers.")
+        gpu_max_workers = max_workers
+
     if mode == "sequential":
         max_workers = 1
         matlab_max_workers = 1
+        gpu_max_workers = 1
 
     return {
         "ok": len(errors) == 0,
         "mode": mode,
         "max_workers": max_workers,
         "matlab_max_workers": matlab_max_workers,
+        "gpu_max_workers": gpu_max_workers,
+        "gpu_mode": gpu_mode,
         "warnings": warnings,
         "errors": errors,
     }
@@ -93,6 +121,12 @@ def create_scheduler_plan(
         if node.parallel_level == "subject" and "matlab" in node.backend
     ]
 
+    gpu_subject_nodes = [
+        node.id
+        for node in pipeline.nodes
+        if node.parallel_level == "subject" and node.gpu_supported
+    ]
+
     warnings = list(config.get("warnings", []))
 
     if config["mode"] == "local_parallel" and not subject_nodes:
@@ -103,16 +137,32 @@ def create_scheduler_plan(
             "Running multiple MATLAB workers may consume multiple MATLAB licenses."
         )
 
+    if gpu_subject_nodes and config["gpu_mode"] == "require":
+        try:
+            from src.backend.app.tools.gpu_utils import detect_gpu
+            gpu_info = detect_gpu()
+            if not gpu_info.get("gpu_available"):
+                warnings.append(
+                    "gpu_mode is 'require' but no GPU detected. GPU nodes will fail unless "
+                    "gpu_mode is changed to 'prefer' or 'off'."
+                )
+        except ImportError:
+            warnings.append("gpu_mode is 'require' but cannot import GPU detection.")
+
     return {
         "ok": config["ok"],
         "mode": config["mode"],
         "max_workers": config["max_workers"],
         "matlab_max_workers": config["matlab_max_workers"],
+        "gpu_max_workers": config["gpu_max_workers"],
+        "gpu_mode": config["gpu_mode"],
         "subject_level_nodes": subject_nodes,
         "matlab_subject_nodes": matlab_subject_nodes,
+        "gpu_subject_nodes": gpu_subject_nodes,
         "estimated_parallelism": {
             "subject_workers": config["max_workers"],
             "matlab_workers": config["matlab_max_workers"],
+            "gpu_workers": config["gpu_max_workers"],
         },
         "warnings": warnings,
         "errors": config.get("errors", []),

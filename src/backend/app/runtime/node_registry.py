@@ -14,6 +14,10 @@ from src.backend.app.tools.spm_runner import run_spm_smoke_test
 from src.backend.app.tools.spm_subject_runner import run_spm_smooth_subject
 from src.backend.app.tools.synthetic_bids import create_synthetic_bids_dataset
 from src.backend.app.nodes.gpu_alff_node import gpu_alff_subject_node
+from src.backend.app.nodes.gpu_reho_node import gpu_reho_subject_node
+from src.backend.app.nodes.gpu_nuisance_regression_node import gpu_nuisance_regression_subject_node
+from src.backend.app.nodes.gpu_temporal_filtering_node import gpu_temporal_filtering_subject_node
+from src.backend.app.nodes.gpu_functional_connectivity_node import gpu_functional_connectivity_subject_node
 from src.backend.app.tools.dpabi_runner import run_dpabi_capability_inspection
 from src.backend.app.tools.dpabi_config import write_dpabi_wrapper_scaffold
 from src.backend.app.tools.dpabi_adapter import build_dpabi_input_manifest
@@ -468,6 +472,10 @@ NODE_REGISTRY: dict[str, NodeRunner] = {
     "subject_qc": run_subject_qc_node,
     "dataset_evaluation": run_dataset_evaluation_node,
     "gpu_alff_subject": gpu_alff_subject_node,
+    "gpu_reho_subject": gpu_reho_subject_node,
+    "gpu_nuisance_regression_subject": gpu_nuisance_regression_subject_node,
+    "gpu_temporal_filtering_subject": gpu_temporal_filtering_subject_node,
+    "gpu_functional_connectivity_subject": gpu_functional_connectivity_subject_node,
     "dpabi_capability_inspection": run_dpabi_capability_inspection_node,
     "dpabi_wrapper_scaffold": run_dpabi_wrapper_scaffold_node,
     "dpabi_input_manifest": run_dpabi_input_manifest_node,

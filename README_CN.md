@@ -151,9 +151,13 @@ Every Operation → Audit Logger → SessionDB → Run History → Reproducibili
 - **SPM 工具**：Realign、Slice Timing、Smooth、Normalize、Coregister、Segment
 - **DPABI**：插件式接入接口（预留扩展）
 
-### GPU 加速设计
-- **状态**：设计中 / 预留扩展
-- **设计思路**：CuPy 加速矩阵运算，subject-level 并行
+### GPU 加速
+- **状态**：已实现（5 个模块）
+- **后端**：CuPy（主） + 自动 NumPy CPU 回退
+- **加速模块**：ALFF/fALFF、ReHo、Nuisance Regression、Temporal Filtering、Functional Connectivity
+- **设计模式**：三后端（NumPy / CuPy / 调度器） + `prefer_gpu` / `require_gpu` 参数
+- **内存安全**：大数组 z 切片分块处理、GPU 内存估算工具
+- **调度**：独立 `gpu_max_workers`（上限 4） + `gpu_mode`（prefer / require / off）
 
 ### 安全与审计
 - **路径安全**：Path Safety（规范化、防目录遍历、work_dir 隔离）
@@ -170,6 +174,7 @@ Every Operation → Audit Logger → SessionDB → Run History → Reproducibili
 - Python 3.10+
 - Node.js 18+
 - MATLAB + SPM12（可选，用于 SPM 预处理步骤）
+- CuPy（可选，用于 GPU 加速；`pip install cupy-cuda12x`）
 
 ### 安装依赖
 
@@ -212,6 +217,16 @@ python -m backend.app.tools.run_rsfmri_spm_realign_motion_qc_cli \
   examples/project_config_dataset.yaml \
   examples/pipeline_rsfmri_spm_realign_motion_qc.yaml \
   --approve
+
+# 运行 GPU 加速 ALFF（含 CPU 对比基准测试）
+python -m backend.app.tools.gpu_benchmark_cli
+
+# 运行 GPU 加速 ReHo
+python -c "
+from src.backend.app.tools.gpu_reho_runner import run_reho_subject
+result = run_reho_subject('sub-001', 'derivatives/spm_smooth/sub-001/func/sub-001_task-rest_bold_smooth.nii', './derivatives', prefer_gpu=True)
+print(f'Backend: {result[\"gpu_backend\"]}, Runtime: {result[\"runtime_seconds\"]}s')
+"
 ```
 
 ---
@@ -238,19 +253,32 @@ MedImage_Agent/
 │   │       │   ├── error_diagnoser.py  # 错误诊断
 │   │       │   ├── retry_runtime.py    # 重试机制
 │   │       │   └── run_inspector.py    # 运行检查器
+│   │       ├── nodes/                  # Pipeline 节点处理函数
+│   │       │   ├── gpu_alff_node.py    # GPU ALFF 节点
+│   │       │   ├── gpu_reho_node.py    # GPU ReHo 节点
+│   │       │   ├── gpu_nuisance_regression_node.py
+│   │       │   ├── gpu_temporal_filtering_node.py
+│   │       │   └── gpu_functional_connectivity_node.py
 │   │       ├── tools/                  # 工具模块
 │   │       │   ├── alff_falff.py       # ALFF/fALFF 计算
+│   │       │   ├── alff_compute.py     # ALFF GPU 后端 (NumPy/CuPy/PyTorch)
 │   │       │   ├── reho.py             # ReHo 计算
+│   │       │   ├── reho_compute.py     # ReHo GPU 后端 (NumPy/CuPy)
 │   │       │   ├── functional_connectivity.py  # 功能连接
-│   │       │   ├── motion_qc.py        # 运动 QC
+│   │       │   ├── functional_connectivity_compute.py  # FC GPU 后端
 │   │       │   ├── nuisance_regression.py      # 去噪回归
+│   │       │   ├── nuisance_regression_compute.py  # NR GPU 后端
 │   │       │   ├── temporal_filtering.py       # 时间滤波
+│   │       │   ├── temporal_filtering_compute.py  # TF GPU 后端
+│   │       │   ├── motion_qc.py        # 运动 QC
 │   │       │   ├── data_inspector.py   # 数据检查
 │   │       │   ├── dataset_evaluator.py        # 数据集评估
 │   │       │   ├── report_writer.py    # 报告生成
 │   │       │   ├── report_validator.py # 报告验证
 │   │       │   ├── reproducibility_bundle.py   # 可复现包
 │   │       │   ├── synthetic_bids.py   # 合成数据生成
+│   │       │   ├── gpu_memory.py       # GPU 内存监控
+│   │       │   ├── gpu_*.py            # GPU Runner 与 Contract
 │   │       │   └── spm_*.py            # SPM 集成 Runner
 │   │       ├── safety/                 # 安全模块
 │   │       │   ├── path_safety.py      # 路径安全
@@ -315,7 +343,7 @@ MedImage_Agent/
 | SPM Smooth | 空间平滑 | ✅ 已实现 |
 | SPM Coregister | 配准 | ✅ 已实现 |
 | SPM Segment | 分割 | ✅ 已实现 |
-| GPU 加速 | CuPy 加速 | 🔄 设计中 |
+| GPU 加速 | CuPy 加速矩阵运算（5 个模块）| ✅ 已实现 |
 
 ### 4. QC 与报告
 
@@ -377,7 +405,7 @@ MedImage Agent 采用多层安全设计，确保研究数据不被误修改：
 - ✅ 错误诊断与重试系统
 
 ### 设计中 / 预留扩展
-- 🔄 GPU 加速（CuPy 实现，文件已创建，核心逻辑待完善）
+- ✅ GPU 加速（5 个模块：ALFF/fALFF、ReHo、Nuisance Regression、Temporal Filtering、Functional Connectivity；CuPy + CPU 回退）
 - 🔄 DPABI 完整集成（接口设计完成，待实现）
 - 🔄 分布式执行（多机并行，架构预留）
 - 🔄 Docker 容器化一键部署（配置文件已创建）
@@ -398,7 +426,7 @@ MedImage Agent 采用多层安全设计，确保研究数据不被误修改：
 | Phase 2 | Agent Runtime + 安全机制 | ✅ 完成 |
 | Phase 3 | SPM 集成 + QC 系统 | ✅ 完成 |
 | Phase 4 | 前端可视化 + 报告系统 | ✅ 完成 |
-| Phase 5 | GPU 加速 + 性能优化 | 🔄 进行中 |
+| Phase 5 | GPU 加速 + 性能优化 | ✅ 完成 |
 | Phase 6 | 真实数据验证 + 论文发表 | 📋 计划中 |
 
 ---

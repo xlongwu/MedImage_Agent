@@ -1,0 +1,94 @@
+pipeline_id: gpu_nuisance_regression
+version: "0.1.0"
+modality: rs-fMRI
+description: "GPU-accelerated nuisance regression pipeline"
+execution:
+  run_id: run_gpu_nuisance_regression_001
+  stop_on_failure: true
+  scheduler:
+    mode: local_parallel
+    max_workers: 4
+    gpu_max_workers: 1
+    gpu_mode: prefer
+nodes:
+  - id: environment_check
+    name: Environment Check
+    agent: system
+    backend: matlab-spm
+    inputs: []
+    outputs:
+      - work/environment_check.json
+    params: {}
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: create_synthetic_bids
+    name: Create Synthetic BIDS
+    agent: system
+    backend: python
+    inputs: []
+    outputs: []
+    params:
+      output_dir: ./examples/synthetic_bids/rawdata
+      subjects:
+        - subject_id: sub-001
+          sessions:
+            - func:
+                - bold: ./examples/synthetic_bids/rawdata/sub-001/func/sub-001_task-rest_bold.nii
+          anat:
+            - ./examples/synthetic_bids/rawdata/sub-001/anat/sub-001_T1w.nii
+        - subject_id: sub-002
+          sessions:
+            - func:
+                - bold: ./examples/synthetic_bids/rawdata/sub-002/func/sub-002_task-rest_bold.nii
+          anat:
+            - ./examples/synthetic_bids/rawdata/sub-002/anat/sub-002_T1w.nii
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: data_inspection
+    name: Data Inspection
+    agent: system
+    backend: python
+    depends_on:
+      - create_synthetic_bids
+    inputs: []
+    outputs: []
+    params:
+      rawdata_dir: ./examples/synthetic_bids/rawdata
+    parallel_level: project
+    gpu_supported: false
+    cache: false
+
+  - id: spm_smooth_subject
+    name: SPM Smooth
+    agent: spm-runner
+    backend: matlab-spm
+    depends_on:
+      - data_inspection
+    inputs: []
+    outputs: []
+    params:
+      fwhm: [6, 6, 6]
+      approved: false
+    parallel_level: subject
+    gpu_supported: false
+    cache: false
+
+  - id: gpu_nuisance_regression_subject
+    name: GPU Nuisance Regression
+    agent: system
+    backend: python-gpu
+    depends_on:
+      - spm_smooth_subject
+    inputs: []
+    outputs: []
+    params:
+      model: friston24
+      include_intercept: true
+      include_linear_trend: true
+    parallel_level: subject
+    gpu_supported: true
+    cache: false

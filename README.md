@@ -153,9 +153,13 @@ Every Operation → Audit Logger → SessionDB → Run History → Reproducibili
 - **SPM Tools**: Realign, Slice Timing, Smooth, Normalize, Coregister, Segment
 - **DPABI**: Plugin-style interface (extensible)
 
-### GPU Acceleration Design
-- **Status**: In design / extensible
-- **Design Approach**: CuPy-accelerated matrix operations, subject-level parallelism
+### GPU Acceleration
+- **Status**: Implemented (5 modules)
+- **Backend**: CuPy (primary) with automatic NumPy CPU fallback
+- **Accelerated Modules**: ALFF/fALFF, ReHo, Nuisance Regression, Temporal Filtering, Functional Connectivity
+- **Design Pattern**: Triple-backend (NumPy / CuPy / dispatcher) with `prefer_gpu` / `require_gpu` flags
+- **Memory Safety**: Z-slice chunking for large arrays, GPU memory estimation utilities
+- **Scheduling**: Dedicated `gpu_max_workers` (capped at 4) with `gpu_mode` (prefer / require / off)
 
 ### Security & Audit
 - **Path Safety**: Path normalization, directory traversal prevention, work_dir isolation
@@ -172,6 +176,7 @@ Every Operation → Audit Logger → SessionDB → Run History → Reproducibili
 - Python 3.10+
 - Node.js 18+
 - MATLAB + SPM12 (optional, for SPM preprocessing steps)
+- CuPy (optional, for GPU acceleration; `pip install cupy-cuda12x`)
 
 ### Install Dependencies
 
@@ -214,6 +219,16 @@ python -m backend.app.tools.run_rsfmri_spm_realign_motion_qc_cli \
   examples/project_config_dataset.yaml \
   examples/pipeline_rsfmri_spm_realign_motion_qc.yaml \
   --approve
+
+# Run GPU-accelerated ALFF (with CPU comparison benchmark)
+python -m backend.app.tools.gpu_benchmark_cli
+
+# Run GPU-accelerated ReHo
+python -c "
+from src.backend.app.tools.gpu_reho_runner import run_reho_subject
+result = run_reho_subject('sub-001', 'derivatives/spm_smooth/sub-001/func/sub-001_task-rest_bold_smooth.nii', './derivatives', prefer_gpu=True)
+print(f'Backend: {result[\"gpu_backend\"]}, Runtime: {result[\"runtime_seconds\"]}s')
+"
 ```
 
 ---
@@ -240,19 +255,32 @@ MedImage_Agent/
 │   │       │   ├── error_diagnoser.py  # Error diagnosis
 │   │       │   ├── retry_runtime.py    # Retry mechanism
 │   │       │   └── run_inspector.py    # Run inspector
+│   │       ├── nodes/                  # Pipeline node handlers
+│   │       │   ├── gpu_alff_node.py    # GPU ALFF node
+│   │       │   ├── gpu_reho_node.py    # GPU ReHo node
+│   │       │   ├── gpu_nuisance_regression_node.py
+│   │       │   ├── gpu_temporal_filtering_node.py
+│   │       │   └── gpu_functional_connectivity_node.py
 │   │       ├── tools/                  # Tool modules
 │   │       │   ├── alff_falff.py       # ALFF/fALFF computation
+│   │       │   ├── alff_compute.py     # ALFF GPU backends (NumPy/CuPy/PyTorch)
 │   │       │   ├── reho.py             # ReHo computation
+│   │       │   ├── reho_compute.py     # ReHo GPU backends (NumPy/CuPy)
 │   │       │   ├── functional_connectivity.py  # Functional connectivity
-│   │       │   ├── motion_qc.py        # Motion QC
+│   │       │   ├── functional_connectivity_compute.py  # FC GPU backends
 │   │       │   ├── nuisance_regression.py      # Nuisance regression
+│   │       │   ├── nuisance_regression_compute.py  # NR GPU backends
 │   │       │   ├── temporal_filtering.py       # Temporal filtering
+│   │       │   ├── temporal_filtering_compute.py  # TF GPU backends
+│   │       │   ├── motion_qc.py        # Motion QC
 │   │       │   ├── data_inspector.py   # Data inspection
 │   │       │   ├── dataset_evaluator.py        # Dataset evaluation
 │   │       │   ├── report_writer.py    # Report generation
 │   │       │   ├── report_validator.py # Report validation
 │   │       │   ├── reproducibility_bundle.py   # Reproducibility bundle
 │   │       │   ├── synthetic_bids.py   # Synthetic data generation
+│   │       │   ├── gpu_memory.py       # GPU memory monitoring
+│   │       │   ├── gpu_*.py            # GPU runners & contracts
 │   │       │   └── spm_*.py            # SPM integration runners
 │   │       ├── safety/                 # Security modules
 │   │       │   ├── path_safety.py      # Path safety
@@ -317,7 +345,7 @@ MedImage_Agent/
 | SPM Smooth | Spatial smoothing | ✅ Implemented |
 | SPM Coregister | Coregistration | ✅ Implemented |
 | SPM Segment | Segmentation | ✅ Implemented |
-| GPU Acceleration | CuPy acceleration | 🔄 In Design |
+| GPU Acceleration | CuPy-accelerated matrix operations (5 modules) | ✅ Implemented |
 
 ### 4. QC & Reporting
 
@@ -379,7 +407,7 @@ MedImage Agent adopts a multi-layer security design to ensure research data is n
 - ✅ Error diagnosis and retry system
 
 ### In Design / Extensible
-- 🔄 GPU acceleration (CuPy implementation, files created, core logic pending)
+- ✅ GPU acceleration (5 modules: ALFF/fALFF, ReHo, Nuisance Regression, Temporal Filtering, Functional Connectivity; CuPy + CPU fallback)
 - 🔄 Full DPABI integration (interface design complete, pending implementation)
 - 🔄 Distributed execution (multi-machine parallelism, architecture reserved)
 - 🔄 Docker containerized one-click deployment (config files created)
@@ -400,7 +428,7 @@ MedImage Agent adopts a multi-layer security design to ensure research data is n
 | Phase 2 | Agent Runtime + Security Mechanisms | ✅ Complete |
 | Phase 3 | SPM Integration + QC System | ✅ Complete |
 | Phase 4 | Frontend Visualization + Reporting System | ✅ Complete |
-| Phase 5 | GPU Acceleration + Performance Optimization | 🔄 In Progress |
+| Phase 5 | GPU Acceleration + Performance Optimization | ✅ Complete |
 | Phase 6 | Real Data Validation + Publication | 📋 Planned |
 
 ---
