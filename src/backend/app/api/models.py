@@ -46,6 +46,75 @@ class SchedulerPlanRequest(BaseModel):
     pipeline_path: str = Field(default="examples/pipeline_subject_preprocess_parallel.yaml")
 
 
+class PlannerDraftRequest(BaseModel):
+    disease_type: str = Field(default="unspecified")
+    modality: str = Field(default="rs-fMRI")
+    downstream_task: str = Field(default="standard preprocessing")
+    available_data: list[str] = Field(default_factory=lambda: ["T1w", "BOLD"])
+    constraints: list[str] = Field(default_factory=list)
+    project_config_path: str = Field(default="examples/project_config_dataset.yaml")
+    pipeline_path: str | None = Field(default=None)
+    plan_id: str | None = Field(default=None)
+
+
+class PlannerValidateRequest(BaseModel):
+    plan_id: str | None = Field(default=None)
+    draft: dict | None = Field(default=None)
+    disease_type: str = Field(default="unspecified")
+    modality: str = Field(default="rs-fMRI")
+    downstream_task: str = Field(default="standard preprocessing")
+    available_data: list[str] = Field(default_factory=lambda: ["T1w", "BOLD"])
+    constraints: list[str] = Field(default_factory=list)
+    project_config_path: str = Field(default="examples/project_config_dataset.yaml")
+    pipeline_path: str | None = Field(default=None)
+
+
+class PlannerExecuteRequest(BaseModel):
+    plan_id: str | None = Field(default=None)
+    draft: dict | None = Field(default=None)
+    disease_type: str = Field(default="unspecified")
+    modality: str = Field(default="rs-fMRI")
+    downstream_task: str = Field(default="standard preprocessing")
+    available_data: list[str] = Field(default_factory=lambda: ["T1w", "BOLD"])
+    constraints: list[str] = Field(default_factory=list)
+    project_config_path: str = Field(default="examples/project_config_dataset.yaml")
+    pipeline_path: str | None = Field(default=None)
+    approved: bool = Field(default=False)
+
+
+class GuiAgentSessionRequest(BaseModel):
+    session_id: str | None = Field(default=None)
+    target_app: str = Field(default="spm")
+    objective: str = Field(default="assist SPM/DPABI GUI operation")
+    provider: str = Field(default="mock")
+    approved: bool = Field(default=False)
+
+
+class GuiAgentStepRequest(BaseModel):
+    action: str = Field(default="record_observation")
+    parameters: dict = Field(default_factory=dict)
+
+
+class DesktopConfigSaveRequest(BaseModel):
+    project_dir: str | None = Field(default=None)
+    python_path: str | None = Field(default=None)
+    matlab_command: str | None = Field(default=None)
+    spm_dir: str | None = Field(default=None)
+    dpabi_dir: str | None = Field(default=None)
+    gpu_mode: str | None = Field(default=None)
+    llm: dict = Field(default_factory=dict)
+    gui_agent: dict = Field(default_factory=dict)
+
+
+class ExternalSmokeRunRequest(BaseModel):
+    target: str = Field(default="all")
+    mode: str = Field(default="manual_package")
+    config_path: str = Field(default="examples/project_config.yaml")
+    approved: bool = Field(default=False)
+    approved_by: str = Field(default="local-user")
+    dpabi_function: str = Field(default="y_Smooth")
+
+
 class GpuBenchmarkRequest(BaseModel):
     subject_id: str = Field(default="sub-001")
     input_nii: str = Field(default="./derivatives/spm_smooth/sub-001/func/sub-001_task-rest_bold_smooth.nii")
