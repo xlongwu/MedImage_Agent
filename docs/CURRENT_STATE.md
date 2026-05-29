@@ -13,6 +13,7 @@
 | M2-T002a：Plan Validator Python 模块 | ✅ 已完成 | 2026-05-29 |
 | M2-T002b：Plan Validator API endpoint | ✅ 已完成 | 2026-05-29 |
 | M3-T001a：LLM Planner MVP（mock/rule-based） | ✅ 已完成 | 2026-05-29 |
+| M3-T001b：LLM Planner API endpoint | ✅ 已完成 | 2026-05-29 |
 
 ## M1 交付物状态
 
