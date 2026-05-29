@@ -9,6 +9,25 @@ type CatalogItem = {
   risk_level: string; inputs: string[]; outputs: string[]; tags: string[];
 };
 
+type DryRunExecutionMeta = {
+  executor_called?: boolean;
+  submitted?: boolean;
+  run_id?: string | null;
+};
+
+type DryRunResult = {
+  ok?: boolean;
+  status?: string;
+  dry_run?: boolean;
+  would_execute?: boolean;
+  execution_allowed?: boolean;
+  validation?: Record<string, unknown>;
+  approval_gate?: Record<string, unknown> | null;
+  execution?: DryRunExecutionMeta;
+  errors?: unknown[];
+  warnings?: unknown[];
+};
+
 export default function PlanReviewConsole() {
   const baseUrl = DEFAULT_API_BASE;
   const [goal, setGoal] = useState("");
@@ -39,7 +58,7 @@ export default function PlanReviewConsole() {
   const [approvalError, setApprovalError] = useState("");
 
   // ── Dry-run Execution Check ──
-  const [dryRunResult, setDryRunResult] = useState<Record<string, unknown> | null>(null);
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [dryRunError, setDryRunError] = useState("");
 
