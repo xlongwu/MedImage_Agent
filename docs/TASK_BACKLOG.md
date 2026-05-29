@@ -64,27 +64,37 @@
 
 ---
 
-### T-0003：运行全量测试并修复失败
+### T-0003：新增 ProjectSettings 统一配置层
 
 - **task_id**: T-0003
-- **title**: 运行 pytest 全量测试，修复任何失败的测试
+- **title**: 新增 ProjectSettings，统一 project_config 读取逻辑
 - **priority**: P0
-- **scope**: 测试修复，不改动核心执行逻辑
+- **scope**: 新增配置模块和测试，不改动现有业务代码
 - **allowed_files**:
-  - `tests/` 下的测试文件
-  - `conftest.py`、`pytest.ini`、`setup.cfg`（如存在）
+  - `src/backend/app/config/__init__.py`
+  - `src/backend/app/config/settings.py`
+  - `tests/unit/test_project_settings.py`
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/DEV_LOG/`
 - **forbidden_changes**:
-  - 不修改 `src/backend/app/runtime/` 核心逻辑
-  - 不修改 `src/backend/app/tools/` 业务逻辑
+  - 不修改 `src/backend/app/runtime/` 核心执行逻辑
+  - 不修改 `src/backend/app/api/routes.py`
+  - 不修改 `examples/*.yaml`
+  - 不替换现有配置读取代码
 - **acceptance_criteria**:
-  - `pytest` 全量通过（或有明确记录的已知失败）
-  - 如有无法修复的测试，记录到 `docs/TASK_BACKLOG.md` 并标记 known_issue
+  - `ProjectSettings.from_yaml()` 从现有 YAML 正常加载
+  - 新增 14 个单元测试全部通过
+  - 关键字段缺失时抛出 `ValueError`
+  - 文件不存在时抛出 `FileNotFoundError`
+  - YAML 格式错误时抛出 `ValueError`
+  - 可选字段使用安全默认值
+  - `pytest` 全量通过（209 passed, 4 skipped）
 - **test_commands**:
-  - `pytest`（全量）
-  - `pytest tests/unit/`（单元测试）
-  - `pytest tests/integration/`（集成测试）
-  - `pytest tests/api/`（API 测试）
-- **status**: 待执行
+  - `pytest tests/unit/test_project_settings.py -v`
+  - `pytest`（全量回归）
+- **status**: ✅ 已完成（2026-05-29）
 
 ---
 
