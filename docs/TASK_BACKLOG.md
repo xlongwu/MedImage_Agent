@@ -268,6 +268,21 @@
 
 ---
 
+### T-0008b：ERROR_KB.yaml 完整内容提交
+
+- **task_id**: T-0008b
+- **title**: 提交完整 ERROR_KB.yaml（v0.2.0, 15 categories）
+- **priority**: P0
+- **scope**: 替换 Git 中 v0.1.0 空占位符为本地完整 KB
+- **allowed_files**:
+  - `memory/global/ERROR_KB.yaml`
+- **acceptance_criteria**:
+  - CI error_classifier 8 tests 全 PASS
+  - CI 全绿
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
 ### T-0005：实现 audit_logger 或从文档中移除引用
 
 - **task_id**: T-0005
