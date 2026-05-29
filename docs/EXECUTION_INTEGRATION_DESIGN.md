@@ -177,7 +177,11 @@ M5-T008: gated execution API (dry_run=false)
 M5-T009: disabled-by-default frontend execution button
 ```
 
-## 十一、安全原则
+## 十一、安全审计
+
+详见 [`docs/GATED_EXECUTION_SAFETY_REVIEW.md`](GATED_EXECUTION_SAFETY_REVIEW.md)（M5-T011）。
+
+## 十二、安全原则
 
 1. 前端不能绕过 approval gate
 2. 后端必须独立重做 validation + approval check

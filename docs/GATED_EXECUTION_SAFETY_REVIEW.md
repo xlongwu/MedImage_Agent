@@ -1,0 +1,149 @@
+# Gated Execution Safety Review
+
+本文档对 gated execution API 做安全审计与设计收口。未来真实执行必须满足本文档列出的所有前置条件。
+
+**状态**: 审计 & 设计阶段 (M5-T011)，尚未实现真实执行。
+
+## 一、Plan Validator 强制重跑
+
+| 条件 | 当前 dry-run | 未来真实执行 |
+|------|:---:|:---:|
+| 后端独立运行 `validate_plan(plan)` | ✅ | ✅ 必须 |
+| 不信任前端传入 validation | ✅ | ✅ 必须 |
+| `validation.ok=false` → 禁止执行 | ✅ | ✅ 必须 |
+
+**代码位置**: `execute_reviewed_routes.py` 第 97-112 行
+
+## 二、Approval Gate 强制重跑
+
+| 条件 | 当前 dry-run | 未来真实执行 |
+|------|:---:|:---:|
+| 后端独立运行 `check_approval_gate()` | ✅ | ✅ 必须 |
+| 不信任前端传入 approval_gate result | ✅ | ✅ 必须 |
+| `execution_allowed=false` → 禁止执行 | ✅ | ✅ 必须 |
+| missing approval nodes → 禁止 | ✅ | ✅ 必须 |
+| rejected nodes → 禁止 | ✅ | ✅ 必须 |
+| `approval.approved=false` → 禁止 | ✅ | ✅ 必须 |
+| `manual_required_nodes` 非空 → MVP 禁止 | ✅ | ✅ 必须 |
+
+**代码位置**: `execute_reviewed_routes.py` 第 115-129 行
+
+## 三、Audit Record 策略
+
+| 条件 | 当前 | 未来 |
+|------|:---:|:---:|
+| dry-run audit | 可选（`persist_audit=true`） | 可选 |
+| 真实 execution audit | N/A | **必选** |
+
+未来真实执行时的 audit record 至少包含：
+
+- plan_hash / validation_hash / approval_hash
+- approval_gate result snapshot
+- actor / source
+- execution request snapshot
+- run_id / status / created_at
+- safety 声明
+
+**代码位置**: `audit_record.py`, `execute_reviewed_routes.py`
+
+## 四、rawdata readonly
+
+- `data/` 永远只读
+- 所有输出写入 `outputs/derivatives/`, `outputs/work/`, `outputs/reports/`, `outputs/exports/`
+- 执行 API 必须遵守 `ProjectSettings.safety.rawdata_readonly`
+- 禁止 overwrite rawdata
+
+## 五、manual_required / GUI Agent
+
+- MVP: `manual_required_nodes` 非空 → `execution_allowed=false`
+- 未来 GUI Agent 接入后，manual_required 节点走 GUI Agent path
+- 不能走普通 executor path
+- 不跳过、不静默执行
+
+## 六、dry_run=false 开放条件
+
+当前 `dry_run=false` → `DRY_RUN_ONLY`。
+
+未来开放真实执行前，必须**全部**满足：
+
+1. `validation.ok == true`
+2. `approval_gate.execution_allowed == true`
+3. audit record 可写
+4. `project_config_path` 有效且指向合法 project config
+5. rawdata readonly 确认
+6. 无 `manual_required_nodes`
+7. 请求中 `confirm_execution == true`（二次确认）
+8. `executor_called` 在 response/audit 中明确记录为 `true`
+
+## 七、LLM 安全边界
+
+| 允许 | 禁止 |
+|------|------|
+| 生成 candidate plan | 执行工具 |
+| 建议参数 | 调用 node runner |
+| 解释 QC 报告 | 绕过 Plan Validator |
+| | 绕过 Approval Gate |
+| | 写 rawdata / outputs |
+
+## 八、前端执行按钮策略
+
+| 规则 | 说明 |
+|------|------|
+| 当前 | 无执行按钮 |
+| 未来默认 | hidden / disabled |
+| 可用条件 | dry-run status=DRY_RUN_OK |
+| 文案 | "Execute Reviewed Plan"（明确危险） |
+| 二次确认 | 必须弹出确认对话框 |
+| 禁止文案 | "Run" / "Start" / "Submit" |
+
+## 九、未来 Gated Execution API 草案
+
+```
+POST /api/plans/execute-reviewed
+```
+
+请求：
+
+```json
+{
+  "plan": {},
+  "approval": {},
+  "project_config_path": "...",
+  "dry_run": false,
+  "persist_audit": true,
+  "actor": "user",
+  "confirm_execution": true
+}
+```
+
+响应（SUBMITTED）：
+
+```json
+{
+  "ok": true,
+  "status": "SUBMITTED",
+  "execution_allowed": true,
+  "validation": {},
+  "approval_gate": {},
+  "audit": { "persisted": true, "audit_id": "..." },
+  "execution": {
+    "submitted": true,
+    "run_id": "...",
+    "executor_called": true
+  }
+}
+```
+
+**当前不实现此行为。** 本文档仅做设计收口。
+
+## 十、审计结论
+
+当前 dry-run API 已满足所有安全前置条件。未来开放真实执行时，只需：
+
+1. 移除 `dry_run=false` 的 DRY_RUN_ONLY 阻断
+2. 增加 `confirm_execution` 校验
+3. 强制 `persist_audit=true`
+4. 调用 `run_pipeline()`
+5. 回写 run_id 到 audit record
+
+以上变更范围明确，风险可控。
