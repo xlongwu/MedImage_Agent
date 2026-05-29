@@ -1023,3 +1023,40 @@ export async function postSessionIndex(baseUrl: string) {
 export async function querySessions(baseUrl: string, q: string) {
   return requestJson<Record<string, unknown>>(baseUrl, `/api/sessions/query?q=${encodeURIComponent(q)}&limit=50`);
 }
+
+// === Tool Catalog ===
+
+export async function fetchToolCatalog(baseUrl: string) {
+  return requestJson<{ ok: boolean; count: number; items: Array<Record<string, unknown>> }>(
+    baseUrl,
+    "/api/tools/catalog"
+  );
+}
+
+// === LLM Planner ===
+
+export async function generatePlanFromGoal(
+  baseUrl: string,
+  payload: {
+    goal: string;
+    provider?: string;
+    constraints?: Record<string, unknown>;
+  }
+) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/planner/plan-from-goal", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// === Plan Validator ===
+
+export async function validatePlan(
+  baseUrl: string,
+  plan: Record<string, unknown>
+) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/plans/validate", {
+    method: "POST",
+    body: JSON.stringify({ plan }),
+  });
+}

@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { DEFAULT_API_BASE, getHealth } from "./api";
 import AdvancedModePanel from "./components/workflow/AdvancedModePanel";
+import PlanReviewConsole from "./components/PlanReviewConsole";
 import { useDatasetSummary } from "./hooks/useDatasetSummary";
 import { useImagePreview } from "./hooks/useImagePreview";
 import { useImageSources } from "./hooks/useImageSources";
@@ -41,7 +42,7 @@ const quickActions = [
 
 export default function App() {
   const baseUrl = DEFAULT_API_BASE;
-  const [mode, setMode] = useState<"dashboard" | "advanced">("dashboard");
+  const [mode, setMode] = useState<"dashboard" | "advanced" | "planner">("dashboard");
   const [health, setHealth] = useState<boolean | null>(null);
   const [apiError, setApiError] = useState("");
   const [notice, setNotice] = useState("");
@@ -363,6 +364,21 @@ export default function App() {
     );
   }
 
+  if (mode === "planner") {
+    return (
+      <div className="windows-workstation">
+        <TopBar
+          health={health}
+          apiError={apiError}
+          onRetry={checkHealth}
+          onToggleMode={() => setMode("dashboard")}
+          modeLabel="Dashboard"
+        />
+        <PlanReviewConsole />
+      </div>
+    );
+  }
+
   return (
     <div className="windows-workstation">
       <TopBar
@@ -372,6 +388,7 @@ export default function App() {
         onToggleMode={() => setMode("advanced")}
         modeLabel="Advanced Console"
       />
+      <button onClick={() => setMode("planner")}>Plan Review</button>
       {notice ? <div className="toast-line">{notice}<button onClick={() => setNotice("")}>Dismiss</button></div> : null}
       {taskStream.error ? (
         <div className="api-banner stream-banner">
