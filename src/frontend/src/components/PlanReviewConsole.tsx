@@ -350,7 +350,7 @@ export default function PlanReviewConsole() {
           {approvalResult && (
             <div style={{ padding: 8, background: approvalResult.execution_allowed ? "#e8f5e9" : "#ffebee", borderRadius: 4, fontSize: 13 }}>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                {approvalResult.execution_allowed ? "✅ Execution would be allowed" : "🚫 Execution blocked"}
+                {approvalResult.execution_allowed ? "✅ Execution allowed by approval gate" : "🚫 Execution blocked by approval gate"}
               </div>
               <div>Approval required: <b>{String(approvalResult.approval_required)}</b></div>
               <div>Approved: <b>{String(approvalResult.approved)}</b></div>
