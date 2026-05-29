@@ -121,7 +121,7 @@ def test_agents_md_contains_llm(checks):
 # ── ARCHITECTURE.md line count ──
 
 def test_architecture_md_line_count(checks):
-    arch_key = ("docs_m1", "ARCHITECTURE.md >= 100 lines")
+    arch_key = ("docs_m1", "architecture.md >= 100 lines")
     assert arch_key in checks
     assert checks[arch_key] == "PASS"
 

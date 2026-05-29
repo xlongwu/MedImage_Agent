@@ -89,7 +89,7 @@ def build_release_readiness():
         ("AGENTS.md", "Codex/通用 Agent 开发指南"),
         ("CLAUDE.md", "Claude Code 专属指南"),
         ("docs/PROJECT_GOAL.md", "项目长期目标"),
-        ("docs/ARCHITECTURE.md", "完整架构文档"),
+        ("docs/architecture.md", "完整架构文档"),
         ("docs/ROADMAP.md", "开发路线图"),
         ("docs/TASK_BACKLOG.md", "任务待办池"),
         ("docs/SAFETY_BOUNDARIES.md", "安全边界文档"),
@@ -109,10 +109,10 @@ def build_release_readiness():
             chk("docs_m1", f"AGENTS.md contains '{kw}'", found)
 
     # ── ARCHITECTURE.md line count ──
-    arch_path = Path("docs/ARCHITECTURE.md")
+    arch_path = Path("docs/architecture.md")
     if arch_path.is_file():
         arch_lines = len(arch_path.read_text(encoding="utf-8").splitlines())
-        chk("docs_m1", "ARCHITECTURE.md >= 100 lines", arch_lines >= 100, f"Found {arch_lines} lines")
+        chk("docs_m1", "architecture.md >= 100 lines", arch_lines >= 100, f"Found {arch_lines} lines")
 
     # ── README.md backend start command check ──
     readme_path = Path("README.md")
