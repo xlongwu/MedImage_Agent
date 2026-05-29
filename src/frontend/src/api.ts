@@ -1060,3 +1060,19 @@ export async function validatePlan(
     body: JSON.stringify({ plan }),
   });
 }
+
+// === Approval Gate ===
+
+export async function checkApprovalGate(
+  baseUrl: string,
+  payload: {
+    plan: Record<string, unknown>;
+    validation: Record<string, unknown>;
+    approval: Record<string, unknown> | null;
+  }
+) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/approval/check", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
+import { DEFAULT_API_BASE, checkApprovalGate, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
 
 type PlanData = Record<string, unknown> | null;
 
@@ -27,6 +27,16 @@ export default function PlanReviewConsole() {
   const [jsonError, setJsonError] = useState("");
   const [reValidation, setReValidation] = useState<Record<string, unknown> | null>(null);
   const [copyStatus, setCopyStatus] = useState("");
+
+  // ── Approval Gate ──
+  const [approvalApproved, setApprovalApproved] = useState(true);
+  const [approvalBy, setApprovalBy] = useState("");
+  const [approvalReason, setApprovalReason] = useState("");
+  const [approvalNodesInput, setApprovalNodesInput] = useState("");
+  const [rejectedNodesInput, setRejectedNodesInput] = useState("");
+  const [approvalResult, setApprovalResult] = useState<Record<string, unknown> | null>(null);
+  const [approvalLoading, setApprovalLoading] = useState(false);
+  const [approvalError, setApprovalError] = useState("");
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -198,6 +208,39 @@ export default function PlanReviewConsole() {
     setTimeout(() => setCopyStatus(""), 2000);
   }
 
+  function handleApproveAllRequired() {
+    setApprovalNodesInput(approvalNodes.join(", "));
+  }
+
+  async function handleCheckApproval() {
+    setApprovalError(""); setApprovalResult(null);
+    // Parse current plan JSON
+    let plan: Record<string, unknown>;
+    try { plan = JSON.parse(planJson || "{}"); }
+    catch { setApprovalError("Cannot parse current plan JSON."); return; }
+    if (!validation || !Object.keys(validation).length) {
+      setApprovalError("Please generate or re-validate a plan first.");
+      return;
+    }
+    const nodes = approvalNodesInput.split(",").map(s => s.trim()).filter(Boolean);
+    const rejected = rejectedNodesInput.split(",").map(s => s.trim()).filter(Boolean);
+    const approval = approvalApproved ? {
+      approved: true,
+      approved_by: approvalBy || "reviewer",
+      reason: approvalReason || undefined,
+      approved_nodes: nodes,
+      rejected_nodes: rejected,
+      review_draft_schema_version: "review-draft-v1",
+    } : { approved: false };
+    setApprovalLoading(true);
+    try {
+      const data = await checkApprovalGate(baseUrl, { plan, validation, approval });
+      setApprovalResult(data as Record<string, unknown>);
+    } catch (e) {
+      setApprovalError(e instanceof Error ? e.message : String(e));
+    } finally { setApprovalLoading(false); }
+  }
+
   return (
     <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
       <h2>Plan Review Console</h2>
@@ -265,6 +308,66 @@ export default function PlanReviewConsole() {
             rows={14}
             style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 8, borderRadius: 4, border: "1px solid #ccc" }}
             spellCheck={false} />
+        </div>
+      )}
+
+      {/* ── Approval Gate ── */}
+      {result && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#fafafa", borderRadius: 4, border: "1px solid #e0e0e0" }}>
+          <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Approval Gate Check</h4>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: 13, marginBottom: 8 }}>
+            <label>
+              <input type="checkbox" checked={approvalApproved} onChange={(e) => setApprovalApproved(e.target.checked)} />
+              {" "}Approved
+            </label>
+            <label>
+              Approved by:{" "}
+              <input type="text" value={approvalBy} onChange={(e) => setApprovalBy(e.target.value)}
+                placeholder="reviewer" style={{ width: 100, padding: "2px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }} />
+            </label>
+            <label style={{ gridColumn: "span 2" }}>
+              Approved nodes (comma-separated, or *):
+              <input type="text" value={approvalNodesInput} onChange={(e) => setApprovalNodesInput(e.target.value)}
+                placeholder="spm_realign_subject, motion_qc_subject" style={{ width: "100%", padding: "2px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12, marginTop: 2 }} />
+            </label>
+            <label style={{ gridColumn: "span 2" }}>
+              Rejected nodes:
+              <input type="text" value={rejectedNodesInput} onChange={(e) => setRejectedNodesInput(e.target.value)}
+                placeholder="optional" style={{ width: "100%", padding: "2px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12, marginTop: 2 }} />
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button onClick={handleCheckApproval} disabled={approvalLoading}
+              style={{ padding: "6px 14px", background: "#e65100", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              {approvalLoading ? "Checking..." : "Check Approval Gate"}
+            </button>
+            <button onClick={handleApproveAllRequired}
+              style={{ padding: "6px 14px", background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>
+              Approve all required nodes
+            </button>
+          </div>
+          {approvalError && <div style={{ color: "#c62828", fontSize: 13, marginBottom: 6 }}>❌ {approvalError}</div>}
+          {approvalResult && (
+            <div style={{ padding: 8, background: approvalResult.execution_allowed ? "#e8f5e9" : "#ffebee", borderRadius: 4, fontSize: 13 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                {approvalResult.execution_allowed ? "✅ Execution would be allowed" : "🚫 Execution blocked"}
+              </div>
+              <div>Approval required: <b>{String(approvalResult.approval_required)}</b></div>
+              <div>Approved: <b>{String(approvalResult.approved)}</b></div>
+              {((approvalResult.missing_approval_nodes as string[]) || []).length > 0 && (
+                <div style={{ color: "#c62828" }}>Missing: {(approvalResult.missing_approval_nodes as string[]).join(", ")}</div>
+              )}
+              {((approvalResult.rejected_nodes as string[]) || []).length > 0 && (
+                <div style={{ color: "#c62828" }}>Rejected: {(approvalResult.rejected_nodes as string[]).join(", ")}</div>
+              )}
+              {((approvalResult.errors as Array<Record<string,unknown>>) || []).map((e, i) => (
+                <div key={`ae-${i}`} style={{ color: "#c62828" }}>❌ [{String(e.code)}] {String(e.message)}</div>
+              ))}
+              {((approvalResult.warnings as Array<Record<string,unknown>>) || []).map((w, i) => (
+                <div key={`aw-${i}`} style={{ color: "#e65100" }}>⚠️ [{String(w.code)}] {String(w.message)}</div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
