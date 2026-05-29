@@ -181,6 +181,8 @@ M5-T009: disabled-by-default frontend execution button
 
 详见 [`docs/GATED_EXECUTION_SAFETY_REVIEW.md`](GATED_EXECUTION_SAFETY_REVIEW.md)（M5-T011）。
 
+Safe execution 设计详见 [`docs/SAFE_REVIEWED_EXECUTION_DESIGN.md`](SAFE_REVIEWED_EXECUTION_DESIGN.md)（M5-T012c）。
+
 ## 十二、安全原则
 
 1. 前端不能绕过 approval gate

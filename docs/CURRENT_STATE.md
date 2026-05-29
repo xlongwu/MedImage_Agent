@@ -22,6 +22,9 @@
 | M5-T003：Plan Review Console Approval Gate 展示 | ✅ 已完成 | 2026-05-29 |
 | M5-T004：Execution Integration Design Doc | ✅ 已完成 | 2026-05-29 |
 | M5-T011：Gated Execution 安全审计与设计收口 | ✅ 已完成 | 2026-05-29 |
+| M5-T012a：Plan Adapter 转换层 | ✅ 已完成 | 2026-05-29 |
+| M5-T012b：dry-run 集成 plan_adapter | ✅ 已完成 | 2026-05-29 |
+| M5-T012c：Safe Reviewed Execution 设计 | ✅ 已完成 | 2026-05-29 |
 
 ## M1 交付物状态
 
