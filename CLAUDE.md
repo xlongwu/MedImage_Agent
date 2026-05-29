@@ -103,3 +103,46 @@ Per `docs/developer_guide.md`:
 - Every processing step has a companion QC module.
 - All derivative outputs go to `outputs/derivatives/` — never modify `data/` (rawdata).
 - Import style uses `from __future__ import annotations` throughout.
+
+## Claude Code Workflow Rules
+
+### Before writing any code
+
+1. **Read first.** Use `read_file`, `search_content`, `directory_tree` to understand the files you're about to modify. Never guess.
+2. **Plan second.** For multi-file changes, submit a plan (`submit_plan`) before touching code. For single-file fixes, explain in one sentence what you'll do.
+3. **Wait for confirmation.** Don't execute the plan until the user approves.
+
+### While writing code
+
+- **No unbounded refactors.** Don't rewrite large modules unless the task explicitly asks for it. Localized changes over global rewrites.
+- **No bypassing the approval gate.** Any code that writes files, runs MATLAB/SPM/DPABI, or modifies derivatives MUST go through the approval gate (`approved=true`). Default is `approved=false` — fail safe.
+- **No modifying rawdata.** The `data/` directory (raw BIDS data) is read-only. All outputs go under `outputs/derivatives/`, `outputs/work/`, `outputs/reports/`, `outputs/exports/`.
+- **No hardcoding secrets.** Never write API keys, absolute private paths, or experimental data paths into code or docs.
+- **Frontend only calls API.** Frontend code must never access the local filesystem directly.
+- **LLM only advises.** LLM-generated output is advisory — the Pipeline Executor is the sole execution path.
+
+### After writing code
+
+For EVERY change, report:
+
+1. **Files changed** — list every file you modified, created, or deleted
+2. **Tests run** — which `pytest` commands you ran and whether they passed
+3. **Risks remaining** — known side effects, untested edge cases, follow-up work needed
+
+### Adding a new pipeline stage
+
+Per `docs/developer_guide.md`:
+1. Create the processing/QC module in `src/backend/app/tools/`
+2. Register the node in `src/backend/app/runtime/node_registry.py`
+3. Create a pipeline YAML in `examples/`
+4. Create a CLI runner in `src/backend/app/tools/`
+5. Add API endpoint in `src/backend/app/api/routes.py` + model in `models.py`
+6. Add a frontend panel in `src/frontend/src/components/`
+7. Add tests in `tests/unit/`
+
+### Safety architecture reference
+
+- **Approval gate**: `tool_registry.py` — `requires_confirmation` tools fail without `approved=true`
+- **Path safety**: `path_safety.py` — all file access uses path resolution, preventing directory traversal
+- **Allowed write dirs**: `outputs/work/`, `outputs/logs/`, `outputs/derivatives/`, `outputs/reports/`, `outputs/exports/`
+- **Allowed read dirs** (via API): `examples/`, `work/`, `logs/`, `reports/`, `memory/`, `specs/`

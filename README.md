@@ -185,17 +185,17 @@ Every Operation → Audit Logger → SessionDB → Run History → Reproducibili
 pip install -r requirements.txt
 
 # Frontend dependencies
-cd frontend && npm install
+cd src/frontend && npm install
 ```
 
 ### Start Services
 
 ```bash
 # Start backend (development mode)
-uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000
 
 # Start frontend (development mode)
-cd frontend && npm run dev
+cd src/frontend && npm run dev
 ```
 
 ### Docker Demo Mode
@@ -209,19 +209,19 @@ docker compose -f deploy/docker-compose.demo.yml up --build
 
 ```bash
 # Generate synthetic BIDS data
-python -m backend.app.tools.synthetic_bids
+python -m src.backend.app.tools.synthetic_bids
 
 # Run dataset evaluation
-python -m backend.app.tools.run_dataset_evaluation_cli examples/project_config_dataset.yaml
+python -m src.backend.app.tools.run_dataset_evaluation_cli examples/project_config_dataset.yaml
 
 # Run SPM realignment + Motion QC (requires approval)
-python -m backend.app.tools.run_rsfmri_spm_realign_motion_qc_cli \
+python -m src.backend.app.tools.run_rsfmri_spm_realign_motion_qc_cli \
   examples/project_config_dataset.yaml \
   examples/pipeline_rsfmri_spm_realign_motion_qc.yaml \
   --approve
 
 # Run GPU-accelerated ALFF (with CPU comparison benchmark)
-python -m backend.app.tools.gpu_benchmark_cli
+python -m src.backend.app.tools.gpu_benchmark_cli
 
 # Run GPU-accelerated ReHo
 python -c "
@@ -241,11 +241,14 @@ MedImage_Agent/
 │   ├── backend/
 │   │   └── app/
 │   │       ├── api/                    # FastAPI routes
-│   │       │   └── routes.py
-│   │       ├── core/                   # Core config & models
-│   │       │   ├── config.py
-│   │       │   └── models.py
-│   │       ├── runtime/                # Pipeline + Agent Runtime
+│   │       │   ├── routes.py
+│   │       │   ├── models.py
+│   │       │   ├── dashboard_routes.py
+│   │       │   ├── planner_routes.py
+│   │       │   ├── gui_agent_routes.py
+│   │       │   ├── desktop_routes.py
+│   │       │   └── external_smoke_routes.py
+│   │       ├── runtime/                # Pipeline + Agent Runtime + Safety
 │   │       │   ├── agent_runtime.py    # Agent planning & execution
 │   │       │   ├── pipeline_executor.py # DAG execution engine
 │   │       │   ├── scheduler.py        # Parallel scheduler
@@ -254,8 +257,11 @@ MedImage_Agent/
 │   │       │   ├── hook_manager.py     # Hook system
 │   │       │   ├── error_diagnoser.py  # Error diagnosis
 │   │       │   ├── retry_runtime.py    # Retry mechanism
-│   │       │   └── run_inspector.py    # Run inspector
-│   │       ├── nodes/                  # Pipeline node handlers
+│   │       │   ├── run_inspector.py    # Run inspector
+│   │       │   ├── path_safety.py      # Path safety
+│   │       │   ├── tool_registry.py    # Tool permission registry
+│   │       │   └── agent_plan.py       # Agent plan creation
+│   │       ├── nodes/                  # Pipeline node handlers (GPU)
 │   │       │   ├── gpu_alff_node.py    # GPU ALFF node
 │   │       │   ├── gpu_reho_node.py    # GPU ReHo node
 │   │       │   ├── gpu_nuisance_regression_node.py
@@ -282,10 +288,17 @@ MedImage_Agent/
 │   │       │   ├── gpu_memory.py       # GPU memory monitoring
 │   │       │   ├── gpu_*.py            # GPU runners & contracts
 │   │       │   └── spm_*.py            # SPM integration runners
-│   │       ├── safety/                 # Security modules
-│   │       │   ├── path_safety.py      # Path safety
-│   │       │   ├── tool_registry.py    # Tool permission registry
-│   │       │   └── audit_logger.py     # Audit logging
+│   │       ├── schemas/                # Pipeline schema validation
+│   │       │   └── pipeline_schema.py
+│   │       ├── advisor/                # LLM advisor modules
+│   │       │   ├── advisor_models.py
+│   │       │   ├── advisor_router.py
+│   │       │   ├── advisor_safety.py
+│   │       │   ├── parameter_advisor.py
+│   │       │   ├── protocol_advisor.py
+│   │       │   ├── qc_report_advisor.py
+│   │       │   ├── error_advisor.py
+│   │       │   └── docs_qa_advisor.py
 │   │       └── main.py                 # FastAPI entry point
 │   └── frontend/
 │       ├── src/
