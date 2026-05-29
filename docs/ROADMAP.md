@@ -4,7 +4,8 @@
 
 | 里程碑 | 目标 | 预计状态 | 依赖 |
 |--------|------|---------|------|
-| M1 | 稳定当前基础设施 | 当前进行中 | — |
+| M1 | 稳定当前基础设施 | ✅ 已完成 | M2 |
+| M2 | 拆分 Node Registry，建立 Tool Catalog | 🔄 当前进行中 | — |
 | M2 | 拆分 Node Registry，建立 Tool Catalog | 计划中 | M1 |
 | M3 | 实现 Plan Validator | 计划中 | M2 |
 | M4 | 实现 LLM Planner MVP | 计划中 | M3 |
@@ -30,15 +31,18 @@
 8. ✅ docs/DEVELOPMENT_WORKFLOW.md（开发工作流文档）
 9. ✅ docs/DECISIONS/0001-agent-runtime-boundary.md（ADR-001）
 10. ✅ docs/DECISIONS/0002-rawdata-readonly.md（ADR-002）
-11. 🔄 修正 README.md 和现有文档中的路径不一致
-12. 🔄 确认所有测试通过，修复失败的测试
+11. ✅ 修正 README.md 和现有文档中的路径不一致
+12. ✅ 确认所有测试通过（242 passed, 4 skipped）
 
 ### 验收标准
 
-- 所有文档中的路径与实际文件结构一致
-- `pytest` 全量通过
-- 后端和前端能正常启动
-- Agent 可根据 AGENTS.md 和 CLAUDE.md 安全地修改代码
+- ✅ 所有文档中的路径与实际文件结构一致
+- ✅ `pytest` 全量通过（242 passed, 4 skipped）
+- ✅ 后端 `python -c "from src.backend.app.main import app; print(app.title)"` 通过
+- ✅ 前端 `npm run build` 成功
+- ✅ 端口统一为 8000（12 处 8765→8000 修正）
+- ✅ CI 建立（`.github/workflows/ci.yml`）
+- ✅ Agent 可根据 AGENTS.md 和 CLAUDE.md 安全地修改代码
 
 ---
 

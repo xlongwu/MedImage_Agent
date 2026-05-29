@@ -6,7 +6,8 @@
 
 | 里程碑 | 状态 | 完成日期 |
 |--------|------|---------|
-| M1：稳定当前基础设施 | 🔄 进行中 | — |
+| M1：稳定当前基础设施 | ✅ 已完成 | 2026-05-29 |
+| M2：Tool Catalog MVP | 🔄 进行中 | — |
 
 ## M1 交付物状态
 
@@ -54,6 +55,8 @@
 | test_release_readiness.py | 24 passed |
 | test_backend_app_import.py | 3 passed |
 | test_agent_plan_project_settings.py | 12 passed |
+| test_pipeline_executor_project_settings.py | 10 passed |
+| test_routes_project_settings.py | 8 passed |
 | npm run build | ✅ 成功 |
 
 ## 新增模块
@@ -61,12 +64,26 @@
 | 模块 | 说明 |
 |------|------|
 | `src/backend/app/config/` | ProjectSettings 统一配置读取层 |
-| `src/backend/app/config/settings.py` | RuntimeSettings / ThirdPartySettings / SafetySettings / ProjectSettings dataclass |
-| `tests/unit/test_project_settings.py` | 14 个测试：加载、默认值、错误处理、无副作用 |
+| `.github/workflows/ci.yml` | GitHub Actions CI（backend pytest + frontend build） |
+
+## ProjectSettings 闭环
+
+三条主要配置入口全部接入 ProjectSettings 结构校验：
+
+| 入口 | 阶段 | 文件 | 状态 |
+|------|------|------|:---:|
+| `_load_project_config()` | PLAN | `agent_plan.py` | ✅ |
+| `load_project_config()` | EXECUTE | `pipeline_executor.py` | ✅ |
+| `_load_project_config()` | API | `routes.py` | ✅ |
+
+## CI
+
+GitHub Actions 在每次 push/PR 时自动运行：
+- **backend**：Python 3.11 + `pytest --tb=short`
+- **frontend**：Node 20 + `npm ci` + `npm run build`
+- 不依赖 MATLAB/SPM/DPABI/GPU
 
 ## 已知问题
 
-1. **audit_logger.py 不存在**：多处文档引用该文件，但实际未实现。T-0005 待决策。
-2. **前后端未验证启动**：T-0004 待执行。
-3. **配置读取重复**：pipeline_executor、agent_plan、routes 中各自实现了 `_load_project_config`。agent_plan 已迁移（T-005a），pipeline_executor 和 routes 待后续。
-4. **Python-only 项目兼容性**：ProjectSettings 当前要求 `third_party.spm_dir` 和 `third_party.dpabi_dir` 为关键字段。如后续支持纯 Python pipeline（无需 MATLAB/SPM/DPABI），需调整为可选字段或提供 Python-only config 模板。
+1. **audit_logger.py 不存在**：non-blocking，planned for M2。不阻塞 Tool Catalog MVP。
+2. **Python-only 项目兼容性**：ProjectSettings 要求 `third_party.spm_dir/dpabi_dir` 为关键字段。后续支持纯 Python pipeline 时需调整。

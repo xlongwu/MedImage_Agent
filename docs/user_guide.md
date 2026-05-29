@@ -4,10 +4,10 @@
 
 ```bash
 # Start backend
-uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000
 
 # Start frontend
-cd frontend && npm run dev
+cd src/frontend && npm run dev
 ```
 
 ## Running rs-fMRI Pipelines
@@ -15,7 +15,7 @@ cd frontend && npm run dev
 Each pipeline is defined as a YAML file in `examples/`. Run with:
 
 ```bash
-python -m backend.app.tools.run_rsfmri_{pipeline_name}_cli --approve
+python -m src.backend.app.tools.run_rsfmri_{pipeline_name}_cli --approve
 ```
 
 For pipelines requiring MATLAB/SPM, the `--approve` flag is mandatory. Without it, SPM steps fail safely.
