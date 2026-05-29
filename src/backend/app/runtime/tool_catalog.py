@@ -1,0 +1,582 @@
+"""Tool Catalog — read-only registry of pipeline node metadata.
+
+Purpose:
+  Describe every valid pipeline node so that LLM Planners, Plan Validators,
+  and frontend Plan Review Consoles can reason about tools without executing
+  them.  The Tool Catalog is NOT a substitute for Node Registry — Node
+  Registry maps node_id → runner function; Tool Catalog maps node_id →
+  metadata for planning / validation / display.
+
+Design (MVP):
+  - TOOL_METADATA hard-codes metadata for ~30 core nodes.
+  - build_tool_catalog() iterates ALL NODE_REGISTRY keys and applies
+    fallback rules for any node not in TOOL_METADATA.
+  - No node is ever silently dropped — every NODE_REGISTRY entry produces
+    exactly one ToolCatalogItem.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+# ── Dataclass ────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class ToolCatalogItem:
+    """Metadata for a single pipeline node / tool."""
+
+    id: str
+    name: str
+    backend: str
+    parallel_level: str
+    description: str
+    requires_approval: bool
+    manual_required: bool
+    risk_level: str
+    inputs: list[str] = field(default_factory=list)
+    outputs: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+
+
+# ── Core metadata (30 nodes) ─────────────────────────────────────────────────
+
+TOOL_METADATA: dict[str, dict[str, Any]] = {
+    # ── Data / Env ──
+    "create_synthetic_bids": {
+        "name": "Create Synthetic BIDS",
+        "backend": "python",
+        "parallel_level": "project",
+        "description": "Generate synthetic BIDS dataset for testing.",
+        "requires_approval": False,
+        "manual_required": False,
+        "risk_level": "low",
+        "inputs": [],
+        "outputs": ["synthetic_bids/rawdata/"],
+        "tags": ["data", "synthetic"],
+    },
+    "data_inspection": {
+        "name": "Data Inspection",
+        "backend": "python",
+        "parallel_level": "project",
+        "description": "Scan rawdata and build dataset index.",
+        "requires_approval": False,
+        "manual_required": False,
+        "risk_level": "low",
+        "inputs": ["rawdata_dir"],
+        "outputs": ["dataset_index.json"],
+        "tags": ["data", "bids"],
+    },
+    "environment_check": {
+        "name": "Environment Check",
+        "backend": "python",
+        "parallel_level": "project",
+        "description": "Verify MATLAB/SPM/DPABI environment.",
+        "requires_approval": False,
+        "manual_required": False,
+        "risk_level": "low",
+        "inputs": [],
+        "outputs": ["environment_check.json"],
+        "tags": ["env", "matlab"],
+    },
+
+    # ── SPM preprocessing ──
+    "spm_slice_timing_subject": {
+        "name": "SPM Slice Timing",
+        "backend": "matlab-spm",
+        "parallel_level": "subject",
+        "description": "Correct slice timing differences in BOLD fMRI.",
+        "requires_approval": True,
+        "manual_required": False,
+        "risk_level": "high",
+        "inputs": ["BOLD NIfTI", "TR", "slice_order"],
+        "outputs": ["a<subject>_bold.nii"],
+        "tags": ["spm", "matlab", "rsfmri", "preprocessing"],
+    },
+    "spm_realign_subject": {
+        "name": "SPM Realign",
+        "backend": "matlab-spm",
+        "parallel_level": "subject",
+        "description": "Motion correction via rigid-body realignment.",
+        "requires_approval": True,
+        "manual_required": False,
+        "risk_level": "high",
+        "inputs": ["BOLD NIfTI"],
+        "outputs": ["r<subject>_bold.nii", "rp_*.txt"],
+        "tags": ["spm", "matlab", "rsfmri", "motion"],
+    },
+    "spm_coregister_subject": {
+        "name": "SPM Coregister",
+        "backend": "matlab-spm",
+        "parallel_level": "subject",
+        "description": "Coregister functional to structural images.",
+        "requires_approval": True,
+        "manual_required": False,
+        "risk_level": "high",
+        "inputs": ["BOLD NIfTI", "T1w NIfTI"],
+        "outputs": ["coregistered BOLD"],
+        "tags": ["spm", "matlab", "rsfmri", "registration"],
+    },
+    "spm_segment_subject": {
+        "name": "SPM Segment",
+        "backend": "matlab-spm",
+        "parallel_level": "subject",
+        "description": "Segment T1w into GM/WM/CSF tissue maps.",
+        "requires_approval": True,
+        "manual_required": False,
+        "risk_level": "high",
+        "inputs": ["T1w NIfTI"],
+        "outputs": ["c1/c2/c3 tissue maps"],
+        "tags": ["spm", "matlab", "segmentation"],
+    },
+    "spm_normalize_subject": {
+        "name": "SPM Normalize",
+        "backend": "matlab-spm",
+        "parallel_level": "subject",
+        "description": "Spatial normalisation to MNI template.",
+        "requires_approval": True,
+        "manual_required": False,
+        "risk_level": "high",
+        "inputs": ["BOLD NIfTI", "deformation fields"],
+        "outputs": ["w<subject>_bold.nii"],
+        "tags": ["spm", "matlab", "rsfmri", "normalization"],
+    },
+    "spm_smooth_subject": {
+        "name": "SPM Smooth",
+        "backend": "matlab-spm",
+        "parallel_level": "subject",
+        "description": "Gaussian spatial smoothing of BOLD images.",
+        "requires_approval": True,
+        "manual_required": False,
+        "risk_level": "high",
+        "inputs": ["BOLD NIfTI", "FWHM"],
+        "outputs": ["s<subject>_bold.nii"],
+        "tags": ["spm", "matlab", "rsfmri", "smoothing"],
+    },
+    "spm_smoke_test": {
+        "name": "SPM Smoke Test",
+        "backend": "matlab-spm",
+        "parallel_level": "project",
+        "description": "Quick smoke test to verify SPM/MATLAB setup.",
+        "requires_approval": True,
+        "manual_required": False,
+        "risk_level": "medium",
+        "inputs": [],
+        "outputs": [],
+        "tags": ["spm", "matlab", "test"],
+    },
+
+    # ── Motion QC ──
+    "motion_qc_subject": {
+        "name": "Motion QC (per subject)",
+        "backend": "python",
+        "parallel_level": "subject",
+        "description": "Compute FD/DVARS motion metrics.",
+        "requires_approval": False,
+        "manual_required": False,
+        "risk_level": "low",
+        "inputs": ["rp_*.txt"],
+        "outputs": ["motion_qc.json"],
+        "tags": ["qc", "motion", "rsfmri"],
+    },
+    "motion_qc_dataset_report": {
+        "name": "Motion QC Dataset Report",
+        "backend": "python",
+        "parallel_level": "project",
+        "description": "Aggregate motion QC across all subjects.",
+        "requires_approval": False,
+        "manual_required": False,
+        "risk_level": "low",
+        "inputs": ["motion_qc per subject"],
+        "outputs": ["motion_qc_dataset_report"],
+        "tags": ["qc", "motion", "report"],
+    },
+
+    # ── QC reports ──
+    "slice_timing_qc_dataset_report": {
+        "name": "Slice Timing QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate slice timing QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "slice_timing"],
+    },
+    "registration_qc_dataset_report": {
+        "name": "Registration QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate coregistration QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "registration"],
+    },
+    "tissue_qc_dataset_report": {
+        "name": "Tissue QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate segmentation QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "segmentation"],
+    },
+    "normalization_qc_dataset_report": {
+        "name": "Normalization QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate normalisation QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "normalization"],
+    },
+    "smoothing_qc_dataset_report": {
+        "name": "Smoothing QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate smoothing QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "smoothing"],
+    },
+
+    # ── Python post-processing ──
+    "nuisance_regression_subject": {
+        "name": "Nuisance Regression",
+        "backend": "python", "parallel_level": "subject",
+        "description": "Remove nuisance signals via linear regression.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI", "confound matrix"],
+        "outputs": ["residual BOLD"],
+        "tags": ["rsfmri", "denoising"],
+    },
+    "temporal_filtering_subject": {
+        "name": "Temporal Filtering",
+        "backend": "python", "parallel_level": "subject",
+        "description": "Band-pass temporal filtering.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI", "TR", "freq_band"],
+        "outputs": ["filtered BOLD"],
+        "tags": ["rsfmri", "filtering"],
+    },
+    "alff_falff_subject": {
+        "name": "ALFF/fALFF",
+        "backend": "python", "parallel_level": "subject",
+        "description": "Amplitude of Low Frequency Fluctuations.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI", "TR", "freq_band"],
+        "outputs": ["ALFF/fALFF maps"],
+        "tags": ["rsfmri", "metric", "alff"],
+    },
+    "reho_subject": {
+        "name": "ReHo",
+        "backend": "python", "parallel_level": "subject",
+        "description": "Regional Homogeneity (Kendall's W).",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI"],
+        "outputs": ["ReHo map"],
+        "tags": ["rsfmri", "metric", "reho"],
+    },
+    "functional_connectivity_subject": {
+        "name": "Functional Connectivity",
+        "backend": "python", "parallel_level": "subject",
+        "description": "ROI-based functional connectivity matrix.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI", "ROI atlas"],
+        "outputs": ["FC matrix"],
+        "tags": ["rsfmri", "metric", "connectivity"],
+    },
+
+    # ── GPU-accelerated ──
+    "gpu_alff_subject": {
+        "name": "GPU ALFF/fALFF",
+        "backend": "gpu", "parallel_level": "subject",
+        "description": "GPU-accelerated ALFF/fALFF (CuPy).",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI"],
+        "outputs": ["ALFF/fALFF maps"],
+        "tags": ["rsfmri", "metric", "alff", "gpu"],
+    },
+    "gpu_reho_subject": {
+        "name": "GPU ReHo",
+        "backend": "gpu", "parallel_level": "subject",
+        "description": "GPU-accelerated ReHo (CuPy).",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI"],
+        "outputs": ["ReHo map"],
+        "tags": ["rsfmri", "metric", "reho", "gpu"],
+    },
+    "gpu_nuisance_regression_subject": {
+        "name": "GPU Nuisance Regression",
+        "backend": "gpu", "parallel_level": "subject",
+        "description": "GPU-accelerated nuisance regression.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI"],
+        "outputs": ["residual BOLD"],
+        "tags": ["rsfmri", "gpu", "denoising"],
+    },
+    "gpu_temporal_filtering_subject": {
+        "name": "GPU Temporal Filtering",
+        "backend": "gpu", "parallel_level": "subject",
+        "description": "GPU-accelerated temporal filtering.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI"],
+        "outputs": ["filtered BOLD"],
+        "tags": ["rsfmri", "gpu", "filtering"],
+    },
+    "gpu_functional_connectivity_subject": {
+        "name": "GPU Functional Connectivity",
+        "backend": "gpu", "parallel_level": "subject",
+        "description": "GPU-accelerated functional connectivity.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["BOLD NIfTI"],
+        "outputs": ["FC matrix"],
+        "tags": ["rsfmri", "gpu", "connectivity"],
+    },
+
+    # ── QC dataset reports (Python) ──
+    "nuisance_regression_qc_dataset_report": {
+        "name": "Nuisance Regression QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate nuisance regression QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report"],
+    },
+    "temporal_filtering_qc_dataset_report": {
+        "name": "Temporal Filtering QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate temporal filtering QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report"],
+    },
+    "alff_falff_qc_dataset_report": {
+        "name": "ALFF/fALFF QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate ALFF/fALFF QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "alff"],
+    },
+    "reho_qc_dataset_report": {
+        "name": "ReHo QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate ReHo QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "reho"],
+    },
+    "functional_connectivity_qc_dataset_report": {
+        "name": "FC QC Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "Aggregate functional connectivity QC.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["qc", "report", "connectivity"],
+    },
+
+    # ── Group / Report / Release ──
+    "dataset_evaluation": {
+        "name": "Dataset Evaluation",
+        "backend": "python", "parallel_level": "project",
+        "description": "Evaluate dataset completeness and consistency.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["dataset_index"],
+        "outputs": ["dataset_evaluation report"],
+        "tags": ["data", "qc", "report"],
+    },
+    "group_dataset_summary": {
+        "name": "Group Dataset Summary",
+        "backend": "python", "parallel_level": "project",
+        "description": "Cross-subject aggregate summary and dashboard data.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["per-subject QC/metrics"],
+        "outputs": ["group_summary.json", "dashboard_data.csv"],
+        "tags": ["report", "summary"],
+    },
+    "rsfmri_report_exporter": {
+        "name": "rs-fMRI Report Exporter",
+        "backend": "python", "parallel_level": "project",
+        "description": "Export ZIP report package with SHA256 checksums.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["reports/"],
+        "outputs": ["ZIP package", "SHA256 manifest"],
+        "tags": ["report", "export"],
+    },
+    "rsfmri_report_package_validator": {
+        "name": "Report Package Validator",
+        "backend": "python", "parallel_level": "project",
+        "description": "Validate exported report package integrity and safety.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["ZIP package"],
+        "outputs": ["validation_report"],
+        "tags": ["report", "validation"],
+    },
+    "project_release_readiness": {
+        "name": "Project Release Readiness",
+        "backend": "python", "parallel_level": "project",
+        "description": "Check project release readiness against quality gates.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [],
+        "outputs": ["release_readiness report"],
+        "tags": ["release", "report"],
+    },
+    "docs_inventory": {
+        "name": "Docs Inventory",
+        "backend": "python", "parallel_level": "project",
+        "description": "Build documentation inventory for the project.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [],
+        "outputs": ["docs_inventory"],
+        "tags": ["docs", "report"],
+    },
+
+    # ── Misc ──
+    "subject_qc": {
+        "name": "Subject QC",
+        "backend": "python", "parallel_level": "subject",
+        "description": "Per-subject quality control on smoothed output.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["smoothed BOLD"],
+        "outputs": ["qc_metrics"],
+        "tags": ["qc"],
+    },
+    "st_realign_motion_chain_report": {
+        "name": "Slice Timing + Realign + Motion Chain Report",
+        "backend": "python", "parallel_level": "project",
+        "description": "End-to-end report for ST → Realign → Motion QC chain.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["report", "motion"],
+    },
+    "rsfmri_preprocessing_plan": {
+        "name": "rs-fMRI Preprocessing Plan",
+        "backend": "python", "parallel_level": "project",
+        "description": "Generate and write the rs-fMRI preprocessing plan.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": [], "outputs": [],
+        "tags": ["plan", "rsfmri"],
+    },
+}
+
+
+# ── Fallback logic ────────────────────────────────────────────────────────────
+
+def _fallback(node_id: str) -> dict[str, Any]:
+    """Produce safe conservative metadata for nodes not in TOOL_METADATA."""
+    backend = "unknown"
+    parallel_level = "unknown"
+    requires_approval = False
+    manual_required = False
+    risk_level = "unknown"
+    tags: list[str] = ["uncataloged"]
+
+    # ── Prefix-based inference ──
+    if node_id.startswith("spm_"):
+        backend = "matlab-spm"
+        requires_approval = True
+        risk_level = "high"
+        tags = ["spm", "matlab"]
+    elif node_id.startswith("dpabi_"):
+        if "contract" in node_id or "capability" in node_id or "preflight" in node_id or "scaffold" in node_id or "signature" in node_id or "template" in node_id or "manifest" in node_id or "run_plan" in node_id:
+            backend = "python"
+            requires_approval = False
+            risk_level = "low"
+            tags = ["dpabi", "contract"]
+        elif "sandbox" in node_id or "single_function" in node_id:
+            backend = "matlab"
+            requires_approval = True
+            risk_level = "high"
+            tags = ["dpabi", "matlab"]
+        else:
+            backend = "dpabi"
+            requires_approval = True
+            risk_level = "high"
+            tags = ["dpabi", "matlab"]
+    elif node_id.startswith("gpu_"):
+        backend = "gpu"
+        risk_level = "medium"
+        tags = ["gpu"]
+    elif "_qc_" in node_id or node_id.endswith("_dataset_report"):
+        requires_approval = False
+        risk_level = "low"
+        tags = ["qc", "report"]
+    elif node_id.endswith("_contract") or "candidate_contract" in node_id:
+        requires_approval = False
+        risk_level = "low"
+        tags = ["contract"]
+    elif node_id.startswith("gui_"):
+        requires_approval = True
+        manual_required = True
+        risk_level = "high"
+        tags = ["gui"]
+
+    return {
+        "name": node_id.replace("_", " ").title(),
+        "backend": backend,
+        "parallel_level": parallel_level,
+        "description": f"No catalog metadata yet for node '{node_id}'.",
+        "requires_approval": requires_approval,
+        "manual_required": manual_required,
+        "risk_level": risk_level,
+        "inputs": [],
+        "outputs": [],
+        "tags": tags,
+    }
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def build_tool_catalog() -> list[ToolCatalogItem]:
+    """Build a ToolCatalogItem for every registered node.
+
+    Returns one item per NODE_REGISTRY key.  Nodes with metadata in
+    TOOL_METADATA use explicit values; all others receive fallback metadata
+    derived from their node id prefix.
+    """
+    from src.backend.app.runtime.node_registry import NODE_REGISTRY  # noqa: E402
+
+    items: list[ToolCatalogItem] = []
+    seen: set[str] = set()
+
+    for node_id in sorted(NODE_REGISTRY):
+        if node_id in seen:
+            continue
+        seen.add(node_id)
+        meta = TOOL_METADATA.get(node_id)
+        if meta is None:
+            meta = _fallback(node_id)
+        items.append(ToolCatalogItem(id=node_id, **meta))
+
+    return items
+
+
+def get_tool_catalog_item(node_id: str) -> ToolCatalogItem:
+    """Look up a single node's metadata by id.
+
+    Raises KeyError if the node is not registered.
+    """
+    from src.backend.app.runtime.node_registry import NODE_REGISTRY  # noqa: E402
+
+    if node_id not in NODE_REGISTRY:
+        raise KeyError(f"Unknown node id: {node_id}")
+    meta = TOOL_METADATA.get(node_id)
+    if meta is None:
+        meta = _fallback(node_id)
+    return ToolCatalogItem(id=node_id, **meta)
+
+
+def catalog_as_dicts() -> list[dict[str, Any]]:
+    """Return the full catalog as a list of plain dicts (JSON-serializable)."""
+    return [
+        {
+            "id": item.id,
+            "name": item.name,
+            "backend": item.backend,
+            "parallel_level": item.parallel_level,
+            "description": item.description,
+            "requires_approval": item.requires_approval,
+            "manual_required": item.manual_required,
+            "risk_level": item.risk_level,
+            "inputs": item.inputs,
+            "outputs": item.outputs,
+            "tags": item.tags,
+        }
+        for item in build_tool_catalog()
+    ]

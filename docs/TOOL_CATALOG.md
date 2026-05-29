@@ -1,0 +1,79 @@
+# Tool Catalog
+
+## 目的
+
+Tool Catalog 是只读工具目录，描述系统中所有合法 pipeline node / tool 的元数据。
+
+用于：
+- **LLM Planner**：选择工具时只能从 Catalog 中选取，不能编造不存在的 node
+- **Plan Validator**：校验 plan 中引用的 node 是否存在、参数是否合法
+- **Frontend Plan Review Console**：展示可用工具列表及风险等级
+
+## 与 Node Registry 的区别
+
+| | Node Registry | Tool Catalog |
+|---|---|---|
+| 映射 | `node_id → runner function` | `node_id → metadata` |
+| 用途 | **执行** | **规划 / 校验 / 展示** |
+| 调用时机 | Pipeline Executor 执行时 | Planner / Validator 运行时 |
+| 内容 | Python callable | 结构化元数据 |
+
+**Tool Catalog 不替代 Node Registry。**
+
+## ToolCatalogItem 字段（v1.0）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `str` | pipeline node id，如 `spm_realign_subject` |
+| `name` | `str` | 人类可读名称 |
+| `backend` | `str` | `python` / `matlab-spm` / `dpabi` / `gpu` / `gui-agent` / `report` / `unknown` |
+| `parallel_level` | `str` | `project` / `subject` / `unknown` |
+| `description` | `str` | 简短说明 |
+| `requires_approval` | `bool` | 是否需要显式 approval |
+| `manual_required` | `bool` | 是否需要人工或 GUI Agent 介入（M5 预留） |
+| `risk_level` | `str` | `low` / `medium` / `high` / `unknown` |
+| `inputs` | `list[str]` | 逻辑输入（非精确文件路径） |
+| `outputs` | `list[str]` | 逻辑输出（非精确文件路径） |
+| `tags` | `list[str]` | 分类标签：rsfmri, spm, matlab, dpabi, qc, report, metric, gpu, gui |
+
+## 风险等级与审批规则
+
+| 条件 | requires_approval | risk_level |
+|------|:---:|:---:|
+| SPM / MATLAB 执行节点 | True | high |
+| DPABI 执行节点（非 contract） | True | high |
+| GUI / manual 节点 | True | high |
+| Python 处理节点（写 derivatives） | False | medium |
+| Python QC / report 节点 | False | low |
+| Contract / capability 检查节点 | False | low |
+
+**保守原则**：不确定时宁可设为较高风险等级。
+
+## LLM Planner 使用方式
+
+LLM Planner 只能从 Tool Catalog 中选择合法的 `node_id`：
+
+```python
+catalog = build_tool_catalog()
+available_node_ids = {item.id for item in catalog}
+```
+
+LLM 不应编造 Catalog 中不存在的 node。生成的 pipeline plan 必须通过 Plan Validator 校验（检查 node id 是否在 Catalog 中）。
+
+## 当前限制
+
+1. **Metadata 不是完整执行 contract**：不包含参数类型、参数范围、文件格式约束。这些由 Pipeline Schema（`pipeline_schema.py`）和 Plan Validator 补充。
+2. **不替代 Pipeline Schema**：schema 定义 node 的结构约束（depends_on、params、outputs），Catalog 提供人类可读的语义描述。
+3. **不替代 Plan Validator**：Validator 负责参数校验、路径安全、backend 可用性。Catalog 只提供元数据查询。
+4. **Fallback metadata 是 MVP 临时策略**：未在 `TOOL_METADATA` 中明确定义的 node 通过 id 前缀规则推导。后续需要逐节点补全精确 metadata。
+
+## 覆盖范围
+
+- **明确定义**：~30 个核心 node（SPM 预处理、Python 后处理、QC、报告）
+- **Fallback**：~34 个 node（DPABI contract、GPU candidate contract 等）
+- **总计**：覆盖全部 64 个 NODE_REGISTRY 中的 node
+
+## 代码位置
+
+- `src/backend/app/runtime/tool_catalog.py` — 核心实现
+- `tests/unit/test_tool_catalog.py` — 13 个测试
