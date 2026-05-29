@@ -24,6 +24,12 @@ type DryRunResult = {
   validation?: Record<string, unknown>;
   approval_gate?: Record<string, unknown> | null;
   execution?: DryRunExecutionMeta;
+  audit?: {
+    persisted?: boolean;
+    audit_id?: string;
+    audit_path?: string;
+    event_type?: string;
+  };
   errors?: unknown[];
   warnings?: unknown[];
 };
@@ -61,6 +67,7 @@ export default function PlanReviewConsole() {
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [dryRunError, setDryRunError] = useState("");
+  const [persistAudit, setPersistAudit] = useState(false);
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -286,6 +293,8 @@ export default function PlanReviewConsole() {
         plan,
         approval,
         project_config_path: "examples/project_config_dataset.yaml",
+        persist_audit: persistAudit,
+        actor: approvalBy || undefined,
       });
       setDryRunResult(data as Record<string, unknown>);
     } catch (e) {
@@ -434,6 +443,10 @@ export default function PlanReviewConsole() {
             style={{ padding: "6px 14px", background: "#7b1fa2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
             {dryRunLoading ? "Checking..." : "Dry-run Execution Check"}
           </button>
+          <label style={{ fontSize: 12, marginLeft: 8 }}>
+            <input type="checkbox" checked={persistAudit} onChange={(e) => setPersistAudit(e.target.checked)} />
+            {" "}Persist audit record
+          </label>
           {dryRunError && <div style={{ color: "#c62828", fontSize: 13, marginBottom: 6 }}>❌ {dryRunError}</div>}
           {dryRunResult && (
             <div style={{ padding: 8, background: dryRunResult.status === "DRY_RUN_OK" ? "#e8f5e9" : dryRunResult.status === "VALIDATION_FAILED" ? "#ffebee" : "#fff3e0", borderRadius: 4, fontSize: 13 }}>
@@ -454,6 +467,11 @@ export default function PlanReviewConsole() {
               {dryRunResult.status !== "DRY_RUN_OK" && (
                 <div style={{ marginTop: 4, fontSize: 11, color: "#e65100" }}>
                   ⚠️ No pipeline was executed. This is a dry-run check only.
+                </div>
+              )}
+              {dryRunResult.audit?.persisted && (
+                <div style={{ marginTop: 4, fontSize: 11, color: "#2e7d32" }}>
+                  📝 Audit: {String(dryRunResult.audit.audit_id)} ({String(dryRunResult.audit.event_type)})
                 </div>
               )}
             </div>

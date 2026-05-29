@@ -1085,6 +1085,8 @@ export async function executeReviewedDryRun(
     plan: Record<string, unknown>;
     approval: Record<string, unknown> | null;
     project_config_path?: string;
+    persist_audit?: boolean;
+    actor?: string;
   }
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/plans/execute-reviewed", {
