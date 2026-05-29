@@ -88,4 +88,4 @@ GitHub Actions 在每次 push/PR 时自动运行：
 
 1. **audit_logger.py 不存在**：non-blocking，planned for M2。不阻塞 Tool Catalog MVP。
 2. **Python-only 项目兼容性**：ProjectSettings 要求 `third_party.spm_dir/dpabi_dir` 为关键字段。后续支持纯 Python pipeline 时需调整。
-3. **CI 存量测试已修复**（T-0008）：error KB 路径改为 `__file__` 推导 + 原子写入。CI 全绿。
+3. **CI 全绿**（T-0008/T-0008b）：error KB 完整提交 v0.2.0 + `__file__` 路径解析 + 原子写入。
