@@ -164,12 +164,14 @@ pytest tests/api/
 
 ### 5.2 前端测试
 
+**任何前端改动必须本地运行 `npm run build` 通过才能提交。**
+
 ```bash
+# 构建检查（必须通过）
+cd src/frontend && npm run build
+
 # 类型检查
 cd src/frontend && npm run typecheck
-
-# 构建检查
-cd src/frontend && npm run build
 
 # Lint
 cd src/frontend && npm run lint
@@ -177,6 +179,8 @@ cd src/frontend && npm run lint
 # 格式化检查
 cd src/frontend && npm run format:check
 ```
+
+手动 smoke checklist 见 [`docs/FRONTEND_SMOKE_CHECK.md`](FRONTEND_SMOKE_CHECK.md)。
 
 ### 5.3 启动验证
 
