@@ -171,3 +171,79 @@ def test_no_runner():
 def test_json_serializable():
     resp = client.post("/api/plans/execute-reviewed", json=_valid_body())
     json.loads(resp.text)
+
+
+# ── 15. persist_audit=false → no audit ──
+
+def test_persist_audit_false():
+    resp = client.post("/api/plans/execute-reviewed", json=_valid_body(persist_audit=False))
+    data = resp.json()
+    assert data["audit"]["persisted"] is False
+
+
+# ── 16. persist_audit=true DRY_RUN_OK writes audit ──
+
+def test_persist_audit_dry_run_ok():
+    resp = client.post("/api/plans/execute-reviewed", json=_valid_body(persist_audit=True))
+    data = resp.json()
+    assert data["status"] == "DRY_RUN_OK"
+    assert data["audit"]["persisted"] is True
+    assert "audit_id" in data["audit"]
+    assert "audit_path" in data["audit"]
+
+
+# ── 17. audit file exists on disk ──
+
+def test_audit_file_exists():
+    resp = client.post("/api/plans/execute-reviewed", json=_valid_body(persist_audit=True))
+    data = resp.json()
+    path = data["audit"].get("audit_path")
+    assert path
+    from pathlib import Path
+    assert Path(path).exists()
+    content = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert "plan_hash" in content
+    assert "validation_hash" in content
+
+
+# ── 18. validation failed + audit writes blocked event ──
+
+def test_validation_failed_writes_audit():
+    resp = client.post("/api/plans/execute-reviewed", json=_valid_body(
+        plan={"pipeline_id": "bad", "nodes": [{"id": "nonexistent_xyz", "depends_on": []}]},
+        persist_audit=True,
+    ))
+    data = resp.json()
+    assert data["status"] == "VALIDATION_FAILED"
+    assert data["audit"]["persisted"] is True
+    assert data["audit"]["event_type"] == "execution_blocked"
+
+
+# ── 19. approval blocked + audit writes blocked event ──
+
+def test_approval_blocked_writes_audit():
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+    }
+    resp = client.post("/api/plans/execute-reviewed", json={
+        "plan": plan,
+        "approval": None,
+        "dry_run": True,
+        "persist_audit": True,
+    })
+    data = resp.json()
+    assert data["status"] == "APPROVAL_GATE_BLOCKED"
+    assert data["audit"]["persisted"] is True
+    assert data["audit"]["event_type"] == "execution_blocked"
+
+
+# ── 20. dry_run=false does not write audit ──
+
+def test_dry_run_false_no_audit():
+    resp = client.post("/api/plans/execute-reviewed", json=_valid_body(
+        dry_run=False, persist_audit=True,
+    ))
+    data = resp.json()
+    assert data["status"] == "DRY_RUN_ONLY"
+    assert data["audit"]["persisted"] is False

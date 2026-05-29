@@ -3,19 +3,26 @@
 This endpoint validates that a reviewed plan would be allowed to execute,
 but NEVER calls pipeline_executor.  It re-runs Plan Validator and
 Approval Gate internally — front-end submitted validation is NOT trusted.
+
+When persist_audit=true, an audit record is atomically written for
+traceability.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from src.backend.app.planner.approval_gate import check_approval_gate
+from src.backend.app.planner.audit_record import build_review_audit_record, write_audit_record
 from src.backend.app.planner.plan_validator import validate_plan
 
 router = APIRouter()
+
+AUDIT_RECORD_DIR = Path("outputs/reports/audit_records")
 
 
 class ExecuteReviewedRequest(BaseModel):
@@ -23,6 +30,8 @@ class ExecuteReviewedRequest(BaseModel):
     approval: dict[str, Any] | None = None
     project_config_path: str | None = None
     dry_run: bool = True
+    persist_audit: bool = False
+    actor: str | None = None
 
 
 def _plan_summary(plan: dict[str, Any], validation: dict[str, Any]) -> dict[str, Any]:
@@ -41,6 +50,44 @@ def _execution_meta(submitted: bool = False, run_id: str | None = None) -> dict[
         "run_id": run_id,
         "executor_called": False,
     }
+
+
+def _no_audit() -> dict[str, Any]:
+    return {"persisted": False}
+
+
+def _write_audit(
+    event_type: str,
+    plan: dict[str, Any],
+    validation: dict[str, Any],
+    approval: dict[str, Any] | None,
+    gate: dict[str, Any] | None,
+    dry_run_result: dict[str, Any] | None,
+    actor: str | None,
+    request: ExecuteReviewedRequest,
+) -> dict[str, Any]:
+    if not request.persist_audit:
+        return _no_audit()
+    try:
+        record = build_review_audit_record(
+            event_type=event_type,
+            plan=plan,
+            validation=validation,
+            approval=approval,
+            approval_gate=gate,
+            dry_run_result=dry_run_result,
+            actor=actor or request.actor,
+            source="execute_reviewed_api",
+        )
+        path = write_audit_record(record, AUDIT_RECORD_DIR)
+        return {
+            "persisted": True,
+            "audit_id": record.audit_id,
+            "audit_path": str(path),
+            "event_type": event_type,
+        }
+    except Exception:
+        return {"persisted": False, "error": "Failed to write audit record"}
 
 
 @router.post("/api/plans/execute-reviewed")
@@ -64,6 +111,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "plan_summary": None,
             "project_config_path": request.project_config_path,
             "execution": _execution_meta(),
+            "audit": _no_audit(),
         }
 
     # ── 1. Re-validate plan (backend-owned, never trust front-end) ──
@@ -71,7 +119,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
     validation = validate_plan(plan).to_dict()
 
     if not validation.get("ok"):
-        return {
+        result = {
             "ok": False,
             "status": "VALIDATION_FAILED",
             "dry_run": True,
@@ -83,12 +131,17 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "project_config_path": request.project_config_path,
             "execution": _execution_meta(),
         }
+        result["audit"] = _write_audit(
+            "execution_blocked", plan, validation, request.approval,
+            None, result, request.actor, request,
+        )
+        return result
 
     # ── 2. Re-check approval gate ──
     gate = check_approval_gate(plan, validation, request.approval).to_dict()
 
     if not gate.get("execution_allowed"):
-        return {
+        result = {
             "ok": False,
             "status": "APPROVAL_GATE_BLOCKED",
             "dry_run": True,
@@ -100,9 +153,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "project_config_path": request.project_config_path,
             "execution": _execution_meta(),
         }
+        result["audit"] = _write_audit(
+            "execution_blocked", plan, validation, request.approval,
+            gate, result, request.actor, request,
+        )
+        return result
 
     # ── 3. Dry-run OK (but never executor) ──
-    return {
+    result = {
         "ok": True,
         "status": "DRY_RUN_OK",
         "dry_run": True,
@@ -114,3 +172,8 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
         "project_config_path": request.project_config_path,
         "execution": _execution_meta(),
     }
+    result["audit"] = _write_audit(
+        "dry_run_checked", plan, validation, request.approval,
+        gate, result, request.actor, request,
+    )
+    return result
