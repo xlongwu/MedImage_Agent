@@ -36,7 +36,14 @@ User Goal → Planner → Tool Catalog lookup → Plan generation → Plan Valid
 - 不调用真实 LLM API
 - 不读写文件
 
+## 真实 LLM 手动测试
+
+参见 [`docs/LLM_PROVIDER_SMOKE_TEST.md`](LLM_PROVIDER_SMOKE_TEST.md)。
+
 ## 代码位置
 
 - `src/backend/app/planner/llm_planner.py`
+- `src/backend/app/planner/llm_provider.py`
 - `tests/unit/test_llm_planner.py` — 17 个测试
+- `tests/unit/test_llm_provider.py` — 16 个测试
+- `tests/unit/test_llm_planner_api.py` — 19 个测试
