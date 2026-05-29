@@ -217,6 +217,34 @@
 
 ---
 
+### T-0006：新增 CI / smoke tests
+
+- **task_id**: T-0006
+- **title**: 建立 GitHub Actions CI，固化 pytest + frontend build
+- **priority**: P0
+- **scope**: CI workflow + 文档更新，不改业务代码
+- **allowed_files**:
+  - `.github/workflows/ci.yml`
+  - `README.md`、`AGENTS.md`、`CLAUDE.md`
+  - `docs/DEVELOPMENT_WORKFLOW.md`
+  - 其他文档
+- **forbidden_changes**:
+  - 不修改 runtime/routes/tools/frontend 业务代码
+  - 不修改 examples YAML
+- **acceptance_criteria**:
+  - `.github/workflows/ci.yml` 存在
+  - backend job：Python 3.11 + pytest
+  - frontend job：Node 20 + npm ci + npm run build
+  - CI 不依赖 MATLAB/SPM/DPABI/GPU
+  - 本地 `pytest` 242 passed
+  - 本地 `npm run build` 成功
+- **test_commands**:
+  - `pytest --tb=short`
+  - `cd src/frontend && npm run build`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
 ### T-0005：实现 audit_logger 或从文档中移除引用
 
 - **task_id**: T-0005

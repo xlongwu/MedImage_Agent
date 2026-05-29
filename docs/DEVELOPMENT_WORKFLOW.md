@@ -291,7 +291,42 @@ M6 和 M7 中的纯前端任务可以与 M5 的后端任务部分并行。
 
 ---
 
-## 9. 完整示例：一个 task packet 的开发过程
+## 9. CI（持续集成）
+
+### 9.1 CI 触发条件
+
+- 推送到 `main`、`master`、`develop` 分支
+- 创建 PR 到 `main`、`master`、`develop`
+
+### 9.2 CI 内容
+
+| Job | 环境 | 命令 |
+|-----|------|------|
+| backend | Python 3.11 | `pip install -r requirements.txt` → `pytest --tb=short` |
+| frontend | Node 20 | `npm ci` → `npm run build` |
+
+### 9.3 本地模拟
+
+```bash
+# 模拟 backend CI
+pip install -r requirements.txt
+pytest --tb=short
+
+# 模拟 frontend CI
+cd src/frontend
+npm ci
+npm run build
+```
+
+### 9.4 CI 限制
+
+- 不安装 MATLAB/SPM/DPABI/GPU/CuPy
+- 不运行真实医学影像预处理 pipeline
+- GPU 相关测试自动 skip
+
+---
+
+## 10. 完整示例：一个 task packet 的开发过程
 
 ### Task Packet
 

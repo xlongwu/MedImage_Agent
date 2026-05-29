@@ -26,8 +26,8 @@ start.bat           # Windows
 # Docker demo (no MATLAB)
 docker compose -f deploy/docker-compose.demo.yml up --build
 
-# Run all tests
-pytest
+# Run all tests (also runs in CI on push/PR)
+pytest --tb=short
 
 # Run a single test file
 pytest tests/unit/test_motion_qc.py

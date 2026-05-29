@@ -85,6 +85,15 @@ pytest tests/unit/test_motion_qc.py
 pytest tests/unit/test_pipeline_schema.py -k test_validates_minimal_pipeline
 ```
 
+### CI
+
+GitHub Actions 在每次 push 和 PR 时自动运行：
+
+- **backend job**：Python 3.11 + `pytest --tb=short`
+- **frontend job**：Node 20 + `npm ci` + `npm run build`
+
+CI 不依赖 MATLAB/SPM/DPABI/GPU。配置见 `.github/workflows/ci.yml`。
+
 ### CLI 工具
 
 ```bash

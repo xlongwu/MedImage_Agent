@@ -5,6 +5,8 @@
 [![React](https://img.shields.io/badge/React-18-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6)](https://www.typescriptlang.org/)
 
+[![CI](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml)
+
 **English** | [中文](README_CN.md)
 
 MedImage Agent is a **deterministic agentic pipeline engineering platform** for resting-state fMRI (rs-fMRI) research. Inspired by the Plan-then-Execute architecture of Hermes Agent, it abandons the open-ended conversational loop of general LLM Agents and builds a secure, reproducible, and auditable medical image analysis workflow system.

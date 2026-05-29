@@ -32,6 +32,7 @@
 | T-0005a：agent_plan 接入 ProjectSettings | ✅ 已完成 | 2026-05-29 |
 | T-0005b：pipeline_executor 接入 ProjectSettings | ✅ 已完成 | 2026-05-29 |
 | T-0005c：routes API 层接入 ProjectSettings | ✅ 已完成 | 2026-05-29 |
+| T-0006：新增 CI / smoke tests | ✅ 已完成 | 2026-05-29 |
 | T-0005：实现 audit_logger 或移除引用 | ⏳ 待决策 | — |
 
 ## release_readiness 状态
