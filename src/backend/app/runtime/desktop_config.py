@@ -1,0 +1,179 @@
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+from importlib.util import find_spec
+from pathlib import Path
+from typing import Any
+
+
+DESKTOP_CONFIG_PATH = Path("outputs/work/desktop/config.json")
+
+
+DEFAULT_DESKTOP_CONFIG: dict[str, Any] = {
+    "project_dir": ".",
+    "python_path": sys.executable,
+    "matlab_command": "matlab",
+    "spm_dir": "./third_party/spm12",
+    "dpabi_dir": "./third_party/DPABI_V8.2_240510",
+    "gpu_mode": "prefer",
+    "llm": {
+        "enabled": False,
+        "base_url": "https://api.openai.com/v1",
+        "model": "",
+        "api_key_set": False,
+    },
+    "gui_agent": {
+        "provider": "mock",
+        "approved": False,
+    },
+}
+
+
+def _read_config() -> dict[str, Any]:
+    if not DESKTOP_CONFIG_PATH.exists():
+        return {}
+    try:
+        return json.loads(DESKTOP_CONFIG_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def get_desktop_config(redacted: bool = True) -> dict[str, Any]:
+    config = _merge(DEFAULT_DESKTOP_CONFIG, _read_config())
+    config["llm"] = _merge(
+        config.get("llm", {}),
+        {
+            "enabled": os.environ.get("MEDIMAGE_LLM_ENABLED", str(config.get("llm", {}).get("enabled", False))).lower() == "true",
+            "base_url": os.environ.get("MEDIMAGE_LLM_BASE_URL", config.get("llm", {}).get("base_url")),
+            "model": os.environ.get("MEDIMAGE_LLM_MODEL", config.get("llm", {}).get("model", "")),
+            "api_key_set": bool(os.environ.get("MEDIMAGE_LLM_API_KEY")) or bool(config.get("llm", {}).get("api_key_set")),
+        },
+    )
+    if redacted:
+        config["llm"].pop("api_key", None)
+    return config
+
+
+def save_desktop_config(payload: dict[str, Any]) -> dict[str, Any]:
+    existing = get_desktop_config(redacted=False)
+    clean = dict(payload)
+    llm = dict(clean.get("llm", {}))
+    if llm.get("api_key"):
+        llm["api_key_set"] = True
+        llm.pop("api_key", None)
+    clean["llm"] = llm
+    saved = _merge(existing, clean)
+    DESKTOP_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DESKTOP_CONFIG_PATH.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"ok": True, "config": get_desktop_config(redacted=True), "config_path": str(DESKTOP_CONFIG_PATH)}
+
+
+def _path_check(name: str, path: str) -> dict[str, Any]:
+    p = Path(path)
+    return {
+        "name": name,
+        "ok": p.exists(),
+        "path": str(p),
+        "resolved": str(p.resolve()) if p.exists() else "",
+    }
+
+
+def _command_check(name: str, command: str) -> dict[str, Any]:
+    found = shutil.which(command)
+    path_exists = Path(command).exists()
+    return {"name": name, "ok": bool(found or path_exists), "command": command, "resolved": found or (str(Path(command).resolve()) if path_exists else "")}
+
+
+def get_desktop_health() -> dict[str, Any]:
+    config = get_desktop_config()
+    checks = [
+        _path_check("project_dir", config.get("project_dir", ".")),
+        _path_check("python_path", config.get("python_path", sys.executable)),
+        _command_check("matlab_command", config.get("matlab_command", "matlab")),
+        _path_check("spm_dir", config.get("spm_dir", "./third_party/spm12")),
+        _path_check("dpabi_dir", config.get("dpabi_dir", "./third_party/DPABI_V8.2_240510")),
+    ]
+
+    try:
+        from src.backend.app.tools.gpu_utils import detect_gpu
+
+        gpu = detect_gpu()
+    except Exception as exc:
+        gpu = {"ok": False, "gpu_available": False, "errors": [str(exc)]}
+
+    gui_provider = config.get("gui_agent", {}).get("provider", "mock")
+    gui_ok = gui_provider == "mock"
+    if gui_provider == "pywinauto":
+        try:
+            import pywinauto  # noqa: F401
+
+            gui_ok = True
+        except ImportError:
+            gui_ok = False
+
+    checks.append({"name": "llm_config", "ok": bool(config.get("llm", {}).get("api_key_set")) or not config.get("llm", {}).get("enabled"), "enabled": config.get("llm", {}).get("enabled"), "api_key_set": config.get("llm", {}).get("api_key_set")})
+    checks.append({"name": "gui_agent_provider", "ok": gui_ok, "provider": gui_provider})
+    checks.append(_websocket_runtime_check())
+    checks.append(_desktop_store_check())
+    checks.append(_pipeline_adapters_check())
+
+    return {
+        "ok": True,
+        "config": config,
+        "checks": checks,
+        "all_required_ok": all(item.get("ok", False) for item in checks if item["name"] in {"project_dir", "python_path"}),
+        "gpu": gpu,
+    }
+
+
+def _websocket_runtime_check() -> dict[str, Any]:
+    installed = [name for name in ("websockets", "wsproto") if find_spec(name)]
+    return {
+        "name": "websocket_runtime",
+        "ok": bool(installed),
+        "installed": installed,
+        "detail": "uvicorn WebSocket transport available" if installed else "Install uvicorn[standard] or websockets for live task streams.",
+    }
+
+
+def _desktop_store_check() -> dict[str, Any]:
+    try:
+        from src.backend.app.services.mock_store import mock_store
+
+        return mock_store.health_check()
+    except Exception as exc:
+        return {"name": "desktop_store", "ok": False, "error": str(exc)}
+
+
+def _pipeline_adapters_check() -> dict[str, Any]:
+    adapters = {
+        "simulated": True,
+        "external_smoke": False,
+        "rsfmri_python": False,
+    }
+    try:
+        from src.backend.app.tools.external_smoke import run_external_smoke  # noqa: F401
+
+        adapters["external_smoke"] = True
+    except Exception:
+        adapters["external_smoke"] = False
+    try:
+        from src.backend.app.tools.run_quickstart_demo_cli import main  # noqa: F401
+
+        adapters["rsfmri_python"] = True
+    except Exception:
+        adapters["rsfmri_python"] = False
+    return {"name": "pipeline_adapters", "ok": any(adapters.values()), "adapters": adapters}

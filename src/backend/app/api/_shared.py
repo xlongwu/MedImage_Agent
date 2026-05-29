@@ -1,0 +1,43 @@
+"""Shared utilities for API route modules.
+
+Import this from any domain-specific route module to avoid
+duplicating helpers like _load_project_config.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from fastapi import HTTPException
+
+
+def _read_json_if_exists(path: str | Path) -> dict[str, Any] | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _read_text_if_exists(path: str | Path) -> str | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        return p.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+
+
+def _load_project_config(path: str) -> dict[str, Any]:
+    import yaml
+    p = Path(path)
+    if not p.exists():
+        raise HTTPException(status_code=400, detail=f"Project config not found: {path}")
+    try:
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to parse project config: {exc}")
