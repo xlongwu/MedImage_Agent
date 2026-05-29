@@ -162,6 +162,34 @@
 
 ---
 
+### T-0005b：pipeline_executor 接入 ProjectSettings 校验
+
+- **task_id**: T-0005b
+- **title**: 将 pipeline_executor.py 的 load_project_config 接入 ProjectSettings 结构校验
+- **priority**: P1
+- **scope**: pipeline_executor.py + 测试，保持 dict 兼容
+- **allowed_files**:
+  - `src/backend/app/runtime/pipeline_executor.py`
+  - `tests/unit/test_pipeline_executor_project_settings.py`
+  - 文档更新
+- **forbidden_changes**:
+  - 不修改 run_pipeline() 主体逻辑、scheduler、node runner、subject-level 并行
+  - 不修改 agent_runtime、node_registry、routes、tools
+  - 不修改 ProjectSettings
+- **acceptance_criteria**:
+  - `load_project_config()` 在返回 dict 前调用 `ProjectSettings.from_yaml()` 校验
+  - `load_project_config()` 仍返回 dict
+  - bad config → `run_pipeline()` 返回 `status == "INVALID"`
+  - 10 个新增测试全部通过
+  - `pytest` 全量 234 passed, 4 skipped
+- **test_commands**:
+  - `pytest tests/unit/test_pipeline_executor_project_settings.py -v`
+  - `pytest tests/unit/test_agent_plan_project_settings.py -v`
+  - `pytest`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
 ### T-0005：实现 audit_logger 或从文档中移除引用
 
 - **task_id**: T-0005

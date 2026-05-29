@@ -18,6 +18,19 @@ from src.backend.app.schemas.pipeline_schema import PipelineValidationError, loa
 
 
 def load_project_config(path: str | Path) -> dict[str, Any]:
+    """Load and validate a project config YAML file.
+
+    Uses ProjectSettings.from_yaml() to validate critical fields (work_dir,
+    log_dir, spm_dir, dpabi_dir) before returning the raw dict.  The returned
+    dict is kept for backward compatibility — run_pipeline() still accesses
+    config fields via subscript notation.
+    """
+    # ── structural validation (M1-T003 / M1-T005b) ──
+    from src.backend.app.config import ProjectSettings  # noqa: E402
+
+    ProjectSettings.from_yaml(path)  # raises on missing critical fields
+
+    # ── return raw dict for backward compat ──
     try:
         import yaml
     except ImportError:
