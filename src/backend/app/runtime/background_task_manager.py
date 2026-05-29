@@ -18,6 +18,37 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _write_status(path: Path, record: dict[str, Any]) -> None:
+    """Atomic write: write to temp file, then replace the target."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _read_status(path: Path) -> dict[str, Any] | None:
+    """Read a status JSON file, handling edge cases gracefully.
+
+    Returns None for missing / empty / corrupted files so callers can
+    decide how to handle them without crashing.
+    """
+    if not path.exists():
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except IOError:
+        return None
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
 def submit_background_task(
     task_type: str,
     func: Callable,
@@ -27,7 +58,6 @@ def submit_background_task(
 ) -> str:
     task_id = f"{task_type}_{uuid.uuid4().hex[:12]}"
     status_path = Path(status_dir) / f"{task_id}.json"
-    status_path.parent.mkdir(parents=True, exist_ok=True)
 
     task_record = {
         "task_id": task_id,
@@ -65,9 +95,9 @@ def submit_background_task(
 
 def get_task_status(task_id: str, status_dir: str = "./work/background_tasks") -> dict[str, Any]:
     status_path = Path(status_dir) / f"{task_id}.json"
-    if not status_path.exists():
+    record = _read_status(status_path)
+    if record is None:
         return {"ok": False, "task_id": task_id, "errors": ["Task not found"]}
-    record = json.loads(status_path.read_text(encoding="utf-8"))
     return {"ok": True, **record}
 
 
@@ -77,13 +107,7 @@ def list_tasks(status_dir: str = "./work/background_tasks", limit: int = 50) -> 
         return {"ok": True, "tasks": [], "total": 0}
     tasks = []
     for f in sorted(sd.glob("*.json"), key=lambda p: -p.stat().st_mtime)[:limit]:
-        try:
-            tasks.append(json.loads(f.read_text(encoding="utf-8")))
-        except (json.JSONDecodeError, IOError):
-            continue
+        record = _read_status(f)
+        if record is not None:
+            tasks.append(record)
     return {"ok": True, "tasks": tasks, "total": len(tasks)}
-
-
-def _write_status(path: Path, record: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")

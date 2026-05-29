@@ -51,7 +51,7 @@
 | 指标 | 当前值 |
 |------|--------|
 | pytest 全量（本地） | 242 passed, 4 skipped |
-| pytest CI（Linux） | 157 passed, 8 failed, 4 skipped |
+| pytest CI（Linux） | 全绿 ✅ |
 | test_project_settings.py | 14 passed |
 | test_release_readiness.py | 24 passed |
 | test_backend_app_import.py | 3 passed |
@@ -88,4 +88,4 @@ GitHub Actions 在每次 push/PR 时自动运行：
 
 1. **audit_logger.py 不存在**：non-blocking，planned for M2。不阻塞 Tool Catalog MVP。
 2. **Python-only 项目兼容性**：ProjectSettings 要求 `third_party.spm_dir/dpabi_dir` 为关键字段。后续支持纯 Python pipeline 时需调整。
-3. **CI 存量测试失败（8 个）**：error_classifier（7）+ background_task_manager（1）。相对路径硬编码导致 Linux CI 上 KB 文件加载失败。本地 Windows 全 PASS。见 T-0008。
+3. **CI 存量测试已修复**（T-0008）：error KB 路径改为 `__file__` 推导 + 原子写入。CI 全绿。

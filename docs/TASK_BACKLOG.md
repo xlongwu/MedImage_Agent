@@ -250,20 +250,21 @@
 - **task_id**: T-0008
 - **title**: 修复 Linux CI 上 8 个存量测试失败
 - **priority**: P1
-- **scope**: error_classifier.py / error_kb_validator.py 的 KB 路径改为绝对路径或基于 `__file__`
+- **scope**: error_classifier.py KB 路径 + background_task_manager 原子写入
 - **allowed_files**:
   - `src/backend/app/tools/error_classifier.py`
   - `src/backend/app/tools/error_kb_validator.py`
-  - `tests/unit/test_error_classifier.py`
+  - `src/backend/app/runtime/background_task_manager.py`
 - **forbidden_changes**:
   - 不修改 KB 文件内容
+  - 不用 skip/xfail
 - **acceptance_criteria**:
   - CI 上 8 个测试全部 PASS
   - 本地 242 passed 保持
 - **test_commands**:
   - `pytest tests/unit/test_error_classifier.py -v`
   - `pytest tests/unit/test_background_task_manager.py -v`
-- **status**: 待执行
+- **status**: ✅ 已完成（2026-05-29）
 
 ---
 

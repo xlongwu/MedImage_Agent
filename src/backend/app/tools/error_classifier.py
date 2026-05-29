@@ -1,16 +1,41 @@
 """Structured error classifier backed by ERROR_KB.yaml v0.2.0."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
+_DEFAULT_KB_REL = "memory/global/ERROR_KB.yaml"
 
-def _load_error_kb(kb_path: str = "outputs/memory/global/ERROR_KB.yaml") -> dict[str, Any]:
+
+def _resolve_kb_path(kb_path: str | None = None) -> Path:
+    """Resolve ERROR_KB.yaml robustly across environments.
+
+    Priority:
+      1. MEDIMAGE_ERROR_KB_PATH env var
+      2. __file__-based repo root + memory/global/ERROR_KB.yaml
+      3. CWD fallback
+    """
+    env_path = os.environ.get("MEDIMAGE_ERROR_KB_PATH")
+    if env_path:
+        return Path(env_path)
+
+    # Derive repo root from this file's location
+    this_file = Path(__file__).resolve()
+    repo_root = this_file.parents[3]  # tools → app → backend → src → repo
+    resolved = repo_root / _DEFAULT_KB_REL
+    if resolved.exists():
+        return resolved
+
+    return Path.cwd() / _DEFAULT_KB_REL
+
+
+def _load_error_kb(kb_path: str | None = None) -> dict[str, Any]:
     try:
         import yaml
     except ImportError:
         raise RuntimeError("PyYAML required")
-    path = Path(kb_path)
+    path = _resolve_kb_path(kb_path)
     if not path.exists():
         return {"version": "0.0.0", "categories": {}}
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {"version": "0.0.0", "categories": {}}
@@ -18,7 +43,7 @@ def _load_error_kb(kb_path: str = "outputs/memory/global/ERROR_KB.yaml") -> dict
 
 def classify_error(
     message: str,
-    kb_path: str = "outputs/memory/global/ERROR_KB.yaml",
+    kb_path: str | None = None,
 ) -> dict[str, Any]:
     kb = _load_error_kb(kb_path)
     categories = kb.get("categories", {})
@@ -64,6 +89,6 @@ def classify_error(
 
 def classify_errors_batch(
     errors: list[str],
-    kb_path: str = "outputs/memory/global/ERROR_KB.yaml",
+    kb_path: str | None = None,
 ) -> list[dict[str, Any]]:
     return [classify_error(msg, kb_path) for msg in errors]

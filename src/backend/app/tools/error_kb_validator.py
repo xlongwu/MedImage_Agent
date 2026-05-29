@@ -4,19 +4,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-
-def _load_error_kb(kb_path: str = "outputs/memory/global/ERROR_KB.yaml") -> dict[str, Any]:
-    try:
-        import yaml
-    except ImportError:
-        raise RuntimeError("PyYAML required")
-    path = Path(kb_path)
-    if not path.exists():
-        return {"version": "0.0.0", "categories": {}}
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {"version": "0.0.0", "categories": {}}
+from src.backend.app.tools.error_classifier import _load_error_kb
 
 
-def validate_error_kb(kb_path: str = "outputs/memory/global/ERROR_KB.yaml") -> dict[str, Any]:
+def validate_error_kb(kb_path: str | None = None) -> dict[str, Any]:
     kb = _load_error_kb(kb_path)
     errors: list[str] = []
     warnings: list[str] = []
