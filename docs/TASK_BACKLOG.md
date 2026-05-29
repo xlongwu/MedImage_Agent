@@ -134,6 +134,34 @@
 
 ---
 
+### T-0005a：agent_plan 接入 ProjectSettings 校验
+
+- **task_id**: T-0005a
+- **title**: 将 agent_plan.py 的 _load_project_config 接入 ProjectSettings 结构校验
+- **priority**: P1
+- **scope**: agent_plan.py + 测试，保持 dict 兼容
+- **allowed_files**:
+  - `src/backend/app/runtime/agent_plan.py`
+  - `tests/unit/test_agent_plan_project_settings.py`
+  - 文档更新
+- **forbidden_changes**:
+  - 不修改 hook_manager、scheduler、agent_runtime 接口
+  - 不修改 pipeline_executor、routes、node_registry
+  - 不修改 ProjectSettings
+- **acceptance_criteria**:
+  - `_load_project_config()` 在返回 dict 前调用 `ProjectSettings.from_yaml()` 校验
+  - 缺失关键字段在 PLAN 阶段失败（而非后续执行阶段 KeyError）
+  - `_load_project_config()` 仍返回 dict
+  - 12 个新增测试全部通过
+  - `pytest` 全量 224 passed, 4 skipped
+- **test_commands**:
+  - `pytest tests/unit/test_agent_plan_project_settings.py -v`
+  - `pytest tests/integration/test_agent_plan.py -v`
+  - `pytest`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
 ### T-0005：实现 audit_logger 或从文档中移除引用
 
 - **task_id**: T-0005

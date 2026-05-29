@@ -10,10 +10,25 @@ from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
 
 
 def _load_project_config(path: str | Path) -> dict[str, Any]:
+    """Load and validate a project config YAML file.
+
+    Uses ProjectSettings.from_yaml() to validate critical fields (work_dir,
+    log_dir, spm_dir, dpabi_dir) before returning the raw dict.  The returned
+    dict is kept for backward compatibility with hook_manager, scheduler, and
+    agent_runtime — they still expect plain dicts, not dataclass instances.
+    """
+    # ── structural validation (M1-T003) ──
+    from src.backend.app.config import ProjectSettings  # noqa: E402
+
+    ProjectSettings.from_yaml(path)  # raises on missing critical fields
+
+    # ── return raw dict for backward compat ──
     try:
         import yaml
     except ImportError as exc:
-        raise RuntimeError("Missing dependency: PyYAML. Install with: pip install pyyaml") from exc
+        raise RuntimeError(
+            "Missing dependency: PyYAML. Install with: pip install pyyaml"
+        ) from exc
 
     p = Path(path)
     if not p.exists():
