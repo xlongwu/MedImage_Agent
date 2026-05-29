@@ -253,7 +253,12 @@ class OpenAICompatiblePlannerProvider:
 
         mock_raw = os.environ.get("MEDIMAGE_LLM_MOCK_RESPONSE")
         if mock_raw:
-            payload = _json.loads(mock_raw)
+            try:
+                payload = _json.loads(mock_raw)
+            except Exception as exc:
+                raise PlannerProviderError(
+                    f"malformed JSON in MEDIMAGE_LLM_MOCK_RESPONSE: {exc}"
+                ) from exc
             return _DraftResponse("openai_compatible", payload)
 
         # Fallback: try urllib-based call

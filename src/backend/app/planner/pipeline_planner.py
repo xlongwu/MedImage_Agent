@@ -147,8 +147,14 @@ def draft_pipeline_plan(payload: dict[str, Any]) -> dict[str, Any]:
         except Exception as exc:
             errors.append(str(exc))
 
+    ok = not errors
+    # If LLM was explicitly enabled and produced errors, the draft is invalid
+    # — do not silently fall back to deterministic path selection.
+    if llm_note.get("llm_used") and llm_note.get("llm_errors"):
+        ok = False
+
     draft = {
-        "ok": not errors,
+        "ok": ok,
         "plan_id": plan_id,
         "created_at": _now_iso(),
         "advice_only": True,
