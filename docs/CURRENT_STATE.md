@@ -31,6 +31,7 @@
 | T-0004：验证并统一前后端启动方式 | ✅ 已完成 | 2026-05-29 |
 | T-0005a：agent_plan 接入 ProjectSettings | ✅ 已完成 | 2026-05-29 |
 | T-0005b：pipeline_executor 接入 ProjectSettings | ✅ 已完成 | 2026-05-29 |
+| T-0005c：routes API 层接入 ProjectSettings | ✅ 已完成 | 2026-05-29 |
 | T-0005：实现 audit_logger 或移除引用 | ⏳ 待决策 | — |
 
 ## release_readiness 状态
@@ -47,7 +48,7 @@
 
 | 指标 | 当前值 |
 |------|--------|
-| pytest 全量 | 234 passed, 4 skipped |
+| pytest 全量 | 242 passed, 4 skipped |
 | test_project_settings.py | 14 passed |
 | test_release_readiness.py | 24 passed |
 | test_backend_app_import.py | 3 passed |

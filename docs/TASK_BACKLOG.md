@@ -190,6 +190,33 @@
 
 ---
 
+### T-0005c：routes API 层接入 ProjectSettings 校验
+
+- **task_id**: T-0005c
+- **title**: 将 routes.py 的 _load_project_config 接入 ProjectSettings 结构校验
+- **priority**: P1
+- **scope**: routes.py _load_project_config + 测试，保持 dict 兼容
+- **allowed_files**:
+  - `src/backend/app/api/routes.py`
+  - `tests/unit/test_routes_project_settings.py`
+  - 文档更新
+- **forbidden_changes**:
+  - 不修改任何 endpoint 业务逻辑、路由、请求模型、返回结构
+  - 不修改 agent_plan、pipeline_executor、agent_runtime、node_registry
+  - 不修改 ProjectSettings
+- **acceptance_criteria**:
+  - `_load_project_config()` 在返回 dict 前调用 `ProjectSettings.from_yaml()` 校验
+  - ValueError/FileNotFoundError 包装为 HTTPException(400)
+  - `_load_project_config()` 仍返回 dict
+  - 8 个新增测试全部通过
+  - `pytest` 全量 242 passed, 4 skipped
+- **test_commands**:
+  - `pytest tests/unit/test_routes_project_settings.py -v`
+  - `pytest`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
 ### T-0005：实现 audit_logger 或从文档中移除引用
 
 - **task_id**: T-0005

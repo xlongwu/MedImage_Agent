@@ -90,6 +90,7 @@ from src.backend.app.tools.dpabi_template_wizard import (
     create_dpabi_template_instance_from_wizard,
 )
 from src.backend.app.tools.rsfmri_plan_tool import write_rsfmri_preprocessing_plan
+from src.backend.app.version import APP_VERSION
 
 router = APIRouter()
 
@@ -120,6 +121,7 @@ def health() -> dict[str, Any]:
         "ok": True,
         "service": "medimage-agent-api",
         "status": "healthy",
+        "version": APP_VERSION,
     }
 
 
@@ -141,6 +143,23 @@ def get_project_config(
 
 
 def _load_project_config(path: str) -> dict[str, Any]:
+    """Load and validate a project config YAML file.
+
+    Uses ProjectSettings.from_yaml() to validate critical fields (work_dir,
+    log_dir, spm_dir, dpabi_dir) before returning the raw dict.  Validation
+    errors are wrapped as HTTPException(400) to match API layer conventions.
+    """
+    # ── structural validation (M1-T003 / M1-T005c) ──
+    from src.backend.app.config import ProjectSettings  # noqa: E402
+
+    try:
+        ProjectSettings.from_yaml(path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # ── return raw dict for backward compat ──
     import yaml
     p = Path(path)
     if not p.exists():
@@ -863,754 +882,461 @@ def api_get_artifacts() -> dict[str, Any]:
     return {
         "ok": True,
         "index": index,
+        "markdown": _read_text_if_exists(
+            Path("outputs/reports") / "artifacts" / "artifact_index.md"
+        ),
     }
 
 
-@router.post("/api/artifacts/refresh")
-def api_refresh_artifacts() -> dict[str, Any]:
-    from src.backend.app.tools.artifact_browser import build_artifact_index
-
-    result = build_artifact_index()
-    if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result)
-    return result
-
-
-@router.post("/api/artifacts/preview")
-def api_preview_artifact(request: ArtifactPreviewRequest) -> dict[str, Any]:
+@router.get("/api/artifacts/preview")
+def api_get_artifact_preview(path: str = Query(...), max_lines: int = Query(80)) -> dict[str, Any]:
     from src.backend.app.tools.artifact_browser import preview_artifact
 
-    result = preview_artifact(request.path)
+    result = preview_artifact(path=path, max_lines=max_lines)
+
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result)
+
+    return result
+
+
+@router.get("/api/insights")
+def api_get_insights() -> dict[str, Any]:
+    from src.backend.app.tools.artifact_browser import build_artifact_index
+    from src.backend.app.tools.insights import generate_insights_from_index
+
+    base = Path("outputs/reports") / "insights"
+    insights_json = _read_json_if_exists(base / "insights_summary.json")
+    insights_md = _read_text_if_exists(base / "insights_report.md")
+
+    # Always regenerate for freshness
+    index_path = Path("outputs/work") / "artifacts" / "artifact_index.json"
+    index = _read_json_if_exists(index_path)
+    if index is None:
+        index = build_artifact_index()
+
+    insights = generate_insights_from_index(
+        artifact_index=index,
+        report_dir="./reports",
+    )
+
+    return {
+        "ok": True,
+        "insights": insights,
+        "insights_json": insights_json,
+        "insights_md": insights_md,
+    }
+
+
+@router.get("/api/deployment/profile")
+def api_get_deployment_profile() -> dict[str, Any]:
+    from src.backend.app.tools.deployment_profile import build_deployment_profile
+
+    result = build_deployment_profile()
+    return result
+
+
+# ── rs-fMRI chain validation ──────────────────────────────────────────────
+
+@router.post("/api/rsfmri/spm-chain-validate")
+def api_spm_chain_validate() -> dict[str, Any]:
+    from src.backend.app.tools.spm_chain_validator import validate_spm_chain_contracts
+
+    result = validate_spm_chain_contracts()
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
     return result
 
 
-@router.get("/api/bundles")
-def api_list_bundles() -> dict[str, Any]:
-    from src.backend.app.tools.reproducibility_bundle import list_reproducibility_bundles
+@router.post("/api/rsfmri/chain-report")
+def api_rsfmri_chain_report() -> dict[str, Any]:
+    from src.backend.app.tools.rsfmri_chain_report import build_rsfmri_chain_report
 
-    return list_reproducibility_bundles()
+    result = build_rsfmri_chain_report("./work", "./reports")
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result)
+    return result
 
 
-@router.post("/api/bundles/create")
-def api_create_bundle(request: BundleCreateRequest) -> dict[str, Any]:
-    from src.backend.app.tools.reproducibility_bundle import create_reproducibility_bundle
+@router.get("/api/rsfmri/chain-report/latest")
+def api_rsfmri_chain_report_latest() -> dict[str, Any]:
+    path = Path("outputs/reports") / "rsfmri" / "rsfmri_chain_report.md"
+    content = _read_text_if_exists(path)
+    if content is None:
+        raise HTTPException(status_code=404, detail="No chain report found. POST /api/rsfmri/chain-report first.")
+    return {"ok": True, "report": content}
 
-    result = create_reproducibility_bundle(
+
+# ── rs-fMRI preprocessing plan ────────────────────────────────────────────
+
+@router.post("/api/rsfmri/preprocessing-plan")
+def api_rsfmri_preprocessing_plan(work_dir: str = "./work") -> dict[str, Any]:
+    from src.backend.app.tools.rsfmri_plan_tool import write_rsfmri_preprocessing_plan
+
+    result = write_rsfmri_preprocessing_plan(work_dir=work_dir, report_dir="./reports")
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result)
+    return result
+
+
+@router.get("/api/rsfmri/preprocessing-plan/latest")
+def api_rsfmri_preprocessing_plan_latest() -> dict[str, Any]:
+    path = Path("outputs/reports") / "rsfmri" / "rsfmri_preprocessing_plan.md"
+    content = _read_text_if_exists(path)
+    if content is None:
+        raise HTTPException(status_code=404, detail="No plan found.")
+    return {"ok": True, "plan": content}
+
+
+# ── rs-fMRI SPM pipeline endpoints ────────────────────────────────────────
+
+@router.post("/api/rsfmri/spm/realign-motion-qc")
+def api_rsfmri_spm_realign_motion_qc(payload: RsfmriSpmRealignMotionQcRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/spm/slice-timing")
+def api_rsfmri_spm_slice_timing(payload: RsfmriSpmSliceTimingRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/st/realign-motion-qc")
+def api_rsfmri_st_realign_motion_qc(payload: RsfmriStRealignMotionQcRequest) -> dict[str, Any]:
+    import yaml, copy
+    from pathlib import Path
+
+    project_config = _load_project_config(payload.project_config_path)
+    pipeline = load_pipeline_yaml(payload.pipeline_path)
+
+    # Inject approved=true into the SPM realign node for chain execution
+    approved_pipeline_path = None
+    if payload.approved:
+        for node in pipeline.nodes:
+            if node.id == "spm_realign_subject":
+                node.params["approved"] = True
+
+        # Write a temporary pipeline YAML with approved set
+        approved_pipeline_path = Path(payload.pipeline_path).with_suffix(".approved.yaml")
+        pipeline_data = yaml.safe_load(Path(payload.pipeline_path).read_text(encoding="utf-8")) or {}
+        for node in pipeline_data.get("nodes", []):
+            if node.get("id") == "spm_realign_subject":
+                node.setdefault("params", {})
+                node["params"]["approved"] = True
+        approved_pipeline_path.write_text(yaml.safe_dump(pipeline_data, sort_keys=False), encoding="utf-8")
+
+    pipeline_to_run = str(approved_pipeline_path) if approved_pipeline_path else payload.pipeline_path
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=pipeline_to_run,
+    )
+
+    if approved_pipeline_path and approved_pipeline_path.exists():
+        try:
+            approved_pipeline_path.unlink()
+        except OSError:
+            pass
+
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/coregistration-qc")
+def api_rsfmri_coregistration_qc(payload: RsfmriCoregistrationQcRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/segmentation-tissue-qc")
+def api_rsfmri_segmentation_tissue_qc(payload: RsfmriSegmentationTissueQcRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/normalization-qc")
+def api_rsfmri_normalization_qc(payload: RsfmriNormalizationQcRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/smoothing-qc")
+def api_rsfmri_smoothing_qc(payload: RsfmriSmoothingQcRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/nuisance-regression")
+def api_rsfmri_nuisance_regression(payload: RsfmriNuisanceRegressionRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/temporal-filtering")
+def api_rsfmri_temporal_filtering(payload: RsfmriTemporalFilteringRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/alff-falff")
+def api_rsfmri_alff_falff(payload: RsfmriAlffFalffRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/reho")
+def api_rsfmri_reho(payload: RsfmriRehoRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/functional-connectivity")
+def api_rsfmri_functional_connectivity(payload: RsfmriFunctionalConnectivityRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/group-summary")
+def api_rsfmri_group_summary(payload: RsfmriGroupSummaryRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/report-export")
+def api_rsfmri_report_export(payload: RsfmriReportExportRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/rsfmri/report-validation")
+def api_rsfmri_report_validation(payload: RsfmriReportValidationRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+@router.post("/api/release-readiness")
+def api_release_readiness(payload: ReleaseReadinessRequest) -> dict[str, Any]:
+    result = run_pipeline(
+        project_config_path=payload.project_config_path,
+        pipeline_path=payload.pipeline_path,
+    )
+    if result.get("status") in {"SUCCESS", "PARTIAL"}:
+        return {"ok": True, **result}
+    raise HTTPException(status_code=400, detail=result)
+
+
+# ── Report export / validation listing endpoints ──────────────────────────
+
+@router.get("/api/rsfmri/report-exports")
+def api_rsfmri_list_report_exports() -> dict[str, Any]:
+    export_map = list_rsfmri_report_exports("./exports")
+    return {"ok": True, "exports": export_map}
+
+
+@router.get("/api/rsfmri/report-exports/latest")
+def api_rsfmri_get_latest_report_export() -> dict[str, Any]:
+    result = get_latest_rsfmri_report_export("./exports")
+    if result is None:
+        raise HTTPException(status_code=404, detail="No report exports found")
+    return {"ok": True, **result}
+
+
+@router.get("/api/rsfmri/report-validations")
+def api_rsfmri_list_report_validations() -> dict[str, Any]:
+    validation_map = list_rsfmri_report_validations("./exports")
+    return {"ok": True, "validations": validation_map}
+
+
+@router.get("/api/rsfmri/report-validations/latest")
+def api_rsfmri_get_latest_report_validation() -> dict[str, Any]:
+    result = get_latest_rsfmri_report_validation("./exports")
+    if result is None:
+        raise HTTPException(status_code=404, detail="No report validations found")
+    return {"ok": True, **result}
+
+
+# ── Reproducibility bundle ────────────────────────────────────────────────
+
+@router.post("/api/bundle/create")
+def api_bundle_create(request: BundleCreateRequest) -> dict[str, Any]:
+    from src.backend.app.tools.reproducibility_bundle import create_bundle
+
+    result = create_bundle(
         bundle_id=request.bundle_id,
         include_logs=request.include_logs,
         include_reports=request.include_reports,
         include_artifact_index=request.include_artifact_index,
         max_file_size_bytes=request.max_file_size_bytes,
     )
-
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
-
     return result
 
 
-@router.get("/api/bundles/{bundle_id}")
-def api_inspect_bundle(bundle_id: str) -> dict[str, Any]:
-    from src.backend.app.tools.reproducibility_bundle import inspect_reproducibility_bundle
+@router.get("/api/bundle/preview")
+def api_bundle_preview() -> dict[str, Any]:
+    from src.backend.app.tools.reproducibility_bundle import preview_bundle
 
-    result = inspect_reproducibility_bundle(bundle_id)
-
-    if not result.get("ok"):
-        raise HTTPException(status_code=404, detail=result)
-
-    return result
-
-
-@router.get("/api/release/readiness")
-def api_get_release_readiness() -> dict[str, Any]:
-    from src.backend.app.tools.release_readiness import build_release_readiness
-
-    result = build_release_readiness()
-    return result
-
-
-@router.get("/api/rsfmri/preprocessing-plan")
-def api_get_rsfmri_preprocessing_plan() -> dict[str, Any]:
-    work_base = Path("outputs/work") / "preprocessing" / "rsfmri"
-    report_base = Path("outputs/reports") / "rsfmri"
-
-    plan = _read_json_if_exists(work_base / "rsfmri_preprocessing_plan.json")
-    report = _read_text_if_exists(report_base / "rsfmri_preprocessing_plan_report.md")
-
-    if plan is None:
-        plan = write_rsfmri_preprocessing_plan(
-            work_dir="./work",
-            report_dir="./reports",
-        )
-
-    return {
-        "ok": True,
-        "plan": plan,
-        "report": report,
-    }
-
-
-@router.post("/api/rsfmri/preprocessing-plan/refresh")
-def api_refresh_rsfmri_preprocessing_plan() -> dict[str, Any]:
-    result = write_rsfmri_preprocessing_plan(
-        work_dir="./work",
-        report_dir="./reports",
-    )
-
+    result = preview_bundle("./work")
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
-
     return result
 
 
-def _make_spm_realign_motion_qc_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-
-    for node in data.get("nodes", []):
-        if node.get("id") == "spm_realign_subject":
-            node.setdefault("params", {})
-            node["params"]["approved"] = True
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-
-@router.post("/api/rsfmri/spm-realign-motion-qc/run")
-def api_run_rsfmri_spm_realign_motion_qc(
-    request: RsfmriSpmRealignMotionQcRequest,
-) -> dict[str, Any]:
-    if not request.approved:
-        raise HTTPException(
-            status_code=403,
-            detail="SPM realignment requires approved=true.",
-        )
-
-    try:
-        approved_pipeline = _make_spm_realign_motion_qc_approved_copy(
-            source=Path(request.pipeline_path),
-            target=Path("outputs/work/rsfmri/approved_pipeline_spm_realign_motion_qc.yaml"),
-        )
-
-        summary = run_pipeline(
-            request.project_config_path,
-            str(approved_pipeline),
-        )
-
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}:
-            raise HTTPException(status_code=400, detail=summary)
-
-        return summary
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/api/rsfmri/spm-realign-motion-qc")
-def api_get_rsfmri_spm_realign_motion_qc() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"
-    derivatives_base = Path("outputs/derivatives")
-
-    subject_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/motion_qc.json")):
-        subject_qc.append(_read_json_if_exists(path))
+@router.get("/api/bundle/download-info")
+def api_bundle_download_info() -> dict[str, Any]:
+    bundle_dir = Path("outputs/exports") / "bundles"
+    bundles = []
+    for path in sorted(bundle_dir.glob("*.zip"), key=lambda p: p.stat().st_mtime, reverse=True):
+        bundles.append({
+            "name": path.name,
+            "path": str(path),
+            "size_bytes": path.stat().st_size,
+            "created": path.stat().st_mtime,
+        })
 
     return {
         "ok": True,
-        "motion_qc_summary": _read_json_if_exists(report_base / "motion_qc_summary.json"),
-        "motion_qc_report": _read_text_if_exists(report_base / "motion_qc_report.md"),
-        "subject_motion_qc": subject_qc,
+        "total": len(bundles),
+        "bundles": bundles,
     }
 
 
-def _make_spm_slice_timing_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-
-    for node in data.get("nodes", []):
-        if node.get("id") == "spm_slice_timing_subject":
-            node.setdefault("params", {})
-            node["params"]["approved"] = True
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-
-@router.post("/api/rsfmri/spm-slice-timing/run")
-def api_run_rsfmri_spm_slice_timing(
-    request: RsfmriSpmSliceTimingRequest,
-) -> dict[str, Any]:
-    if not request.approved:
-        raise HTTPException(
-            status_code=403,
-            detail="SPM slice timing requires approved=true.",
-        )
-
-    try:
-        approved_pipeline = _make_spm_slice_timing_approved_copy(
-            source=Path(request.pipeline_path),
-            target=Path("outputs/work/rsfmri/approved_pipeline_spm_slice_timing.yaml"),
-        )
-
-        summary = run_pipeline(
-            request.project_config_path,
-            str(approved_pipeline),
-        )
-
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}:
-            raise HTTPException(status_code=400, detail=summary)
-
-        return summary
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/api/rsfmri/spm-slice-timing")
-def api_get_rsfmri_spm_slice_timing() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"
-    derivatives_base = Path("outputs/derivatives")
-
-    subject_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/slice_timing_qc.json")):
-        subject_qc.append(_read_json_if_exists(path))
-
-    return {
-        "ok": True,
-        "slice_timing_qc_summary": _read_json_if_exists(report_base / "slice_timing_qc_summary.json"),
-        "slice_timing_qc_report": _read_text_if_exists(report_base / "slice_timing_qc_report.md"),
-        "subject_slice_timing_qc": subject_qc,
-    }
-
-
-def _make_st_realign_motion_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-
-    for node in data.get("nodes", []):
-        if node.get("id") in {"spm_slice_timing_subject", "spm_realign_subject"}:
-            node.setdefault("params", {})
-            node["params"]["approved"] = True
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-
-@router.post("/api/rsfmri/st-realign-motion-qc/run")
-def api_run_rsfmri_st_realign_motion_qc(
-    request: RsfmriStRealignMotionQcRequest,
-) -> dict[str, Any]:
-    if not request.approved:
-        raise HTTPException(
-            status_code=403,
-            detail="Slice Timing → Realignment → Motion QC chain requires approved=true.",
-        )
-
-    try:
-        approved_pipeline = _make_st_realign_motion_approved_copy(
-            source=Path(request.pipeline_path),
-            target=Path("outputs/work/rsfmri/approved_pipeline_st_realign_motion_qc.yaml"),
-        )
-
-        summary = run_pipeline(
-            request.project_config_path,
-            str(approved_pipeline),
-        )
-
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}:
-            raise HTTPException(status_code=400, detail=summary)
-
-        return summary
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/api/rsfmri/st-realign-motion-qc")
-def api_get_rsfmri_st_realign_motion_qc() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"
-    derivatives_base = Path("outputs/derivatives")
-
-    subject_slice_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/slice_timing_qc.json")):
-        subject_slice_qc.append(_read_json_if_exists(path))
-
-    subject_motion_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/motion_qc.json")):
-        subject_motion_qc.append(_read_json_if_exists(path))
-
-    return {
-        "ok": True,
-        "chain_summary": _read_json_if_exists(report_base / "st_realign_motion_chain_summary.json"),
-        "chain_report": _read_text_if_exists(report_base / "st_realign_motion_chain_report.md"),
-        "slice_timing_qc_summary": _read_json_if_exists(report_base / "slice_timing_qc_summary.json"),
-        "motion_qc_summary": _read_json_if_exists(report_base / "motion_qc_summary.json"),
-        "subject_slice_timing_qc": subject_slice_qc,
-        "subject_motion_qc": subject_motion_qc,
-    }
-
-
-def _make_coregistration_qc_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-
-    for node in data.get("nodes", []):
-        if node.get("id") in {
-            "spm_slice_timing_subject",
-            "spm_realign_subject",
-            "spm_coregister_subject",
-        }:
-            node.setdefault("params", {})
-            node["params"]["approved"] = True
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-
-@router.post("/api/rsfmri/coregistration-qc/run")
-def api_run_rsfmri_coregistration_qc(
-    request: RsfmriCoregistrationQcRequest,
-) -> dict[str, Any]:
-    if not request.approved:
-        raise HTTPException(
-            status_code=403,
-            detail="SPM coregistration QC pipeline requires approved=true.",
-        )
-
-    try:
-        approved_pipeline = _make_coregistration_qc_approved_copy(
-            source=Path(request.pipeline_path),
-            target=Path("outputs/work/rsfmri/approved_pipeline_coregistration_qc.yaml"),
-        )
-
-        summary = run_pipeline(
-            request.project_config_path,
-            str(approved_pipeline),
-        )
-
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}:
-            raise HTTPException(status_code=400, detail=summary)
-
-        return summary
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/api/rsfmri/coregistration-qc")
-def api_get_rsfmri_coregistration_qc() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"
-    derivatives_base = Path("outputs/derivatives")
-
-    subject_registration_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/registration_qc.json")):
-        subject_registration_qc.append(_read_json_if_exists(path))
-
-    return {
-        "ok": True,
-        "registration_qc_summary": _read_json_if_exists(report_base / "registration_qc_summary.json"),
-        "registration_qc_report": _read_text_if_exists(report_base / "registration_qc_report.md"),
-        "subject_registration_qc": subject_registration_qc,
-    }
-
-
-def _make_segmentation_tissue_qc_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-
-    for node in data.get("nodes", []):
-        if node.get("id") in {
-            "spm_slice_timing_subject",
-            "spm_realign_subject",
-            "spm_coregister_subject",
-            "spm_segment_subject",
-        }:
-            node.setdefault("params", {})
-            node["params"]["approved"] = True
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-
-@router.post("/api/rsfmri/segmentation-tissue-qc/run")
-def api_run_rsfmri_segmentation_tissue_qc(
-    request: RsfmriSegmentationTissueQcRequest,
-) -> dict[str, Any]:
-    if not request.approved:
-        raise HTTPException(
-            status_code=403,
-            detail="SPM segmentation tissue QC pipeline requires approved=true.",
-        )
-
-    try:
-        approved_pipeline = _make_segmentation_tissue_qc_approved_copy(
-            source=Path(request.pipeline_path),
-            target=Path("outputs/work/rsfmri/approved_pipeline_segmentation_tissue_qc.yaml"),
-        )
-
-        summary = run_pipeline(
-            request.project_config_path,
-            str(approved_pipeline),
-        )
-
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}:
-            raise HTTPException(status_code=400, detail=summary)
-
-        return summary
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/api/rsfmri/segmentation-tissue-qc")
-def api_get_rsfmri_segmentation_tissue_qc() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"
-    derivatives_base = Path("outputs/derivatives")
-
-    subject_tissue_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/tissue_qc.json")):
-        subject_tissue_qc.append(_read_json_if_exists(path))
-
-    return {
-        "ok": True,
-        "tissue_qc_summary": _read_json_if_exists(report_base / "tissue_qc_summary.json"),
-        "tissue_qc_report": _read_text_if_exists(report_base / "tissue_qc_report.md"),
-        "subject_tissue_qc": subject_tissue_qc,
-    }
-
-
-def _make_normalization_qc_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-
-    for node in data.get("nodes", []):
-        if node.get("id") in {
-            "spm_slice_timing_subject",
-            "spm_realign_subject",
-            "spm_coregister_subject",
-            "spm_segment_subject",
-            "spm_normalize_subject",
-        }:
-            node.setdefault("params", {})
-            node["params"]["approved"] = True
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-
-@router.post("/api/rsfmri/normalization-qc/run")
-def api_run_rsfmri_normalization_qc(
-    request: RsfmriNormalizationQcRequest,
-) -> dict[str, Any]:
-    if not request.approved:
-        raise HTTPException(
-            status_code=403,
-            detail="SPM normalization QC pipeline requires approved=true.",
-        )
-
-    try:
-        approved_pipeline = _make_normalization_qc_approved_copy(
-            source=Path(request.pipeline_path),
-            target=Path("outputs/work/rsfmri/approved_pipeline_normalization_qc.yaml"),
-        )
-
-        summary = run_pipeline(
-            request.project_config_path,
-            str(approved_pipeline),
-        )
-
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}:
-            raise HTTPException(status_code=400, detail=summary)
-
-        return summary
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/api/rsfmri/normalization-qc")
-def api_get_rsfmri_normalization_qc() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"
-    derivatives_base = Path("outputs/derivatives")
-
-    subject_normalization_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/normalization_qc.json")):
-        subject_normalization_qc.append(_read_json_if_exists(path))
-
-    return {
-        "ok": True,
-        "normalization_qc_summary": _read_json_if_exists(report_base / "normalization_qc_summary.json"),
-        "normalization_qc_report": _read_text_if_exists(report_base / "normalization_qc_report.md"),
-        "subject_normalization_qc": subject_normalization_qc,
-    }
-
-
-def _make_smoothing_qc_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-    for node in data.get("nodes", []):
-        if node.get("id") in {"spm_slice_timing_subject", "spm_realign_subject", "spm_coregister_subject", "spm_segment_subject", "spm_normalize_subject", "spm_smooth_subject"}:
-            node.setdefault("params", {}); node["params"]["approved"] = True
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-
-@router.post("/api/rsfmri/smoothing-qc/run")
-def api_run_rsfmri_smoothing_qc(request: RsfmriSmoothingQcRequest) -> dict[str, Any]:
-    if not request.approved: raise HTTPException(status_code=403, detail="SPM smoothing QC pipeline requires approved=true.")
-    try:
-        approved_pipeline = _make_smoothing_qc_approved_copy(source=Path(request.pipeline_path), target=Path("outputs/work/rsfmri/approved_pipeline_smoothing_qc.yaml"))
-        summary = run_pipeline(request.project_config_path, str(approved_pipeline))
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}: raise HTTPException(status_code=400, detail=summary)
-        return summary
-    except HTTPException: raise
-    except Exception as exc: raise HTTPException(status_code=400, detail=str(exc))
-
-
-@router.get("/api/rsfmri/smoothing-qc")
-def api_get_rsfmri_smoothing_qc() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"
-    derivatives_base = Path("outputs/derivatives")
-    subject_smoothing_qc = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/smoothing_qc.json")):
-        subject_smoothing_qc.append(_read_json_if_exists(path))
-    return {"ok": True, "smoothing_qc_summary": _read_json_if_exists(report_base / "smoothing_qc_summary.json"), "smoothing_qc_report": _read_text_if_exists(report_base / "smoothing_qc_report.md"), "subject_smoothing_qc": subject_smoothing_qc}
-
-
-def _make_nuisance_regression_approved_copy(source: Path, target: Path) -> Path:
-    import yaml
-    data = yaml.safe_load(source.read_text(encoding="utf-8"))
-    for node in data.get("nodes", []):
-        if node.get("id") in {"spm_slice_timing_subject","spm_realign_subject","spm_coregister_subject","spm_segment_subject","spm_normalize_subject","spm_smooth_subject"}:
-            node.setdefault("params",{}); node["params"]["approved"] = True
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
-    return target
-
-@router.post("/api/rsfmri/nuisance-regression/run")
-def api_run_rsfmri_nuisance_regression(request: RsfmriNuisanceRegressionRequest) -> dict[str, Any]:
-    if not request.approved: raise HTTPException(status_code=403, detail="Nuisance regression pipeline requires approved=true because it depends on approved SPM preprocessing derivatives.")
-    try:
-        approved_pipeline = _make_nuisance_regression_approved_copy(source=Path(request.pipeline_path), target=Path("outputs/work/rsfmri/approved_pipeline_nuisance_regression.yaml"))
-        summary = run_pipeline(request.project_config_path, str(approved_pipeline))
-        if summary.get("status") not in {"SUCCESS", "PARTIAL"}: raise HTTPException(status_code=400, detail=summary)
-        return summary
-    except HTTPException: raise
-    except Exception as exc: raise HTTPException(status_code=400, detail=str(exc))
-
-@router.get("/api/rsfmri/nuisance-regression")
-def api_get_rsfmri_nuisance_regression() -> dict[str, Any]:
-    report_base = Path("outputs/reports") / "rsfmri"; derivatives_base = Path("outputs/derivatives"); work_base = Path("outputs/work") / "dpabi" / "contracts"
-    subject_regression_qc = []; subject_confounds = []
-    for path in sorted((derivatives_base / "rsfmri_qc").glob("*/nuisance_regression_qc.json")): subject_regression_qc.append(_read_json_if_exists(path))
-    for path in sorted((derivatives_base / "rsfmri_confounds").glob("*/confound_qc.json")): subject_confounds.append(_read_json_if_exists(path))
-    return {"ok": True, "nuisance_regression_qc_summary": _read_json_if_exists(report_base / "nuisance_regression_qc_summary.json"), "nuisance_regression_qc_report": _read_text_if_exists(report_base / "nuisance_regression_qc_report.md"), "subject_nuisance_regression_qc": subject_regression_qc, "subject_confound_qc": subject_confounds, "dpabi_backend_contract": _read_json_if_exists(work_base / "nuisance_regression_backend_contract.json")}
-
-def _make_temporal_filtering_approved_copy(source: Path, target: Path) -> Path:
-    import yaml; data = yaml.safe_load(source.read_text(encoding="utf-8"))
-    for node in data.get("nodes", []):
-        if node.get("id") in {"spm_slice_timing_subject","spm_realign_subject","spm_coregister_subject","spm_segment_subject","spm_normalize_subject","spm_smooth_subject"}:
-            node.setdefault("params",{}); node["params"]["approved"] = True
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8"); return target
-
-@router.post("/api/rsfmri/temporal-filtering/run")
-def api_run_rsfmri_temporal_filtering(request: RsfmriTemporalFilteringRequest) -> dict[str, Any]:
-    if not request.approved: raise HTTPException(403, "Temporal filtering pipeline requires approved=true.")
-    try:
-        ap = _make_temporal_filtering_approved_copy(Path(request.pipeline_path), Path("outputs/work/rsfmri/approved_pipeline_temporal_filtering.yaml"))
-        s = run_pipeline(request.project_config_path, str(ap))
-        if s.get("status") not in {"SUCCESS","PARTIAL"}: raise HTTPException(400, detail=s)
-        return s
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/rsfmri/temporal-filtering")
-def api_get_rsfmri_temporal_filtering() -> dict[str, Any]:
-    rb = Path("outputs/reports") / "rsfmri"; db = Path("outputs/derivatives"); wb = Path("outputs/work") / "dpabi" / "contracts"
-    sqc = []; [sqc.append(_read_json_if_exists(p)) for p in sorted((db / "rsfmri_qc").glob("*/temporal_filtering_qc.json"))]
-    return {"ok": True, "temporal_filtering_qc_summary": _read_json_if_exists(rb / "temporal_filtering_qc_summary.json"), "temporal_filtering_qc_report": _read_text_if_exists(rb / "temporal_filtering_qc_report.md"), "subject_temporal_filtering_qc": sqc, "dpabi_backend_contract": _read_json_if_exists(wb / "temporal_filtering_backend_contract.json")}
-
-def _make_alff_falff_approved_copy(source: Path, target: Path) -> Path:
-    import yaml; d = yaml.safe_load(source.read_text(encoding="utf-8"))
-    for n in d.get("nodes", []):
-        if n.get("id") in {"spm_slice_timing_subject","spm_realign_subject","spm_coregister_subject","spm_segment_subject","spm_normalize_subject","spm_smooth_subject"}: n.setdefault("params",{}); n["params"]["approved"] = True
-    target.parent.mkdir(parents=True, exist_ok=True); target.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8"); return target
-
-@router.post("/api/rsfmri/alff-falff/run")
-def api_run_rsfmri_alff_falff(request: RsfmriAlffFalffRequest) -> dict[str, Any]:
-    if not request.approved: raise HTTPException(403, "ALFF/fALFF pipeline requires approved=true.")
-    try:
-        ap = _make_alff_falff_approved_copy(Path(request.pipeline_path), Path("outputs/work/rsfmri/approved_pipeline_alff_falff.yaml"))
-        s = run_pipeline(request.project_config_path, str(ap))
-        if s.get("status") not in {"SUCCESS","PARTIAL"}: raise HTTPException(400, detail=s)
-        return s
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/rsfmri/alff-falff")
-def api_get_rsfmri_alff_falff() -> dict[str, Any]:
-    rb = Path("outputs/reports") / "rsfmri"; db = Path("outputs/derivatives"); gb = Path("outputs/work") / "gpu" / "contracts"; wb = Path("outputs/work") / "dpabi" / "contracts"
-    sqc = []; src = []
-    [sqc.append(_read_json_if_exists(p)) for p in sorted((db / "rsfmri_qc").glob("*/alff_falff_qc.json"))]
-    [src.append(_read_json_if_exists(p)) for p in sorted((db / "rsfmri_metrics").glob("*/alff_falff_result.json"))]
-    return {"ok": True, "alff_falff_qc_summary": _read_json_if_exists(rb / "alff_falff_qc_summary.json"), "alff_falff_qc_report": _read_text_if_exists(rb / "alff_falff_qc_report.md"), "subject_alff_falff_qc": sqc, "subject_alff_falff_results": src, "gpu_candidate_contract": _read_json_if_exists(gb / "alff_falff_gpu_candidate_contract.json"), "dpabi_backend_contract": _read_json_if_exists(wb / "alff_falff_backend_contract.json")}
-
-def _make_reho_approved_copy(source: Path, target: Path) -> Path:
-    import yaml; d = yaml.safe_load(source.read_text(encoding="utf-8"))
-    for n in d.get("nodes", []):
-        if n.get("id") in {"spm_slice_timing_subject","spm_realign_subject","spm_coregister_subject","spm_segment_subject","spm_normalize_subject","spm_smooth_subject"}: n.setdefault("params",{}); n["params"]["approved"] = True
-    target.parent.mkdir(parents=True, exist_ok=True); target.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8"); return target
-
-@router.post("/api/rsfmri/reho/run")
-def api_run_rsfmri_reho(request: RsfmriRehoRequest) -> dict[str, Any]:
-    if not request.approved: raise HTTPException(403, "ReHo pipeline requires approved=true.")
-    try:
-        ap = _make_reho_approved_copy(Path(request.pipeline_path), Path("outputs/work/rsfmri/approved_pipeline_reho.yaml"))
-        s = run_pipeline(request.project_config_path, str(ap))
-        if s.get("status") not in {"SUCCESS","PARTIAL"}: raise HTTPException(400, detail=s)
-        return s
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/rsfmri/reho")
-def api_get_rsfmri_reho() -> dict[str, Any]:
-    rb = Path("outputs/reports") / "rsfmri"; db = Path("outputs/derivatives"); gb = Path("outputs/work") / "gpu" / "contracts"; wb = Path("outputs/work") / "dpabi" / "contracts"
-    sqc = []; src = []
-    [sqc.append(_read_json_if_exists(p)) for p in sorted((db / "rsfmri_qc").glob("*/reho_qc.json"))]
-    [src.append(_read_json_if_exists(p)) for p in sorted((db / "rsfmri_metrics").glob("*/reho_result.json"))]
-    return {"ok": True, "reho_qc_summary": _read_json_if_exists(rb / "reho_qc_summary.json"), "reho_qc_report": _read_text_if_exists(rb / "reho_qc_report.md"), "subject_reho_qc": sqc, "subject_reho_results": src, "gpu_candidate_contract": _read_json_if_exists(gb / "reho_gpu_candidate_contract.json"), "dpabi_backend_contract": _read_json_if_exists(wb / "reho_backend_contract.json")}
-
-def _make_fc_approved_copy(source: Path, target: Path) -> Path:
-    import yaml; d = yaml.safe_load(source.read_text(encoding="utf-8"))
-    for n in d.get("nodes", []):
-        if n.get("id") in {"spm_slice_timing_subject","spm_realign_subject","spm_coregister_subject","spm_segment_subject","spm_normalize_subject","spm_smooth_subject"}: n.setdefault("params",{}); n["params"]["approved"] = True
-    target.parent.mkdir(parents=True, exist_ok=True); target.write_text(yaml.safe_dump(d, sort_keys=False), encoding="utf-8"); return target
-
-@router.post("/api/rsfmri/functional-connectivity/run")
-def api_run_rsfmri_fc(request: RsfmriFunctionalConnectivityRequest) -> dict[str, Any]:
-    if not request.approved: raise HTTPException(403, "FC pipeline requires approved=true.")
-    try:
-        ap = _make_fc_approved_copy(Path(request.pipeline_path), Path("outputs/work/rsfmri/approved_pipeline_fc.yaml"))
-        s = run_pipeline(request.project_config_path, str(ap))
-        if s.get("status") not in {"SUCCESS","PARTIAL"}: raise HTTPException(400, detail=s)
-        return s
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/rsfmri/functional-connectivity")
-def api_get_rsfmri_fc() -> dict[str, Any]:
-    rb = Path("outputs/reports") / "rsfmri"; db = Path("outputs/derivatives"); gb = Path("outputs/work") / "gpu" / "contracts"; wb = Path("outputs/work") / "dpabi" / "contracts"
-    sqc = []; src = []
-    [sqc.append(_read_json_if_exists(p)) for p in sorted((db / "rsfmri_qc").glob("*/functional_connectivity_qc.json"))]
-    [src.append(_read_json_if_exists(p)) for p in sorted((db / "rsfmri_fc").glob("*/fc_result.json"))]
-    return {"ok": True, "functional_connectivity_qc_summary": _read_json_if_exists(rb / "functional_connectivity_qc_summary.json"), "functional_connectivity_qc_report": _read_text_if_exists(rb / "functional_connectivity_qc_report.md"), "subject_fc_qc": sqc, "subject_fc_results": src, "gpu_candidate_contract": _read_json_if_exists(gb / "functional_connectivity_gpu_candidate_contract.json"), "dpabi_backend_contract": _read_json_if_exists(wb / "functional_connectivity_backend_contract.json")}
-
-@router.post("/api/rsfmri/group-summary/run")
-def api_run_rsfmri_group_summary(request: RsfmriGroupSummaryRequest) -> dict[str, Any]:
-    try:
-        s = run_pipeline(request.project_config_path, request.pipeline_path)
-        if s.get("status") not in {"SUCCESS","PARTIAL"}: raise HTTPException(400, detail=s)
-        return s
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/rsfmri/group-summary")
-def api_get_rsfmri_group_summary() -> dict[str, Any]:
-    gb = Path("outputs/reports") / "rsfmri" / "group_summary"
-    return {"ok": True, "dataset_summary": _read_json_if_exists(gb / "dataset_summary.json"), "dashboard_data": _read_json_if_exists(gb / "dashboard_data.json"), "pipeline_completeness": _read_json_if_exists(gb / "pipeline_completeness.json"), "contracts_overview": _read_json_if_exists(gb / "contracts_overview.json"), "dataset_summary_report": _read_text_if_exists(gb / "dataset_summary_report.md"), "subject_metrics_table_path": str(gb / "subject_metrics_table.csv")}
-
-@router.post("/api/rsfmri/report-export/run")
-def api_run_report_export(request: RsfmriReportExportRequest) -> dict[str, Any]:
-    try:
-        s = run_pipeline(request.project_config_path, request.pipeline_path)
-        if s.get("status") not in {"SUCCESS","PARTIAL"}: raise HTTPException(400, detail=s)
-        return s
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/rsfmri/report-export/latest")
-def api_get_latest_report_export() -> dict[str, Any]: return get_latest_rsfmri_report_export()
-
-@router.get("/api/rsfmri/report-export/list")
-def api_list_report_exports() -> dict[str, Any]: return list_rsfmri_report_exports()
-
-@router.post("/api/rsfmri/report-validator/run")
-def api_run_report_validator(request: RsfmriReportValidationRequest) -> dict[str, Any]:
-    try:
-        s = run_pipeline(request.project_config_path, request.pipeline_path)
-        if s.get("status") not in {"SUCCESS","PARTIAL"}: raise HTTPException(400, detail=s)
-        return s
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/rsfmri/report-validator/latest")
-def api_get_latest_report_validation() -> dict[str, Any]: return get_latest_rsfmri_report_validation()
-
-@router.get("/api/rsfmri/report-validator/list")
-def api_list_report_validations() -> dict[str, Any]: return list_rsfmri_report_validations()
-
-@router.post("/api/release-readiness/run")
-def api_run_release_readiness(request: ReleaseReadinessRequest) -> dict[str, Any]:
-    try:
-        s = run_pipeline(request.project_config_path, request.pipeline_path)
-        return s
-    except Exception as e: raise HTTPException(400, detail=str(e))
-
-@router.get("/api/release-readiness")
-def api_get_release_readiness() -> dict[str, Any]:
-    rb = Path("outputs/reports/release_readiness")
-    return {"ok": True, "result": _read_json_if_exists(rb/"release_readiness_result.json"), "report": _read_text_if_exists(rb/"release_readiness_report.md"), "dashboard": _read_json_if_exists(rb/"release_readiness_dashboard.json")}
+# ── Docs inventory ────────────────────────────────────────────────────────
 
 @router.get("/api/docs/inventory")
-def api_get_docs_inventory() -> dict[str, Any]:
+def api_docs_inventory() -> dict[str, Any]:
     from src.backend.app.tools.docs_inventory import build_docs_inventory
 
-    return build_docs_inventory()
+    result = build_docs_inventory()
+    return result
 
 
-@router.get("/api/quickstart-demo/latest")
-def api_get_quickstart_demo_latest() -> dict[str, Any]:
-    demo_dir = Path("outputs/demo_runs")
-    if not demo_dir.is_dir():
-        return {"ok": False, "errors": ["No demo_runs directory"]}
-    runs = sorted(demo_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True)
-    if not runs:
-        return {"ok": False, "errors": ["No demo runs found"]}
-    summary_path = runs[0] / "quickstart_demo_summary.json"
-    if not summary_path.exists():
-        return {"ok": False, "errors": [f"No summary found for {runs[0].name}"]}
-    return json.loads(summary_path.read_text(encoding="utf-8"))
+# ── Advisor endpoints ─────────────────────────────────────────────────────
+
+@router.post("/api/advisor/protocol")
+def api_advisor_protocol(request: dict[str, Any]) -> dict[str, Any]:
+    from src.backend.app.advisor.advisor_router import route_advisor
+
+    return route_advisor("protocol", request)
 
 
-# === SessionDB endpoints ===
+@router.post("/api/advisor/error")
+def api_advisor_error(request: dict[str, Any]) -> dict[str, Any]:
+    from src.backend.app.advisor.advisor_router import route_advisor
+
+    return route_advisor("error", request)
+
+
+@router.post("/api/advisor/qc-report")
+def api_advisor_qc_report(request: dict[str, Any]) -> dict[str, Any]:
+    from src.backend.app.advisor.advisor_router import route_advisor
+
+    return route_advisor("qc-report", request)
+
+
+@router.post("/api/advisor/parameters")
+def api_advisor_parameters(request: dict[str, Any]) -> dict[str, Any]:
+    from src.backend.app.advisor.advisor_router import route_advisor
+
+    return route_advisor("parameters", request)
+
+
+@router.post("/api/advisor/docs-qa")
+def api_advisor_docs_qa(request: dict[str, Any]) -> dict[str, Any]:
+    from src.backend.app.advisor.advisor_router import route_advisor
+
+    return route_advisor("docs-qa", request)
+
+
+# ── Error KB endpoints ────────────────────────────────────────────────────
+
+@router.get("/api/kb/errors")
+def api_kb_errors() -> dict[str, Any]:
+    from src.backend.app.tools.error_kb_validator import list_error_kb_entries
+
+    return list_error_kb_entries()
+
+
+@router.post("/api/kb/errors/validate")
+def api_kb_errors_validate() -> dict[str, Any]:
+    from src.backend.app.tools.error_kb_validator import validate_error_kb
+
+    return validate_error_kb()
+
+
+# ── SessionDB endpoints ───────────────────────────────────────────────────
 
 @router.post("/api/sessions/index")
 async def sessions_index():
@@ -1633,11 +1359,13 @@ async def sessions_query(
     subject_id: str | None = Query(None),
     category: str | None = Query(None),
     limit: int = Query(50),
+    offset: int = Query(0),
 ):
     """Query SessionDB with optional filters or FTS search."""
     from src.backend.app.tools.session_query import query_sessions
 
-    return query_sessions(q=q, status=status, subject_id=subject_id, category=category, limit=limit)
+    return query_sessions(q=q, status=status, subject_id=subject_id,
+                          category=category, limit=limit, offset=offset)
 
 
 @router.get("/api/sessions/runs")
@@ -1647,172 +1375,53 @@ async def sessions_runs(status: str | None = None, limit: int = 50):
 
     db = SessionDB()
     runs = db.query_runs(status=status, limit=limit)
-    stats = db.stats()
     db.close()
-    return {"ok": True, "runs": runs, "stats": stats, "total": len(runs)}
+    return {"ok": True, "runs": runs, "total": len(runs)}
 
 
-@router.get("/api/sessions/errors")
-async def sessions_errors(category: str | None = None, limit: int = 100):
-    """List errors from SessionDB, optionally filtered by category."""
+@router.get("/api/sessions/nodes")
+async def sessions_nodes(run_id: str = Query(...)):
+    """List nodes for a run from SessionDB."""
     from src.backend.app.memory.session_db import SessionDB
 
     db = SessionDB()
-    errors = db.query_errors(category=category, limit=limit)
-    cats = db.error_categories()
+    nodes = db.query_nodes(run_id=run_id)
     db.close()
-    return {"ok": True, "errors": errors, "categories": cats, "total": len(errors)}
+    return {"ok": True, "nodes": nodes, "total": len(nodes)}
 
 
-@router.get("/api/sessions/subjects/{subject_id}")
-async def sessions_subject(subject_id: str):
-    """Get run history for a specific subject."""
+@router.get("/api/sessions/search")
+async def sessions_search(q: str = Query(...), limit: int = 30):
+    """Full-text search across indexed documents."""
     from src.backend.app.memory.session_db import SessionDB
 
     db = SessionDB()
-    nodes = db.query_nodes_by_subject(subject_id)
+    results = db.fts_search(query=q, limit=limit)
     db.close()
-    return {"ok": True, "subject_id": subject_id, "nodes": nodes, "total": len(nodes)}
+    return {"ok": True, "results": results, "total": len(results)}
 
 
-# === Insights endpoints ===
+# ── Run history endpoints ─────────────────────────────────────────────────
 
-@router.post("/api/insights/build")
-async def insights_build():
-    """Build insights from SessionDB."""
-    from src.backend.app.tools.insights import build_insights
+@router.get("/api/history/runs")
+def api_history_runs(limit: int = Query(20)) -> dict[str, Any]:
+    from src.backend.app.tools.run_history_cli import get_recent_run_history
 
-    return build_insights()
-
-
-@router.get("/api/insights")
-async def insights_get():
-    """Get latest insights report (auto-rebuild if stale)."""
-    from src.backend.app.tools.insights import build_insights
-
-    return build_insights()
+    return {"ok": True, "runs": get_recent_run_history(limit)}
 
 
-# === Error Intelligence endpoints ===
+# ── DPABI template library endpoints ──────────────────────────────────────
 
-@router.post("/api/errors/classify")
-async def errors_classify(request: dict[str, Any]):
-    """Classify a single error message against the ERROR_KB."""
-    from src.backend.app.tools.error_classifier import classify_error
-
-    message = request.get("message", "")
-    if not message:
-        raise HTTPException(status_code=400, detail="message required")
-    return classify_error(message)
-
-
-@router.get("/api/errors/kb")
-async def errors_kb():
-    """Get error knowledge base summary / validate schema."""
-    from src.backend.app.tools.error_kb_validator import validate_error_kb
-
-    return validate_error_kb()
-
-
-@router.post("/api/errors/kb/validate")
-async def errors_kb_validate():
-    """Validate ERROR_KB schema completeness."""
-    from src.backend.app.tools.error_kb_validator import validate_error_kb
-
-    return validate_error_kb()
-
-
-# === Background Review endpoints ===
-
-@router.post("/api/background-review/start")
-async def background_review_start(request: dict[str, Any]):
-    """Start a background review (sync or async)."""
-    from src.backend.app.runtime.background_review import run_background_review, submit_background_review_async
-
-    agent_run_id = request["agent_run_id"]
-    project_config_path = request.get("project_config_path", "examples/project_config_dataset.yaml")
-    agent_summary_path = request.get("agent_summary_path", f"outputs/work/agent_runs/{agent_run_id}/agent_summary.json")
-    async_mode = request.get("async", True)
-
-    if async_mode:
-        task_id = submit_background_review_async(agent_run_id, project_config_path, agent_summary_path)
-        return {"ok": True, "async": True, "task_id": task_id}
-    else:
-        return run_background_review(agent_run_id, project_config_path, agent_summary_path)
-
-
-@router.get("/api/background-review/status/{task_id}")
-async def background_review_status(task_id: str):
-    """Get background review task status."""
-    from src.backend.app.runtime.background_task_manager import get_task_status
-
-    return get_task_status(task_id)
-
-
-@router.get("/api/background-review/latest")
-async def background_review_latest():
-    """Get latest background review result."""
-    from src.backend.app.runtime.background_task_manager import list_tasks
-
-    tasks = list_tasks()
-    for t in tasks.get("tasks", []):
-        if t.get("task_type") == "background_review" and t.get("status") == "SUCCESS":
-            return {"ok": True, "latest": t}
-    return {"ok": False, "errors": ["No completed background review found"]}
-
-
-# === SPM Chain Validation endpoints ===
-
-@router.post("/api/spm/chain/validate")
-async def spm_chain_validate(request: dict[str, Any]):
-    """Start SPM preprocessing chain validation (dry_run or synthetic_execute)."""
-    from src.backend.app.tools.spm_chain_validator import validate_spm_chain
-
-    return validate_spm_chain(
-        subject_id=request.get("subject_id", "sub-001"),
-        mode=request.get("mode", "dry_run"),
-        approved=request.get("approved", False),
-        stop_on_failure=request.get("stop_on_failure", True),
-    )
-
-
-@router.get("/api/spm/chain/results")
-async def spm_chain_results():
-    """Get latest SPM chain validation results."""
-    path = Path("outputs/reports/spm_chain_validation/spm_chain_validation_result.json")
+@router.get("/api/dpabi/template-library")
+async def dpabi_template_library_view():
+    """View the DPABI template library report."""
+    path = Path("outputs/reports") / "dpabi" / "dpabi_template_library.md"
     if not path.exists():
-        raise HTTPException(status_code=404, detail="No chain validation results found. POST /api/spm/chain/validate first.")
-    return json.loads(path.read_text(encoding="utf-8"))
+        raise HTTPException(status_code=404, detail="Template library not found. POST /api/dpabi/template-library to generate.")
+    return {"ok": True, "report": path.read_text(encoding="utf-8")}
 
 
-@router.get("/api/spm/check-env/status")
-async def spm_check_env_status():
-    """Get MATLAB/SPM environment check status."""
-    result: dict[str, Any] = {"ok": True, "checks": []}
-    import subprocess
-    import shutil
-    import sys as _sys
-
-    matlab_cmd = shutil.which("matlab") or "matlab"
-    result["checks"].append({"name": "matlab_in_path", "ok": shutil.which("matlab") is not None})
-
-    try:
-        r = subprocess.run([matlab_cmd, "-batch", "disp(version)"], capture_output=True, text=True, timeout=30)
-        result["checks"].append({"name": "matlab_executable", "ok": r.returncode == 0, "version": r.stdout.strip()[:100]})
-    except Exception as e:
-        result["checks"].append({"name": "matlab_executable", "ok": False, "error": str(e)})
-
-    spm_dir = Path("third_party/spm12")
-    result["checks"].append({"name": "spm12_directory", "ok": spm_dir.is_dir(), "path": str(spm_dir)})
-
-    if spm_dir.is_dir():
-        result["checks"].append({"name": "spm12_items", "ok": True, "count": len(list(spm_dir.iterdir()))})
-
-    result["all_ok"] = all(c.get("ok", False) for c in result["checks"])
-    return result
-
-
-# === DPABI endpoints ===
+# ── DPABI smoke test / validation endpoints ───────────────────────────────
 
 @router.post("/api/dpabi/smoke-test")
 async def dpabi_smoke_test(request: dict[str, Any]):
@@ -1856,7 +1465,7 @@ async def dpabi_function_list():
     return {"ok": True, "functions": list_allowed_functions()}
 
 
-# === GPU endpoints ===
+# ── GPU endpoints ─────────────────────────────────────────────────────────
 
 @router.get("/api/gpu/capability")
 async def gpu_capability():
@@ -1866,150 +1475,64 @@ async def gpu_capability():
     return detect_gpu_capability()
 
 
-@router.post("/api/gpu/benchmark")
-async def gpu_benchmark(request: dict[str, Any]):
+@router.post("/api/gpu/synthetic-benchmark")
+async def gpu_synthetic_benchmark(request: dict[str, Any]):
     """Run CPU vs GPU benchmark for ALFF computation."""
     from src.backend.app.tools.alff_compute import compute_alff_backend, compute_alff_numpy
     import numpy as np
     import time
 
-    size = request.get("size", [64, 64, 32, 100])
-    tr = request.get("tr", 2.0)
-    band = tuple(request.get("freq_band", [0.01, 0.08]))
-    repeat = request.get("repeat", 1)
+    shape = tuple(request.get("shape", [32, 32, 32, 128]))
+    filter_type = request.get("filter_type", "bandpass")
+    low_hz = float(request.get("low_hz", 0.01))
+    high_hz = float(request.get("high_hz", 0.08))
+    tr = float(request.get("tr", 2.0))
 
-    data = np.random.default_rng(42).normal(size=size).astype("float32")
+    data = np.random.default_rng(42).normal(size=shape).astype(np.float32)
 
-    # CPU benchmark
-    cpu_times = []
-    for _ in range(repeat):
-        start = time.perf_counter()
-        alff_cpu, falff_cpu, _ = compute_alff_numpy(data, tr, band)
-        cpu_times.append(time.perf_counter() - start)
+    t0 = time.time()
+    _cpu = compute_alff_numpy(data, low_hz=low_hz, high_hz=high_hz, tr=tr)
+    cpu_time = round(time.time() - t0, 3)
 
-    # GPU benchmark (prefer GPU but fallback to CPU)
-    gpu_result = compute_alff_backend(data, tr, band, prefer_gpu=True, require_gpu=False)
+    gpu_time = None
+    gpu_error = None
+    try:
+        t0 = time.time()
+        _gpu = compute_alff_backend(data, low_hz=low_hz, high_hz=high_hz, tr=tr, prefer_gpu=True)
+        gpu_time = round(time.time() - t0, 3)
+    except Exception as exc:
+        gpu_error = str(exc)
 
-    results = {
+    return {
         "ok": True,
-        "backend_used": gpu_result["backend"],
-        "cpu_avg_seconds": round(sum(cpu_times) / len(cpu_times), 4),
-        "gpu_seconds": round(gpu_result.get("runtime_seconds", 0), 4),
-        "speedup": round(sum(cpu_times) / len(cpu_times) / max(gpu_result.get("runtime_seconds", 0.001), 0.001), 2),
-        "cpu_result_shape": alff_cpu.shape,
-        "gpu_result_shape": gpu_result["alff"].shape if gpu_result["alff"] is not None else None,
-        "shape_match": gpu_result["alff"] is not None and alff_cpu.shape == gpu_result["alff"].shape,
-        "warnings": gpu_result.get("warnings", []),
+        "shape": list(shape),
+        "cpu_time_s": cpu_time,
+        "gpu_time_s": gpu_time,
+        "gpu_error": gpu_error,
+        "speedup": round(cpu_time / gpu_time, 2) if gpu_time else None,
     }
 
-    # Validate if GPU was used
-    if gpu_result["alff"] is not None:
-        diff = float(np.max(np.abs(alff_cpu.astype("float32") - gpu_result["alff"].astype("float32"))))
-        results["max_abs_diff"] = round(diff, 8)
-        results["within_tolerance"] = diff < 1e-5
 
-    return results
+# ── Real data sandbox ─────────────────────────────────────────────────────
 
+@router.post("/api/real-data/inspect")
+async def real_data_inspect(request: dict[str, Any]):
+    """Inspect a real dataset directory and generate data inventory."""
+    from src.backend.app.tools.real_data_inspector import inspect_real_data_directory
 
-@router.get("/api/gpu/benchmark/latest")
-async def gpu_benchmark_latest():
-    """Get latest GPU benchmark result."""
-    # Return the capability check as proxy for latest GPU status
-    from src.backend.app.tools.gpu_capability import detect_gpu_capability
-
-    return detect_gpu_capability()
-
-
-# === LLM Advisor endpoints ===
-
-@router.post("/api/advisor/protocol")
-async def advisor_protocol(request: dict[str, Any]):
-    """Protocol Advisor: recommend pipeline templates and parameters."""
-    from src.backend.app.advisor.protocol_advisor import advise_protocol
-
-    return advise_protocol(
-        modality=request.get("modality", "rs-fMRI"),
-        task_goal=request.get("task_goal", ""),
-        tr=request.get("tr", 2.0),
-        slice_count=request.get("slice_count", 32),
-        has_fieldmap=request.get("has_fieldmap", False),
-        available_data=request.get("available_data", ["T1w", "BOLD"]),
-        constraints=request.get("constraints", []),
-    )
-
-
-@router.post("/api/advisor/error")
-async def advisor_error(request: dict[str, Any]):
-    """Error Advisor: explain error messages and suggest fixes."""
-    from src.backend.app.advisor.error_advisor import advise_error
-
-    return advise_error(
-        error_message=request.get("error_message", ""),
-        node_id=request.get("node_id", ""),
-        backend=request.get("backend", "python"),
-        error_category=request.get("error_category", "UNKNOWN_ERROR"),
-        subject_id=request.get("subject_id", ""),
-    )
-
-
-@router.post("/api/advisor/qc-report")
-async def advisor_qc_report(request: dict[str, Any]):
-    """QC Report Advisor: generate human-readable QC narratives."""
-    from src.backend.app.advisor.qc_report_advisor import advise_qc_report
-
-    return advise_qc_report(
-        qc_data=request.get("qc_data", {}),
-        subjects_total=request.get("subjects_total", 0),
-        subjects_passed=request.get("subjects_passed", 0),
-    )
-
-
-@router.post("/api/advisor/parameters")
-async def advisor_parameters(request: dict[str, Any]):
-    """Parameter Advisor: explain and suggest preprocessing parameters."""
-    from src.backend.app.advisor.parameter_advisor import advise_parameters
-
-    return advise_parameters(parameters=request.get("parameters", {}))
-
-
-@router.post("/api/advisor/docs-qa")
-async def advisor_docs_qa(request: dict[str, Any]):
-    """Docs Q&A Advisor: answer questions using project documentation."""
-    from src.backend.app.advisor.docs_qa_advisor import advise_docs_qa
-
-    return advise_docs_qa(
-        question=request.get("question", ""),
-        context_docs=request.get("context_docs", []),
-    )
-
-
-@router.get("/api/advisor/status")
-async def advisor_status():
-    """Get LLM advisor configuration status."""
-    from src.backend.app.advisor.advisor_safety import is_llm_enabled, get_llm_config
-
-    return {"ok": True, "llm_enabled": is_llm_enabled(), "config": get_llm_config()}
-
-
-# === Real Data Sandbox endpoints ===
-
-@router.post("/api/real-data/inventory")
-async def real_data_inventory(request: dict[str, Any]):
-    """Inspect a BIDS dataset (read-only, no voxel data loaded)."""
-    from src.backend.app.tools.real_data_inspector import inspect_real_dataset
-
-    return inspect_real_dataset(
-        rawdata_path=request.get("rawdata_path", "examples/synthetic_bids/rawdata"),
-        output_dir=request.get("output_dir", "./reports/real_data_sandbox"),
+    return inspect_real_data_directory(
+        root_dir=request.get("root_dir", "./data/DemoData"),
+        work_dir=request.get("work_dir", "./work"),
+        report_dir=request.get("report_dir", "./reports"),
     )
 
 
 @router.get("/api/real-data/inventory/latest")
 async def real_data_inventory_latest():
     """Get latest data inventory."""
-    path = Path("outputs/reports/real_data_sandbox/data_inventory.json")
+    path = Path("outputs/reports") / "real_data_sandbox" / "data_inventory.json"
     if not path.exists():
-        raise HTTPException(status_code=404, detail="No inventory found. POST /api/real-data/inventory first.")
+        raise HTTPException(status_code=404, detail="No inventory found. POST /api/real-data/inspect first.")
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -2053,116 +1576,23 @@ async def sandbox_status():
 
 @router.post("/api/workflow/run")
 async def workflow_run(request: dict[str, Any]):
+    """Run quickstart demo or real-data mini pipeline.
+
+    Delegates heavy computation to workflow_runner module.
+    """
+    from src.backend.app.tools.workflow_runner import (
+        run_quickstart_demo_workflow,
+        run_real_data_workflow,
+    )
+
     data_source = request.get("data_source", "demo")
     dataset_path = request.get("dataset_path", "")
+
     if data_source == "demo" or not dataset_path or "synthetic" in str(dataset_path).lower():
-        import datetime
-        from src.backend.app.tools.synthetic_bids import create_synthetic_bids_dataset
-        from src.backend.app.tools.data_inspector import inspect_dataset
-        from src.backend.app.tools.alff_falff import run_python_alff_falff_subject
-        from src.backend.app.tools.reho import run_python_reho_subject
-        from src.backend.app.tools.functional_connectivity import run_python_functional_connectivity_subject
-        from src.backend.app.tools.group_dataset_summary import build_group_dataset_summary
-        from src.backend.app.tools.report_exporter import export_rsfmri_report_package
-        import numpy as np, nibabel as nib, json as _json
+        return run_quickstart_demo_workflow()
 
-        demo_id = f"demo_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        wd, rd, dd, rpd, ed = Path("outputs/work"), Path("examples/synthetic_bids/rawdata"), Path("outputs/derivatives"), Path("outputs/reports"), Path("outputs/exports")
-        steps = []
-        cr = create_synthetic_bids_dataset(str(rd), subjects=["sub-001","sub-002"])
-        steps.append({"step":"create_synthetic_bids","ok":cr.get("ok",False)})
-        steps.append({"step":"data_inspection","ok":inspect_dataset(str(rd),str(wd/"dataset_index")).get("ok",False)})
-        for sid in ["sub-001","sub-002"]:
-            fd=dd/"rsfmri_preproc"/sid/"func";qd=dd/"rsfmri_qc"/sid
-            fd.mkdir(parents=True,exist_ok=True);qd.mkdir(parents=True,exist_ok=True)
-            d=np.random.default_rng(42).normal(size=(4,4,4,16)).astype(np.float32)
-            nib.save(nib.Nifti1Image(d,affine=np.eye(4)),str(fd/f"resid_swra{sid}_bold.nii"))
-            nib.save(nib.Nifti1Image(d,affine=np.eye(4)),str(fd/f"filt_resid_swra{sid}_bold.nii"))
-            (qd/"temporal_filtering_qc.json").write_text(_json.dumps({"ok":True,"subject_id":sid,"tr":2.0,"low_hz":0.01,"high_hz":0.08,"filtering_qc_status":"PASS"}),encoding="utf-8")
-            for fn,name in [(run_python_alff_falff_subject,f"alff_falff_{sid}"),(run_python_reho_subject,f"reho_{sid}"),(run_python_functional_connectivity_subject,f"fc_{sid}")]:
-                r=fn(sid,str(dd),neighborhood=27) if name.startswith("reho") else (fn(sid,str(dd),roi_count=2) if name.startswith("fc") else fn(sid,str(dd)))
-                steps.append({"step":name,"ok":r.get("ok",False)})
-        (rpd/"rsfmri"/"group_summary").mkdir(parents=True,exist_ok=True)
-        steps.append({"step":"group_summary","ok":build_group_dataset_summary(derivatives_dir=str(dd),reports_dir=str(rpd),work_dir=str(wd)).get("ok",False)})
-        export_rsfmri_report_package(derivatives_dir=str(dd),reports_dir=str(rpd),work_dir=str(wd),exports_dir=str(ed),export_id=f"quickstart_{demo_id}")
-        steps.append({"step":"report_export","ok":True})
-        steps.append({"step":"report_validation","ok":True})
-        result = {"ok":all(s["ok"] for s in steps),"workflow_type":"quickstart_demo","demo_id":demo_id,"steps":steps,"outputs":{"derivatives":str(dd),"reports":str(rpd),"exports":str(ed)}}
-        # Auto-write to demo_runs and index into SessionDB
-        demo_out = Path("outputs/demo_runs") / demo_id; demo_out.mkdir(parents=True, exist_ok=True)
-        (demo_out / "quickstart_demo_summary.json").write_text(_json.dumps(result, ensure_ascii=False, indent=2))
-        try:
-            from src.backend.app.memory.session_db import SessionDB
-            db = SessionDB(); db.upsert_run({"run_id":demo_id,"pipeline_id":"quickstart_demo","status":"SUCCESS" if result["ok"] else "FAILED","started_at":result.get("started_at",""),"source_path":str(demo_out/"quickstart_demo_summary.json")})
-            db.index_document(demo_id,"demo_run",f"Demo: {demo_id}",_json.dumps(result,ensure_ascii=False)); db.close()
-        except: pass
-        return result
+    return run_real_data_workflow(dataset_path)
 
-    # Real data pipeline
-    import time,numpy as np,nibabel as nib,pydicom
-    root=Path(dataset_path);deriv=Path("outputs/derivatives/demo_real");start_time=time.time()
-    subjects=[d.name for d in sorted((root/"FunRaw").iterdir()) if d.is_dir()] if (root/"FunRaw").is_dir() else []
-    if not subjects: return {"ok":False,"errors":[f"No subjects found in {dataset_path}"]}
-    steps=[];metrics={}
-    for sid in subjects[:3]:
-        t1=time.time()
-        func_files=sorted((root/"FunRaw"/sid).glob("*.dcm"))
-        volumes=[];affine=np.eye(4);affine[0,0]=3.12;affine[1,1]=3.12;affine[2,2]=3.0
-        for fp in func_files:
-            ds=pydicom.dcmread(str(fp));arr=ds.pixel_array.astype(np.float32)
-            xd,ms=64,arr.shape[0];rows=ms//xd;sl2d=[]
-            for r in range(rows):
-                for c in range(rows):
-                    y1,y2=r*xd,(r+1)*xd;x1,x2=c*xd,(c+1)*xd
-                    if y2<=ms and x2<=ms:
-                        sl=arr[y1:y2,x1:x2]
-                        if np.any(sl>0): sl2d.append(sl)
-            volumes.append(np.stack(sl2d,axis=2))
-        fd=np.stack(volumes,axis=3).astype(np.float32)
-        nx,ny,nz,nt=fd.shape;tr=2.0
-        for d in[deriv/"rsfmri_preproc"/sid/"func",deriv/"rsfmri_qc"/sid,deriv/"rsfmri_metrics"/sid,deriv/"rsfmri_fc"/sid]:d.mkdir(parents=True,exist_ok=True)
-        rng=np.random.default_rng(42+sum(ord(c)for c in sid))
-        mo=rng.normal(0,0.05,size=(nt,6));rp=mo;rpd=np.vstack([np.zeros(6),np.diff(rp,axis=0)])
-        cf=np.column_stack([rp,rpd,rp**2,rpd**2,np.ones((nt,1)),np.arange(nt).reshape(-1,1)/nt])
-        flat=fd.reshape(-1,nt);beta=np.linalg.lstsq(cf,flat.T,rcond=None)[0]
-        resid=(flat.T-cf@beta).T.reshape(fd.shape).astype(np.float32)
-        freqs=np.fft.rfftfreq(nt,d=tr);spec=np.fft.rfft(resid,axis=3)
-        bm=(freqs>=0.01)&(freqs<=0.08);sf=spec.copy();sf[...,~bm]=0;sf[...,0]=spec[...,0]
-        flt=np.fft.irfft(sf,n=nt,axis=3).astype(np.float32)
-        df=flt-flt.mean(axis=3,keepdims=True);amp=np.abs(np.fft.rfft(df,axis=3))
-        bm2=bm&(freqs>0)
-        alff=np.mean(amp[...,bm2],axis=3).astype(np.float32)
-        ta=np.sum(amp[...,1:],axis=3);bs=np.sum(amp[...,bm2],axis=3)
-        falff=np.zeros_like(alff);mt=ta>0;falff[mt]=(bs[mt]/ta[mt]).astype(np.float32)
-        am=float(np.nanmean(alff))
-        off=[(dx,dy,dz)for dx in[-1,0,1]for dy in[-1,0,1]for dz in[-1,0,1]]
-        rm=np.zeros((nx,ny,nz),dtype=np.float32);vc=0
-        for x in range(1,nx-1):
-            for y in range(1,ny-1):
-                for z in range(1,nz-1):
-                    se=[];ok=True
-                    for dx,dy,dz in off:
-                        v=flt[x+dx,y+dy,z+dz,:]
-                        if not np.isfinite(v).all():ok=False;break
-                        se.append(v)
-                    if not ok or len(se)<27:continue
-                    mat=np.stack(se,axis=1)
-                    if not np.isfinite(mat).all():continue
-                    c=np.corrcoef(mat.T);rm[x,y,z]=float(np.mean(c[np.triu_indices_from(c,k=1)]));vc+=1
-        rhm=float(np.nanmean(rm[rm!=0])) if vc>0 else 0.0
-        edges=np.linspace(0,nx,5).astype(int);rts=[]
-        for i in range(4):m=flt[edges[i]:edges[i+1],:,:,:];rts.append(np.mean(m.reshape(-1,nt),axis=0) if m.size>0 else np.zeros(nt))
-        fcm=float(np.mean(np.abs(np.corrcoef(np.vstack(rts))[np.triu_indices(4,k=1)])))
-        metrics[sid]={"alff_mean":round(am,2),"reho_mean":round(rhm,4),"fc_mean":round(fcm,4),"shape":list(fd.shape),"time_s":round(time.time()-t1,1)}
-        steps.append({"step":f"real_pipeline_{sid}","ok":True})
-    result = {"ok":True,"workflow_type":"real_data_pipeline","demo_id":f"real_{int(start_time)}","data_source":dataset_path,"subjects":len(subjects[:3]),"total_time_s":round(time.time()-start_time,1),"steps":steps,"metrics":metrics,"outputs":{"derivatives":str(deriv),"reports":"outputs/reports/","exports":"outputs/exports/"}}
-    try:
-        from src.backend.app.memory.session_db import SessionDB
-        db=SessionDB();db.upsert_run({"run_id":f"real_{int(start_time)}","pipeline_id":"real_data_pipeline","status":"SUCCESS","started_at":str(int(start_time)),"duration_seconds":round(time.time()-start_time,1),"source_path":dataset_path})
-        for sid, m in metrics.items(): db.insert_node({"run_id":f"real_{int(start_time)}","node_id":f"real_pipeline_{sid}","subject_id":sid,"ok":True,"status":"SUCCESS","duration_seconds":m.get("time_s",0)})
-        db.index_document(f"real_{int(start_time)}","pipeline_run",f"Real Data: {dataset_path} ({len(subjects[:3])} subjects)",str(metrics));db.close()
-    except: pass
-    return result
 
 @router.get("/api/deployment/profile")
 def api_get_deployment_profile() -> dict[str, Any]:
