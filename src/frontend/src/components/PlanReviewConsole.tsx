@@ -113,6 +113,13 @@ export default function PlanReviewConsole() {
     return <span style={{ color: colors[level] || "#999", fontWeight: 700, fontSize: 12 }}>{level.toUpperCase()}</span>;
   }
 
+  function getNodeDependsOnText(nodeId: string): string {
+    const node = nodes.find(
+      (item) => String(item.id) === nodeId
+    ) as { depends_on?: string[] } | undefined;
+    return node?.depends_on?.length ? node.depends_on.join(", ") : "—";
+  }
+
   return (
     <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
       <h2>Plan Review Console</h2>
@@ -269,8 +276,7 @@ export default function PlanReviewConsole() {
             {/* Depends-on detail row for selected */}
             {selectedNodeId && (
               <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
-                Depends on: {(nodes.find(n => String(n.id) === selectedNodeId) as Record<string,unknown> | undefined)?
-                  .depends_on as string[] | undefined)?.join(", ") || "—"}
+                Depends on: {getNodeDependsOnText(selectedNodeId)}
               </div>
             )}
           </div>
