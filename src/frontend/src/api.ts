@@ -1076,3 +1076,19 @@ export async function checkApprovalGate(
     body: JSON.stringify(payload),
   });
 }
+
+// === Execute Reviewed ===
+
+export async function executeReviewedDryRun(
+  baseUrl: string,
+  payload: {
+    plan: Record<string, unknown>;
+    approval: Record<string, unknown> | null;
+    project_config_path?: string;
+  }
+) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/plans/execute-reviewed", {
+    method: "POST",
+    body: JSON.stringify({ ...payload, dry_run: true }),
+  });
+}

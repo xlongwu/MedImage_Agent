@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE, checkApprovalGate, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
+import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
 
 type PlanData = Record<string, unknown> | null;
 
@@ -37,6 +37,11 @@ export default function PlanReviewConsole() {
   const [approvalResult, setApprovalResult] = useState<Record<string, unknown> | null>(null);
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalError, setApprovalError] = useState("");
+
+  // ── Dry-run Execution Check ──
+  const [dryRunResult, setDryRunResult] = useState<Record<string, unknown> | null>(null);
+  const [dryRunLoading, setDryRunLoading] = useState(false);
+  const [dryRunError, setDryRunError] = useState("");
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -241,6 +246,34 @@ export default function PlanReviewConsole() {
     } finally { setApprovalLoading(false); }
   }
 
+  async function handleDryRunCheck() {
+    setDryRunError(""); setDryRunResult(null);
+    let plan: Record<string, unknown>;
+    try { plan = JSON.parse(planJson || "{}"); }
+    catch { setDryRunError("Cannot parse current plan JSON."); return; }
+    const nodes = approvalNodesInput.split(",").map(s => s.trim()).filter(Boolean);
+    const rejected = rejectedNodesInput.split(",").map(s => s.trim()).filter(Boolean);
+    const approval = approvalApproved ? {
+      approved: true,
+      approved_by: approvalBy || "reviewer",
+      reason: approvalReason || undefined,
+      approved_nodes: nodes,
+      rejected_nodes: rejected,
+      review_draft_schema_version: "review-draft-v1",
+    } : { approved: false };
+    setDryRunLoading(true);
+    try {
+      const data = await executeReviewedDryRun(baseUrl, {
+        plan,
+        approval,
+        project_config_path: "examples/project_config_dataset.yaml",
+      });
+      setDryRunResult(data as Record<string, unknown>);
+    } catch (e) {
+      setDryRunError(e instanceof Error ? e.message : String(e));
+    } finally { setDryRunLoading(false); }
+  }
+
   return (
     <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
       <h2>Plan Review Console</h2>
@@ -366,6 +399,44 @@ export default function PlanReviewConsole() {
               {((approvalResult.warnings as Array<Record<string,unknown>>) || []).map((w, i) => (
                 <div key={`aw-${i}`} style={{ color: "#e65100" }}>⚠️ [{String(w.code)}] {String(w.message)}</div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Dry-run Execution Readiness ── */}
+      {result && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#f3e5f5", borderRadius: 4, border: "1px solid #ce93d8" }}>
+          <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Dry-run Execution Readiness</h4>
+          <p style={{ fontSize: 12, color: "#777", margin: "0 0 8px 0" }}>
+            Backend re-runs Plan Validator + Approval Gate. No pipeline is executed.
+          </p>
+          <button onClick={handleDryRunCheck} disabled={dryRunLoading}
+            style={{ padding: "6px 14px", background: "#7b1fa2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+            {dryRunLoading ? "Checking..." : "Dry-run Execution Check"}
+          </button>
+          {dryRunError && <div style={{ color: "#c62828", fontSize: 13, marginBottom: 6 }}>❌ {dryRunError}</div>}
+          {dryRunResult && (
+            <div style={{ padding: 8, background: dryRunResult.status === "DRY_RUN_OK" ? "#e8f5e9" : dryRunResult.status === "VALIDATION_FAILED" ? "#ffebee" : "#fff3e0", borderRadius: 4, fontSize: 13 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                {dryRunResult.status === "DRY_RUN_OK" && "✅ Dry-run OK: backend would allow execution"}
+                {dryRunResult.status === "VALIDATION_FAILED" && "❌ Validation failed during backend re-check"}
+                {dryRunResult.status === "APPROVAL_GATE_BLOCKED" && "🚫 Approval gate blocked execution"}
+                {dryRunResult.status === "DRY_RUN_ONLY" && "ℹ️ Only dry-run is supported in this phase"}
+              </div>
+              <div>Status: <b>{String(dryRunResult.status)}</b></div>
+              <div>Would execute: <b>{String(dryRunResult.would_execute)}</b></div>
+              <div>Execution allowed: <b>{String(dryRunResult.execution_allowed)}</b></div>
+              <div style={{ marginTop: 4, fontSize: 11, color: "#777" }}>
+                executor_called: {String(dryRunResult.execution?.executor_called ?? "false")}
+                {" | "}submitted: {String(dryRunResult.execution?.submitted ?? "false")}
+                {" | "}run_id: {String(dryRunResult.execution?.run_id ?? "null")}
+              </div>
+              {dryRunResult.status !== "DRY_RUN_OK" && (
+                <div style={{ marginTop: 4, fontSize: 11, color: "#e65100" }}>
+                  ⚠️ No pipeline was executed. This is a dry-run check only.
+                </div>
+              )}
             </div>
           )}
         </div>
