@@ -119,3 +119,87 @@ def test_json_serializable():
     raw = resp.text
     back = json.loads(raw)
     assert back["ok"] is True
+
+
+# ── 14. openai_compatible without API key → 200, ok=false ──
+
+def test_openai_compatible_no_api_key(monkeypatch):
+    monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
+    resp = client.post("/api/planner/plan-from-goal", json={
+        "goal": "motion correction",
+        "provider": "openai_compatible",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is False
+    assert any("LLM_API_KEY_MISSING" in e for e in data["errors"])
+
+
+# ── 15. openai_compatible does not call real network ──
+
+def test_openai_compatible_no_network(monkeypatch):
+    monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
+    resp = client.post("/api/planner/plan-from-goal", json={
+        "goal": "motion",
+        "provider": "openai_compatible",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is False
+    assert data["provider"] == "openai_compatible"
+
+
+# ── 16. openai_compatible API key not leaked ──
+
+def test_openai_compatible_no_api_key_leak(monkeypatch):
+    monkeypatch.setenv("MEDIMAGE_LLM_API_KEY", "sk-secret-test-key")
+    resp = client.post("/api/planner/plan-from-goal", json={
+        "goal": "motion",
+        "provider": "openai_compatible",
+    })
+    assert resp.status_code == 200
+    raw = resp.text
+    assert "sk-secret-test-key" not in raw
+
+
+# ── 17. mock provider still works (regression) ──
+
+def test_mock_provider_regression():
+    resp = client.post("/api/planner/plan-from-goal", json={
+        "goal": "motion correction",
+        "provider": "mock",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["provider"] == "mock"
+    assert data["plan"]["pipeline_id"] == "planned_motion_qc"
+
+
+# ── 18. rule_based provider still works (regression) ──
+
+def test_rule_based_provider_regression():
+    resp = client.post("/api/planner/plan-from-goal", json={
+        "goal": "reho analysis",
+        "provider": "rule_based",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["provider"] == "rule_based"
+
+
+# ── 19. openai_compatible provider error not fallback to ok ──
+
+def test_openai_compatible_error_not_fallback(monkeypatch):
+    """When provider=openai_compatible and API key is missing,
+    the response must be ok=false, not silently fallback to deterministic."""
+    monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
+    resp = client.post("/api/planner/plan-from-goal", json={
+        "goal": "motion",
+        "provider": "openai_compatible",
+    })
+    data = resp.json()
+    assert data["ok"] is False, (
+        "openai_compatible with missing key must fail, not fallback"
+    )
