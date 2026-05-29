@@ -13,19 +13,22 @@ def _resolve_kb_path(kb_path: str | None = None) -> Path:
 
     Priority:
       1. MEDIMAGE_ERROR_KB_PATH env var
-      2. __file__-based repo root + memory/global/ERROR_KB.yaml
+      2. Walk upward from __file__ to find repo root containing memory/global/ERROR_KB.yaml
       3. CWD fallback
     """
     env_path = os.environ.get("MEDIMAGE_ERROR_KB_PATH")
     if env_path:
         return Path(env_path)
 
-    # Derive repo root from this file's location
-    this_file = Path(__file__).resolve()
-    repo_root = this_file.parents[4]  # tools → app → backend → src → repo
-    resolved = repo_root / _DEFAULT_KB_REL
-    if resolved.exists():
-        return resolved
+    # Walk upward from this file to find repo root
+    current = Path(__file__).resolve().parent
+    for _ in range(10):  # safety limit
+        candidate = current / _DEFAULT_KB_REL
+        if candidate.exists():
+            return candidate
+        if current == current.parent:
+            break
+        current = current.parent
 
     return Path.cwd() / _DEFAULT_KB_REL
 
