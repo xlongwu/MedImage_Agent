@@ -165,7 +165,7 @@ def generate_plan_from_goal(
     messages: list[str] = []
 
     # ── Provider check ──
-    supported = {"mock", "rule_based"}
+    supported = {"mock", "rule_based", "openai_compatible"}
     if provider not in supported:
         return PlannerResponse(
             ok=False,
@@ -186,6 +186,46 @@ def generate_plan_from_goal(
             plan={},
             validation={},
             errors=["EMPTY_GOAL: goal must be a non-empty string."],
+        )
+
+    # ── OpenAI-compatible provider ──
+    if provider == "openai_compatible":
+        from src.backend.app.planner.llm_provider import (  # noqa: E402
+            call_openai_compatible_provider,
+            parse_llm_plan_json,
+        )
+
+        pr = call_openai_compatible_provider(goal, constraints=constraints)
+        if not pr.ok:
+            return PlannerResponse(
+                ok=False,
+                provider=provider,
+                goal=goal,
+                plan={},
+                validation={},
+                errors=pr.errors,
+            )
+
+        try:
+            plan = parse_llm_plan_json(pr.content)
+        except ValueError as exc:
+            return PlannerResponse(
+                ok=False,
+                provider=provider,
+                goal=goal,
+                plan={},
+                validation={},
+                errors=[str(exc)],
+            )
+
+        validation = validate_plan(plan)
+        return PlannerResponse(
+            ok=validation.ok,
+            provider=provider,
+            goal=goal,
+            plan=plan,
+            validation=validation.to_dict(),
+            messages=[f"Generated plan via {provider} ({len(plan.get('nodes', []))} nodes)."],
         )
 
     # ── Rule matching ──

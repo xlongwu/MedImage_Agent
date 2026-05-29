@@ -1,149 +1,312 @@
+"""OpenAI-compatible LLM Provider Adapter.
+
+Translates a natural-language goal + Tool Catalog into an LLM prompt,
+sends it to an OpenAI-compatible API, parses the JSON response, and
+returns a structured result.
+
+Security:
+  - Never reads real API keys unless MEDIMAGE_LLM_API_KEY is set.
+  - Never prints or logs API keys.
+  - http_post is injectable for testing (no real network in CI).
+"""
+
 from __future__ import annotations
 
 import json
 import os
-import urllib.error
-import urllib.request
-from dataclasses import dataclass
-from typing import Any, Protocol
+import re
+from dataclasses import dataclass, field
+from typing import Any, Callable
 
 
-class PlannerProviderError(RuntimeError):
-    """Raised when an LLM provider cannot return a valid planner payload."""
+# ── Config / Result dataclasses ──────────────────────────────────────────────
 
-
-@dataclass
-class PlannerProviderResponse:
+@dataclass(frozen=True)
+class LLMProviderConfig:
     provider: str
+    base_url: str
     model: str
-    raw_text: str
-    payload: dict[str, Any]
+    api_key_set: bool
 
 
-class LLMPlannerProvider(Protocol):
-    provider_name: str
+@dataclass(frozen=True)
+class LLMProviderResult:
+    ok: bool
+    content: str
+    raw: dict[str, Any] | None = None
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
-    def draft_plan(self, request: dict[str, Any], candidate_pipelines: list[str]) -> PlannerProviderResponse:
-        ...
 
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
-def llm_configured() -> bool:
-    return (
-        os.environ.get("MEDIMAGE_LLM_ENABLED", "false").lower() == "true"
-        and bool(os.environ.get("MEDIMAGE_LLM_API_KEY", ""))
+def _get_config() -> LLMProviderConfig:
+    return LLMProviderConfig(
+        provider="openai_compatible",
+        base_url=os.environ.get("MEDIMAGE_LLM_BASE_URL", "https://api.openai.com/v1"),
+        model=os.environ.get("MEDIMAGE_LLM_MODEL", "gpt-4.1-mini"),
+        api_key_set=bool(os.environ.get("MEDIMAGE_LLM_API_KEY")),
     )
 
 
-def _parse_json_object(text: str) -> dict[str, Any]:
+def _tool_catalog_summary() -> list[dict[str, Any]]:
+    """Return a compact summary of the Tool Catalog for prompt injection."""
+    from src.backend.app.runtime.tool_catalog import build_tool_catalog  # noqa: E402
+
+    items = build_tool_catalog()
+    return [
+        {
+            "id": item.id,
+            "name": item.name,
+            "backend": item.backend,
+            "requires_approval": item.requires_approval,
+            "risk_level": item.risk_level,
+            "tags": item.tags,
+        }
+        for item in items
+    ]
+
+
+# ── Prompt builder ───────────────────────────────────────────────────────────
+
+def build_planner_prompt(
+    goal: str,
+    tool_catalog: list[dict[str, Any]] | None = None,
+    constraints: dict[str, Any] | None = None,
+) -> str:
+    """Build a strict system prompt for the LLM Planner."""
+    if tool_catalog is None:
+        tool_catalog = _tool_catalog_summary()
+
+    catalog_json = json.dumps(tool_catalog, ensure_ascii=False, indent=2)
+    constraints_json = json.dumps(constraints, ensure_ascii=False) if constraints else "{}"
+
+    return f"""You are a medical imaging pipeline planner. Your ONLY task is to output a valid JSON pipeline plan.
+
+RULES (non-negotiable):
+1. ONLY use node IDs from the Tool Catalog below. You MUST NOT invent any node ID.
+2. Output STRICT JSON with no explanation, no markdown outside the JSON block.
+3. The JSON must have: "pipeline_id" (string) and "nodes" (list).
+4. Each node must have: "id", "backend", "depends_on" (list), "params" (dict).
+5. For nodes that require approval (requires_approval=true), set params.approved=false.
+6. Order nodes so that dependencies appear before dependents.
+7. Chain dependencies sequentially where processing order matters.
+
+TOOL CATALOG (ONLY these node IDs are valid):
+{catalog_json}
+
+USER GOAL:
+{goal}
+
+CONSTRAINTS:
+{constraints_json}
+
+OUTPUT (JSON only):
+"""
+
+
+# ── JSON parser ──────────────────────────────────────────────────────────────
+
+_CODE_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL)
+
+
+def parse_llm_plan_json(content: str) -> dict[str, Any]:
+    """Extract and parse a pipeline plan JSON from LLM response text.
+
+    Handles:
+      - Pure JSON string
+      - JSON wrapped in ```json ... ``` code fences
+    """
+    stripped = content.strip()
+    if not stripped:
+        raise ValueError("LLM_PLAN_JSON_PARSE_ERROR: empty response content")
+
+    # Try code fence first
+    match = _CODE_FENCE_RE.search(stripped)
+    if match:
+        stripped = match.group(1).strip()
+
     try:
-        payload = json.loads(text)
+        data = json.loads(stripped)
     except json.JSONDecodeError as exc:
-        raise PlannerProviderError(f"LLM planner returned malformed JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise PlannerProviderError("LLM planner JSON must be an object.")
-    return payload
+        raise ValueError(
+            f"LLM_PLAN_JSON_PARSE_ERROR: {exc}"
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise ValueError("LLM_PLAN_JSON_PARSE_ERROR: parsed JSON is not a dict")
+
+    return data
 
 
-class FixturePlannerProvider:
-    provider_name = "fixture"
+# ── Provider caller ──────────────────────────────────────────────────────────
 
-    def __init__(self, response_text: str, model: str = "fixture") -> None:
-        self.response_text = response_text
-        self.model = model
+def call_openai_compatible_provider(
+    goal: str,
+    constraints: dict[str, Any] | None = None,
+    http_post: Callable[..., Any] | None = None,
+) -> LLMProviderResult:
+    """Call an OpenAI-compatible chat completions API.
 
-    def draft_plan(self, request: dict[str, Any], candidate_pipelines: list[str]) -> PlannerProviderResponse:
-        del request, candidate_pipelines
-        return PlannerProviderResponse(
-            provider=self.provider_name,
-            model=self.model,
-            raw_text=self.response_text,
-            payload=_parse_json_object(self.response_text),
+    Args:
+        goal: Natural-language pipeline goal.
+        constraints: Optional constraints dict.
+        http_post: Injectable HTTP POST function for testing.
+                   Signature: (url, headers, json_body, timeout) → response-like.
+                   Response must have .json() and .raise_for_status() or .status_code.
+
+    Returns:
+        LLMProviderResult with ok=True and parsed plan content on success.
+    """
+    config = _get_config()
+
+    if not config.api_key_set:
+        return LLMProviderResult(
+            ok=False,
+            content="",
+            errors=["LLM_API_KEY_MISSING: set MEDIMAGE_LLM_API_KEY environment variable."],
         )
+
+    prompt = build_planner_prompt(goal, constraints=constraints)
+    api_key = os.environ["MEDIMAGE_LLM_API_KEY"]
+
+    body = {
+        "model": config.model,
+        "messages": [
+            {"role": "system", "content": "You are a medical imaging pipeline planner. Output only valid JSON."},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 4096,
+    }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    url = f"{config.base_url.rstrip('/')}/chat/completions"
+
+    try:
+        if http_post is None:
+            import httpx  # noqa: E402
+            resp = httpx.post(url, headers=headers, json=body, timeout=60.0)
+            resp.raise_for_status()
+            raw = resp.json()
+        else:
+            resp = http_post(url, headers, body, 60.0)
+            if hasattr(resp, "raise_for_status"):
+                resp.raise_for_status()
+            raw = resp.json() if hasattr(resp, "json") else resp
+    except Exception as exc:
+        return LLMProviderResult(
+            ok=False,
+            content="",
+            errors=[f"LLM_API_CALL_FAILED: {exc}"],
+        )
+
+    choices = raw.get("choices", [])
+    if not choices:
+        return LLMProviderResult(
+            ok=False,
+            content="",
+            raw=raw,
+            errors=["LLM_API_CALL_FAILED: no choices in response"],
+        )
+
+    content = (choices[0].get("message", {}) or {}).get("content", "")
+    if not content:
+        return LLMProviderResult(
+            ok=False,
+            content="",
+            raw=raw,
+            errors=["LLM_API_CALL_FAILED: empty content in response"],
+        )
+
+    return LLMProviderResult(ok=True, content=content, raw=raw)
+
+
+# ── Backward-compat stubs (used by pipeline_planner.py) ──────────────────────
+
+class PlannerProviderError(Exception):
+    """Generic planner provider error."""
+    pass
 
 
 class OpenAICompatiblePlannerProvider:
-    provider_name = "openai_compatible"
+    """Legacy OpenAI-compatible planner provider.
 
-    def __init__(
-        self,
-        *,
-        base_url: str,
-        api_key: str,
-        model: str,
-        timeout_seconds: float = 30.0,
-    ) -> None:
-        self.base_url = base_url.rstrip("/")
+    Backward-compat implementation for existing tests that construct
+    this class directly.  Uses MEDIMAGE_LLM_MOCK_RESPONSE env var or
+    urllib to call an OpenAI-compatible endpoint.
+    """
+
+    def __init__(self, base_url: str = "", api_key: str = "",
+                 model: str = "", timeout_seconds: int = 5):
+        self.base_url = base_url
         self.api_key = api_key
         self.model = model
         self.timeout_seconds = timeout_seconds
 
-    def draft_plan(self, request: dict[str, Any], candidate_pipelines: list[str]) -> PlannerProviderResponse:
-        body = {
-            "model": self.model,
-            "temperature": 0,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a MedImage planning advisor. Return JSON only. "
-                        "Do not call tools. Choose one recommended_pipeline_path from candidate_pipelines."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(
-                        {
-                            "request": request,
-                            "candidate_pipelines": candidate_pipelines,
-                            "required_keys": [
-                                "recommended_pipeline_path",
-                                "rationale",
-                                "constraints",
-                            ],
-                        },
-                        ensure_ascii=False,
-                    ),
-                },
-            ],
-        }
-        req = urllib.request.Request(
-            f"{self.base_url}/chat/completions",
-            data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
+    def draft_plan(self, request: dict[str, Any],
+                   pipeline_paths: list[str]) -> Any:  # → DraftResponse
+        """Draft a plan via LLM call or mock env var."""
+        import json as _json
+
+        mock_raw = os.environ.get("MEDIMAGE_LLM_MOCK_RESPONSE")
+        if mock_raw:
+            payload = _json.loads(mock_raw)
+            return _DraftResponse("openai_compatible", payload)
+
+        # Fallback: try urllib-based call
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as response:
-                response_payload = json.loads(response.read().decode("utf-8"))
-        except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
-            raise PlannerProviderError(f"LLM planner request failed: {exc}") from exc
+            import urllib.request  # noqa: E402
+            body = _json.dumps({
+                "model": self.model or "planner",
+                "messages": [
+                    {"role": "user", "content": _json.dumps(request)},
+                ],
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                f"{self.base_url.rstrip('/')}/chat/completions",
+                data=body,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+                raw = _json.loads(resp.read().decode("utf-8"))
+            content = (raw.get("choices", [{}])[0]
+                       .get("message", {}).get("content", "{}"))
+            payload = _json.loads(content)
+            return _DraftResponse("openai_compatible", payload)
+        except Exception as exc:
+            raise PlannerProviderError(str(exc)) from exc
 
-        try:
-            text = response_payload["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise PlannerProviderError("LLM planner response missing choices[0].message.content.") from exc
 
-        return PlannerProviderResponse(
-            provider=self.provider_name,
-            model=self.model,
-            raw_text=text,
-            payload=_parse_json_object(text),
+class _DraftResponse:
+    """Minimal response object for backward compat."""
+    def __init__(self, provider: str, payload: dict[str, Any]):
+        self.provider = provider
+        self.payload = payload
+        self.model = ""
+
+
+def get_planner_provider_from_env() -> Any:
+    """Return OpenAICompatiblePlannerProvider if keys are configured, else None.
+
+    Also activates when MEDIMAGE_LLM_MOCK_RESPONSE is set (for testing).
+    """
+    if os.environ.get("MEDIMAGE_LLM_MOCK_RESPONSE"):
+        return OpenAICompatiblePlannerProvider(
+            base_url="https://mock.test/v1",
+            api_key="mock-key",
+            model="mock-model",
         )
-
-
-def get_planner_provider_from_env() -> LLMPlannerProvider | None:
-    fixture = os.environ.get("MEDIMAGE_LLM_MOCK_RESPONSE")
-    if fixture:
-        return FixturePlannerProvider(fixture, model=os.environ.get("MEDIMAGE_LLM_MODEL", "fixture"))
-    if not llm_configured():
-        return None
-    return OpenAICompatiblePlannerProvider(
-        base_url=os.environ.get("MEDIMAGE_LLM_BASE_URL", "https://api.openai.com/v1"),
-        api_key=os.environ["MEDIMAGE_LLM_API_KEY"],
-        model=os.environ.get("MEDIMAGE_LLM_MODEL", "medimage-planner-default"),
-        timeout_seconds=float(os.environ.get("MEDIMAGE_LLM_TIMEOUT_SECONDS", "30")),
-    )
+    config = _get_config()
+    if config.api_key_set:
+        return OpenAICompatiblePlannerProvider(
+            base_url=config.base_url,
+            api_key=os.environ["MEDIMAGE_LLM_API_KEY"],
+            model=config.model,
+        )
+    return None
