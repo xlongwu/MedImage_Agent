@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE, fetchToolCatalog, generatePlanFromGoal } from "../api";
+import { DEFAULT_API_BASE, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
 
 type PlanData = Record<string, unknown> | null;
 
@@ -12,6 +12,13 @@ export default function PlanReviewConsole() {
   const [error, setError] = useState("");
   const [catalogCount, setCatalogCount] = useState<number | null>(null);
 
+  // ── Edit + re-validate ──
+  const [planJson, setPlanJson] = useState("");
+  const [validateLoading, setValidateLoading] = useState(false);
+  const [jsonError, setJsonError] = useState("");
+  // Separate validation state so re-validate updates only this, not the planner result
+  const [reValidation, setReValidation] = useState<Record<string, unknown> | null>(null);
+
   // Load catalog count on mount
   React.useEffect(() => {
     fetchToolCatalog(baseUrl)
@@ -22,6 +29,9 @@ export default function PlanReviewConsole() {
   async function handleGenerate() {
     setError("");
     setResult(null);
+    setPlanJson("");
+    setReValidation(null);
+    setJsonError("");
     if (!goal.trim()) {
       setError("Please enter a goal.");
       return;
@@ -33,6 +43,11 @@ export default function PlanReviewConsole() {
         provider,
       });
       setResult(data);
+      // Auto-populate plan editor with formatted JSON
+      const plan = data?.plan;
+      if (plan && typeof plan === "object") {
+        setPlanJson(JSON.stringify(plan, null, 2));
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -40,7 +55,32 @@ export default function PlanReviewConsole() {
     }
   }
 
-  const validation = (result?.validation ?? {}) as Record<string, unknown>;
+  async function handleRevalidate() {
+    setJsonError("");
+    setReValidation(null);
+
+    // Local JSON parse first
+    let plan: Record<string, unknown>;
+    try {
+      plan = JSON.parse(planJson);
+    } catch (e) {
+      setJsonError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+
+    setValidateLoading(true);
+    try {
+      const data = await validatePlan(baseUrl, plan);
+      setReValidation(data as Record<string, unknown>);
+    } catch (e) {
+      setJsonError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setValidateLoading(false);
+    }
+  }
+
+  // Use re-validation data if available, otherwise planner's validation
+  const validation = (reValidation ?? result?.validation ?? {}) as Record<string, unknown>;
   const riskSummary = (validation?.risk_summary ?? {}) as Record<string, unknown>;
   const plan = (result?.plan ?? {}) as Record<string, unknown>;
   const nodes = (plan?.nodes ?? []) as Array<Record<string, unknown>>;
@@ -52,6 +92,7 @@ export default function PlanReviewConsole() {
   const highRiskNodes = (validation?.high_risk_nodes ?? []) as string[];
   const unknownNodes = (validation?.unknown_nodes ?? []) as string[];
   const topoOrder = (validation?.topological_order ?? []) as string[];
+  const reValidated = reValidation !== null;
 
   return (
     <div style={{ padding: 20, maxWidth: 960, margin: "0 auto" }}>
@@ -106,6 +147,45 @@ export default function PlanReviewConsole() {
         </div>
       )}
 
+      {/* ── Plan JSON Editor ── */}
+      {result && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <h4 style={{ margin: 0 }}>Candidate Plan JSON</h4>
+            <button
+              onClick={handleRevalidate}
+              disabled={validateLoading}
+              style={{
+                padding: "6px 14px", background: "#4caf50", color: "#fff",
+                border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13,
+              }}
+            >
+              {validateLoading ? "Validating..." : "Re-validate"}
+            </button>
+            {reValidated && (
+              <span style={{ fontSize: 12, color: "#777" }}>
+                (using re-validation result)
+              </span>
+            )}
+          </div>
+          {jsonError && (
+            <div style={{ padding: 8, background: "#ffebee", borderRadius: 4, marginBottom: 8, color: "#c62828", fontSize: 13 }}>
+              JSON Parse Error: {jsonError}
+            </div>
+          )}
+          <textarea
+            value={planJson}
+            onChange={(e) => { setPlanJson(e.target.value); setReValidation(null); setJsonError(""); }}
+            rows={16}
+            style={{
+              width: "100%", fontFamily: "monospace", fontSize: 12,
+              padding: 8, borderRadius: 4, border: "1px solid #ccc",
+            }}
+            spellCheck={false}
+          />
+        </div>
+      )}
+
       {/* ── Result ── */}
       {result && (
         <>
@@ -133,7 +213,9 @@ export default function PlanReviewConsole() {
 
           {/* Risk Summary */}
           <div style={{ marginBottom: 16, padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Risk Summary</h4>
+            <h4 style={{ margin: "0 0 8px 0" }}>
+              Risk Summary{reValidated ? " (re-validated)" : ""}
+            </h4>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px", fontSize: 13 }}>
               <span>Total nodes: <b>{String(riskSummary.nodes_total ?? "?")}</b></span>
               <span>Requires approval: <b style={{ color: riskSummary.requires_approval ? "#c62828" : "#2e7d32" }}>{String(riskSummary.requires_approval ?? "?")}</b></span>
@@ -147,7 +229,7 @@ export default function PlanReviewConsole() {
 
           {/* Validation detail */}
           <div style={{ marginBottom: 16 }}>
-            <h4 style={{ margin: "0 0 8px 0" }}>Validation</h4>
+            <h4 style={{ margin: "0 0 8px 0" }}>Validation{reValidated ? " (re-validated)" : ""}</h4>
             {valErrors.length > 0 && (
               <div style={{ marginBottom: 8 }}>
                 {valErrors.map((e, i) => (
