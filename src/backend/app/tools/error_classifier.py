@@ -22,7 +22,7 @@ def _resolve_kb_path(kb_path: str | None = None) -> Path:
 
     # Derive repo root from this file's location
     this_file = Path(__file__).resolve()
-    repo_root = this_file.parents[3]  # tools → app → backend → src → repo
+    repo_root = this_file.parents[4]  # tools → app → backend → src → repo
     resolved = repo_root / _DEFAULT_KB_REL
     if resolved.exists():
         return resolved
