@@ -26,6 +26,7 @@ export default function PlanReviewConsole() {
   const [validateLoading, setValidateLoading] = useState(false);
   const [jsonError, setJsonError] = useState("");
   const [reValidation, setReValidation] = useState<Record<string, unknown> | null>(null);
+  const [copyStatus, setCopyStatus] = useState("");
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -120,6 +121,83 @@ export default function PlanReviewConsole() {
     return node?.depends_on?.length ? node.depends_on.join(", ") : "—";
   }
 
+  function buildReviewDraft(): Record<string, unknown> | null {
+    if (!result) return null;
+    // Use re-validation if available, otherwise planner's validation
+    const v = (reValidation ?? result?.validation ?? {}) as Record<string, unknown>;
+    return {
+      schema_version: "review-draft-v1",
+      review_status: "draft",
+      execution_allowed: false,
+      generated_at: new Date().toISOString(),
+      goal,
+      provider,
+      plan: JSON.parse(planJson || "{}"),
+      validation: {
+        ok: v.ok,
+        errors: v.errors,
+        warnings: v.warnings,
+        risk_summary: v.risk_summary,
+        approval_required_nodes: v.approval_required_nodes,
+        high_risk_nodes: v.high_risk_nodes,
+        manual_required_nodes: v.manual_required_nodes,
+        unknown_nodes: v.unknown_nodes,
+        topological_order: v.topological_order,
+      },
+      risk_summary: v.risk_summary,
+      review_summary: {
+        nodes_total: nodes.length,
+        approval_required_nodes: approvalNodes,
+        high_risk_nodes: highRiskNodes,
+        manual_required_nodes: (v.manual_required_nodes ?? []) as string[],
+        unknown_nodes: unknownNodes,
+      },
+      catalog_summary: {
+        tools_total: catalogCount,
+        metadata_available: !catalogError,
+      },
+      planner: {
+        ok: result?.ok,
+        messages: result?.messages,
+        errors: errors,
+        warnings: warnings,
+      },
+      safety: {
+        review_only: true,
+        executes_pipeline: false,
+        requires_approval_before_execution: true,
+      },
+    };
+  }
+
+  function handleExport() {
+    const draft = buildReviewDraft();
+    if (!draft) return;
+    const json = JSON.stringify(draft, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const pipelineId = String(plan?.pipeline_id ?? "plan");
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    a.href = url;
+    a.download = `medimage_plan_review_${pipelineId}_${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleCopy() {
+    const draft = buildReviewDraft();
+    if (!draft) return;
+    const json = JSON.stringify(draft, null, 2);
+    try {
+      await navigator.clipboard.writeText(json);
+      setCopyStatus("Copied!");
+    } catch {
+      setCopyStatus("Clipboard unavailable");
+    }
+    setTimeout(() => setCopyStatus(""), 2000);
+  }
+
   return (
     <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
       <h2>Plan Review Console</h2>
@@ -170,6 +248,15 @@ export default function PlanReviewConsole() {
               style={{ padding: "6px 14px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
               {validateLoading ? "Validating..." : "Re-validate"}
             </button>
+            <button onClick={handleExport} disabled={!result}
+              style={{ padding: "6px 14px", background: "#0288d1", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              Export JSON
+            </button>
+            <button onClick={handleCopy} disabled={!result}
+              style={{ padding: "6px 14px", background: "#6a1b9a", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              Copy JSON
+            </button>
+            {copyStatus && <span style={{ fontSize: 12, color: "#2e7d32" }}>{copyStatus}</span>}
             {reValidated && <span style={{ fontSize: 12, color: "#777" }}>(using re-validation result)</span>}
           </div>
           {jsonError && <div style={{ padding: 8, background: "#ffebee", borderRadius: 4, marginBottom: 8, color: "#c62828", fontSize: 13 }}>JSON Parse Error: {jsonError}</div>}
