@@ -1079,6 +1079,17 @@ export async function checkApprovalGate(
 
 // === Execute Reviewed ===
 
+// === Audit Record ===
+
+export async function fetchAuditRecord(baseUrl: string, auditId: string) {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/audit/records/${encodeURIComponent(auditId)}`
+  );
+}
+
+// === Execute Reviewed ===
+
 export async function executeReviewedDryRun(
   baseUrl: string,
   payload: {

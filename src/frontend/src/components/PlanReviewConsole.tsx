@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
+import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
 
 type PlanData = Record<string, unknown> | null;
 
@@ -68,6 +68,11 @@ export default function PlanReviewConsole() {
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [dryRunError, setDryRunError] = useState("");
   const [persistAudit, setPersistAudit] = useState(false);
+
+  // ── Audit detail ──
+  const [auditDetail, setAuditDetail] = useState<Record<string, unknown> | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFetchError, setAuditFetchError] = useState("");
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -302,6 +307,17 @@ export default function PlanReviewConsole() {
     } finally { setDryRunLoading(false); }
   }
 
+  async function handleViewAudit(auditId: string) {
+    setAuditFetchError(""); setAuditDetail(null);
+    setAuditLoading(true);
+    try {
+      const data = await fetchAuditRecord(baseUrl, auditId);
+      setAuditDetail((data as Record<string, unknown>).record as Record<string, unknown> || null);
+    } catch (e) {
+      setAuditFetchError(e instanceof Error ? e.message : String(e));
+    } finally { setAuditLoading(false); }
+  }
+
   return (
     <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
       <h2>Plan Review Console</h2>
@@ -469,9 +485,38 @@ export default function PlanReviewConsole() {
                   ⚠️ No pipeline was executed. This is a dry-run check only.
                 </div>
               )}
-              {dryRunResult.audit?.persisted && (
-                <div style={{ marginTop: 4, fontSize: 11, color: "#2e7d32" }}>
-                  📝 Audit: {String(dryRunResult.audit.audit_id)} ({String(dryRunResult.audit.event_type)})
+              {dryRunResult.audit?.persisted ? (
+                <div style={{ marginTop: 4, fontSize: 11 }}>
+                  <div style={{ color: "#2e7d32" }}>
+                    📝 Audit: {String(dryRunResult.audit.audit_id)} ({String(dryRunResult.audit.event_type)})
+                  </div>
+                  <div style={{ color: "#777" }}>Path: {String(dryRunResult.audit.audit_path)}</div>
+                  <button
+                    onClick={() => handleViewAudit(String(dryRunResult.audit?.audit_id))}
+                    disabled={auditLoading}
+                    style={{ marginTop: 4, padding: "3px 10px", fontSize: 11, background: "#e0e0e0", border: "1px solid #ccc", borderRadius: 3, cursor: "pointer" }}>
+                    {auditLoading ? "Loading..." : "View Audit Record"}
+                  </button>
+                  {auditFetchError && <div style={{ color: "#c62828", marginTop: 2 }}>❌ {auditFetchError}</div>}
+                </div>
+              ) : (
+                <div style={{ marginTop: 4, fontSize: 11, color: "#777" }}>
+                  📝 Audit was not persisted for this dry-run.
+                </div>
+              )}
+              {auditDetail && (
+                <div style={{ marginTop: 6, padding: 6, background: "#f5f5f5", borderRadius: 3, fontSize: 11 }}>
+                  <div><b>audit_id:</b> {String(auditDetail.audit_id)}</div>
+                  <div><b>created_at:</b> {String(auditDetail.created_at)}</div>
+                  <div><b>event_type:</b> {String(auditDetail.event_type)}</div>
+                  <div><b>plan_hash:</b> {String(auditDetail.plan_hash)}</div>
+                  <div><b>validation_hash:</b> {String(auditDetail.validation_hash)}</div>
+                  <div><b>approval_hash:</b> {String(auditDetail.approval_hash ?? "—")}</div>
+                  <div><b>actor:</b> {String(auditDetail.actor ?? "—")}</div>
+                  <div><b>source:</b> {String(auditDetail.source)}</div>
+                  <div><b>safety.review_only:</b> {String((auditDetail.safety as Record<string,unknown>|null)?.review_only ?? "—")}</div>
+                  <div><b>safety.executes_pipeline:</b> {String((auditDetail.safety as Record<string,unknown>|null)?.executes_pipeline ?? "—")}</div>
+                  <div><b>safety.rawdata_readonly:</b> {String((auditDetail.safety as Record<string,unknown>|null)?.rawdata_readonly ?? "—")}</div>
                 </div>
               )}
             </div>
