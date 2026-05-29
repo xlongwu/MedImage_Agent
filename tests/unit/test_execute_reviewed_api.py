@@ -247,3 +247,106 @@ def test_dry_run_false_no_audit():
     data = resp.json()
     assert data["status"] == "DRY_RUN_ONLY"
     assert data["audit"]["persisted"] is False
+
+
+# ── 21. DRY_RUN_OK has adapter ──
+
+def test_dry_run_ok_has_adapter():
+    resp = client.post("/api/plans/execute-reviewed", json=_valid_body())
+    data = resp.json()
+    assert data["status"] == "DRY_RUN_OK"
+    assert data["adapter"]["ok"] is True
+    assert data["adapter"]["pipeline"]["available"] is True
+
+
+# ── 22. SPM node → EXECUTION_POLICY_BLOCKED ──
+
+def test_spm_node_policy_blocked():
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+    }
+    resp = client.post("/api/plans/execute-reviewed", json={
+        "plan": plan,
+        "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
+        "dry_run": True,
+    })
+    data = resp.json()
+    assert data["status"] == "EXECUTION_POLICY_BLOCKED"
+
+
+# ── 23. DPABI execution → EXECUTION_POLICY_BLOCKED ──
+
+def test_dpabi_policy_blocked():
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [{"id": "dpabi_subject_smooth", "depends_on": [], "params": {}}],
+    }
+    resp = client.post("/api/plans/execute-reviewed", json={
+        "plan": plan,
+        "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
+        "dry_run": True,
+    })
+    assert resp.json()["status"] == "EXECUTION_POLICY_BLOCKED"
+
+
+# ── 24. Adapter summary present on blocked ──
+
+def test_adapter_summary_present_on_blocked():
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+    }
+    resp = client.post("/api/plans/execute-reviewed", json={
+        "plan": plan,
+        "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
+        "dry_run": True,
+    })
+    data = resp.json()
+    assert data["status"] == "EXECUTION_POLICY_BLOCKED"
+    # Adapter succeeded (plan is structurally valid) but policy blocked
+    assert data["adapter"]["ok"] is True
+
+
+# ── 25. Policy blocked → would_execute false ──
+
+def test_policy_blocked_would_execute_false():
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+    }
+    resp = client.post("/api/plans/execute-reviewed", json={
+        "plan": plan,
+        "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
+        "dry_run": True,
+    })
+    data = resp.json()
+    assert data["would_execute"] is False
+    assert data["execution"]["executor_called"] is False
+
+
+# ── 26. Policy blocked + persist_audit → audit written ──
+
+def test_policy_blocked_writes_audit():
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+    }
+    resp = client.post("/api/plans/execute-reviewed", json={
+        "plan": plan,
+        "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
+        "dry_run": True,
+        "persist_audit": True,
+    })
+    data = resp.json()
+    assert data["status"] == "EXECUTION_POLICY_BLOCKED"
+    assert data["audit"]["persisted"] is True
+    assert data["audit"]["event_type"] == "execution_blocked"
+
+
+# ── 27. dry_run=false still refused ──
+
+def test_dry_run_false_still_refused():
+    resp = client.post("/api/plans/execute-reviewed", json=_valid_body(dry_run=False))
+    assert resp.json()["status"] == "DRY_RUN_ONLY"
+    assert resp.json()["execution"]["executor_called"] is False
