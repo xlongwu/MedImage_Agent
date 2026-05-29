@@ -13,6 +13,7 @@ from src.backend.app.api.dashboard_routes import router as dashboard_router
 from src.backend.app.api.desktop_routes import router as desktop_router
 from src.backend.app.api.external_smoke_routes import router as external_smoke_router
 from src.backend.app.api.gui_agent_routes import router as gui_agent_router
+from src.backend.app.api.plan_validator_routes import router as plan_validator_router
 from src.backend.app.api.planner_routes import router as planner_router
 from src.backend.app.api.tool_catalog_routes import router as tool_catalog_router
 from src.backend.app.version import API_DESCRIPTION, API_TITLE, APP_VERSION
@@ -42,6 +43,7 @@ def create_app() -> FastAPI:
     app.include_router(dashboard_router)
     app.include_router(planner_router)
     app.include_router(tool_catalog_router)
+    app.include_router(plan_validator_router)
     app.include_router(gui_agent_router)
     app.include_router(desktop_router)
     app.include_router(external_smoke_router)

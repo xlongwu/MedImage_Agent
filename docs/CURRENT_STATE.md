@@ -11,6 +11,7 @@
 | M2-T001a：Tool Catalog 只读 MVP | ✅ 已完成 | 2026-05-29 |
 | M2-T001b：Tool Catalog API endpoint | ✅ 已完成 | 2026-05-29 |
 | M2-T002a：Plan Validator Python 模块 | ✅ 已完成 | 2026-05-29 |
+| M2-T002b：Plan Validator API endpoint | ✅ 已完成 | 2026-05-29 |
 
 ## M1 交付物状态
 
