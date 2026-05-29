@@ -73,7 +73,18 @@ LLM 不应编造 Catalog 中不存在的 node。生成的 pipeline plan 必须�
 - **Fallback**：~34 个 node（DPABI contract、GPU candidate contract 等）
 - **总计**：覆盖全部 64 个 NODE_REGISTRY 中的 node
 
+## API
+
+| Endpoint | Method | 说明 |
+|----------|:---:|------|
+| `/api/tools/catalog` | GET | 返回完整工具目录 |
+| `/api/tools/catalog/{node_id}` | GET | 返回单个工具；不存在→404 |
+
+响应示例：见 `tests/unit/test_tool_catalog_api.py`。
+
 ## 代码位置
 
 - `src/backend/app/runtime/tool_catalog.py` — 核心实现
-- `tests/unit/test_tool_catalog.py` — 13 个测试
+- `src/backend/app/api/tool_catalog_routes.py` — API 路由
+- `tests/unit/test_tool_catalog.py` — 13 个测试（核心）
+- `tests/unit/test_tool_catalog_api.py` — 12 个测试（API）
