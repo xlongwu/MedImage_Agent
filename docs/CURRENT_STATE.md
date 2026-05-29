@@ -10,6 +10,7 @@
 | M2：Tool Catalog MVP | 🔄 进行中 | — |
 | M2-T001a：Tool Catalog 只读 MVP | ✅ 已完成 | 2026-05-29 |
 | M2-T001b：Tool Catalog API endpoint | ✅ 已完成 | 2026-05-29 |
+| M2-T002a：Plan Validator Python 模块 | ✅ 已完成 | 2026-05-29 |
 
 ## M1 交付物状态
 
@@ -57,6 +58,7 @@
 | CI frontend build | ✅ 通过 |
 | test_tool_catalog.py | 13 passed |
 | test_tool_catalog_api.py | 12 passed |
+| test_plan_validator.py | 24 passed |
 | test_project_settings.py | 14 passed |
 | test_release_readiness.py | 24 passed |
 | test_backend_app_import.py | 3 passed |
