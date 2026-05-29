@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DEFAULT_API_BASE } from "../../api";
 import type { WorkflowState, WorkflowAction } from "../../state/workflowTypes";
 
 interface Props {
@@ -23,7 +24,7 @@ export function DataUploadStep({ state, dispatch }: Props) {
     setInspecting(true);
     try {
       const path = state.dataSource === "demo" ? "examples/synthetic_bids/rawdata" : state.datasetPath;
-      const res = await fetch(`http://127.0.0.1:8000/api/real-data/inventory`, {
+      const res = await fetch(`${DEFAULT_API_BASE}/api/real-data/inventory`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rawdata_path: path }),
@@ -123,7 +124,7 @@ export function DataUploadStep({ state, dispatch }: Props) {
       {inspectResult?.error && (
         <div style={{ padding: 12, background: "#fff3e0", borderRadius: 4, marginBottom: 16, fontSize: 13, color: "#e65100" }}>
           Could not connect: {inspectResult.error}. Backend may not be running.<br/>
-          Start with: <code>uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000</code>
+          Start with: <code>python -m uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000</code>
         </div>
       )}
 

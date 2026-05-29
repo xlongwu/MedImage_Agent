@@ -6,7 +6,30 @@ import type {
   RunInspection
 } from "./types";
 
-export const DEFAULT_API_BASE = "http://127.0.0.1:8000";
+declare global {
+  interface Window {
+    MEDIMAGE_API_BASE_URL?: string;
+    MEDIMAGE_DESKTOP_RUNTIME?: {
+      apiBaseUrl: string;
+      platform: string;
+      backend: {
+        managed: boolean;
+        ready: boolean;
+        status: string;
+        pid: number | null;
+        logPath: string;
+      };
+    };
+    medimageDesktop?: {
+      runtime: Window["MEDIMAGE_DESKTOP_RUNTIME"];
+    };
+  }
+}
+
+export const DEFAULT_API_BASE =
+  window.MEDIMAGE_API_BASE_URL ||
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000";
 
 async function requestJson<T>(
   baseUrl: string,
@@ -42,7 +65,7 @@ async function requestJson<T>(
 }
 
 export async function getHealth(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/health");
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/health");
 }
 
 export async function getProjectConfig(baseUrl: string) {
@@ -885,6 +908,105 @@ export async function getReleaseReadiness(baseUrl: string) {
 
 export async function getDeploymentProfile(baseUrl: string) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/deployment/profile");
+}
+
+export async function getDesktopConfig(baseUrl: string) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/desktop/config");
+}
+
+export async function getDesktopHealth(baseUrl: string) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/desktop/health");
+}
+
+export async function saveDesktopConfig(
+  baseUrl: string,
+  payload: Record<string, unknown>
+) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/desktop/config", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function getImageValidationReport(baseUrl: string, projectId = "brain-tumor-study") {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/images/validation?project_id=${encodeURIComponent(projectId)}`
+  );
+}
+
+export async function getImageManifestReport(baseUrl: string, projectId = "brain-tumor-study") {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/images/manifest?project_id=${encodeURIComponent(projectId)}`
+  );
+}
+
+export async function getDatasetImportHistory(baseUrl: string, projectId = "brain-tumor-study") {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/datasets/imports?project_id=${encodeURIComponent(projectId)}`
+  );
+}
+
+export async function createImportDiagnosticsPackage(baseUrl: string, projectId = "brain-tumor-study") {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/datasets/diagnostics/package?project_id=${encodeURIComponent(projectId)}`,
+    { method: "POST" }
+  );
+}
+
+export async function getLatestImportDiagnosticsPackage(baseUrl: string, projectId = "brain-tumor-study") {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/datasets/diagnostics/package/latest?project_id=${encodeURIComponent(projectId)}`
+  );
+}
+
+export async function verifyImportDiagnosticsPackage(baseUrl: string, projectId = "brain-tumor-study") {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/datasets/diagnostics/package/verify?project_id=${encodeURIComponent(projectId)}`,
+    { method: "POST" }
+  );
+}
+
+export async function getDicomPreflight(
+  baseUrl: string,
+  projectId = "brain-tumor-study",
+  path = "data/DemoData",
+  maxFiles = 2000
+) {
+  const params = new URLSearchParams({
+    project_id: projectId,
+    max_files: String(maxFiles)
+  });
+  if (path.trim()) {
+    params.set("path", path.trim());
+  }
+  return requestJson<Record<string, unknown>>(baseUrl, `/api/datasets/dicom/preflight?${params.toString()}`);
+}
+
+export async function getExternalSmokeStatus(baseUrl: string) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/external-smoke/status");
+}
+
+export async function runExternalSmoke(
+  baseUrl: string,
+  payload: {
+    target?: string;
+    mode?: string;
+    config_path?: string;
+    approved?: boolean;
+    approved_by?: string;
+    dpabi_function?: string;
+  }
+) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/external-smoke/run", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
 }
 
 // === SessionDB ===

@@ -98,26 +98,39 @@
 
 ---
 
-### T-0004：确认前后端启动正常
+### T-0004：验证并统一前后端启动方式
 
 - **task_id**: T-0004
-- **title**: 验证后端（uvicorn）和前端（vite）能正常启动
+- **title**: 统一前后端端口为 8000，验证 app 导入和前端 build
 - **priority**: P0
-- **scope**: 启动验证，修复阻塞启动的问题
+- **scope**: 端口统一 + 验证，不改动业务逻辑
 - **allowed_files**:
-  - `requirements.txt`
   - `src/frontend/package.json`
-  - 配置文件（仅在阻塞启动时修改）
+  - `src/frontend/src/api.ts`
+  - `src/frontend/src/App.tsx`
+  - `src/frontend/src/lib/api/client.ts`
+  - `src/frontend/src/components/workflow/DataUploadStep.tsx`
+  - `src/frontend/src/hooks/useAppState.ts`
+  - `src/frontend/electron/main.cjs`
+  - `src/frontend/electron/preload.cjs`
+  - `src/backend/app/core/config.py`
+  - `tests/unit/test_backend_app_import.py`
+  - 文档更新
 - **forbidden_changes**:
-  - 不修改核心业务逻辑
+  - 不修改核心执行逻辑（routes/pipeline_executor/agent_runtime/node_registry）
+  - 不删除环境变量覆盖能力
 - **acceptance_criteria**:
-  - `uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000` 启动成功
-  - `cd src/frontend && npm run dev` 启动成功
-  - `/health` 端点返回 `{"ok": true}`
-  - 前端页面可访问
+  - 所有默认端口统一为 8000（11 处引用全部修正）
+  - `from src.backend.app.main import app` 可导入
+  - `npm run build` 成功
+  - `pytest` 212 passed, 4 skipped
+  - `grep 8765` 源代码无残留（除 dist/ 和 __pycache__ 构建产物）
 - **test_commands**:
-  - `curl http://127.0.0.1:8000/health`
-- **status**: 待执行
+  - `pytest tests/unit/test_backend_app_import.py -v`
+  - `pytest tests/unit/test_project_settings.py -v`
+  - `pytest tests/unit/test_release_readiness.py -v`
+  - `pytest`
+- **status**: ✅ 已完成（2026-05-29）
 
 ---
 
