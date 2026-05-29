@@ -6,6 +6,12 @@
 
 M1 "稳定当前基础设施" 全部交付物已完成。详见 `docs/CURRENT_STATE.md`。
 
+## 立即执行（P1）
+
+### T-0008：修复 CI 存量测试失败
+
+error_classifier（7）+ background_task_manager（1）。Linux CI 上 KB 文件加载失败。本地 Windows 全 PASS。
+
 ## M2：Tool Catalog MVP（当前里程碑）
 
 ### M2-T001：Tool Catalog schema 设计

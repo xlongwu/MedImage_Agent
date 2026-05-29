@@ -245,6 +245,28 @@
 
 ---
 
+### T-0008：修复 CI 存量测试失败（error_classifier + background_task_manager）
+
+- **task_id**: T-0008
+- **title**: 修复 Linux CI 上 8 个存量测试失败
+- **priority**: P1
+- **scope**: error_classifier.py / error_kb_validator.py 的 KB 路径改为绝对路径或基于 `__file__`
+- **allowed_files**:
+  - `src/backend/app/tools/error_classifier.py`
+  - `src/backend/app/tools/error_kb_validator.py`
+  - `tests/unit/test_error_classifier.py`
+- **forbidden_changes**:
+  - 不修改 KB 文件内容
+- **acceptance_criteria**:
+  - CI 上 8 个测试全部 PASS
+  - 本地 242 passed 保持
+- **test_commands**:
+  - `pytest tests/unit/test_error_classifier.py -v`
+  - `pytest tests/unit/test_background_task_manager.py -v`
+- **status**: 待执行
+
+---
+
 ### T-0005：实现 audit_logger 或从文档中移除引用
 
 - **task_id**: T-0005
