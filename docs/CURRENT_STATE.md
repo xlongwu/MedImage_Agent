@@ -18,6 +18,9 @@
 | M3-T002b：Planner API openai_compatible 测试与文档 | ✅ 已完成 | 2026-05-29 |
 | M3-T003：真实 LLM Provider smoke test 文档 | ✅ 已完成 | 2026-05-29 |
 | M5-T001：Approval Gate schema + 校验 MVP | ✅ 已完成 | 2026-05-29 |
+| M5-T002：Approval Gate API endpoint | ✅ 已完成 | 2026-05-29 |
+| M5-T003：Plan Review Console Approval Gate 展示 | ✅ 已完成 | 2026-05-29 |
+| M5-T004：Execution Integration Design Doc | ✅ 已完成 | 2026-05-29 |
 
 ## M1 交付物状态
 
