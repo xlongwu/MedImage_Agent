@@ -78,7 +78,7 @@ M1_DOC_PATHS = [
     "file:AGENTS.md",
     "file:CLAUDE.md",
     "file:docs/PROJECT_GOAL.md",
-    "file:docs/ARCHITECTURE.md",
+    "file:docs/architecture.md",
     "file:docs/ROADMAP.md",
     "file:docs/TASK_BACKLOG.md",
     "file:docs/SAFETY_BOUNDARIES.md",
