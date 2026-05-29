@@ -17,6 +17,7 @@
 | M3-T002a：OpenAI-compatible Provider Adapter | ✅ 已完成 | 2026-05-29 |
 | M3-T002b：Planner API openai_compatible 测试与文档 | ✅ 已完成 | 2026-05-29 |
 | M3-T003：真实 LLM Provider smoke test 文档 | ✅ 已完成 | 2026-05-29 |
+| M5-T001：Approval Gate schema + 校验 MVP | ✅ 已完成 | 2026-05-29 |
 
 ## M1 交付物状态
 
