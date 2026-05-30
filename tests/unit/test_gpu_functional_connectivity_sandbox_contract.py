@@ -109,6 +109,32 @@ def test_gpu_temporal_allowed():
     assert "gpu_temporal_filtering_subject" in policy["allowed_gpu_temporal_filtering_sandbox_nodes"]
 
 
+# ── M8-T010d: sandbox declaration allowlist ──
+
+def test_fc_sandbox_allowed():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_functional_connectivity_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "subject_level": True,
+                    "input_source": "scoped_functional_or_timeseries_derivative",
+                    "output_policy": "derivatives_dir_scoped",
+                    "device_policy": "guarded_auto_cpu_cuda0",
+                    "memory_policy": "bounded_subject_gpu_512mb",
+                    "fc_policy": "bounded_roi_pearson_only"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_functional_connectivity_subject" in policy["allowed_gpu_functional_connectivity_sandbox_nodes"]
+
+
+def test_fc_no_sandbox_blocked():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_functional_connectivity_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_functional_connectivity_subject" not in policy["allowed_gpu_functional_connectivity_sandbox_nodes"]
+
+
 def test_json_serializable(tmp_path):
     func, deriv = _make_derivative(tmp_path)
     r = run_gpu_functional_connectivity_subject(subject_id="s",

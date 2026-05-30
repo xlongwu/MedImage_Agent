@@ -154,13 +154,14 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
     gpu_alff_sandbox_nodes = policy.get("allowed_gpu_alff_sandbox_nodes", [])
     gpu_reho_sandbox_nodes = policy.get("allowed_gpu_reho_sandbox_nodes", [])
     gpu_temporal_filtering_sandbox_nodes = policy.get("allowed_gpu_temporal_filtering_sandbox_nodes", [])
+    gpu_functional_connectivity_sandbox_nodes = policy.get("allowed_gpu_functional_connectivity_sandbox_nodes", [])
     unsafe = gpu_nodes  # contract_nodes are Python-only metadata, now allowed; gpu_synthetic_smoke sandbox-gated
     if unsafe:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
 
     # Must have at least one allowed node
     python_nodes = policy.get("allowed_python_nodes", [])
-    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes + spm_slice_timing_sandbox_nodes + spm_coregister_sandbox_nodes + spm_segment_sandbox_nodes + spm_normalize_sandbox_nodes + spm_smooth_sandbox_nodes + dpabi_metadata_nodes + dpabi_sandbox_smoke_nodes + dpabi_single_function_sandbox_nodes + dpabi_subject_smooth_sandbox_nodes + dpabi_subject_wrapper_report_nodes + dpabi_validation_matrix_nodes + contract_nodes + gpu_synthetic_smoke_nodes + gpu_alff_sandbox_nodes + gpu_reho_sandbox_nodes + gpu_temporal_filtering_sandbox_nodes
+    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes + spm_slice_timing_sandbox_nodes + spm_coregister_sandbox_nodes + spm_segment_sandbox_nodes + spm_normalize_sandbox_nodes + spm_smooth_sandbox_nodes + dpabi_metadata_nodes + dpabi_sandbox_smoke_nodes + dpabi_single_function_sandbox_nodes + dpabi_subject_smooth_sandbox_nodes + dpabi_subject_wrapper_report_nodes + dpabi_validation_matrix_nodes + contract_nodes + gpu_synthetic_smoke_nodes + gpu_alff_sandbox_nodes + gpu_reho_sandbox_nodes + gpu_temporal_filtering_sandbox_nodes + gpu_functional_connectivity_sandbox_nodes
     if not total_allowed:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
     return None
