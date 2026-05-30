@@ -1,9 +1,17 @@
 # 下一步行动 (NEXT_ACTIONS)
 
-> M7 DPABI Wrapper Report — COMPLETE (19 DPABI nodes allowlisted)
+> M7 DPABI Reviewed Execution — COMPLETE 🎉
 
-## M7: 15 metadata + sandbox_smoke + single_function + subject_smooth + wrapper_report (sandbox)
+## M6: 7 SPM sandbox-gated nodes
+## M7: 20 DPABI sandbox-gated nodes
 
-## Blocked: validation_matrix | GPU | GUI
+## M8: GPU contract safety review
 
-## Next: M7-DPABI-T008a dpabi_wrapper_validation_matrix safety contract
+M8-GPU-T001: GPU node safety review
+M8-GPU-T002: GPU runtime guard design
+M8-GPU-T003: GPU contract tests
+M8-GPU-T004: GPU sandbox allowlist (only if safe)
+
+## M9: GUI/manual Agent design
+
+Do NOT open unrestricted SPM/DPABI/GPU/GUI execution.

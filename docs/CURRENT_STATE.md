@@ -101,38 +101,34 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | `spm_normalize_subject` | sandbox declaration | ✅ |
 | `spm_smooth_subject` | sandbox declaration | ✅ |
 
-### M7 任务（DPABI Contract/Capability）— Metadata Phase COMPLETE
+### M7 任务（DPABI Reviewed Execution）— **COMPLETE** 🎉
 
-| 任务 | 状态 |
+**Phase**: M7-DPABI-T001 → M7-DPABI-T008d (28 tasks + fixes). All 20 DPABI catalog nodes sandbox-gated.
+
+| Task | Status |
 |------|:---:|
-| M7-DPABI-T001：DPABI safety review | ✅ |
-| M7-DPABI-T002a：register safe DPABI metadata runners | ✅ |
-| M7-DPABI-T002b：allowlist safe DPABI metadata contract nodes | ✅ |
-| M7-DPABI-T003：DPABI metadata smoke guide | ✅ |
-| M7-DPABI-T003-fix：complete DPABI metadata smoke coverage | ✅ |
-| M7-DPABI-T004a：dpabi sandbox smoke safety contract | ✅ |
-| M7-DPABI-T004b：register and harden DPABI sandbox smoke runner | ✅ |
-| M7-DPABI-T004c：DPABI sandbox smoke contract tests | ✅ |
-| M7-DPABI-T004d：allow sandbox-only DPABI smoke reviewed execution | ✅ |
-| M7-DPABI-T005a：single-function safety contract | ✅ |
-| M7-DPABI-T005b：single-function runtime hardening | ✅ |
-| M7-DPABI-T005c：single-function contract tests | ✅ |
-| M7-DPABI-T005d：single-function sandbox-only allowlist | ✅ |
-| M7-DPABI-T006a：subject smooth safety contract | ✅ |
-| M7-DPABI-T006b：subject smooth runtime hardening | ✅ |
-| M7-DPABI-T006c：subject smooth contract tests | ✅ |
-| M7-DPABI-T006d：subject smooth sandbox-only allowlist | ✅ |
-| **M7 DPABI subject smooth closeout** | ✅ |
+| 28 M7 tasks (audit, register, harden, test, allowlist) | ✅ |
+| **M7 DPABI full closeout** | ✅ |
 
-| M7-DPABI-T007a：wrapper report safety contract | ✅ |
-| M7-DPABI-T007b：wrapper report output hardening | ✅ |
-| M7-DPABI-T007c：wrapper report contract tests | ✅ |
-| M7-DPABI-T007d：wrapper report sandbox-only allowlist | ✅ |
-| **M7 DPABI wrapper report closeout** | ✅ |
+### M7 Allowlisted DPABI Nodes (20)
 
-> 15 metadata + sandbox_smoke + single_function + subject_smooth + wrapper_report (report-only) allowlisted.
-> validation_matrix blocked. Unrestricted DPABI execution blocked. 19 DPABI nodes total.
-| DPABI execution | — | ❌ |
+| Category | Count | Condition |
+|----------|:---:|---------|
+| metadata/contract/capability | 15 | Python-only |
+| `dpabi_sandbox_smoke_run` | 1 | sandbox-gated |
+| `dpabi_single_function_sandbox` | 1 | sandbox + allowlisted functions |
+| `dpabi_subject_smooth` | 1 | sandbox + synthetic + bounded FWHM |
+| `dpabi_subject_wrapper_report` | 1 | sandbox + report-only |
+| `dpabi_wrapper_validation_matrix` | 1 | sandbox + validation-matrix-only |
+
+### Still Blocked
+
+| Scope | Status |
+|-------|:---:|
+| GPU execution | ❌ M8 |
+| GUI/manual | ❌ M9 |
+| Unrestricted DPABI | ❌ |
+| Unrestricted SPM | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |
 
