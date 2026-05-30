@@ -1197,6 +1197,17 @@ NODE_REGISTRY["rsfmri_report_package_validator"] = run_rsfmri_report_package_val
 NODE_REGISTRY["project_release_readiness"] = run_project_release_readiness_node
 NODE_REGISTRY["docs_inventory"] = run_docs_inventory_node
 
+# ── M7-DPABI-T002a: register safe DPABI metadata/contract runners ──
+NODE_REGISTRY["dpabi_capability_inspection"] = run_dpabi_capability_inspection_node
+NODE_REGISTRY["dpabi_input_manifest"] = run_dpabi_input_manifest_node
+NODE_REGISTRY["dpabi_preflight"] = run_dpabi_preflight_node
+NODE_REGISTRY["dpabi_run_plan"] = run_dpabi_run_plan_node
+NODE_REGISTRY["dpabi_signature_probe"] = run_dpabi_signature_probe_node
+NODE_REGISTRY["dpabi_wrapper_contracts"] = run_dpabi_wrapper_contracts_node
+NODE_REGISTRY["dpabi_wrapper_scaffold"] = run_dpabi_wrapper_scaffold_node
+# NOTE: dpabi_sandbox_smoke_run and dpabi_single_function_sandbox are NOT
+# registered — they call MATLAB and must remain blocked.
+
 
 def get_node_runner(node_id: str) -> NodeRunner:
     try:
