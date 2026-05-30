@@ -1,17 +1,9 @@
 # 下一步行动 (NEXT_ACTIONS)
 
-> M7 DPABI Reviewed Execution — COMPLETE 🎉
+> M8 GPU Contract Metadata — COMPLETE (30 total reviewed execution nodes)
 
-## M6: 7 SPM sandbox-gated nodes
-## M7: 20 DPABI sandbox-gated nodes
+## M6: 7 SPM | M7: 20 DPABI | M8: 3 GPU contract
 
-## M8: GPU contract safety review
-
-M8-GPU-T001: GPU node safety review
-M8-GPU-T002: GPU runtime guard design
-M8-GPU-T003: GPU contract tests
-M8-GPU-T004: GPU sandbox allowlist (only if safe)
+## Next: M8-GPU-T006a synthetic GPU smoke safety contract
 
 ## M9: GUI/manual Agent design
-
-Do NOT open unrestricted SPM/DPABI/GPU/GUI execution.

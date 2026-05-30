@@ -134,6 +134,31 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 
 > M6 Full SPM Sandbox Pipeline COMPLETE (7 SPM nodes, all sandbox-gated). Manual smoke guide added. Unrestricted SPM NOT open. DPABI/GPU/GUI blocked.
 
+### M8 任务（GPU Reviewed Execution）— Contract Metadata Phase COMPLETE
+
+| Task | Status |
+|------|:---:|
+| M8-GPU-T001：GPU safety review | ✅ |
+| M8-GPU-T002：GPU runtime guard design | ✅ |
+| M8-GPU-T003：gpu_safety.py guard + 35 tests | ✅ |
+| M8-GPU-T004：GPU contract metadata runner hardening | ✅ |
+| M8-GPU-T005：GPU contract metadata allowlist | ✅ |
+| **M8 GPU contract metadata closeout** | ✅ |
+
+### M8 Allowed GPU Nodes (3)
+
+| Node | Condition |
+|------|---------|
+| `alff_falff_gpu_candidate_contract` | Python-only |
+| `functional_connectivity_gpu_candidate_contract` | Python-only |
+| `reho_gpu_candidate_contract` | Python-only |
+
+### M8 Blocked GPU Nodes (5)
+
+gpu_alff_subject, gpu_functional_connectivity_subject, gpu_nuisance_regression_subject, gpu_reho_subject, gpu_temporal_filtering_subject
+
+> GPU contract metadata nodes do NOT call CUDA, torch.cuda, or allocate tensors. Subject-level GPU execution remains blocked.
+
 ## M1 交付物状态
 
 | 交付物 | 状态 | 备注 |
