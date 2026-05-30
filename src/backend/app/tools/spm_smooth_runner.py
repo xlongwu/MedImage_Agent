@@ -60,7 +60,29 @@ def run_spm_smooth_subject(
         )
         return data
 
+    # ── M6-T010b: MATLAB/SPM safety preflight ──
+    from src.backend.app.safety.matlab_safety import validate_spm_runtime_config
+    sr = validate_spm_runtime_config(matlab_command=matlab_command, spm_dir=spm_dir)
+    if not sr.ok:
+        return {'ok': False, 'node_id': 'spm_smooth_subject', 'backend': 'matlab-spm',
+                'subject_id': subject_id, 'outputs': [], 'warnings': [],
+                'errors': [f'MATLAB/SPM safety preflight failed: {e.message}' for e in sr.errors],
+                'safety': sr.to_dict(), 'matlab_called': False, 'spm_called': False,
+                'stage': 'matlab_safety_preflight'}
+
+    # ── M6-T010b: FWHM validation ──
     fwhm = fwhm or [6.0, 6.0, 6.0]
+    if not isinstance(fwhm, (list, tuple)) or len(fwhm) != 3:
+        return {'ok': False, 'node_id': 'spm_smooth_subject', 'backend': 'matlab-spm',
+                'subject_id': subject_id, 'outputs': [], 'warnings': [],
+                'errors': ['FWHM must be a 3-element list of numbers.'],
+                'matlab_called': False, 'spm_called': False, 'stage': 'fwhm_preflight'}
+    for i, v in enumerate(fwhm):
+        if not isinstance(v, (int, float)) or v != v or v == float('inf') or v <= 0 or v > 12:
+            return {'ok': False, 'node_id': 'spm_smooth_subject', 'backend': 'matlab-spm',
+                    'subject_id': subject_id, 'outputs': [], 'warnings': [],
+                    'errors': [f'FWHM element {i} invalid: {v}. Must be 0 < value <= 12.'],
+                    'matlab_called': False, 'spm_called': False, 'stage': 'fwhm_preflight'}
     input_func = _find_normalized_functional(subject_id, derivatives_dir)
     if not input_func:
         return {"ok": False, "node_id": "spm_smooth_subject", "backend": "matlab-spm", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No normalized functional input found under derivatives/rsfmri_preproc/{subject_id}/func."]}

@@ -147,7 +147,7 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 
 | 指标 | 当前值 |
 |------|--------|
-| pytest 全量（本地） | **792 passed, 4 skipped** |
+| pytest 全量（本地） | **803 passed, 4 skipped** |
 | pytest CI（Linux） | ✅ 全绿 |
 | CI frontend build | ✅ 通过 |
 | frontend build（本地） | ✅ 已验证 |

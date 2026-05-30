@@ -207,7 +207,7 @@ def _smooth_runner(tmp_path: Path) -> dict[str, Any]:
     dirs = _subject_dirs(tmp_path)
     _write_nifti(dirs["derivatives"] / "rsfmri_preproc" / "sub-001" / "func" / "wra_sub-001_bold.nii")
     return run_spm_smooth_subject(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         spm_dir=str(tmp_path / "spm12"),
         subject_id="sub-001",
         derivatives_dir=str(dirs["derivatives"]),
