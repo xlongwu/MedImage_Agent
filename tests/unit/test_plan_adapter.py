@@ -241,3 +241,49 @@ def test_spm_slice_timing_still_blocked():
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T005d: sandbox-only spm_realign_subject allowlist
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── 24. spm_realign_subject + sandbox → allowed_spm_realign_sandbox_nodes ──
+
+def test_spm_realign_sandbox_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_realign_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_realign_subject" in policy["allowed_spm_realign_sandbox_nodes"]
+
+
+# ── 25. spm_realign_subject without sandbox_mode → blocked ──
+
+def test_spm_realign_no_sandbox_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_realign_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_realign_subject" in policy["blocked_spm_nodes"]
+
+
+# ── 26. spm_realign_subject without input_bold → blocked ──
+
+def test_spm_realign_no_input_bold_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_realign_subject", "depends_on": [],
+         "params": {"sandbox_mode": True}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_realign_subject" in policy["blocked_spm_nodes"]
+
+
+# ── 27. spm_normalize_subject still blocked ──
+
+def test_spm_normalize_still_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_normalize_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_normalize_subject" in policy["blocked_spm_nodes"]

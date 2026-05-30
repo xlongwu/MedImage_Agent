@@ -1475,3 +1475,124 @@ def test_m6t004b_dry_run_true_not_regressed():
         "dry_run": True,
     })
     assert resp.json()["status"] == "DRY_RUN_OK"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T005d: sandbox-only spm_realign_subject reviewed execution
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _sandbox_realign_body(monkeypatch, tmp_path, **overrides):
+    monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
+    monkeypatch.setattr(
+        "src.backend.app.api.execute_reviewed_routes.pipeline_writer.REVIEWED_PIPELINE_DIR",
+        tmp_path,
+    )
+    monkeypatch.setattr(
+        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        lambda **kw: {"status": "SUCCESS", "run_id": "mock-realign-001"},
+    )
+    cfg = tmp_path / "project_config.yaml"
+    import yaml
+    config = {
+        "project": {"name": "test", "root_dir": "."},
+        "runtime": {
+            "work_dir": str(tmp_path / "work"), "log_dir": str(tmp_path / "logs"),
+            "derivatives_dir": str(tmp_path / "derivatives"), "report_dir": str(tmp_path / "reports"),
+        },
+        "third_party": {
+            "spm_dir": str(tmp_path / "spm"), "dpabi_dir": str(tmp_path / "dpabi"),
+        },
+        "safety": {"rawdata_readonly": True},
+    }
+    cfg.write_text(yaml.safe_dump(config), encoding="utf-8")
+    body = {
+        "plan": {"pipeline_id": "sandbox_realign", "nodes": [{
+            "id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [],
+            "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+        }]},
+        "approval": {
+            "approved": True, "approved_by": "ci",
+            "approved_nodes": ["spm_realign_subject"],
+            "approved_backends": ["matlab-spm"], "rejected_nodes": [],
+        },
+        "project_config_path": str(cfg),
+        "dry_run": False, "persist_audit": True, "write_pipeline_yaml": True,
+        "confirm_execution": True, "actor": "ci",
+    }
+    body.update(overrides)
+    return body
+
+
+# ── 106. sandbox realign + explicit approval → EXECUTION_SUBMITTED ──
+
+def test_m6t005d_sandbox_realign_submitted(monkeypatch, tmp_path):
+    resp = client.post("/api/plans/execute-reviewed", json=_sandbox_realign_body(monkeypatch, tmp_path))
+    data = resp.json()
+    assert data["status"] == "EXECUTION_SUBMITTED"
+    assert data["execution"]["executor_called"] is True
+
+
+# ── 107. wildcard approval → blocked ──
+
+def test_m6t005d_realign_wildcard_blocked(monkeypatch, tmp_path):
+    body = _sandbox_realign_body(monkeypatch, tmp_path, approval={
+        "approved": True, "approved_nodes": ["*"], "approved_backends": [], "rejected_nodes": [],
+    })
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    assert resp.json()["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED", "SAFE_EXECUTION_POLICY_BLOCKED")
+
+
+# ── 108. missing backend approval → blocked ──
+
+def test_m6t005d_realign_missing_backend(monkeypatch, tmp_path):
+    body = _sandbox_realign_body(monkeypatch, tmp_path, approval={
+        "approved": True, "approved_nodes": ["spm_realign_subject"],
+        "approved_backends": [], "rejected_nodes": [],
+    })
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    assert resp.json()["execution"]["executor_called"] is False
+
+
+# ── 109. no sandbox_mode → blocked ──
+
+def test_m6t005d_realign_no_sandbox_blocked(monkeypatch, tmp_path):
+    body = _sandbox_realign_body(monkeypatch, tmp_path, plan={
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+    })
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    assert resp.json()["execution"]["executor_called"] is False
+
+
+# ── 110. spm_slice_timing still blocked ──
+
+def test_m6t005d_slice_timing_blocked(monkeypatch, tmp_path):
+    body = _sandbox_realign_body(monkeypatch, tmp_path, plan={
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_slice_timing_subject", "backend": "matlab-spm", "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}}],
+    })
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    assert resp.json()["execution"]["executor_called"] is False
+
+
+# ── 111. DPABI still blocked ──
+
+def test_m6t005d_dpabi_blocked(monkeypatch, tmp_path):
+    body = _sandbox_realign_body(monkeypatch, tmp_path, plan={
+        "pipeline_id": "test",
+        "nodes": [{"id": "dpabi_subject_smooth", "depends_on": [], "params": {}}],
+    })
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    assert resp.json()["execution"]["executor_called"] is False
+
+
+# ── 112. GPU still blocked ──
+
+def test_m6t005d_gpu_blocked(monkeypatch, tmp_path):
+    body = _sandbox_realign_body(monkeypatch, tmp_path, plan={
+        "pipeline_id": "test",
+        "nodes": [{"id": "gpu_alff_subject", "backend": "gpu", "depends_on": [], "params": {}}],
+    })
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    assert resp.json()["execution"]["executor_called"] is False

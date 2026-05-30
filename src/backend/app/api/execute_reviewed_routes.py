@@ -136,6 +136,7 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
     gpu_nodes = policy.get("allowed_gpu_nodes", [])
     contract_nodes = policy.get("allowed_contract_nodes", [])
     spm_smoke_nodes = policy.get("allowed_spm_smoke_nodes", [])
+    spm_realign_sandbox_nodes = policy.get("allowed_spm_realign_sandbox_nodes", [])
 
     unsafe = gpu_nodes + contract_nodes
     if unsafe:
@@ -143,7 +144,7 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
 
     # Must have at least one allowed node
     python_nodes = policy.get("allowed_python_nodes", [])
-    total_allowed = python_nodes + spm_smoke_nodes
+    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes
     if not total_allowed:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
     return None

@@ -141,6 +141,21 @@ def reviewed_plan_to_pipeline_dict(
 
 # ── Node classification ──────────────────────────────────────────────────────
 
+def _satisfies_sandbox_contract(node: dict[str, Any]) -> bool:
+    """Check if a spm_realign_subject node satisfies the sandbox contract.
+
+    Requires sandbox_mode=true and input_bold non-empty.
+    """
+    params = node.get("params", {}) or {}
+    sandbox = params.get("sandbox_mode")
+    input_bold = params.get("input_bold")
+    if sandbox is not True:
+        return False
+    if not input_bold or not isinstance(input_bold, str) or not input_bold.strip():
+        return False
+    return True
+
+
 def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     """Classify every node in a reviewed plan by execution policy.
 
@@ -151,7 +166,8 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_python_nodes": [],
         "allowed_gpu_nodes": [],
         "allowed_contract_nodes": [],
-        "allowed_spm_smoke_nodes": [],  # M6-T004b: spm_smoke_test only
+        "allowed_spm_smoke_nodes": [],             # M6-T004b
+        "allowed_spm_realign_sandbox_nodes": [],    # M6-T005d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -180,9 +196,12 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             result["blocked_manual_required_nodes"].append(nid)
             continue
 
-        # SPM — M6-T004b: spm_smoke_test is the only allowed SPM node
+        # SPM — M6-T004b: spm_smoke_test, M6-T005d: sandbox-only realign
         if nid == "spm_smoke_test":
             result["allowed_spm_smoke_nodes"].append(nid)
+            continue
+        if nid == "spm_realign_subject" and _satisfies_sandbox_contract(node):
+            result["allowed_spm_realign_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":
             result["blocked_spm_nodes"].append(nid)
