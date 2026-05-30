@@ -525,6 +525,528 @@
 
 ---
 
+## M5 任务：Reviewed Execution Pipeline（review → execute 安全链路）
+
+本组任务构建从 reviewed plan 到 pipeline execution 的安全集成路径。
+**当前状态：✅ M5 全部完成（M5-T001 至 M5-T020 + T013-fix）。真实执行已开放（safe Python-only allowlist, 12-gate gated）。前端执行按钮已实现。**
+
+---
+
+### M5-T001：Approval Gate schema 与纯函数校验
+
+- **task_id**: M5-T001
+- **title**: 实现 Approval Gate 的核心 schema 与纯函数校验逻辑
+- **priority**: P1
+- **scope**: 新建 approval_gate.py，不接入 API
+- **allowed_files**:
+  - `src/backend/app/planner/approval_gate.py`（新建）
+  - `tests/unit/test_approval_gate.py`（新建）
+- **forbidden_changes**:
+  - 不修改 `src/backend/app/api/routes.py`
+  - 不修改 `src/frontend/`
+- **acceptance_criteria**:
+  - `check_approval_gate()` 纯函数可用
+  - `ApprovalRecord` / `ApprovalGateResult` dataclass 可用
+  - `execution_allowed` 逻辑正确（missing nodes / rejected nodes / approved=false → 阻断）
+  - `manual_required_nodes` 非空 → 阻断
+  - 17 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_approval_gate.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T002：Approval Gate API endpoint
+
+- **task_id**: M5-T002
+- **title**: 新增 POST /api/approval/check，不执行 pipeline
+- **priority**: P1
+- **scope**: 新增 API endpoint + 测试
+- **allowed_files**:
+  - `src/backend/app/api/`（新增或扩展路由）
+  - `tests/unit/test_approval_gate_api.py`（新建）
+- **forbidden_changes**:
+  - 不调用 executor
+  - 不修改 `src/frontend/`
+- **acceptance_criteria**:
+  - `POST /api/approval/check` 可用
+  - 业务错误 HTTP 200 + `execution_allowed=false`
+  - 14 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_approval_gate_api.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T003：前端 Approval Gate Result 展示
+
+- **task_id**: M5-T003
+- **title**: PlanReviewConsole 中展示 Approval Gate 结果
+- **priority**: P1
+- **scope**: 前端 PlanReviewConsole 组件
+- **allowed_files**:
+  - `src/frontend/src/components/PlanReviewConsole.tsx`
+  - `src/frontend/src/api.ts`
+- **forbidden_changes**:
+  - 不添加执行按钮
+  - 不修改后端
+- **acceptance_criteria**:
+  - PlanReviewConsole 可填写 approval 信息
+  - 可调用 `/api/approval/check`
+  - 展示 approval gate 结果
+  - **无执行按钮**
+- **test_commands**:
+  - `cd src/frontend && npm run build`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T004：Execution Integration Design 文档
+
+- **task_id**: M5-T004
+- **title**: 撰写 Execution Integration Design 文档
+- **priority**: P1
+- **scope**: 纯文档
+- **allowed_files**:
+  - `docs/EXECUTION_INTEGRATION_DESIGN.md`（新建）
+- **forbidden_changes**:
+  - 不修改代码
+- **acceptance_criteria**:
+  - 明确后端必须二次 validate + approval check
+  - 定义未来 dry_run 执行链路
+  - 定义安全原则
+- **test_commands**:
+  - 无（纯文档）
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T005：execute-reviewed dry-run API
+
+- **task_id**: M5-T005
+- **title**: 新增 POST /api/plans/execute-reviewed，dry_run=true 只做 readiness check
+- **priority**: P1
+- **scope**: 新增 execute_reviewed_routes.py
+- **allowed_files**:
+  - `src/backend/app/api/execute_reviewed_routes.py`（新建）
+  - `tests/unit/test_execute_reviewed_api.py`（新建）
+- **forbidden_changes**:
+  - 不调用 Pipeline Executor
+  - dry_run=false 返回 DRY_RUN_ONLY
+  - 不修改前端
+- **acceptance_criteria**:
+  - backend 独立重做 validate_plan + check_approval_gate
+  - 不信任前端传入的 validation/approval 结果
+  - `execution_allowed=true` 时仍不调用 executor
+- **test_commands**:
+  - `pytest tests/unit/test_execute_reviewed_api.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T006：前端 dry-run execution readiness 展示
+
+- **task_id**: M5-T006
+- **title**: PlanReviewConsole 可调用 /api/plans/execute-reviewed 展示 readiness
+- **priority**: P1
+- **scope**: 前端 PlanReviewConsole
+- **allowed_files**:
+  - `src/frontend/src/components/PlanReviewConsole.tsx`
+  - `src/frontend/src/api.ts`
+- **forbidden_changes**:
+  - 请求固定 `dry_run=true`
+  - 不添加真正执行按钮
+- **acceptance_criteria**:
+  - 展示 dry-run result（DRY_RUN_OK / BLOCKED）
+  - 无执行按钮
+- **test_commands**:
+  - `cd src/frontend && npm run build`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T007：Audit Record 模块
+
+- **task_id**: M5-T007
+- **title**: 实现 audit_record.py（hash + builder + atomic writer）
+- **priority**: P1
+- **scope**: 新建 audit_record.py
+- **allowed_files**:
+  - `src/backend/app/planner/audit_record.py`（新建）
+  - `tests/unit/test_audit_record.py`（新建）
+- **forbidden_changes**:
+  - 不写 rawdata
+  - 不修改 executor
+- **acceptance_criteria**:
+  - `stable_hash()` 确定性 SHA256
+  - `build_review_audit_record()` builder
+  - `write_audit_record()` atomic write（tmp + replace）
+  - 不覆盖已有文件
+  - 15 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_audit_record.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T008：dry-run 可选写 audit record
+
+- **task_id**: M5-T008
+- **title**: execute-reviewed dry-run 支持 persist_audit=true 写 audit record
+- **priority**: P1
+- **scope**: execute_reviewed_routes.py
+- **allowed_files**:
+  - `src/backend/app/api/execute_reviewed_routes.py`
+  - `tests/unit/test_execute_reviewed_api.py`
+- **forbidden_changes**:
+  - 不修改 audit_record.py 核心逻辑
+- **acceptance_criteria**:
+  - `persist_audit=true` → DRY_RUN_OK 写 `dry_run_checked` 事件
+  - blocked 状态写 `execution_blocked` 事件
+  - `persist_audit=false` → 不写
+- **test_commands**:
+  - `pytest tests/unit/test_execute_reviewed_api.py -v -k audit`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T009：Audit Record Read-only API
+
+- **task_id**: M5-T009
+- **title**: 新增 GET /api/audit/records 和 GET /api/audit/records/{audit_id}
+- **priority**: P1
+- **scope**: 新增 audit_record_routes.py
+- **allowed_files**:
+  - `src/backend/app/api/audit_record_routes.py`（新建）
+  - `tests/unit/test_audit_record_api.py`（新建）
+- **forbidden_changes**:
+  - 不修改 audit_record.py
+- **acceptance_criteria**:
+  - `GET /api/audit/records` 列出所有 audit JSON 文件
+  - `GET /api/audit/records/{audit_id}` 返回单条
+  - audit_id 白名单（regex）+ 防 path traversal
+  - 不存在 → 404
+  - 12 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_audit_record_api.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T010：前端 audit record detail 展示
+
+- **task_id**: M5-T010
+- **title**: PlanReviewConsole 中展示 audit record detail
+- **priority**: P2
+- **scope**: 前端 PlanReviewConsole
+- **allowed_files**:
+  - `src/frontend/src/components/PlanReviewConsole.tsx`
+  - `src/frontend/src/api.ts`
+- **forbidden_changes**:
+  - 不修改后端
+  - 不添加执行按钮
+- **acceptance_criteria**:
+  - dry-run result 中展示 audit_id / event_type / path
+  - 可调用 GET /api/audit/records/{audit_id} 读取单条
+- **test_commands**:
+  - `cd src/frontend && npm run build`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T011：Gated Execution Safety Review 文档
+
+- **task_id**: M5-T011
+- **title**: 撰写 Gated Execution 安全审计与设计收口文档
+- **priority**: P1
+- **scope**: 纯文档
+- **allowed_files**:
+  - `docs/GATED_EXECUTION_SAFETY_REVIEW.md`（新建）
+- **forbidden_changes**:
+  - 不修改代码
+- **acceptance_criteria**:
+  - 明确 8 条真实执行前置条件
+  - 明确 dry_run=false 开放条件
+  - 明确 LLM 安全边界
+- **test_commands**:
+  - 无（纯文档）
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T012a：plan_adapter.py 转换层
+
+- **task_id**: M5-T012a
+- **title**: 实现 reviewed plan → executor-compatible pipeline dict 转换
+- **priority**: P1
+- **scope**: 新建 plan_adapter.py
+- **allowed_files**:
+  - `src/backend/app/planner/plan_adapter.py`（新建）
+  - `tests/unit/test_plan_adapter.py`（新建）
+- **forbidden_changes**:
+  - 不修改 executor
+  - 不修改 node_registry
+- **acceptance_criteria**:
+  - `reviewed_plan_to_pipeline_dict()` 转换 reviewed plan → executor pipeline dict
+  - `classify_plan_nodes()` 按 policy 分类节点
+  - `adapt_reviewed_plan()` 一次调用完成转换 + 分类
+  - 19 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_plan_adapter.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T012b：dry-run 集成 plan_adapter
+
+- **task_id**: M5-T012b
+- **title**: execute-reviewed dry-run 加入 plan_adapter 检查 + execution policy 阻断
+- **priority**: P1
+- **scope**: execute_reviewed_routes.py
+- **allowed_files**:
+  - `src/backend/app/api/execute_reviewed_routes.py`
+  - `tests/unit/test_execute_reviewed_api.py`
+- **forbidden_changes**:
+  - 不修改 plan_adapter.py 核心逻辑
+- **acceptance_criteria**:
+  - 新增状态 PLAN_ADAPTER_FAILED
+  - 新增状态 EXECUTION_POLICY_BLOCKED
+  - SPM / DPABI execution / GUI / manual / unknown / uncataloged 节点阻断
+  - 27 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_execute_reviewed_api.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T012c：Safe Reviewed Execution Design 文档
+
+- **task_id**: M5-T012c
+- **title**: 撰写 Safe Reviewed Execution 设计文档
+- **priority**: P1
+- **scope**: 纯文档
+- **allowed_files**:
+  - `docs/SAFE_REVIEWED_EXECUTION_DESIGN.md`（新建）
+- **forbidden_changes**:
+  - 不修改代码
+- **acceptance_criteria**:
+  - 明确 14 条真实执行硬条件
+  - 定义 API 状态机
+  - 定义 node allowlist / blocklist
+- **test_commands**:
+  - 无（纯文档）
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T013：pipeline_writer.py
+
+- **task_id**: M5-T013
+- **title**: 实现 reviewed pipeline YAML writer（atomic write + sanitize）
+- **priority**: P1
+- **scope**: 新建 pipeline_writer.py
+- **allowed_files**:
+  - `src/backend/app/planner/pipeline_writer.py`（新建）
+  - `tests/unit/test_pipeline_writer.py`（新建）
+- **forbidden_changes**:
+  - 不修改 executor
+  - 不写 rawdata/derivatives/reports
+- **acceptance_criteria**:
+  - `write_reviewed_pipeline_yaml()` atomic write
+  - 默认目录 `outputs/work/reviewed_pipelines/`
+  - filename sanitize（防路径穿越）
+  - 不覆盖已有文件
+  - 14 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_pipeline_writer.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T013-fix：pipeline_writer 路径安全收口
+
+- **task_id**: M5-T013-fix
+- **title**: 移除任意 output_dir，固定 REVIEWED_PIPELINE_DIR，测试用 monkeypatch
+- **priority**: P0
+- **scope**: pipeline_writer.py
+- **allowed_files**:
+  - `src/backend/app/planner/pipeline_writer.py`
+  - `tests/unit/test_pipeline_writer.py`
+- **forbidden_changes**:
+  - 不改变 write 逻辑
+- **acceptance_criteria**:
+  - 移除任意 `output_dir` 参数
+  - 固定 `REVIEWED_PIPELINE_DIR = Path("outputs/work/reviewed_pipelines")`
+  - 测试通过 monkeypatch 注入 tmp_path
+  - 禁止 rawdata / derivatives / reports
+  - 禁止 `..`
+  - 14 个单元测试全部通过
+- **test_commands**:
+  - `pytest tests/unit/test_pipeline_writer.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T014：pipeline_writer 集成到 dry-run API
+
+- **task_id**: M5-T014
+- **title**: 将 pipeline_writer 集成到 POST /api/plans/execute-reviewed dry-run API
+- **priority**: P1
+- **scope**: execute_reviewed_routes.py
+- **allowed_files**:
+  - `src/backend/app/api/execute_reviewed_routes.py`
+  - `tests/unit/test_execute_reviewed_api.py`
+- **forbidden_changes**:
+  - 不调用 Pipeline Executor
+  - 不新增真实执行能力
+  - 不修改前端
+  - 不修改 `pipeline_writer.py`
+  - 不修改 `plan_adapter.py`
+- **acceptance_criteria**:
+  - 新增 `write_pipeline_yaml: bool = False` 请求字段
+  - 默认不写 YAML，只返回 readiness
+  - `write_pipeline_yaml=true` 必须 `persist_audit=true`
+  - 新增状态 `PIPELINE_WRITE_REQUIRES_AUDIT`、`PIPELINE_WRITE_FAILED`
+  - 所有 response 增加 `pipeline_yaml` 字段
+  - audit `dry_run_result` 包含 pipeline_yaml summary
+- **test_commands**:
+  - `pytest tests/unit/test_execute_reviewed_api.py -v`
+  - `pytest --tb=short`
+- **status**: ✅ 已完成（2026-05-29）
+- **depends_on**: M5-T013, M5-T013-fix
+
+---
+
+### M5-T015：safe reviewed execution preflight
+
+- **task_id**: M5-T015
+- **title**: dry_run=false 进入 safe execution preflight
+- **priority**: P2
+- **scope**: execute_reviewed_routes.py
+- **allowed_files**:
+  - `src/backend/app/api/execute_reviewed_routes.py`
+  - `tests/unit/test_execute_reviewed_api.py`
+- **forbidden_changes**:
+  - 不调用 executor
+- **acceptance_criteria**:
+  - 环境变量检查 / confirm_execution / persist_audit / project_config / validation / approval / adapter / policy / pipeline yaml / audit 全链路
+  - 7 种新状态 + EXECUTION_PREFLIGHT_READY
+  - 仍不调用 executor
+- **test_commands**:
+  - `pytest tests/unit/test_execute_reviewed_api.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+- **depends_on**: M5-T014
+
+---
+
+---
+
+### M5-T016：gated execution 最小实现
+
+- **task_id**: M5-T016
+- **title**: 实现 dry_run=false 真实执行分支（需全部 preflight 通过）
+- **priority**: P2
+- **scope**: execute_reviewed_routes.py（扩展）
+- **allowed_files**:
+  - `src/backend/app/api/execute_reviewed_routes.py`
+  - `tests/unit/test_execute_reviewed_api.py`
+- **forbidden_changes**:
+  - 不跳过安全条件
+- **acceptance_criteria**:
+  - 所有 14 条条件满足 + `dry_run=false` + `confirm_execution=true` → 调用 `run_pipeline()`
+  - 返回 `run_id`
+  - 真实执行 audit 包含 `executor_called: true`
+- **test_commands**:
+  - `pytest tests/unit/test_execute_reviewed_api.py -v`
+- **status**: ✅ 已完成（2026-05-29）
+- **depends_on**: M5-T015
+
+---
+
+### M5-T017：backend safety regression + smoke
+
+- **task_id**: M5-T017
+- **title**: 对 M5-T016 真实执行路径做安全回归测试 + synthetic smoke doc
+- **priority**: P2
+- **scope**: 测试加固 + 文档
+- **allowed_files**:
+  - `tests/unit/test_execute_reviewed_api.py`
+  - `docs/REVIEWED_EXECUTION_SMOKE_TEST.md`
+- **acceptance_criteria**:
+  - 28-item safety checklist 全覆盖
+  - contract node / mixed plan 测试
+  - YAML-on-disk-before-executor 验证
+  - 100 tests, 547 passed
+- **status**: ✅ 已完成（2026-05-29）
+
+---
+
+### M5-T018b：synthetic-only end-to-end smoke (recommended next)
+
+- **task_id**: M5-T018b
+- **title**: 落地 synthetic-only reviewed execution 端到端 smoke
+- **priority**: P2
+- **scope**: integration test + 验证
+- **allowed_files**:
+  - `tests/integration/test_reviewed_execution_smoke.py`（新建）
+- **forbidden_changes**:
+  - 不依赖 MATLAB/SPM/DPABI/GPU
+  - 不修改 rawdata
+- **status**: ✅ 已完成（2026-05-29）
+- **depends_on**: M5-T017
+
+---
+
+### M5-T018c：CI-safe integration smoke
+
+- **task_id**: M5-T018c
+- **title**: CI-safe FastAPI integration smoke with mocked executor
+- **priority**: P2
+- **scope**: integration test
+- **status**: ✅ 已完成（2026-05-29）
+- **depends_on**: M5-T018b
+
+---
+
+### M5-T019：frontend safe execution button
+
+- **task_id**: M5-T019
+- **title**: 前端 disabled-by-default 安全执行按钮
+- **priority**: P2
+- **scope**: 前端 PlanReviewConsole
+- **allowed_files**:
+  - `src/frontend/src/components/PlanReviewConsole.tsx`
+  - `src/frontend/src/api.ts`
+- **forbidden_changes**:
+  - 不修改后端 API
+  - 按钮文案不可为 "Run" / "Start" / "Submit"
+- **status**: ✅ 已完成（2026-05-29）
+- **depends_on**: M5-T018b
+
+---
+
+### M5-T020：frontend smoke + final closeout
+
+- **task_id**: M5-T020
+- **title**: 前端 UI smoke 验证 + M5 最终收口
+- **priority**: P2
+- **scope**: 验证 + 文档
+- **status**: ✅ 已完成（2026-05-29）
+- **depends_on**: M5-T019
+
+---
+
+### M6-T001：SPM/DPABI execution safety review
+
+- **task_id**: M6-T001
+- **title**: SPM/DPABI 执行安全审查
+- **priority**: P1
+- **scope**: 独立安全审计 + 设计文档
+- **status**: ✅ 已完成（2026-05-29）
+- **deliverable**: `docs/SPM_DPABI_SAFETY_REVIEW.md`
+
+---
+
 ## M5 任务：接入 GUI Manual Node
 
 ### T-0040：实现 NIfTI 图像渲染组件

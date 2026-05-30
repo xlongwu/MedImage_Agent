@@ -1,31 +1,46 @@
 # 下一步行动 (NEXT_ACTIONS)
 
-> 最后更新：2026-05-29
+> 最后更新：2026-05-29 — M6-T001 完成
 
-## M1 已完全闭环 ✅
+## M5 状态：✅ 全部完成
 
-- 13 个文档交付物
-- ProjectSettings 三入口闭环（PLAN / EXECUTE / API）
-- GitHub Actions CI 全绿（backend + frontend）
-- 启动命令 / 端口统一
-- release_readiness: 78 PASS, 0 FAIL
+M1 / M2 / M3 / M5 全部闭环。550 passed, 4 skipped。
 
-## M2：Tool Catalog MVP（当前里程碑）
+## M6 状态：🔴 SPM/DPABI Execution Safety
 
-### M2-T001a：Tool Catalog read-only MVP
+M6-T001 审计完成。SPM/DPABI **仍被阻断** — 未开放任何 subject-level MATLAB execution。
 
-设计 `tool_registry.py` 完整 schema，为所有处理工具（30+）定义权限等级。
+## 推荐 next action: M6-T002 — MATLAB command safety hardening
 
-**步骤**：
-1. 列出所有处理工具（从 `node_registry.py` 提取）
-2. 为每个工具定义 `read_only` / `writes_files` / `destructive` / `requires_confirmation` / `parallel_safe`
-3. 创建 `specs/tool_catalog_spec.md`
-4. 更新 `docs/ARCHITECTURE.md`
+**目标**: 对 `matlab_command`、`spm_dir`、`dpabi_dir` 做白名单校验。
 
-### M2-T002：Plan Validator 准备
+**范围**:
+- 新增 `matlab_command` 白名单 (只允许 `matlab` 或受控绝对路径)
+- 校验 `spm_dir`/`dpabi_dir` 不可逃逸工作目录
+- 增强 `spm_*_runner.py` 的 path safety
+- 不影响当前 M5 gate 逻辑
 
-前置条件：M2-T001a 完成。
+**允许修改**:
+- `src/backend/app/tools/matlab_runner.py` (新增校验)
+- `src/backend/app/tools/spm_*_runner.py` (增强 path safety)
+- `tests/unit/test_spm_*.py` (新增测试)
 
-### audit_logger
+**禁止**:
+- 不开放 SPM/DPABI subject-level execution
+- 不修改 executor / node_registry
+- 不修改 M5 gate
 
-non-blocking / planned for M2。
+## M6 完整路线
+
+```text
+✅ M6-T001: safety review (done)
+⬜ M6-T002: MATLAB command safety hardening ← recommended next
+⬜ M6-T003: node-level + backend-level approval
+⬜ M6-T004: spm_smoke_test into safe allowlist
+⬜ M6-T005: spm_realign + slice_timing subject-level
+⬜ M6-T006: spm_coregister → segment → normalize → smooth
+⬜ M6-T007: DPABI contract/capability into allowlist
+⬜ M6-T008: DPABI sandbox smoke
+⬜ M6-T009: DPABI subject execution
+⬜ M6-T010: GUI Agent design
+```

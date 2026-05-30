@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
+import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, executeReviewedPlan, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
 
 type PlanData = Record<string, unknown> | null;
 
@@ -73,6 +73,14 @@ export default function PlanReviewConsole() {
   const [auditDetail, setAuditDetail] = useState<Record<string, unknown> | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditFetchError, setAuditFetchError] = useState("");
+
+  // ── Reviewed Execution ──
+  const [executionLoading, setExecutionLoading] = useState(false);
+  const [executionResult, setExecutionResult] = useState<Record<string, unknown> | null>(null);
+  const [executionError, setExecutionError] = useState("");
+  const [confirmExecution, setConfirmExecution] = useState(false);
+  const [projectConfigPath, setProjectConfigPath] = useState("examples/project_config_synthetic_smoke.yaml");
+  const [actorName, setActorName] = useState("frontend-user");
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -307,6 +315,36 @@ export default function PlanReviewConsole() {
     } finally { setDryRunLoading(false); }
   }
 
+  async function handleExecute() {
+    setExecutionError(""); setExecutionResult(null);
+    let plan: Record<string, unknown>;
+    try { plan = JSON.parse(planJson || "{}"); }
+    catch { setExecutionError("Cannot parse current plan JSON."); return; }
+    if (!projectConfigPath.trim()) { setExecutionError("Project config path is required."); return; }
+    const nodes = approvalNodesInput.split(",").map(s => s.trim()).filter(Boolean);
+    const rejected = rejectedNodesInput.split(",").map(s => s.trim()).filter(Boolean);
+    const approval = approvalApproved ? {
+      approved: true,
+      approved_by: approvalBy || "reviewer",
+      reason: approvalReason || undefined,
+      approved_nodes: nodes,
+      rejected_nodes: rejected,
+      review_draft_schema_version: "review-draft-v1",
+    } : { approved: false };
+    setExecutionLoading(true);
+    try {
+      const data = await executeReviewedPlan(baseUrl, {
+        plan,
+        approval,
+        project_config_path: projectConfigPath.trim(),
+        actor: actorName.trim() || "frontend-user",
+      });
+      setExecutionResult(data as Record<string, unknown>);
+    } catch (e) {
+      setExecutionError(e instanceof Error ? e.message : String(e));
+    } finally { setExecutionLoading(false); }
+  }
+
   async function handleViewAudit(auditId: string) {
     setAuditFetchError(""); setAuditDetail(null);
     setAuditLoading(true);
@@ -524,6 +562,116 @@ export default function PlanReviewConsole() {
         </div>
       )}
 
+      {/* ── Reviewed Execution ── */}
+      {result && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#e8eaf6", borderRadius: 4, border: "1px solid #9fa8da" }}>
+          <h4 style={{ margin: "0 0 4px 0", fontSize: 14 }}>🚀 Reviewed Execution</h4>
+          <p style={{ fontSize: 11, color: "#555", margin: "0 0 8px 0", lineHeight: 1.5 }}>
+            Backend gated execution only. The backend will re-run validation, approval gate,
+            adapter policy, pipeline writer, audit, and safe allowlist checks.<br />
+            SPM / DPABI / GUI / GPU nodes remain blocked.
+          </p>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+            <label style={{ fontSize: 12 }}>
+              Project config:{" "}
+              <input type="text" value={projectConfigPath}
+                onChange={(e) => setProjectConfigPath(e.target.value)}
+                style={{ width: 260, padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }} />
+            </label>
+            <label style={{ fontSize: 12 }}>
+              Actor:{" "}
+              <input type="text" value={actorName}
+                onChange={(e) => setActorName(e.target.value)}
+                style={{ width: 120, padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }} />
+            </label>
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ fontSize: 12 }}>
+              <input type="checkbox" checked={confirmExecution}
+                onChange={(e) => setConfirmExecution(e.target.checked)} />
+              {" "}I understand this will request backend gated execution for the reviewed plan.
+            </label>
+          </div>
+
+          {!projectConfigPath.trim() && (
+            <div style={{ fontSize: 11, color: "#e65100", marginBottom: 6 }}>⚠️ Project config path is required.</div>
+          )}
+
+          {dryRunResult?.status !== "DRY_RUN_OK" && (
+            <div style={{ fontSize: 11, color: "#e65100", marginBottom: 6, fontWeight: 600 }}>
+              ⚠️ Run Dry-run Execution Check first — status is not DRY_RUN_OK.
+            </div>
+          )}
+
+          <button onClick={handleExecute}
+            disabled={
+              executionLoading ||
+              dryRunResult?.status !== "DRY_RUN_OK" ||
+              !confirmExecution ||
+              !projectConfigPath.trim()
+            }
+            title={
+              dryRunResult?.status !== "DRY_RUN_OK"
+                ? "Run Dry-run Execution Check first"
+                : !confirmExecution
+                  ? "Check the confirmation box"
+                  : !projectConfigPath.trim()
+                    ? "Enter a project config path"
+                    : ""
+            }
+            style={{
+              padding: "8px 20px",
+              background: (dryRunResult?.status === "DRY_RUN_OK" && confirmExecution && projectConfigPath.trim())
+                ? "#c62828" : "#ccc",
+              color: (dryRunResult?.status === "DRY_RUN_OK" && confirmExecution && projectConfigPath.trim())
+                ? "#fff" : "#888",
+              border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 700, fontSize: 14,
+            }}>
+            {executionLoading ? "Requesting..." : "Execute Reviewed Plan"}
+          </button>
+          <span style={{ fontSize: 10, color: "#999", marginLeft: 8 }}>
+            (dry_run=false, confirm_execution=true, persist_audit=true, write_pipeline_yaml=true)
+          </span>
+
+          {executionError && <div style={{ color: "#c62828", fontSize: 13, marginTop: 8 }}>❌ {executionError}</div>}
+
+          {executionResult && (
+            <div style={{ marginTop: 8, padding: 8, background: executionStatusBg(String(executionResult.status)), borderRadius: 4, fontSize: 13 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>{executionStatusLabel(String(executionResult.status))}</div>
+              <div>Status: <b>{String(executionResult.status)}</b></div>
+              <div>OK: <b>{String(executionResult.ok)}</b></div>
+              <div style={{ marginTop: 4, fontSize: 11, color: "#555" }}>
+                executor_called: <b>{String((executionResult.execution as Record<string,unknown>|null)?.executor_called ?? "false")}</b>
+                {" | "}submitted: <b>{String((executionResult.execution as Record<string,unknown>|null)?.submitted ?? "false")}</b>
+                {" | "}run_id: <b>{String((executionResult.execution as Record<string,unknown>|null)?.run_id ?? "null")}</b>
+              </div>
+              {(executionResult.audit as Record<string,unknown>|null)?.audit_id ? (
+                <div style={{ marginTop: 4, fontSize: 11 }}>
+                  <span style={{ color: "#2e7d32" }}>📝 Audit: {String((executionResult.audit as Record<string,unknown>).audit_id)}</span>
+                </div>
+              ) : null}
+              {(executionResult.pipeline_yaml as Record<string,unknown>|null)?.path ? (
+                <div style={{ marginTop: 2, fontSize: 11 }}>
+                  <span>📄 Pipeline YAML: {String((executionResult.pipeline_yaml as Record<string,unknown>).path)}</span>
+                </div>
+              ) : null}
+              {((executionResult.errors as unknown[]) || []).length > 0 && (
+                <div style={{ marginTop: 4, color: "#c62828", fontSize: 12 }}>
+                  Errors: {String(JSON.stringify(executionResult.errors))}
+                </div>
+              )}
+              {((executionResult.warnings as unknown[]) || []).length > 0 && (
+                <div style={{ marginTop: 4, color: "#e65100", fontSize: 12 }}>
+                  Warnings: {String(JSON.stringify(executionResult.warnings))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Result ── */}
       {result && (
         <div style={{ display: "flex", gap: 16 }}>
@@ -656,6 +804,53 @@ export default function PlanReviewConsole() {
       )}
     </div>
   );
+}
+
+function executionStatusBg(status: string): string {
+  switch (status) {
+    case "EXECUTION_SUBMITTED":
+    case "EXECUTION_PREFLIGHT_READY":
+    case "DRY_RUN_OK": return "#e8f5e9";
+    case "REVIEWED_EXECUTION_DISABLED":
+    case "CONFIRMATION_REQUIRED":
+    case "APPROVAL_GATE_BLOCKED":
+    case "EXECUTION_POLICY_BLOCKED":
+    case "SAFE_EXECUTION_POLICY_BLOCKED": return "#fff3e0";
+    case "AUDIT_REQUIRED":
+    case "VALIDATION_FAILED":
+    case "PLAN_ADAPTER_FAILED":
+    case "PROJECT_CONFIG_REQUIRED":
+    case "PROJECT_CONFIG_INVALID":
+    case "PIPELINE_WRITE_FAILED":
+    case "AUDIT_WRITE_FAILED":
+    case "PIPELINE_YAML_REQUIRED":
+    case "EXECUTION_FAILED": return "#ffebee";
+    default: return "#f5f5f5";
+  }
+}
+
+function executionStatusLabel(status: string): string {
+  switch (status) {
+    case "EXECUTION_SUBMITTED": return "✅ Execution submitted — backend gated execution completed.";
+    case "EXECUTION_PREFLIGHT_READY": return "✅ Preflight ready — all gates passed.";
+    case "DRY_RUN_OK": return "✅ Dry-run OK: backend would allow execution.";
+    case "REVIEWED_EXECUTION_DISABLED": return "🟠 Reviewed execution disabled — env var not set.";
+    case "CONFIRMATION_REQUIRED": return "🟠 Confirmation required — check the confirm checkbox.";
+    case "AUDIT_REQUIRED": return "🔴 Audit required — persist_audit must be true.";
+    case "APPROVAL_GATE_BLOCKED": return "🟠 Approval gate blocked.";
+    case "EXECUTION_POLICY_BLOCKED": return "🟠 Execution policy blocked (SPM/DPABI/GUI/unknown).";
+    case "SAFE_EXECUTION_POLICY_BLOCKED": return "🟠 Safe allowlist blocked (GPU/contract nodes).";
+    case "VALIDATION_FAILED": return "🔴 Validation failed — fix the plan and re-validate.";
+    case "PLAN_ADAPTER_FAILED": return "🔴 Plan adapter failed — plan cannot be converted.";
+    case "PROJECT_CONFIG_REQUIRED": return "🔴 Project config path is required.";
+    case "PROJECT_CONFIG_INVALID": return "🔴 Project config is invalid.";
+    case "PIPELINE_WRITE_FAILED": return "🔴 Pipeline YAML write failed.";
+    case "PIPELINE_WRITE_REQUIRES_AUDIT": return "🟠 Pipeline write requires audit.";
+    case "PIPELINE_YAML_REQUIRED": return "🔴 Pipeline YAML is required for execution.";
+    case "AUDIT_WRITE_FAILED": return "🔴 Audit record write failed.";
+    case "EXECUTION_FAILED": return "🔴 Execution failed — see executor result.";
+    default: return `ℹ️ ${status}`;
+  }
 }
 
 function chipStyle(bg: string, color: string): React.CSSProperties {

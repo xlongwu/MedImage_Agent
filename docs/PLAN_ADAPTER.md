@@ -1,0 +1,99 @@
+# Plan Adapter
+
+将 reviewed plan（LLM Planner / Plan Review Console 产出的 candidate plan）转换为 Pipeline Executor 兼容的 pipeline dict。
+
+**状态**: 已实现 (M5-T012a, M5-T012b)，已集成到 `POST /api/plans/execute-reviewed` dry-run。
+
+**代码位置**: `src/backend/app/planner/plan_adapter.py`
+
+## 一、职责
+
+1. **格式转换**: `reviewed_plan_to_pipeline_dict()` — reviewed plan dict → executor-compatible pipeline dict
+2. **节点分类**: `classify_plan_nodes()` — 按 execution policy 将节点分为 allowed / blocked
+3. **组合调用**: `adapt_reviewed_plan()` — 一次调用完成转换 + 分类
+
+## 二、核心函数
+
+### `reviewed_plan_to_pipeline_dict(plan, *, name, description, modality, execution_backend) → dict`
+
+将 reviewed plan dict 转换为 `PipelineSpec` 兼容的 pipeline dict。
+
+- 从 Tool Catalog 补充 `backend`、`parallel_level` 等缺失字段
+- 校验节点 ID 唯一性、依赖关系合法性
+- 未在 Tool Catalog 中的节点标记 backend="unknown"
+- 生成 `execution.run_id` 和完整 `nodes` 列表
+
+### `classify_plan_nodes(plan) → dict[str, list[str]]`
+
+返回分类结果：
+
+```python
+{
+    "allowed_python_nodes": [...],
+    "allowed_gpu_nodes": [...],
+    "allowed_contract_nodes": [...],
+    "blocked_spm_nodes": [...],
+    "blocked_dpabi_execution_nodes": [...],
+    "blocked_gui_nodes": [...],
+    "blocked_manual_required_nodes": [...],
+    "blocked_unknown_nodes": [...],
+    "blocked_uncataloged_nodes": [...],
+}
+```
+
+### `adapt_reviewed_plan(plan) → PlanAdapterResult`
+
+组合 `classify_plan_nodes` + `reviewed_plan_to_pipeline_dict`，返回 `PlanAdapterResult` dataclass：
+
+```python
+@dataclass(frozen=True)
+class PlanAdapterResult:
+    ok: bool
+    pipeline: dict | None
+    errors: list[str]
+    warnings: list[str]
+    policy: dict[str, list[str]]
+```
+
+## 三、Execution Policy（阻断规则）
+
+以下节点在 dry-run 时被阻断，`EXECUTION_POLICY_BLOCKED`：
+
+| 策略 | 匹配条件 |
+|------|---------|
+| blocked_spm_nodes | `id` 以 `spm_` 开头，或 `backend == "matlab-spm"` |
+| blocked_dpabi_execution_nodes | `id` 以 `dpabi_` 开头，但不是 contract/capability/preflight/scaffold 等非执行节点 |
+| blocked_gui_nodes | `id` 以 `gui_` 开头，或 `backend == "gui-agent"` |
+| blocked_manual_required_nodes | `cat.manual_required == True` |
+| blocked_unknown_nodes | `id` 不在 NODE_REGISTRY 中 |
+| blocked_uncataloged_nodes | `"uncataloged" in cat.tags` |
+
+## 四、在 execute-reviewed API 中的位置
+
+```text
+POST /api/plans/execute-reviewed
+  → 1. validate_plan(plan)         ← 后端重跑
+  → 2. check_approval_gate(...)    ← 后端重跑
+  → 3. adapt_reviewed_plan(plan)   ← M5-T012b
+    → 3a. classify_plan_nodes(plan)
+    → 3b. reviewed_plan_to_pipeline_dict(plan)
+  → 3c. 检查 policy 是否有 blocked nodes
+    → 有 → EXECUTION_POLICY_BLOCKED
+    → 无 → 继续
+  → 4. DRY_RUN_OK (不调用 executor)
+```
+
+## 五、测试
+
+```bash
+pytest tests/unit/test_plan_adapter.py -v  # 19 tests
+```
+
+覆盖：
+- 正常转换（pipeline_id、nodes、version、execution）
+- 从 Tool Catalog 补充 backend
+- 重复节点 ID 检测
+- 未知依赖检测
+- 节点分类（allowed / blocked）
+- `adapt_reviewed_plan()` 组合调用
+- `PlanAdapterResult.to_dict()` 序列化

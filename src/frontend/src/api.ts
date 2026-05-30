@@ -1105,3 +1105,27 @@ export async function executeReviewedDryRun(
     body: JSON.stringify({ ...payload, dry_run: true }),
   });
 }
+
+export async function executeReviewedPlan(
+  baseUrl: string,
+  payload: {
+    plan: Record<string, unknown>;
+    approval: Record<string, unknown> | null;
+    project_config_path: string;
+    actor?: string;
+  }
+) {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/plans/execute-reviewed", {
+    method: "POST",
+    body: JSON.stringify({
+      plan: payload.plan,
+      approval: payload.approval,
+      project_config_path: payload.project_config_path,
+      dry_run: false,
+      confirm_execution: true,
+      persist_audit: true,
+      write_pipeline_yaml: true,
+      actor: payload.actor ?? "frontend-user",
+    }),
+  });
+}

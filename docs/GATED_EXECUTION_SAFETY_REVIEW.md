@@ -2,7 +2,7 @@
 
 本文档对 gated execution API 做安全审计与设计收口。未来真实执行必须满足本文档列出的所有前置条件。
 
-**状态**: 审计 & 设计阶段 (M5-T011)，尚未实现真实执行。
+**状态**: M5-T011 审计完成；M5-T005 至 M5-T013-fix 已实现（dry-run API + audit + adapter + writer）。真实执行尚未开放。
 
 ## 一、Plan Validator 强制重跑
 

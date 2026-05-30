@@ -2,7 +2,7 @@
 
 本文档定义从 reviewed plan 到真实 pipeline execution 的安全实现路径。
 
-**状态**: 设计阶段 (M5-T012c)，尚未实现。
+**状态**: ✅ M5 全部完成。真实执行已开放（safe Python-only allowlist, 12-gate gated）。
 
 ## 一、真实执行硬条件
 
@@ -171,20 +171,23 @@ Audit 必须包含：
 | 禁止文案 | "Run" / "Start" / "Submit" |
 | 阻断提示 | SPM/DPABI/GUI 节点显示阻止原因 |
 
-## 十二、代码修改预估
+## 十二、代码修改预估（M5-T016 真实执行）
 
 | 文件 | 修改 |
 |------|------|
-| `execute_reviewed_routes.py` | 增加 dry_run=false 分支 + 状态机 |
-| `plan_adapter.py` | pipeline dict → YAML 写入函数 |
+| `execute_reviewed_routes.py` | 增加 dry_run=false 分支 + 14 条硬条件 + 状态机 |
+| `plan_adapter.py` | 已完成（M5-T012a） |
+| `pipeline_writer.py` | 已完成（M5-T013） |
 | 无需新增文件 | — |
 
-预计 ~100 行新增代码，~50 行测试。
+预计 ~150 行新增代码，~60 行测试。
 
-## 十三、建议实现步骤
+## 十三、当前进度与后续步骤
 
-| Phase | 内容 |
-|-------|------|
-| M5-T012d | execute_reviewed 真实执行路径（dry_run=false 分支） |
-| M5-T012e | 前端 safe execution 按钮（disabled 默认） |
-| 后续 | SPM/DPABI 逐步开放 |
+| Phase | 内容 | 状态 |
+|-------|------|:---:|
+| M5-T001 至 M5-T015 | Approval Gate + dry-run API + Audit + Adapter + Writer + dry-run 集成 + preflight | ✅ 已完成 |
+| M5-T015 | safe reviewed execution preflight（14 条硬条件检查） | ⏳ 待开始 |
+| M5-T016 | execute_reviewed 真实执行路径（dry_run=false 分支） | ⏳ 待开始 |
+| M5-T017 | 前端 safe execution 按钮（disabled 默认） | ⏳ 待开始 |
+| 后续 | SPM/DPABI 逐步开放 | ⏳ 待开始 |

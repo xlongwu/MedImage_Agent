@@ -1,0 +1,27 @@
+# Synthetic smoke project config — for M5 reviewed execution smoke test.
+#
+# This config provides dummy third_party paths so that ProjectSettings
+# validation passes.  The smoke test uses ONLY Python nodes
+# (create_synthetic_bids, data_inspection) — no MATLAB/SPM/DPABI is
+# actually called.
+
+project:
+  name: medimage_synthetic_smoke
+  description: "Synthetic-only reviewed execution smoke test. No MATLAB required."
+  root_dir: "."
+
+third_party:
+  spm_dir: "./third_party/spm12"
+  dpabi_dir: "./third_party/DPABI_V8.2_240510"
+
+runtime:
+  matlab_command: "matlab"
+  work_dir: "./work"
+  log_dir: "./logs"
+  report_dir: "./reports"
+  derivatives_dir: "./outputs/derivatives"
+
+safety:
+  rawdata_readonly: true
+  allow_overwrite_derivatives: false
+  require_confirmation_for_matlab_run: true

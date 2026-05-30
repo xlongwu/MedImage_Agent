@@ -2,7 +2,7 @@
 
 本文档描述从 reviewed plan 到 pipeline execution 的安全集成路径。
 
-**状态**: 设计阶段 (M5-T004)，尚未实现。
+**状态**: ✅ M5 全部完成。真实执行已开放（safe Python-only allowlist, 12-gate gated）。M5-T001 至 M5-T017 + T013-fix 全部完成。
 
 ## 一、当前状态
 
@@ -16,16 +16,24 @@
 | Frontend Plan Review Console | ✅ |
 | Approval Gate schema + API | ✅ |
 | Approval Gate frontend preview | ✅ |
+| execute-reviewed dry-run API | ✅ (M5-T005) |
+| frontend dry-run readiness 展示 | ✅ (M5-T006) |
+| Audit Record (hash + builder + writer) | ✅ (M5-T007) |
+| dry-run 可选写 audit record | ✅ (M5-T008) |
+| Audit Record Read-only API | ✅ (M5-T009) |
+| frontend audit record detail 展示 | ✅ (M5-T010) |
+| Plan Adapter (reviewed plan → executor dict) | ✅ (M5-T012a) |
+| dry-run 集成 plan_adapter + policy 阻断 | ✅ (M5-T012b) |
+| Pipeline Writer (reviewed pipeline YAML) | ✅ (M5-T013) |
 | frontend build + CI | ✅ |
 
 ### 尚未实现
 
 | 能力 | 说明 |
 |------|------|
-| execution endpoint | 尚无受控执行 API |
-| persistent approval record | approval 未持久化 |
-| controlled execution button | 前端无执行入口 |
-| audit log | 无执行审计记录 |
+| pipeline_writer 集成到 dry-run API | ✅ M5-T014 |
+| 真实 execution (dry_run=false) | 安全硬条件未全部满足 |
+| 前端执行按钮 | 尚未创建 |
 | GUI Agent integration | manual_required 节点暂阻断 |
 
 ## 二、未来执行链路
@@ -169,12 +177,24 @@ if not gate_result.execution_allowed:
 ## 十、分阶段路线
 
 ```text
-M5-T004: Execution integration design doc ← 本任务
-M5-T005: execute-reviewed dry-run API
-M5-T006: frontend displays dry-run execution readiness
-M5-T007: persistent approval/audit record
-M5-T008: gated execution API (dry_run=false)
-M5-T009: disabled-by-default frontend execution button
+M5-T004: Execution integration design doc ✅
+M5-T005: execute-reviewed dry-run API ✅
+M5-T006: frontend displays dry-run execution readiness ✅
+M5-T007: persistent approval/audit record ✅
+M5-T008: dry-run 可选写 audit record ✅
+M5-T009: Audit Record Read-only API ✅
+M5-T010: 前端 audit record detail 展示 ✅
+M5-T011: Gated Execution Safety Review ✅
+M5-T012a: plan_adapter.py 转换层 ✅
+M5-T012b: dry-run 集成 plan_adapter + policy 阻断 ✅
+M5-T012c: Safe Reviewed Execution Design ✅
+M5-T013: pipeline_writer.py ✅
+M5-T013-fix: pipeline_writer 路径安全收口 ✅
+M5-T014: pipeline_writer 集成到 dry-run API ✅
+M5-T015: safe reviewed execution preflight ✅
+M5-T015: safe reviewed execution preflight
+M5-T016: gated execution API (dry_run=false)
+M5-T017: disabled-by-default frontend execution button
 ```
 
 ## 十一、安全审计
