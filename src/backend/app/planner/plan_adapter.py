@@ -156,6 +156,44 @@ def _satisfies_sandbox_contract(node: dict[str, Any]) -> bool:
     return True
 
 
+def _is_safe_sandbox_input(input_bold: str, *, allow_derivative: bool = False) -> bool:
+    """Check if an input_bold path is safe for sandbox execution.
+
+    Allowed:
+      - synthetic BIDS rawdata paths
+      - safe derivatives paths (only when allow_derivative=True)
+
+    Blocked:
+      - arbitrary paths, real rawdata, path traversal
+    """
+    normalized = input_bold.replace("\\", "/")
+    if ".." in normalized:
+        return False
+    is_synthetic = "examples/synthetic_bids/rawdata" in normalized
+    is_safe_derivative = (
+        allow_derivative
+        and "derivatives" in normalized
+        and "rsfmri_preproc" in normalized
+    )
+    return is_synthetic or is_safe_derivative
+
+
+def _satisfies_slice_timing_sandbox(node: dict[str, Any]) -> bool:
+    """Check if a spm_slice_timing_subject node satisfies the sandbox contract.
+
+    Requires: sandbox_mode=true, input_bold non-empty, and path is safe.
+    """
+    params = node.get("params", {}) or {}
+    sandbox = params.get("sandbox_mode")
+    input_bold = params.get("input_bold")
+    if sandbox is not True:
+        return False
+    if not input_bold or not isinstance(input_bold, str) or not input_bold.strip():
+        return False
+    allow_derivative = bool(params.get("allow_derivative_input"))
+    return _is_safe_sandbox_input(str(input_bold), allow_derivative=allow_derivative)
+
+
 def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     """Classify every node in a reviewed plan by execution policy.
 
@@ -204,7 +242,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         if nid == "spm_realign_subject" and _satisfies_sandbox_contract(node):
             result["allowed_spm_realign_sandbox_nodes"].append(nid)
             continue
-        if nid == "spm_slice_timing_subject" and _satisfies_sandbox_contract(node):
+        if nid == "spm_slice_timing_subject" and _satisfies_slice_timing_sandbox(node):
             result["allowed_spm_slice_timing_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":

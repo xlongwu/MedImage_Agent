@@ -293,13 +293,60 @@ def test_spm_normalize_still_blocked():
 # M6-T006d: sandbox-only spm_slice_timing_subject allowlist
 # ══════════════════════════════════════════════════════════════════════════════
 
-def test_slice_timing_sandbox_allowed():
+def test_slice_timing_synthetic_allowed():
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_slice_timing_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
+         "params": {"sandbox_mode": True, "input_bold": "examples/synthetic_bids/rawdata/sub-001/func/bold.nii"}},
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_slice_timing_subject" in policy["allowed_spm_slice_timing_sandbox_nodes"]
+
+
+def test_slice_timing_derivatives_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "allow_derivative_input": True,
+                    "input_bold": "derivatives/rsfmri_preproc/sub-001/func/rsub-001_bold.nii"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["allowed_spm_slice_timing_sandbox_nodes"]
+
+
+def test_slice_timing_derivatives_no_allow_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "allow_derivative_input": False,
+                    "input_bold": "derivatives/rsfmri_preproc/sub-001/func/rsub-001_bold.nii"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]
+
+
+def test_slice_timing_arbitrary_input_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "input_bold": "/etc/passwd"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]
+
+
+def test_slice_timing_rawdata_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "input_bold": "data/sub-001/func/bold.nii"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]
+
+
+def test_slice_timing_path_traversal_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "input_bold": "../etc/passwd"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]
 
 
 def test_slice_timing_no_sandbox_blocked():

@@ -120,7 +120,7 @@
 
 | 指标 | 当前值 |
 |------|--------|
-| pytest 全量（本地） | **707 passed, 4 skipped** |
+| pytest 全量（本地） | **712 passed, 4 skipped** |
 | pytest CI（Linux） | ✅ 全绿 |
 | CI frontend build | ✅ 通过 |
 | frontend build（本地） | ✅ 已验证 |

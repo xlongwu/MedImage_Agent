@@ -1624,7 +1624,7 @@ def _slice_timing_sandbox_body(monkeypatch, tmp_path, **overrides):
     body = {
         "plan": {"pipeline_id": "sandbox_st", "nodes": [{
             "id": "spm_slice_timing_subject", "backend": "matlab-spm", "depends_on": [],
-            "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+            "params": {"sandbox_mode": True, "input_bold": "examples/synthetic_bids/rawdata/sub-001/func/bold.nii"},
         }]},
         "approval": {"approved": True, "approved_nodes": ["spm_slice_timing_subject"],
                      "approved_backends": ["matlab-spm"], "rejected_nodes": []},
