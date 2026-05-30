@@ -123,10 +123,20 @@ def write_dpabi_wrapper_validation_matrix(
     warnings: list[str] = []
     errors: list[str] = []
 
+    # ── M7-DPABI-T008b: input/output scope hardening ──
     sig_path = Path(signatures_path)
     con_path = Path(contracts_path)
     sandbox_path = Path(sandbox_result_path)
     subject_path = Path(subject_wrapper_summary_path)
+    for path_val, label in [(sig_path, "signatures"), (con_path, "contracts"),
+                            (sandbox_path, "sandbox_results"), (subject_path, "subject_summary")]:
+        rstr = str(path_val.resolve()).replace("\\", "/")
+        if ".." in rstr:
+            return {"ok": False, "node_id": "dpabi_wrapper_validation_matrix",
+                    "errors": [f"Path traversal rejected: {label}"], "outputs": []}
+        if any(seg in ("rawdata", "data") for seg in path_val.resolve().parts):
+            return {"ok": False, "node_id": "dpabi_wrapper_validation_matrix",
+                    "errors": [f"{label} path must not point to rawdata"], "outputs": []}
 
     signatures = _read_json(sig_path)
     contracts = _read_json(con_path)
