@@ -100,6 +100,12 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | `spm_segment_subject` | sandbox declaration | ✅ |
 | `spm_normalize_subject` | sandbox declaration | ✅ |
 | `spm_smooth_subject` | sandbox declaration | ✅ |
+
+### M7 任务（DPABI Contract/Capability）
+
+| 任务 | 状态 |
+|------|:---:|
+| **M7-DPABI-T001：DPABI safety review** | ✅ |
 | DPABI execution | — | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |
