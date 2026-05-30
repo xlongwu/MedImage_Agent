@@ -74,6 +74,7 @@
 | **M6-T005b-fix：SPM-only validator, remove dummy dpabi_dir** | ✅ | 2026-05-29 |
 | **M6-T005c：spm realign sandbox contract tests** | ✅ | 2026-05-29 |
 | **M6-T005d：sandbox-only spm realign reviewed execution allowlist** | ✅ | 2026-05-29 |
+| **M6-T006a：spm slice timing safety contract** | ✅ | 2026-05-29 |
 
 ## M1 交付物状态
 
