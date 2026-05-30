@@ -472,3 +472,43 @@ def test_normalize_still_blocked():
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_normalize_subject" in policy["blocked_spm_nodes"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T009d: sandbox-only spm_normalize_subject allowlist
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_normalize_sandbox_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_normalize_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "deformation_source": "segment_deformation_field",
+                    "functional_source": "sandbox_derivatives"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_normalize_subject" in policy["allowed_spm_normalize_sandbox_nodes"]
+
+
+def test_normalize_no_sandbox_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_normalize_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_normalize_subject" in policy["blocked_spm_nodes"]
+
+
+def test_normalize_bad_deformation_source_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_normalize_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "deformation_source": "custom",
+                    "functional_source": "sandbox_derivatives"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_normalize_subject" in policy["blocked_spm_nodes"]
+
+
+def test_smooth_still_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_smooth_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_smooth_subject" in policy["blocked_spm_nodes"]

@@ -221,6 +221,14 @@ def _satisfies_segment_sandbox(node: dict[str, Any]) -> bool:
     return True
 
 
+def _satisfies_normalize_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("deformation_source") != "segment_deformation_field": return False
+    if params.get("functional_source") != "sandbox_derivatives": return False
+    return True
+
+
 def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     """Classify every node in a reviewed plan by execution policy.
 
@@ -236,6 +244,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_spm_slice_timing_sandbox_nodes": [],       # M6-T006d
         "allowed_spm_coregister_sandbox_nodes": [],         # M6-T007d
         "allowed_spm_segment_sandbox_nodes": [],            # M6-T008d
+        "allowed_spm_normalize_sandbox_nodes": [],         # M6-T009d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -279,6 +288,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
         if nid == "spm_segment_subject" and _satisfies_segment_sandbox(node):
             result["allowed_spm_segment_sandbox_nodes"].append(nid)
+            continue
+        if nid == "spm_normalize_subject" and _satisfies_normalize_sandbox(node):
+            result["allowed_spm_normalize_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":
             result["blocked_spm_nodes"].append(nid)
