@@ -166,8 +166,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_python_nodes": [],
         "allowed_gpu_nodes": [],
         "allowed_contract_nodes": [],
-        "allowed_spm_smoke_nodes": [],             # M6-T004b
-        "allowed_spm_realign_sandbox_nodes": [],    # M6-T005d
+        "allowed_spm_smoke_nodes": [],                    # M6-T004b
+        "allowed_spm_realign_sandbox_nodes": [],           # M6-T005d
+        "allowed_spm_slice_timing_sandbox_nodes": [],       # M6-T006d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -196,12 +197,15 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             result["blocked_manual_required_nodes"].append(nid)
             continue
 
-        # SPM — M6-T004b: spm_smoke_test, M6-T005d: sandbox-only realign
+        # SPM — M6-T004b: smoke, M6-T005d: realign, M6-T006d: slice timing
         if nid == "spm_smoke_test":
             result["allowed_spm_smoke_nodes"].append(nid)
             continue
         if nid == "spm_realign_subject" and _satisfies_sandbox_contract(node):
             result["allowed_spm_realign_sandbox_nodes"].append(nid)
+            continue
+        if nid == "spm_slice_timing_subject" and _satisfies_sandbox_contract(node):
+            result["allowed_spm_slice_timing_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":
             result["blocked_spm_nodes"].append(nid)

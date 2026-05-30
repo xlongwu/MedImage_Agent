@@ -287,3 +287,41 @@ def test_spm_normalize_still_blocked():
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_normalize_subject" in policy["blocked_spm_nodes"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T006d: sandbox-only spm_slice_timing_subject allowlist
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_slice_timing_sandbox_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["allowed_spm_slice_timing_sandbox_nodes"]
+
+
+def test_slice_timing_no_sandbox_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]
+
+
+def test_slice_timing_no_input_bold_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [],
+         "params": {"sandbox_mode": True}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]
+
+
+def test_spm_coregister_still_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_coregister_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_coregister_subject" in policy["blocked_spm_nodes"]
