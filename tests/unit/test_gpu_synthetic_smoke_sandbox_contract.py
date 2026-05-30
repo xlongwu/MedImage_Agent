@@ -119,6 +119,30 @@ def test_gpu_contract_nodes_allowlisted():
     assert nid in policy["allowed_contract_nodes"]
 
 
+# ── M8-T006d: synthetic smoke sandbox declaration ──
+
+def test_gpu_smoke_sandbox_allowed():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_synthetic_smoke", "depends_on": [],
+         "params": {"sandbox_mode": True, "synthetic_smoke": True,
+                    "device_policy": "guarded_auto_cpu_cuda0",
+                    "memory_policy": "bounded_1e6_elements_256mb",
+                    "output_policy": "reports_dir_gpu_smoke_only"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_synthetic_smoke" in policy["allowed_gpu_synthetic_smoke_nodes"]
+
+
+def test_gpu_smoke_no_sandbox_blocked():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_synthetic_smoke", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_synthetic_smoke" not in policy["allowed_gpu_synthetic_smoke_nodes"]
+
+
 def test_gpu_subject_exec_still_blocked():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
     for nid in ["gpu_alff_subject", "gpu_reho_subject"]:

@@ -296,6 +296,16 @@ def _satisfies_smooth_sandbox(node):
     return True
 
 
+def _satisfies_gpu_synthetic_smoke_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("synthetic_smoke") is not True: return False
+    if params.get("device_policy") != "guarded_auto_cpu_cuda0": return False
+    if params.get("memory_policy") != "bounded_1e6_elements_256mb": return False
+    if params.get("output_policy") != "reports_dir_gpu_smoke_only": return False
+    return True
+
+
 def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     """Classify every node in a reviewed plan by execution policy.
 
@@ -305,6 +315,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     result: dict[str, list[str]] = {
         "allowed_python_nodes": [],
         "allowed_gpu_nodes": [],
+        "allowed_gpu_synthetic_smoke_nodes": [],  # M8-GPU-T006d
         "allowed_contract_nodes": [],
         "allowed_spm_smoke_nodes": [],                    # M6-T004b
         "allowed_spm_realign_sandbox_nodes": [],           # M6-T005d
@@ -403,6 +414,11 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         # GUI
         if nid.startswith("gui_") or cat.backend == "gui-agent":
             result["blocked_gui_nodes"].append(nid)
+            continue
+
+        # GPU synthetic smoke — M8-T006d: sandbox-gated allowlist
+        if nid == "gpu_synthetic_smoke" and _satisfies_gpu_synthetic_smoke_sandbox(node):
+            result["allowed_gpu_synthetic_smoke_nodes"].append(nid)
             continue
 
         # Allowed categories
