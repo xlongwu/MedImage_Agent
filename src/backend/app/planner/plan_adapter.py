@@ -296,6 +296,18 @@ def _satisfies_smooth_sandbox(node):
     return True
 
 
+def _satisfies_gpu_alff_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("subject_level") is not True: return False
+    if params.get("input_source") != "scoped_functional_derivative": return False
+    if params.get("output_policy") != "derivatives_dir_scoped": return False
+    if params.get("device_policy") != "guarded_auto_cpu_cuda0": return False
+    if params.get("memory_policy") != "bounded_subject_gpu_512mb": return False
+    if params.get("alff_policy") != "bounded_tr_and_frequency_band": return False
+    return True
+
+
 def _satisfies_gpu_synthetic_smoke_sandbox(node):
     params = node.get("params", {}) or {}
     if params.get("sandbox_mode") is not True: return False
@@ -316,6 +328,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_python_nodes": [],
         "allowed_gpu_nodes": [],
         "allowed_gpu_synthetic_smoke_nodes": [],  # M8-GPU-T006d
+        "allowed_gpu_alff_sandbox_nodes": [],     # M8-GPU-T007f
         "allowed_contract_nodes": [],
         "allowed_spm_smoke_nodes": [],                    # M6-T004b
         "allowed_spm_realign_sandbox_nodes": [],           # M6-T005d
@@ -417,6 +430,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
 
         # GPU synthetic smoke — M8-T006d: sandbox-gated allowlist
+        if nid == "gpu_alff_subject" and _satisfies_gpu_alff_sandbox(node):
+            result["allowed_gpu_alff_sandbox_nodes"].append(nid)
+            continue
         if nid == "gpu_synthetic_smoke" and _satisfies_gpu_synthetic_smoke_sandbox(node):
             result["allowed_gpu_synthetic_smoke_nodes"].append(nid)
             continue

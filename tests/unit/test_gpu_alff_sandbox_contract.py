@@ -117,6 +117,32 @@ def test_other_gpu_subject_blocked():
         assert nid not in policy.get("allowed_gpu_synthetic_smoke_nodes", [])
 
 
+# ── M8-T007f: sandbox declaration allowlist ──
+
+def test_alff_sandbox_allowed():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_alff_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "subject_level": True,
+                    "input_source": "scoped_functional_derivative",
+                    "output_policy": "derivatives_dir_scoped",
+                    "device_policy": "guarded_auto_cpu_cuda0",
+                    "memory_policy": "bounded_subject_gpu_512mb",
+                    "alff_policy": "bounded_tr_and_frequency_band"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_alff_subject" in policy["allowed_gpu_alff_sandbox_nodes"]
+
+
+def test_alff_no_sandbox_blocked():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_alff_subject" not in policy["allowed_gpu_alff_sandbox_nodes"]
+
+
 def test_json_serializable(tmp_path):
     func, deriv = _make_derivative(tmp_path)
     r = run_gpu_alff_subject(subject_id="s", input_functional=func,
