@@ -65,8 +65,18 @@ def write_dpabi_subject_wrapper_report(
     derivatives_dir: str,
     report_dir: str,
 ) -> dict[str, Any]:
+    # ── M7-DPABI-T007b: input/output scope hardening ──
     derivatives = Path(derivatives_dir)
     out_dir = Path(report_dir) / "dpabi"
+    for path_val, label in [(derivatives, "derivatives_dir"), (out_dir.parent, "report_dir")]:
+        resolved = path_val.resolve()
+        rstr = str(resolved).replace("\\", "/")
+        if ".." in rstr:
+            return {"ok": False, "node_id": "dpabi_subject_wrapper_report",
+                    "errors": [f"Path traversal rejected: {label}"], "outputs": []}
+        if any(seg in ("rawdata", "data") for seg in resolved.parts):
+            return {"ok": False, "node_id": "dpabi_subject_wrapper_report",
+                    "errors": [f"{label} must not point to rawdata"], "outputs": []}
     out_dir.mkdir(parents=True, exist_ok=True)
 
     summary_path = out_dir / "dpabi_subject_wrapper_summary.json"
