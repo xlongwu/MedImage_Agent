@@ -157,7 +157,30 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 
 gpu_alff_subject, gpu_functional_connectivity_subject, gpu_nuisance_regression_subject, gpu_reho_subject, gpu_temporal_filtering_subject
 
-> GPU contract metadata nodes do NOT call CUDA, torch.cuda, or allocate tensors. Subject-level GPU execution remains blocked.
+| M8-GPU-T006a：synthetic GPU smoke safety contract | ✅ |
+| M8-GPU-T006b：synthetic GPU smoke runner + registration | ✅ |
+| M8-GPU-T006c：synthetic GPU smoke contract tests | ✅ |
+| M8-GPU-T006d：synthetic GPU smoke sandbox-only allowlist | ✅ |
+| **M8 GPU full closeout** | ✅ |
+
+> 4 GPU nodes allowlisted (3 contract + 1 synthetic smoke). 5 subject-level GPU nodes blocked. No CUDA/GPU call by any allowlisted runner.
+
+### Summary: 31 reviewed execution nodes (7 SPM + 20 DPABI + 4 GPU)
+
+| Phase | Nodes | Status |
+|-------|:---:|:---:|
+| M6 SPM | 7 | ✅ |
+| M7 DPABI | 20 | ✅ |
+| M8 GPU | 4 | ✅ |
+| **Total** | **31** | ✅ |
+
+### Still Blocked
+
+| Category | Count |
+|----------|:---:|
+| GPU subject execution | 5 |
+| GUI/manual | TBD |
+| Unrestricted SPM/DPABI/GPU | ❌ |
 
 ## M1 交付物状态
 
