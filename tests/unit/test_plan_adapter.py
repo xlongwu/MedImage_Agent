@@ -655,6 +655,27 @@ def test_wrapper_report_no_sandbox_blocked():
     assert "dpabi_subject_wrapper_report" in policy["blocked_dpabi_execution_nodes"]
 
 
+# ── M7-T008d: validation matrix sandbox allowlist ──
+
+def test_validation_matrix_sandbox_allowed():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_wrapper_validation_matrix", "depends_on": [],
+         "params": {"sandbox_mode": True, "validation_matrix_only": True,
+                    "matrix_source": "dpabi_contracts_and_reports",
+                    "output_policy": "reports_dir_dpabi_validation_matrix_only"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_wrapper_validation_matrix" in policy["allowed_dpabi_validation_matrix_nodes"]
+
+
+def test_validation_matrix_no_sandbox_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_wrapper_validation_matrix", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_wrapper_validation_matrix" in policy["blocked_dpabi_execution_nodes"]
+
+
 def test_dpabi_single_function_bad_normalized_source_blocked():
     plan = {"pipeline_id": "t", "nodes": [
         {"id": "dpabi_single_function_sandbox", "depends_on": [],
