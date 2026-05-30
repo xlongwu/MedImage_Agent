@@ -126,6 +126,16 @@ def run_spm_normalize_subject(
         )
         return data
 
+    # ── M6-T009b: MATLAB/SPM safety preflight ──
+    from src.backend.app.safety.matlab_safety import validate_spm_runtime_config
+    safety_result = validate_spm_runtime_config(matlab_command=matlab_command, spm_dir=spm_dir)
+    if not safety_result.ok:
+        return {'ok': False, 'node_id': 'spm_normalize_subject', 'backend': 'matlab-spm',
+                'subject_id': subject_id, 'outputs': [], 'warnings': [],
+                'errors': [f'MATLAB/SPM safety preflight failed: {e.message}' for e in safety_result.errors],
+                'safety': safety_result.to_dict(), 'matlab_called': False, 'spm_called': False,
+                'stage': 'matlab_safety_preflight'}
+
     voxel_size = voxel_size or [3.0, 3.0, 3.0]
     bounding_box = bounding_box or [[-90.0, -126.0, -72.0], [90.0, 90.0, 108.0]]
 

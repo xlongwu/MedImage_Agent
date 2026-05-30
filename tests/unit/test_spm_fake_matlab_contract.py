@@ -193,7 +193,7 @@ def _normalize_runner(tmp_path: Path) -> dict[str, Any]:
     _write_nifti(func / "mean_sub-001_bold.nii", shape=(4, 4, 4))
     _write_nifti(anat / "y_coreg_sub-001_T1w.nii", shape=(4, 4, 4))
     return run_spm_normalize_subject(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         spm_dir=str(tmp_path / "spm12"),
         subject_id="sub-001",
         derivatives_dir=str(dirs["derivatives"]),
