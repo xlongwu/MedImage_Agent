@@ -93,8 +93,15 @@ def run_dpabi_sandbox_smoke(
         return data
 
     # ── M7-DPABI-T004b: DPABI runtime safety preflight (runs AFTER plan check, BEFORE subprocess) ──
-    from src.backend.app.safety.matlab_safety import validate_matlab_runtime_config
-    sr = validate_matlab_runtime_config(matlab_command=matlab_command, spm_dir='./third_party/spm12', dpabi_dir=dpabi_dir)
+    from src.backend.app.safety.matlab_safety import validate_matlab_command, validate_third_party_dir
+    _cmd_sr = validate_matlab_command(matlab_command)
+    _dpabi_sr = validate_third_party_dir(dpabi_dir, name="dpabi_dir")
+    from src.backend.app.safety.matlab_safety import MatlabSafetyResult
+    sr = MatlabSafetyResult(
+        ok=len(_cmd_sr.errors) + len(_dpabi_sr.errors) == 0,
+        errors=list(_cmd_sr.errors) + list(_dpabi_sr.errors),
+        warnings=list(_cmd_sr.warnings) + list(_dpabi_sr.warnings),
+    )
     if not sr.ok:
         errors = [f'DPABI runtime safety preflight failed: {e.message}' for e in sr.errors]
         data = {'ok': False, 'node_id': 'dpabi_sandbox_smoke_run', 'backend': 'matlab-dpabi',
