@@ -124,7 +124,7 @@ def _fake_subprocess_run(monkeypatch: pytest.MonkeyPatch, *, returncode: int = 0
 def _slice_runner(tmp_path: Path) -> dict[str, Any]:
     dirs = _subject_dirs(tmp_path)
     return run_spm_slice_timing_subject(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         spm_dir=str(tmp_path / "spm12"),
         subject_id="sub-001",
         input_bold=str(_make_raw_bold(tmp_path)),

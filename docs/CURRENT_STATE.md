@@ -75,6 +75,7 @@
 | **M6-T005c：spm realign sandbox contract tests** | ✅ | 2026-05-29 |
 | **M6-T005d：sandbox-only spm realign reviewed execution allowlist** | ✅ | 2026-05-29 |
 | **M6-T006a：spm slice timing safety contract** | ✅ | 2026-05-29 |
+| **M6-T006b：spm slice timing runner hardening** | ✅ | 2026-05-29 |
 
 ## M1 交付物状态
 
@@ -117,7 +118,7 @@
 
 | 指标 | 当前值 |
 |------|--------|
-| pytest 全量（本地） | **667 passed, 4 skipped** |
+| pytest 全量（本地） | **679 passed, 4 skipped** |
 | pytest CI（Linux） | ✅ 全绿 |
 | CI frontend build | ✅ 通过 |
 | frontend build（本地） | ✅ 已验证 |

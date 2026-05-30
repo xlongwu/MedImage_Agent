@@ -69,6 +69,7 @@ def run_spm_slice_timing_subject(
     slice_order: list[int] | None = None,
     reference_slice: int | None = None,
     matlab_script_dir: str = "./matlab",
+    allow_derivative_input: bool = False,
 ) -> dict[str, Any]:
     if not approved:
         data = {
@@ -89,6 +90,31 @@ def run_spm_slice_timing_subject(
             safety=standard_external_safety(),
         )
         return data
+
+    # ── M6-T006b: MATLAB/SPM safety preflight ──
+    from src.backend.app.safety.matlab_safety import validate_spm_runtime_config
+
+    safety_result = validate_spm_runtime_config(
+        matlab_command=matlab_command,
+        spm_dir=spm_dir,
+    )
+    if not safety_result.ok:
+        return {
+            "ok": False,
+            "node_id": "spm_slice_timing_subject",
+            "backend": "matlab-spm",
+            "subject_id": subject_id,
+            "outputs": [],
+            "warnings": [],
+            "errors": [
+                f"MATLAB/SPM safety preflight failed: {e.message}"
+                for e in safety_result.errors
+            ],
+            "safety": safety_result.to_dict(),
+            "matlab_called": False,
+            "spm_called": False,
+            "stage": "matlab_safety_preflight",
+        }
 
     normalized_input = str(input_bold).replace("\\", "/")
     if "examples/synthetic_bids/rawdata" not in normalized_input:
