@@ -66,6 +66,7 @@ def run_dpabi_subject_smooth(
     fwhm: list[float] | None = None,
     approved: bool = False,
     matlab_script_dir: str = "./matlab",
+    spm_dir: str = "./third_party/spm12",
 ) -> dict[str, Any]:
     if not approved:
         return {
@@ -103,6 +104,31 @@ def run_dpabi_subject_smooth(
                 f"Input was: {input_bold}"
             ],
         }
+
+    # ── M7-DPABI-T006b: FWHM validation ──
+    fwhm = fwhm or [6.0, 6.0, 6.0]
+    if not isinstance(fwhm, (list, tuple)) or len(fwhm) != 3:
+        return {'ok': False, 'node_id': 'dpabi_subject_smooth', 'backend': 'matlab-dpabi',
+                'subject_id': subject_id, 'outputs': [], 'warnings': [],
+                'errors': ['FWHM must be a 3-element list of numbers.'],
+                'matlab_called': False, 'dpabi_called': False, 'stage': 'fwhm_preflight'}
+    for i, v in enumerate(fwhm):
+        if not isinstance(v, (int, float)) or v != v or v == float('inf') or v <= 0 or v > 12:
+            return {'ok': False, 'node_id': 'dpabi_subject_smooth', 'backend': 'matlab-dpabi',
+                    'subject_id': subject_id, 'outputs': [], 'warnings': [],
+                    'errors': [f'FWHM element {i} invalid: {v}. Must be 0 < value <= 12.'],
+                    'matlab_called': False, 'dpabi_called': False, 'stage': 'fwhm_preflight'}
+
+    # ── M7-DPABI-T006b: DPABI runtime safety preflight ──
+    from src.backend.app.safety.matlab_safety import validate_matlab_runtime_config
+    sr = validate_matlab_runtime_config(matlab_command=matlab_command, spm_dir=spm_dir, dpabi_dir=dpabi_dir)
+    if not sr.ok:
+        errors = [f'DPABI runtime safety preflight failed: {e.message}' for e in sr.errors]
+        data = {'ok': False, 'node_id': 'dpabi_subject_smooth', 'backend': 'matlab-dpabi',
+                'subject_id': subject_id, 'outputs': [], 'warnings': [],
+                'errors': errors, 'safety': sr.to_dict(),
+                'matlab_called': False, 'dpabi_called': False, 'stage': 'dpabi_runtime_preflight'}
+        return data
 
     contracts_path = Path(work_dir) / "dpabi" / "dpabi_wrapper_contracts.json"
     contracts = _read_json(contracts_path)
