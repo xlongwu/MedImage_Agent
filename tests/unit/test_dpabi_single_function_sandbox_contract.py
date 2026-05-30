@@ -104,9 +104,12 @@ def test_unsafe_matlab_blocks(monkeypatch, tmp_path):
 def test_fake_success(monkeypatch, tmp_path):
     _write_contracts(tmp_path)
     (Path(tmp_path) / "dpabi").mkdir(exist_ok=True)
+    spm_dir = tmp_path / "third_party" / "spm12"
+    spm_dir.mkdir(parents=True, exist_ok=True)
     _fake_subprocess(monkeypatch)
     result = run_dpabi_single_function_sandbox(
         matlab_command="matlab", dpabi_dir=str(tmp_path / "dpabi"),
+        spm_dir=str(spm_dir),
         work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
     )
     assert result["ok"] is True
@@ -115,9 +118,12 @@ def test_fake_success(monkeypatch, tmp_path):
 def test_fake_missing_output(monkeypatch, tmp_path):
     _write_contracts(tmp_path)
     (Path(tmp_path) / "dpabi").mkdir(exist_ok=True)
+    spm_dir = tmp_path / "third_party" / "spm12"
+    spm_dir.mkdir(parents=True, exist_ok=True)
     _fake_subprocess(monkeypatch, returncode=0, create_outputs=False)
     result = run_dpabi_single_function_sandbox(
         matlab_command="matlab", dpabi_dir=str(tmp_path / "dpabi"),
+        spm_dir=str(spm_dir),
         work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
     )
     assert result["ok"] is False
@@ -126,9 +132,12 @@ def test_fake_missing_output(monkeypatch, tmp_path):
 def test_fake_nonzero(monkeypatch, tmp_path):
     _write_contracts(tmp_path)
     (Path(tmp_path) / "dpabi").mkdir(exist_ok=True)
+    spm_dir = tmp_path / "third_party" / "spm12"
+    spm_dir.mkdir(parents=True, exist_ok=True)
     _fake_subprocess(monkeypatch, returncode=7)
     result = run_dpabi_single_function_sandbox(
         matlab_command="matlab", dpabi_dir=str(tmp_path / "dpabi"),
+        spm_dir=str(spm_dir),
         work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
     )
     assert result["ok"] is False
@@ -139,9 +148,12 @@ def test_fake_nonzero(monkeypatch, tmp_path):
 def test_output_no_rawdata(monkeypatch, tmp_path):
     _write_contracts(tmp_path)
     (Path(tmp_path) / "dpabi").mkdir(exist_ok=True)
+    spm_dir = tmp_path / "third_party" / "spm12"
+    spm_dir.mkdir(parents=True, exist_ok=True)
     _fake_subprocess(monkeypatch)
     run_dpabi_single_function_sandbox(
         matlab_command="matlab", dpabi_dir=str(tmp_path / "dpabi"),
+        spm_dir=str(spm_dir),
         work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
     )
     rawdata = tmp_path / "rawdata"
@@ -173,9 +185,12 @@ def test_blocked_by_policy():
 def test_json_serializable(monkeypatch, tmp_path):
     _write_contracts(tmp_path)
     (Path(tmp_path) / "dpabi").mkdir(exist_ok=True)
+    spm_dir = tmp_path / "third_party" / "spm12"
+    spm_dir.mkdir(parents=True, exist_ok=True)
     _fake_subprocess(monkeypatch)
     result = run_dpabi_single_function_sandbox(
         matlab_command="matlab", dpabi_dir=str(tmp_path / "dpabi"),
+        spm_dir=str(spm_dir),
         work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
     )
     json.dumps(result, default=str)
