@@ -1,0 +1,38 @@
+{
+  "ok": true,
+  "node_id": "gpu_synthetic_smoke",
+  "backend": "gpu",
+  "synthetic_only": true,
+  "device": "auto",
+  "shape": [
+    64,
+    64
+  ],
+  "estimated_bytes": 16384,
+  "timeout_seconds": 10,
+  "cuda_called": false,
+  "gpu_called": false,
+  "tensor_allocated": false,
+  "runs_training": false,
+  "runs_model_inference": false,
+  "writes_rawdata": false,
+  "writes_derivatives": false,
+  "errors": [],
+  "warnings": [
+    "CUDA availability unknown."
+  ],
+  "gpu_guard": {
+    "ok": true,
+    "errors": [],
+    "warnings": [
+      {
+        "code": "GPU_UNAVAILABLE",
+        "severity": "warning",
+        "message": "CUDA availability unknown."
+      }
+    ],
+    "device": "auto",
+    "estimated_bytes": 16384,
+    "cleanup_recommended": false
+  }
+}

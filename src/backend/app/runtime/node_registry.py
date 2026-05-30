@@ -1222,6 +1222,27 @@ NODE_REGISTRY["dpabi_sandbox_smoke_run"] = run_dpabi_sandbox_smoke_run_node
 # NOTE: dpabi_single_function_sandbox is NOT registered — must remain blocked.
 # NOTE: dpabi_sandbox_smoke_run has a registered runner but IS blocked by reviewed execution allowlist.
 
+# ── M8-GPU-T006b: register synthetic GPU smoke runner (NOTE: blocked by safe allowlist) ──
+def run_gpu_synthetic_smoke_node(context, node):
+    from src.backend.app.tools.gpu_smoke_runner import run_gpu_synthetic_smoke
+    result = run_gpu_synthetic_smoke(
+        device=node.params.get("device", "auto"),
+        shape=node.params.get("shape", (64, 64)),
+        dtype_bytes=node.params.get("dtype_bytes", 4),
+        batch_size=node.params.get("batch_size", 1),
+        timeout_seconds=node.params.get("timeout_seconds", 10),
+        require_gpu=node.params.get("require_gpu", False),
+        reports_dir=context.project_config.get("runtime", {}).get("report_dir", "./reports"),
+        work_dir=context.work_dir,
+        run_id=context.run_id,
+        approved=True,
+    )
+    result["node_id"] = node.id
+    return result
+NODE_REGISTRY["gpu_synthetic_smoke"] = run_gpu_synthetic_smoke_node
+# NOTE: gpu_synthetic_smoke IS blocked by reviewed execution allowlist.
+# It calls no CUDA/GPU — uses gpu_safety.py pure guard only.
+
 
 def get_node_runner(node_id: str) -> NodeRunner:
     try:
