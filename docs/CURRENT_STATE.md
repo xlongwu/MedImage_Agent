@@ -104,7 +104,7 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |
 
-> M6 Full SPM Sandbox Pipeline COMPLETE (7 SPM nodes, all sandbox-gated). Unrestricted SPM NOT open. DPABI/GPU/GUI blocked.
+> M6 Full SPM Sandbox Pipeline COMPLETE (7 SPM nodes, all sandbox-gated). Manual smoke guide added. Unrestricted SPM NOT open. DPABI/GPU/GUI blocked.
 
 ## M1 交付物状态
 
