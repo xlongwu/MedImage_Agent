@@ -1306,6 +1306,27 @@ def run_gpu_temporal_filtering_subject_node(context, node):
 NODE_REGISTRY["gpu_temporal_filtering_subject"] = run_gpu_temporal_filtering_subject_node
 # NOTE: gpu_temporal_filtering_subject IS blocked by reviewed execution allowlist.
 
+# ── M8-GPU-T010b: register gpu_functional_connectivity_subject (BLOCKED by safe allowlist) ──
+def run_gpu_functional_connectivity_subject_node(context, node):
+    from src.backend.app.tools.gpu_functional_connectivity_runner import run_gpu_functional_connectivity_subject
+    p = node.params
+    result = run_gpu_functional_connectivity_subject(
+        subject_id=p.get("subject_id", "sub-001"),
+        input_functional=p.get("input_functional", f"{context.derivatives_dir}/func.nii"),
+        derivatives_dir=context.derivatives_dir, run_id=context.run_id,
+        atlas_source=p.get("atlas_source", "approved_builtin_atlas"),
+        roi_count=p.get("roi_count"), timepoints=p.get("timepoints"),
+        correlation_method=p.get("correlation_method", "pearson"),
+        fisher_z=bool(p.get("fisher_z", True)),
+        device=p.get("device", "auto"),
+        timeout_seconds=int(p.get("timeout_seconds", 60)),
+        approved=True,
+    )
+    result["node_id"] = node.id
+    return result
+NODE_REGISTRY["gpu_functional_connectivity_subject"] = run_gpu_functional_connectivity_subject_node
+# NOTE: gpu_functional_connectivity_subject IS blocked by reviewed execution allowlist.
+
 
 def get_node_runner(node_id: str) -> NodeRunner:
     try:
