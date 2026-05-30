@@ -1,11 +1,9 @@
 # 下一步行动 (NEXT_ACTIONS)
 
-> M7 DPABI Single-Function Sandbox — COMPLETE
+> M7 DPABI Subject Smooth — COMPLETE
 
-## M7: 15 metadata + sandbox_smoke + single_function (sandbox) allowlisted
+## M7: 15 metadata + sandbox_smoke + single_function + subject_smooth (sandbox) allowlisted
 
-## Blocked
+## Blocked: wrapper_report | validation_matrix | GPU | GUI
 
-subject_smooth | wrapper_report | wrapper_validation | GPU | GUI
-
-## Next: M7-DPABI-T006a dpabi_subject_smooth safety contract
+## Next: M7-DPABI-T007a dpabi_subject_wrapper_report safety contract
