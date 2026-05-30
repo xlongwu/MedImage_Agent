@@ -72,6 +72,47 @@ def run_spm_segment_subject(
         )
         return data
 
+    # ── M6-T008b: MATLAB/SPM safety preflight ──
+    from src.backend.app.safety.matlab_safety import validate_spm_runtime_config
+
+    safety_result = validate_spm_runtime_config(
+        matlab_command=matlab_command,
+        spm_dir=spm_dir,
+    )
+    if not safety_result.ok:
+        return {
+            "ok": False,
+            "node_id": "spm_segment_subject",
+            "backend": "matlab-spm",
+            "subject_id": subject_id,
+            "outputs": [],
+            "warnings": [],
+            "errors": [
+                f"MATLAB/SPM safety preflight failed: {e.message}"
+                for e in safety_result.errors
+            ],
+            "safety": safety_result.to_dict(),
+            "matlab_called": False,
+            "spm_called": False,
+            "stage": "matlab_safety_preflight",
+        }
+
+    # ── M6-T008b: TPM existence check ──
+    tpm_path = Path(spm_dir) / "tpm" / "TPM.nii"
+    if not tpm_path.exists():
+        return {
+            "ok": False,
+            "node_id": "spm_segment_subject",
+            "backend": "matlab-spm",
+            "subject_id": subject_id,
+            "outputs": [],
+            "warnings": [],
+            "errors": [f"SPM TPM not found at expected path: {tpm_path}"],
+            "matlab_called": False,
+            "spm_called": False,
+            "stage": "tpm_preflight",
+        }
+
     input_t1w = _expected_coreg_t1w(subject_id, derivatives_dir)
 
     if not input_t1w.exists():

@@ -170,8 +170,12 @@ def _segment_runner(tmp_path: Path) -> dict[str, Any]:
     dirs = _subject_dirs(tmp_path)
     coreg = dirs["derivatives"] / "rsfmri_preproc" / "sub-001" / "anat" / "coreg_sub-001_T1w.nii"
     _write_nifti(coreg, shape=(4, 4, 4))
+    # Create TPM required by segment preflight
+    tpm_dir = tmp_path / "spm12" / "tpm"
+    tpm_dir.mkdir(parents=True, exist_ok=True)
+    (tpm_dir / "TPM.nii").write_text("dummy")
     return run_spm_segment_subject(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         spm_dir=str(tmp_path / "spm12"),
         subject_id="sub-001",
         derivatives_dir=str(dirs["derivatives"]),
