@@ -1264,6 +1264,26 @@ def run_gpu_alff_subject_node(context, node):
 NODE_REGISTRY["gpu_alff_subject"] = run_gpu_alff_subject_node
 # NOTE: gpu_alff_subject IS blocked by reviewed execution allowlist — scaffold only.
 
+# ── M8-GPU-T008b: register gpu_reho_subject runner (BLOCKED by safe allowlist) ──
+def run_gpu_reho_subject_node(context, node):
+    from src.backend.app.tools.gpu_reho_runner import run_gpu_reho_subject
+    p = node.params
+    result = run_gpu_reho_subject(
+        subject_id=p.get("subject_id", "sub-001"),
+        input_functional=p.get("input_functional", f"{context.derivatives_dir}/func.nii"),
+        derivatives_dir=context.derivatives_dir,
+        run_id=context.run_id,
+        neighborhood=int(p.get("neighborhood", 27)),
+        mask_path=p.get("mask_path"),
+        device=p.get("device", "auto"),
+        timeout_seconds=int(p.get("timeout_seconds", 60)),
+        approved=True,
+    )
+    result["node_id"] = node.id
+    return result
+NODE_REGISTRY["gpu_reho_subject"] = run_gpu_reho_subject_node
+# NOTE: gpu_reho_subject IS blocked by reviewed execution allowlist — scaffold only.
+
 
 def get_node_runner(node_id: str) -> NodeRunner:
     try:

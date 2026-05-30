@@ -1,208 +1,175 @@
+"""GPU ReHo subject runner scaffold (M8-GPU-T008b).
+
+Pure Python preflight — no torch import, no CUDA, no GPU allocation.
+Uses gpu_safety.py guards for device, memory, timeout, concurrency.
+"""
+
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
-from typing import Any
+from typing import Sequence
 
-import nibabel as nib
-import numpy as np
+from src.backend.app.safety.gpu_safety import (
+    validate_gpu_device,
+    check_cuda_availability,
+    validate_gpu_memory_budget,
+    validate_gpu_timeout,
+    validate_gpu_concurrency,
+)
 
-from src.backend.app.tools.reho_compute import compute_reho_backend, compute_reho_numpy
 
-
-def run_reho_subject(
-    subject_id: str,
-    input_nii: str,
-    derivatives_dir: str,
-    neighborhood: int = 27,
-    use_gm_mask: bool = False,
-    gm_mask_path: str | None = None,
-    prefer_gpu: bool = True,
-    require_gpu: bool = False,
-    benchmark_compare_cpu_gpu: bool = True,
-) -> dict[str, Any]:
-    """Run single-subject ReHo computation with optional GPU acceleration."""
-    t_start = time.perf_counter()
-    warnings: list[str] = []
-    errors: list[str] = []
-
-    input_path = Path(input_nii)
-    md = Path(derivatives_dir) / "rsfmri_metrics" / subject_id
-    qd = Path(derivatives_dir) / "rsfmri_qc" / subject_id
-    md.mkdir(parents=True, exist_ok=True)
-    qd.mkdir(parents=True, exist_ok=True)
-
-    result_json = md / "reho_result.json"
-    qc_json = qd / "reho_qc.json"
-    qc_md = qd / "reho_qc.md"
-
-    if not input_path.exists():
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Input NIfTI not found: {input_path}"], warnings)
-
+def _is_scoped_path(path: Path, scope_dir: Path) -> bool:
     try:
-        img = nib.load(str(input_path))
-        data = img.get_fdata(dtype="float32")
-    except Exception as exc:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Failed to read input NIfTI: {exc}"], warnings)
+        rp = path.resolve()
+        rs = scope_dir.resolve()
+        rp.relative_to(rs)
+    except ValueError:
+        return False
+    ps = str(rp).replace("\\", "/")
+    if ".." in ps:
+        return False
+    if any(seg in ("rawdata", "data") for seg in rp.parts):
+        return False
+    return True
 
-    if data.ndim != 4:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Must be 4D. Got {data.shape}"], warnings)
 
-    nx, ny, nz, nt = data.shape
-    if nt < 2:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Need >= 2 timepoints, got {nt}."], warnings)
+_ALLOWED_NEIGHBORHOODS = frozenset({7, 19, 27})
 
-    gm_mask = None
-    gm_used = None
-    if use_gm_mask:
-        if gm_mask_path:
-            try:
-                gd = nib.load(gm_mask_path).get_fdata(dtype="float32")
-                if list(gd.shape[:3]) == [nx, ny, nz]:
-                    gm_mask = gd > 0.2
-                    gm_used = gm_mask_path
-                else:
-                    warnings.append("GM shape mismatch; ignoring mask.")
-            except Exception as exc:
-                warnings.append(f"Cannot load GM mask: {exc}")
 
-    result = compute_reho_backend(
-        data_4d=data,
-        neighborhood=neighborhood,
-        gm_mask=gm_mask,
-        prefer_gpu=prefer_gpu,
+def run_gpu_reho_subject(
+    *,
+    subject_id: str,
+    input_functional: str | Path,
+    derivatives_dir: str | Path,
+    run_id: str,
+    neighborhood: int = 27,
+    mask_path: str | Path | None = None,
+    device: str = "auto",
+    functional_shape: Sequence[int] | None = None,
+    dtype_bytes: int = 4,
+    batch_size: int = 1,
+    timeout_seconds: int = 60,
+    require_gpu: bool = False,
+    torch_cuda_available: bool | None = None,
+    device_count: int | None = None,
+    active_jobs: int = 0,
+    max_concurrent_jobs: int = 1,
+    approved: bool = True,
+    dry_run: bool = False,
+) -> dict:
+
+    result: dict = {
+        "ok": True, "node_id": "gpu_reho_subject", "backend": "gpu",
+        "subject_id": subject_id, "run_id": run_id,
+        "cuda_called": False, "gpu_called": False, "tensor_allocated": False,
+        "runs_training": False, "runs_model_inference": False,
+        "writes_rawdata": False, "errors": [], "warnings": [],
+    }
+
+    if not approved:
+        result["ok"] = False
+        result["errors"].append("GPU ReHo subject requires approved=true.")
+        return result
+    if not subject_id or not isinstance(subject_id, str):
+        result["ok"] = False
+        result["errors"].append(f"Invalid subject_id: {subject_id!r}.")
+        return result
+
+    # ── Input ──
+    derivatives = Path(derivatives_dir)
+    input_path = Path(input_functional)
+    if not _is_scoped_path(input_path, derivatives):
+        result["ok"] = False
+        result["errors"].append(f"Input functional not under derivatives_dir: {input_functional}")
+        return result
+
+    # ── Mask ──
+    if mask_path:
+        mp = Path(mask_path)
+        if not _is_scoped_path(mp, derivatives):
+            result["ok"] = False
+            result["errors"].append(f"Mask not under derivatives_dir: {mask_path}")
+            return result
+
+    # ── Neighborhood ──
+    if neighborhood not in _ALLOWED_NEIGHBORHOODS:
+        result["ok"] = False
+        result["errors"].append(
+            f"Invalid neighborhood: {neighborhood}. Allowed: {sorted(_ALLOWED_NEIGHBORHOODS)}."
+        )
+        return result
+
+    # ── GPU guard ──
+    dev = validate_gpu_device(device)
+    result["gpu_guard"] = dev.to_dict()
+    if not dev.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in dev.errors)
+        return result
+
+    cuda = check_cuda_availability(
+        torch_cuda_available=torch_cuda_available,
+        device_count=device_count,
         require_gpu=require_gpu,
     )
+    result["warnings"].extend(w.message for w in cuda.warnings)
+    if not cuda.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in cuda.errors)
+        return result
 
-    if not result["ok"]:
-        errors.extend(result.get("errors", []))
-        return _fail(subject_id, result_json, qc_json, qc_md, errors, warnings)
+    if functional_shape:
+        mem = validate_gpu_memory_budget(
+            shape=functional_shape,
+            dtype_bytes=dtype_bytes,
+            batch_size=batch_size,
+            max_elements=25_000_000,
+            max_bytes=512 * 1024 * 1024,
+        )
+        if not mem.ok:
+            result["ok"] = False
+            result["errors"].extend(e.message for e in mem.errors)
+            return result
+        result["estimated_bytes"] = mem.estimated_bytes
 
-    reho_map = result["reho"]
+    tm = validate_gpu_timeout(timeout_seconds, max_timeout_seconds=120)
+    if not tm.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in tm.errors)
+        return result
 
-    # Save NIfTI
-    rf = md / "reho.nii"
-    h3 = img.header.copy()
-    try:
-        h3.set_data_shape(reho_map.shape)
-    except Exception:
-        pass
-    nib.save(nib.Nifti1Image(reho_map, affine=img.affine, header=h3), str(rf))
+    conc = validate_gpu_concurrency(active_jobs=active_jobs, max_concurrent_jobs=max_concurrent_jobs)
+    if not conc.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in conc.errors)
+        return result
 
-    # Benchmark: CPU vs GPU comparison
-    benchmark = None
-    if benchmark_compare_cpu_gpu and result["backend"] != "cpu-numpy":
-        try:
-            cpu_result = compute_reho_numpy(data, neighborhood, gm_mask)
-            if cpu_result["ok"] and cpu_result["reho"] is not None:
-                diff = np.abs(reho_map - cpu_result["reho"])
-                benchmark = {
-                    "gpu_backend": result["backend"],
-                    "gpu_runtime_s": result["runtime_seconds"],
-                    "cpu_runtime_s": cpu_result["runtime_seconds"],
-                    "speedup": round(cpu_result["runtime_seconds"] / max(result["runtime_seconds"], 0.001), 2),
-                    "max_abs_diff": float(np.max(diff)),
-                    "mean_abs_diff": float(np.mean(diff)),
-                }
-                if benchmark["max_abs_diff"] > 1e-3:
-                    warnings.append(
-                        f"GPU vs CPU max_abs_diff = {benchmark['max_abs_diff']:.2e} exceeds 1e-3. "
-                        "Results may differ due to float32 precision or rank tie handling."
-                    )
-        except Exception as exc:
-            warnings.append(f"CPU benchmark comparison failed: {exc}")
+    # ── Output scope ──
+    output_dir = derivatives / "gpu" / "gpu_reho_subject" / run_id / subject_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    provenance = {
+        "subject_id": subject_id, "run_id": run_id,
+        "neighborhood": neighborhood,
+        "device": device, "dry_run": dry_run,
+    }
+    if mask_path:
+        provenance["mask"] = str(mask_path)
+    (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
 
-    # QC metrics
-    fm = np.isfinite(reho_map)
-    ff = float(np.count_nonzero(fm) / reho_map.size) if reho_map.size else 0.0
-    nz = reho_map[reho_map != 0]
-    if nz.size > 0:
-        rmean, rstd, rmin, rmax = float(np.mean(nz)), float(np.std(nz)), float(np.min(nz)), float(np.max(nz))
+    outputs = {
+        "output_dir": str(output_dir),
+        "provenance": str(output_dir / "provenance.json"),
+    }
+    if dry_run:
+        outputs["reho_map"] = str(output_dir / "reho_map.nii.gz")
     else:
-        rmean = rstd = rmin = rmax = 0.0
+        result["stage"] = "preflight_completed"
+        result["warnings"].append("ReHo computation not executed (runner is scaffold-only).")
 
-    vc = result.get("valid_voxel_count", 0)
-    sc = result.get("skipped_voxel_count", 0)
-    status = "PASS"
-    if vc == 0:
-        status = "FAIL"
-        errors.append("No valid voxels.")
-    elif ff < 0.95:
-        status = "WARNING"
-        warnings.append("Finite fraction below 0.95.")
-    elif rmin < -1e-6 or rmax > 1.000001:
-        status = "WARNING"
-        warnings.append(f"ReHo out of [0,1]: min={rmin}, max={rmax}")
-
-    qc = {
-        "ok": status != "FAIL",
-        "node_id": "reho_qc_subject", "backend": result["backend"],
-        "subject_id": subject_id, "input_nii": str(input_path),
-        "reho_file": str(rf), "gm_map_used": gm_used,
-        "input_shape": list(data.shape), "output_shape": list(reho_map.shape),
-        "timepoints": int(nt), "neighborhood": neighborhood,
-        "valid_voxel_count": vc, "skipped_voxel_count": sc,
-        "finite_fraction": ff, "reho_mean": rmean, "reho_std": rstd,
-        "reho_min": rmin, "reho_max": rmax,
-        "gpu_backend": result["backend"], "runtime_seconds": result["runtime_seconds"],
-        "benchmark": benchmark, "reho_qc_status": status,
-        "outputs": [str(qc_json), str(qc_md)], "warnings": warnings, "errors": errors,
-    }
-
-    output = {
-        "ok": status != "FAIL",
-        "node_id": "reho_subject", "backend": result["backend"],
-        "subject_id": subject_id, "input_nii": str(input_path),
-        "reho_file": str(rf), "qc": qc,
-        "outputs": [str(rf), str(result_json), str(qc_json), str(qc_md)],
-        "gpu_backend": result["backend"],
-        "runtime_seconds": result["runtime_seconds"],
-        "benchmark": benchmark,
-        "warnings": warnings, "errors": errors,
-    }
-
-    result_json.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
-    qc_json.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qc_md, qc)
-    return output
-
-
-def _fail(subject_id: str, rj: Path, qj: Path, qm: Path,
-          errors: list[str], warnings: list[str] | None = None) -> dict[str, Any]:
-    w = warnings or []
-    qc = {"ok": False, "node_id": "reho_qc_subject", "backend": "unknown",
-          "subject_id": subject_id, "reho_qc_status": "FAIL",
-          "outputs": [str(qj), str(qm)], "warnings": w, "errors": errors}
-    result = {"ok": False, "node_id": "reho_subject", "backend": "unknown",
-              "subject_id": subject_id, "outputs": [str(rj), str(qj), str(qm)],
-              "warnings": w, "errors": errors}
-    rj.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qj.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qm, qc)
+    result["outputs"] = outputs
     return result
 
 
-def _write_qc_md(path: Path, qc: dict[str, Any]) -> None:
-    lines = [
-        f"# ReHo QC: {qc.get('subject_id')}", "",
-        f"- OK: {qc.get('ok')}",
-        f"- Status: {qc.get('reho_qc_status')}",
-        f"- Input: `{qc.get('input_nii')}`",
-        f"- ReHo: `{qc.get('reho_file')}`",
-        f"- Neighborhood: {qc.get('neighborhood')}",
-        f"- Timepoints: {qc.get('timepoints')}",
-        f"- Valid voxels: {qc.get('valid_voxel_count')}",
-        f"- Skipped: {qc.get('skipped_voxel_count')}",
-        f"- Finite fraction: {qc.get('finite_fraction')}",
-        f"- ReHo mean/std: {qc.get('reho_mean')}/{qc.get('reho_std')}",
-        f"- Backend: {qc.get('gpu_backend', 'unknown')}",
-        f"- Runtime: {qc.get('runtime_seconds', 'N/A')}s",
-        "", "## Safety Note", "",
-        "ReHo reads derivative files only and does not modify rawdata.",
-    ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+# Backward-compatibility alias for existing nodes/gpu_reho_node.py
+run_reho_subject = run_gpu_reho_subject
