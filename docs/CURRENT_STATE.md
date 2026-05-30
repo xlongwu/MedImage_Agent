@@ -99,7 +99,7 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | `spm_coregister_subject` | sandbox declaration | ✅ |
 | `spm_segment_subject` | sandbox declaration | ✅ |
 | `spm_normalize_subject` | sandbox declaration | ✅ |
-| `spm_smooth_subject` | — | ❌ |
+| `spm_smooth_subject` | sandbox declaration | ✅ |
 | DPABI execution | — | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |

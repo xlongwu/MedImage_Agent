@@ -229,6 +229,14 @@ def _satisfies_normalize_sandbox(node):
     return True
 
 
+def _satisfies_smooth_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("normalized_source") != "normalize_outputs": return False
+    if params.get("fwhm_policy") != "bounded_3d": return False
+    return True
+
+
 def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     """Classify every node in a reviewed plan by execution policy.
 
@@ -245,6 +253,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_spm_coregister_sandbox_nodes": [],         # M6-T007d
         "allowed_spm_segment_sandbox_nodes": [],            # M6-T008d
         "allowed_spm_normalize_sandbox_nodes": [],         # M6-T009d
+        "allowed_spm_smooth_sandbox_nodes": [],            # M6-T010d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -291,6 +300,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
         if nid == "spm_normalize_subject" and _satisfies_normalize_sandbox(node):
             result["allowed_spm_normalize_sandbox_nodes"].append(nid)
+            continue
+        if nid == "spm_smooth_subject" and _satisfies_smooth_sandbox(node):
+            result["allowed_spm_smooth_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":
             result["blocked_spm_nodes"].append(nid)

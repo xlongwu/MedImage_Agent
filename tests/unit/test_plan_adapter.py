@@ -512,3 +512,33 @@ def test_smooth_still_blocked():
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_smooth_subject" in policy["blocked_spm_nodes"]
+
+
+# ── M6-T010d: smooth sandbox allowlist ──
+
+def test_smooth_sandbox_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_smooth_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "normalized_source": "normalize_outputs",
+                    "fwhm_policy": "bounded_3d"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_smooth_subject" in policy["allowed_spm_smooth_sandbox_nodes"]
+
+
+def test_smooth_no_sandbox_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_smooth_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_smooth_subject" in policy["blocked_spm_nodes"]
+
+
+def test_smooth_bad_normalized_source_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_smooth_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "normalized_source": "custom",
+                    "fwhm_policy": "bounded_3d"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_smooth_subject" in policy["blocked_spm_nodes"]
