@@ -114,10 +114,14 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | M7-DPABI-T004b：register and harden DPABI sandbox smoke runner | ✅ |
 | M7-DPABI-T004c：DPABI sandbox smoke contract tests | ✅ |
 | M7-DPABI-T004d：allow sandbox-only DPABI smoke reviewed execution | ✅ |
-| **M7 DPABI sandbox smoke closeout** | ✅ |
+| M7-DPABI-T005a：single-function safety contract | ✅ |
+| M7-DPABI-T005b：single-function runtime hardening | ✅ |
+| M7-DPABI-T005c：single-function contract tests | ✅ |
+| M7-DPABI-T005d：single-function sandbox-only allowlist | ✅ |
+| **M7 DPABI single-function sandbox closeout** | ✅ |
 
-> 15 DPABI metadata nodes + dpabi_sandbox_smoke_run (sandbox-only) allowlisted.
-> dpabi_single_function_sandbox, subject_smooth, wrapper_validation still blocked.
+> 15 metadata + dpabi_sandbox_smoke_run + dpabi_single_function_sandbox (sandbox + allowlisted function) allowlisted.
+> subject_smooth, wrapper_validation blocked. Arbitrary DPABI functions blocked.
 | DPABI execution | — | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |

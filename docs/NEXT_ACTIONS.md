@@ -1,11 +1,11 @@
 # 下一步行动 (NEXT_ACTIONS)
 
-> M7 DPABI Sandbox Smoke — COMPLETE
+> M7 DPABI Single-Function Sandbox — COMPLETE
 
-## M7: 15 metadata nodes + dpabi_sandbox_smoke run (sandbox) allowlisted
+## M7: 15 metadata + sandbox_smoke + single_function (sandbox) allowlisted
 
 ## Blocked
 
-dpabi_single_function_sandbox | dpabi_subject_smooth | wrapper_validation | GPU | GUI
+subject_smooth | wrapper_report | wrapper_validation | GPU | GUI
 
-## Next: M7-DPABI-T005a dpabi_single_function_sandbox safety contract
+## Next: M7-DPABI-T006a dpabi_subject_smooth safety contract
