@@ -571,6 +571,46 @@ def test_dpabi_smoke_no_sandbox_blocked():
     assert "dpabi_sandbox_smoke_run" in policy["blocked_dpabi_execution_nodes"]
 
 
+# ── M7-T005d: DPABI single-function sandbox allowlist ──
+
+def test_single_func_sandbox_allowed():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_single_function_sandbox", "depends_on": [],
+         "params": {"sandbox_mode": True, "single_function_only": True,
+                    "function_policy": "allowlisted_contract_only", "function_name": "y_Smooth"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_single_function_sandbox" in policy["allowed_dpabi_single_function_sandbox_nodes"]
+
+
+def test_single_func_no_sandbox_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_single_function_sandbox", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_single_function_sandbox" in policy["blocked_dpabi_execution_nodes"]
+
+
+def test_single_func_forbidden_function_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_single_function_sandbox", "depends_on": [],
+         "params": {"sandbox_mode": True, "single_function_only": True,
+                    "function_policy": "allowlisted_contract_only", "function_name": "DPARSF_run"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_single_function_sandbox" in policy["blocked_dpabi_execution_nodes"]
+
+
+def test_single_func_arbitrary_function_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_single_function_sandbox", "depends_on": [],
+         "params": {"sandbox_mode": True, "single_function_only": True,
+                    "function_policy": "allowlisted_contract_only", "function_name": "evil_eval"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_single_function_sandbox" in policy["blocked_dpabi_execution_nodes"]
+
+
 def test_smooth_bad_normalized_source_blocked():
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_smooth_subject", "depends_on": [],

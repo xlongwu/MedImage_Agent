@@ -239,6 +239,18 @@ _DPABI_METADATA_NODES = frozenset([
 ])
 
 
+def _satisfies_single_function_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("single_function_only") is not True: return False
+    if params.get("function_policy") != "allowlisted_contract_only": return False
+    fn = params.get("function_name", "")
+    if not isinstance(fn, str) or ";" in fn or "|" in fn or "&" in fn or "`" in fn: return False
+    from src.backend.app.tools.dpabi_safety import ALLOWED_FUNCTIONS
+    if fn not in ALLOWED_FUNCTIONS: return False
+    return True
+
+
 def _satisfies_dpabi_smoke_sandbox(node):
     params = node.get("params", {}) or {}
     if params.get("sandbox_mode") is not True: return False
@@ -274,6 +286,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_spm_smooth_sandbox_nodes": [],            # M6-T010d
         "allowed_dpabi_metadata_nodes": [],               # M7-DPABI-T002b
         "allowed_dpabi_sandbox_smoke_nodes": [],           # M7-DPABI-T004d
+        "allowed_dpabi_single_function_sandbox_nodes": [], # M7-DPABI-T005d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -334,6 +347,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
         if nid == "dpabi_sandbox_smoke_run" and _satisfies_dpabi_smoke_sandbox(node):
             result["allowed_dpabi_sandbox_smoke_nodes"].append(nid)
+            continue
+        if nid == "dpabi_single_function_sandbox" and _satisfies_single_function_sandbox(node):
+            result["allowed_dpabi_single_function_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("dpabi_") and not (
             "contract" in nid or "capability" in nid or "preflight" in nid
