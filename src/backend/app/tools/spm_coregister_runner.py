@@ -119,6 +119,31 @@ def run_spm_coregister_subject(
         )
         return data
 
+    # ── M6-T007b: MATLAB/SPM safety preflight ──
+    from src.backend.app.safety.matlab_safety import validate_spm_runtime_config
+
+    safety_result = validate_spm_runtime_config(
+        matlab_command=matlab_command,
+        spm_dir=spm_dir,
+    )
+    if not safety_result.ok:
+        return {
+            "ok": False,
+            "node_id": "spm_coregister_subject",
+            "backend": "matlab-spm",
+            "subject_id": subject_id,
+            "outputs": [],
+            "warnings": [],
+            "errors": [
+                f"MATLAB/SPM safety preflight failed: {e.message}"
+                for e in safety_result.errors
+            ],
+            "safety": safety_result.to_dict(),
+            "matlab_called": False,
+            "spm_called": False,
+            "stage": "matlab_safety_preflight",
+        }
+
     input_t1w = _find_subject_t1w(subject_record)
     if not input_t1w:
         return {

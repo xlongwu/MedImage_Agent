@@ -82,6 +82,8 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | M6-T006c：spm slice timing sandbox contract tests | ✅ | 2026-05-29 |
 | M6-T006d：spm_slice_timing sandbox-only reviewed execution | ✅ | 2026-05-29 |
 | M6-T006d-fix：tighten slice timing sandbox input validation | ✅ | 2026-05-29 |
+| M6-T007a：spm coregister safety contract | ✅ | 2026-05-29 |
+| M6-T007b：spm coregister runner hardening | ✅ | 2026-05-29 |
 | **M6 partial closeout** | ✅ | 2026-05-29 |
 
 ### M6 Reviewed Execution Allowlist
@@ -141,7 +143,7 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 
 | 指标 | 当前值 |
 |------|--------|
-| pytest 全量（本地） | **712 passed, 4 skipped** |
+| pytest 全量（本地） | **720 passed, 4 skipped** |
 | pytest CI（Linux） | ✅ 全绿 |
 | CI frontend build | ✅ 通过 |
 | frontend build（本地） | ✅ 已验证 |

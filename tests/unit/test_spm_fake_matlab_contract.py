@@ -155,7 +155,7 @@ def _coreg_runner(tmp_path: Path) -> dict[str, Any]:
     _write_nifti(mean_func, shape=(4, 4, 4))
     t1w = _make_raw_t1w(tmp_path)
     return run_spm_coregister_subject(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         spm_dir=str(tmp_path / "spm12"),
         subject_id="sub-001",
         subject_record={"sessions": [{"anat": {"t1w": str(t1w)}}]},
