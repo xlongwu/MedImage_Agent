@@ -112,10 +112,12 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | M7-DPABI-T003-fix：complete DPABI metadata smoke coverage | ✅ |
 | M7-DPABI-T004a：dpabi sandbox smoke safety contract | ✅ |
 | M7-DPABI-T004b：register and harden DPABI sandbox smoke runner | ✅ |
-| **M7 DPABI metadata closeout** | ✅ |
+| M7-DPABI-T004c：DPABI sandbox smoke contract tests | ✅ |
+| M7-DPABI-T004d：allow sandbox-only DPABI smoke reviewed execution | ✅ |
+| **M7 DPABI sandbox smoke closeout** | ✅ |
 
-> 15 DPABI metadata nodes allowlisted (Python-only, no MATLAB/DPABI).
-> 5 DPABI execution nodes still blocked. dpabi_template_execute is metadata-only.
+> 15 DPABI metadata nodes + dpabi_sandbox_smoke_run (sandbox-only) allowlisted.
+> dpabi_single_function_sandbox, subject_smooth, wrapper_validation still blocked.
 | DPABI execution | — | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |
