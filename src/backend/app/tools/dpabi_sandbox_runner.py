@@ -61,10 +61,18 @@ def run_dpabi_sandbox_smoke(
     from src.backend.app.safety.matlab_safety import validate_matlab_runtime_config
     sr = validate_matlab_runtime_config(matlab_command=matlab_command, spm_dir='./third_party/spm12', dpabi_dir=dpabi_dir)
     if not sr.ok:
-        return {'ok': False, 'node_id': 'dpabi_sandbox_smoke_run', 'backend': 'matlab-dpabi',
+        errors = [f'DPABI runtime safety preflight failed: {e.message}' for e in sr.errors]
+        data = {'ok': False, 'node_id': 'dpabi_sandbox_smoke_run', 'backend': 'matlab-dpabi',
                 'outputs': [], 'warnings': [],
-                'errors': [f'DPABI runtime safety preflight failed: {e.message}' for e in sr.errors],
-                'safety': sr.to_dict(), 'matlab_called': False, 'dpabi_called': False, 'stage': 'dpabi_runtime_preflight'}
+                'errors': errors,
+                'safety': sr.to_dict(), 'matlab_called': False, 'dpabi_called': False,
+                'stage': 'dpabi_runtime_preflight'}
+        data['external_tool_result'] = external_tool_failure(
+            tool_name='dpabi.sandbox_smoke', backend='matlab-dpabi',
+            errors=errors, inputs=[], approval={'approved': approved, 'required': True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     dpabi_work = Path(work_dir) / "dpabi"
     sandbox_dir = dpabi_work / "sandbox"

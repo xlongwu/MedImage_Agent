@@ -146,7 +146,7 @@ def test_dpabi_smoke_fake_matlab_success_has_external_tool_result(tmp_path: Path
     dpabi_dir.mkdir()
     result = run_dpabi_smoke_test(
         dpabi_dir=str(dpabi_dir),
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         work_dir=str(tmp_path / "work"),
         log_dir=str(tmp_path / "logs"),
         approved=True,
@@ -218,7 +218,7 @@ def test_dpabi_sandbox_fake_matlab_success_has_external_tool_result(tmp_path: Pa
     _fake_dpabi_sandbox_subprocess(monkeypatch, returncode=0, write_result=True)
 
     result = run_dpabi_sandbox_smoke(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         dpabi_dir=str(tmp_path / "DPABI"),
         work_dir=str(tmp_path / "work"),
         log_dir=str(tmp_path / "logs"),
@@ -235,7 +235,7 @@ def test_dpabi_sandbox_missing_result_json_fails_with_logs(tmp_path: Path, monke
     _fake_dpabi_sandbox_subprocess(monkeypatch, returncode=0, write_result=False)
 
     result = run_dpabi_sandbox_smoke(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         dpabi_dir=str(tmp_path / "DPABI"),
         work_dir=str(tmp_path / "work"),
         log_dir=str(tmp_path / "logs"),
@@ -252,7 +252,7 @@ def test_dpabi_sandbox_nonzero_returncode_is_diagnosed(tmp_path: Path, monkeypat
     _fake_dpabi_sandbox_subprocess(monkeypatch, returncode=5, write_result=True)
 
     result = run_dpabi_sandbox_smoke(
-        matlab_command="fake-matlab",
+        matlab_command="matlab",
         dpabi_dir=str(tmp_path / "DPABI"),
         work_dir=str(tmp_path / "work"),
         log_dir=str(tmp_path / "logs"),
