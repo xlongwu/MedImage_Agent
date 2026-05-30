@@ -372,3 +372,53 @@ def test_spm_coregister_still_blocked():
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_coregister_subject" in policy["blocked_spm_nodes"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T007d: sandbox-only spm_coregister_subject allowlist
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_coregister_sandbox_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_coregister_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "subject_source": "synthetic_bids",
+                    "reference_source": "derivatives_mean_functional"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_coregister_subject" in policy["allowed_spm_coregister_sandbox_nodes"]
+
+
+def test_coregister_no_sandbox_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_coregister_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_coregister_subject" in policy["blocked_spm_nodes"]
+
+
+def test_coregister_bad_subject_source_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_coregister_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "subject_source": "real_rawdata",
+                    "reference_source": "derivatives_mean_functional"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_coregister_subject" in policy["blocked_spm_nodes"]
+
+
+def test_coregister_bad_reference_source_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_coregister_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "subject_source": "synthetic_bids",
+                    "reference_source": "arbitrary_path"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_coregister_subject" in policy["blocked_spm_nodes"]
+
+
+def test_segment_still_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_segment_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_segment_subject" in policy["blocked_spm_nodes"]

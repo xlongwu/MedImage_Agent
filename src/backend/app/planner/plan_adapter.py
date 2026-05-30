@@ -178,6 +178,22 @@ def _is_safe_sandbox_input(input_bold: str, *, allow_derivative: bool = False) -
     return is_synthetic or is_safe_derivative
 
 
+def _satisfies_coregister_sandbox(node: dict[str, Any]) -> bool:
+    """Check sandbox declaration for spm_coregister_subject.
+
+    Policy layer validates sandbox declaration only.
+    Runner layer validates concrete T1w/mean-functional paths at runtime.
+    """
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True:
+        return False
+    if params.get("subject_source") != "synthetic_bids":
+        return False
+    if params.get("reference_source") != "derivatives_mean_functional":
+        return False
+    return True
+
+
 def _satisfies_slice_timing_sandbox(node: dict[str, Any]) -> bool:
     """Check if a spm_slice_timing_subject node satisfies the sandbox contract.
 
@@ -207,6 +223,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_spm_smoke_nodes": [],                    # M6-T004b
         "allowed_spm_realign_sandbox_nodes": [],           # M6-T005d
         "allowed_spm_slice_timing_sandbox_nodes": [],       # M6-T006d
+        "allowed_spm_coregister_sandbox_nodes": [],         # M6-T007d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -244,6 +261,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
         if nid == "spm_slice_timing_subject" and _satisfies_slice_timing_sandbox(node):
             result["allowed_spm_slice_timing_sandbox_nodes"].append(nid)
+            continue
+        if nid == "spm_coregister_subject" and _satisfies_coregister_sandbox(node):
+            result["allowed_spm_coregister_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":
             result["blocked_spm_nodes"].append(nid)
