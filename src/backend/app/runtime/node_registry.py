@@ -1205,8 +1205,22 @@ NODE_REGISTRY["dpabi_run_plan"] = run_dpabi_run_plan_node
 NODE_REGISTRY["dpabi_signature_probe"] = run_dpabi_signature_probe_node
 NODE_REGISTRY["dpabi_wrapper_contracts"] = run_dpabi_wrapper_contracts_node
 NODE_REGISTRY["dpabi_wrapper_scaffold"] = run_dpabi_wrapper_scaffold_node
-# NOTE: dpabi_sandbox_smoke_run and dpabi_single_function_sandbox are NOT
-# registered — they call MATLAB and must remain blocked.
+
+# ── M7-DPABI-T004b: register dpabi_sandbox_smoke_run (NOTE: remains blocked by allowlist) ──
+def run_dpabi_sandbox_smoke_run_node(context, node):
+    from src.backend.app.tools.dpabi_sandbox_runner import run_dpabi_sandbox_smoke
+    result = run_dpabi_sandbox_smoke(
+        matlab_command=context.matlab_command,
+        dpabi_dir=context.dpabi_dir,
+        work_dir=context.work_dir,
+        log_dir=context.log_dir,
+        approved=True,
+    )
+    result["node_id"] = node.id
+    return result
+NODE_REGISTRY["dpabi_sandbox_smoke_run"] = run_dpabi_sandbox_smoke_run_node
+# NOTE: dpabi_single_function_sandbox is NOT registered — must remain blocked.
+# NOTE: dpabi_sandbox_smoke_run has a registered runner but IS blocked by reviewed execution allowlist.
 
 
 def get_node_runner(node_id: str) -> NodeRunner:

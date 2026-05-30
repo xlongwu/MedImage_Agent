@@ -108,6 +108,10 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | M7-DPABI-T001：DPABI safety review | ✅ |
 | M7-DPABI-T002a：register safe DPABI metadata runners | ✅ |
 | M7-DPABI-T002b：allowlist safe DPABI metadata contract nodes | ✅ |
+| M7-DPABI-T003：DPABI metadata smoke guide | ✅ |
+| M7-DPABI-T003-fix：complete DPABI metadata smoke coverage | ✅ |
+| M7-DPABI-T004a：dpabi sandbox smoke safety contract | ✅ |
+| M7-DPABI-T004b：register and harden DPABI sandbox smoke runner | ✅ |
 | **M7 DPABI metadata closeout** | ✅ |
 
 > 15 DPABI metadata nodes allowlisted (Python-only, no MATLAB/DPABI).
