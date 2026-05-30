@@ -117,7 +117,13 @@ def run_spm_slice_timing_subject(
         }
 
     normalized_input = str(input_bold).replace("\\", "/")
-    if "examples/synthetic_bids/rawdata" not in normalized_input:
+    is_synthetic = "examples/synthetic_bids/rawdata" in normalized_input
+    is_safe_derivative = (
+        allow_derivative_input
+        and "derivatives" in normalized_input
+        and "rsfmri_preproc" in normalized_input
+    )
+    if not is_synthetic and not is_safe_derivative:
         return {
             "ok": False,
             "node_id": "spm_slice_timing_subject",
@@ -126,8 +132,9 @@ def run_spm_slice_timing_subject(
             "outputs": [],
             "warnings": [],
             "errors": [
-                "Refusing to run SPM slice timing on non-synthetic input.",
+                "Refusing to run SPM slice timing on unsafe input.",
                 f"Input was: {input_bold}",
+                "Only synthetic BIDS rawdata or allowed derivatives are accepted.",
             ],
         }
 
