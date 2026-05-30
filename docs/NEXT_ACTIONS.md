@@ -1,26 +1,17 @@
 # 下一步行动 (NEXT_ACTIONS)
 
-> M6 Partial Closeout — SPM sandbox reviewed execution
+> M6 Early Sandbox Closeout — 741 passed, 4 skipped
 
-## M5 ✅ | M6 Phase 1-3 ✅ | 712 passed, 4 skipped
+## M6 SPM Early Sandbox: 4 nodes allowed, 3 blocked
 
-## M6 Reviewed Execution Allowlist
+| Allowed | Blocked |
+|---------|---------|
+| spm_smoke_test | spm_segment_subject |
+| spm_realign (sandbox) | spm_normalize_subject |
+| spm_slice_timing (sandbox) | spm_smooth_subject |
+| spm_coregister (sandbox) | DPABI/GPU/GUI |
 
-| 节点 | 条件 | 状态 |
-|------|------|:---:|
-| Python-only | — | ✅ |
-| `spm_smoke_test` | — | ✅ |
-| `spm_realign_subject` | sandbox_mode=true | ✅ |
-| `spm_slice_timing_subject` | sandbox_mode=true | ✅ |
-| coregister/segment/normalize/smooth | — | ❌ |
-| DPABI/GPU/GUI | — | ❌ |
+## Recommended next: M6-T008a — spm_segment_subject safety contract
 
-## 推荐 next: M6-T007a — spm_coregister_subject safety contract
-
-保持 M6-T005/006 的 4-phase 节奏：
-1. Safety contract (docs)
-2. Runner hardening (preflight)
-3. Sandbox contract tests
-4. Sandbox-only allowlist
-
-不要跳过 contract/runner-hardening/sandbox-tests。
+4-phase rhythm: contract → hardening → tests → allowlist.
+Do NOT skip to normalize/smooth or DPABI.

@@ -84,23 +84,27 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | M6-T006d-fix：tighten slice timing sandbox input validation | ✅ | 2026-05-29 |
 | M6-T007a：spm coregister safety contract | ✅ | 2026-05-29 |
 | M6-T007b：spm coregister runner hardening | ✅ | 2026-05-29 |
-| **M6 partial closeout** | ✅ | 2026-05-29 |
+| M6-T007c：spm coregister sandbox contract tests | ✅ | 2026-05-29 |
+| M6-T007d：spm_coregister sandbox-only reviewed execution | ✅ | 2026-05-29 |
+| **M6 early sandbox closeout** | ✅ | 2026-05-29 |
 
-### M6 Reviewed Execution Allowlist
+### M6 Reviewed Execution Allowlist (Early Sandbox Phase)
 
 | 节点 | 条件 | 状态 |
 |------|------|:---:|
 | Python-only safe nodes | — | ✅ |
 | `spm_smoke_test` | — | ✅ |
 | `spm_realign_subject` | sandbox_mode=true | ✅ |
-| `spm_slice_timing_subject` | sandbox_mode=true | ✅ |
-| `spm_coregister_subject` | — | ❌ |
+| `spm_slice_timing_subject` | sandbox_mode=true + safe input | ✅ |
+| `spm_coregister_subject` | sandbox declaration | ✅ |
 | `spm_segment_subject` | — | ❌ |
 | `spm_normalize_subject` | — | ❌ |
 | `spm_smooth_subject` | — | ❌ |
 | DPABI execution | — | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |
+
+> Full SPM preprocessing pipeline NOT open. Segment/normalize/smooth require independent contracts.
 
 ## M1 交付物状态
 

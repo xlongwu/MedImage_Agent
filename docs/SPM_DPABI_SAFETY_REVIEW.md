@@ -361,6 +361,6 @@ SPM/DPABI execution safety review.
 - **未注册 runner (catalog only)**: 2 DPABI (sandbox_smoke_run, single_function_sandbox)
 - **MATLAB 调用**: 使用 `subprocess.run` list form (安全), `_matlab_quote()` 转义
 
-> **M6 partial closeout**: SPM smoke + realign sandbox + slice timing sandbox 已开放 (sandbox-only, 712 tests). Coregister/segment/normalize/smooth/DPABI/GPU/GUI 仍阻断。\n> **审计日期**: 2026-05-29
+> **M6 early sandbox closeout**: smoke + realign + slice timing + coregister 已开放 (sandbox-only, 741 tests). Segment/normalize/smooth/DPABI/GPU/GUI 仍阻断。\n> **审计日期**: 2026-05-29
 > **审计者**: M6-T001 safety review
 > **代码未修改** — 仅审计文档
