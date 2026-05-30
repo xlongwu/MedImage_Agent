@@ -1,195 +1,171 @@
+"""GPU nuisance regression subject runner scaffold (M8-GPU-T011b).
+
+Pure Python preflight — no torch import, no CUDA, no GPU allocation.
+"""
+
 from __future__ import annotations
 
-import csv
 import json
-import time
 from pathlib import Path
-from typing import Any
+from typing import Sequence
 
-import nibabel as nib
-import numpy as np
-
-from src.backend.app.tools.nuisance_regression_compute import (
-    compute_nuisance_regression_backend,
-    compute_nuisance_regression_numpy,
+from src.backend.app.safety.gpu_safety import (
+    validate_gpu_device, check_cuda_availability,
+    validate_gpu_memory_budget, validate_gpu_timeout,
+    validate_gpu_concurrency,
 )
 
 
-def _read_confounds(path: Path) -> tuple[list[str], list[list[float]]]:
-    with path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.reader(f, delimiter="\t")
-        rows = list(reader)
-    if not rows:
-        raise ValueError("Confounds TSV is empty.")
-    header = rows[0]
-    matrix = [[float(v) for v in row] for row in rows[1:] if row]
-    return header, matrix
-
-
-def run_nuisance_regression_subject(
-    subject_id: str,
-    input_nii: str,
-    confounds_tsv: str,
-    derivatives_dir: str,
-    prefer_gpu: bool = True,
-    require_gpu: bool = False,
-    benchmark_compare_cpu_gpu: bool = True,
-) -> dict[str, Any]:
-    """Run single-subject nuisance regression with optional GPU acceleration."""
-    t_start = time.perf_counter()
-    warnings: list[str] = []
-    errors: list[str] = []
-
-    input_path = Path(input_nii)
-    confounds_path = Path(confounds_tsv)
-    func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
-    qc_dir = Path(derivatives_dir) / "rsfmri_qc" / subject_id
-    func_dir.mkdir(parents=True, exist_ok=True)
-    qc_dir.mkdir(parents=True, exist_ok=True)
-
-    result_json = func_dir / "nuisance_regression_result.json"
-    qc_json = qc_dir / "nuisance_regression_qc.json"
-    qc_md = qc_dir / "nuisance_regression_qc.md"
-
-    if not input_path.exists():
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Input NIfTI not found: {input_path}"], warnings)
-    if not confounds_path.exists():
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Confounds TSV not found: {confounds_path}"], warnings)
-
+def _is_scoped_path(path: Path, scope_dir: Path) -> bool:
     try:
-        columns, confounds = _read_confounds(confounds_path)
-        X = np.asarray(confounds, dtype=np.float64)
-        img = nib.load(str(input_path))
-        data = img.get_fdata(dtype="float32")
-    except Exception as exc:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Failed to read input: {exc}"], warnings)
+        rp = path.resolve(); rs = scope_dir.resolve()
+        rp.relative_to(rs)
+    except ValueError:
+        return False
+    ps = str(rp).replace("\\", "/")
+    if ".." in ps: return False
+    if any(seg in ("rawdata", "data") for seg in rp.parts): return False
+    return True
 
-    if data.ndim != 4:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Input NIfTI must be 4D. Shape was: {data.shape}"], warnings)
 
-    x, y, z, t_shape = data.shape
-    if X.shape[0] != t_shape:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Confound rows {X.shape[0]} do not match timepoints {t_shape}."], warnings)
+_ALLOWED_MODES = frozenset({"ols"})
+_MIN_CONF, _MAX_CONF = 1, 64
 
-    result = compute_nuisance_regression_backend(
-        data_4d=data,
-        X=X,
-        prefer_gpu=prefer_gpu,
-        require_gpu=require_gpu,
-    )
 
-    if not result["ok"]:
-        errors.extend(result.get("errors", []))
-        return _fail(subject_id, result_json, qc_json, qc_md, errors, warnings)
+def run_gpu_nuisance_regression_subject(
+    *, subject_id: str, input_functional: str | Path,
+    confounds_path: str | Path, derivatives_dir: str | Path, run_id: str,
+    confound_columns: list[str] | None = None,
+    regression_mode: str = "ols", include_intercept: bool = True,
+    standardize_confounds: bool = True, allow_global_signal: bool = False,
+    allow_scrubbing: bool = False, device: str = "auto",
+    functional_shape: Sequence[int] | None = None, timepoints: int | None = None,
+    n_confounds: int | None = None, dtype_bytes: int = 4, batch_size: int = 1,
+    timeout_seconds: int = 60, require_gpu: bool = False,
+    torch_cuda_available: bool | None = None, device_count: int | None = None,
+    active_jobs: int = 0, max_concurrent_jobs: int = 1,
+    approved: bool = True, dry_run: bool = False,
+) -> dict:
 
-    residual_4d = result["residual_4d"]
-    output_path = input_path.with_name(f"resid_{input_path.name}")
-    out_img = nib.Nifti1Image(residual_4d, affine=img.affine, header=img.header)
-    nib.save(out_img, str(output_path))
-
-    # Benchmark comparison
-    benchmark = None
-    if benchmark_compare_cpu_gpu and result["backend"] != "cpu-numpy":
-        try:
-            cpu_result = compute_nuisance_regression_numpy(data, X)
-            if cpu_result["ok"] and cpu_result["residual_4d"] is not None:
-                diff = np.abs(residual_4d - cpu_result["residual_4d"])
-                benchmark = {
-                    "gpu_backend": result["backend"],
-                    "gpu_runtime_s": result["runtime_seconds"],
-                    "cpu_runtime_s": cpu_result["runtime_seconds"],
-                    "speedup": round(cpu_result["runtime_seconds"] / max(result["runtime_seconds"], 0.001), 2),
-                    "max_abs_diff": float(np.max(diff)),
-                    "mean_abs_diff": float(np.mean(diff)),
-                }
-                if benchmark["max_abs_diff"] > 1e-4:
-                    warnings.append(
-                        f"GPU vs CPU max_abs_diff = {benchmark['max_abs_diff']:.2e} exceeds 1e-4."
-                    )
-        except Exception as exc:
-            warnings.append(f"CPU benchmark comparison failed: {exc}")
-
-    input_std = result.get("input_std", float(np.std(data)))
-    residual_std_val = result.get("residual_std", float(np.std(residual_4d)))
-    finite_fraction = result.get("finite_fraction", 1.0)
-
-    status = "PASS"
-    if finite_fraction < 0.95:
-        status = "WARNING"
-        warnings.append(f"Residual finite fraction {finite_fraction:.4f} below 0.95.")
-    if result.get("variance_ratio") is not None and result["variance_ratio"] > 1.2:
-        status = "WARNING"
-        warnings.append(f"Residual std larger than input std. Ratio={result['variance_ratio']:.4f}.")
-
-    qc = {
-        "ok": True, "node_id": "nuisance_regression_qc_subject",
-        "backend": result["backend"], "subject_id": subject_id,
-        "input_nii": str(input_path), "output_nii": str(output_path),
-        "confounds_tsv": str(confounds_path),
-        "input_shape": list(data.shape), "output_shape": list(residual_4d.shape),
-        "confound_rows": int(X.shape[0]), "confound_columns": int(X.shape[1]),
-        "confound_rank": result.get("confound_rank"),
-        "finite_fraction": finite_fraction,
-        "input_intensity_std": input_std, "residual_mean": float(np.mean(residual_4d)),
-        "residual_std": residual_std_val, "variance_ratio": result.get("variance_ratio"),
-        "gpu_backend": result["backend"], "runtime_seconds": result["runtime_seconds"],
-        "benchmark": benchmark, "regression_qc_status": status,
-        "outputs": [str(qc_json), str(qc_md)], "warnings": warnings, "errors": errors,
+    result: dict = {
+        "ok": True, "node_id": "gpu_nuisance_regression_subject", "backend": "gpu",
+        "subject_id": subject_id, "run_id": run_id,
+        "cuda_called": False, "gpu_called": False, "tensor_allocated": False,
+        "runs_training": False, "runs_model_inference": False,
+        "runs_temporal_filtering": False, "runs_functional_connectivity": False,
+        "runs_alff": False, "runs_reho": False,
+        "allow_global_signal": allow_global_signal,
+        "allow_scrubbing": allow_scrubbing,
+        "writes_rawdata": False, "errors": [], "warnings": [],
     }
 
-    output = {
-        "ok": True, "node_id": "nuisance_regression_subject",
-        "backend": result["backend"], "subject_id": subject_id,
-        "input_nii": str(input_path), "output_nii": str(output_path),
-        "confounds_tsv": str(confounds_path), "columns": columns, "qc": qc,
-        "outputs": [str(output_path), str(result_json), str(qc_json), str(qc_md)],
-        "gpu_backend": result["backend"], "runtime_seconds": result["runtime_seconds"],
-        "benchmark": benchmark,
-        "warnings": warnings, "errors": errors,
+    if not approved:
+        result["ok"] = False; result["errors"].append("GPU nuisance regression requires approved=true.")
+        return result
+    if not subject_id or not isinstance(subject_id, str):
+        result["ok"] = False; result["errors"].append(f"Invalid subject_id: {subject_id!r}.")
+        return result
+
+    derivatives = Path(derivatives_dir)
+
+    # Input
+    for label, p in [("functional", input_functional), ("confounds", confounds_path)]:
+        if not _is_scoped_path(Path(p), derivatives):
+            result["ok"] = False; result["errors"].append(f"Input {label} not under derivatives_dir: {p}")
+            return result
+
+    # Confound columns
+    if confound_columns is not None:
+        if not isinstance(confound_columns, list) or not confound_columns:
+            result["ok"] = False; result["errors"].append("confound_columns must be non-empty list.")
+            return result
+        if any(not isinstance(c, str) for c in confound_columns):
+            result["ok"] = False; result["errors"].append("confound_columns must contain strings.")
+            return result
+        if len(set(confound_columns)) != len(confound_columns):
+            result["ok"] = False; result["errors"].append("confound_columns must have unique names.")
+            return result
+        nc = len(confound_columns)
+    elif n_confounds is not None:
+        nc = n_confounds
+    else:
+        nc = 0
+
+    if not isinstance(nc, int) or nc > _MAX_CONF:
+        result["ok"] = False; result["errors"].append(f"n_confounds {nc} must be <= {_MAX_CONF}.")
+        return result
+
+    # Design matrix
+    if timepoints is not None:
+        if not isinstance(timepoints, int) or timepoints <= 2:
+            result["ok"] = False; result["errors"].append(f"Invalid timepoints: {timepoints}.")
+            return result
+        n_reg = nc + int(include_intercept)
+        if n_reg >= timepoints:
+            result["ok"] = False; result["errors"].append(
+                f"n_regressors({n_reg}) >= timepoints({timepoints}).")
+            return result
+
+    # Regression mode + policies
+    if regression_mode not in _ALLOWED_MODES:
+        result["ok"] = False; result["errors"].append(f"Invalid regression_mode: {regression_mode}. Allowed: ols.")
+        return result
+    if not isinstance(include_intercept, bool) or not isinstance(standardize_confounds, bool):
+        result["ok"] = False; result["errors"].append("include_intercept and standardize_confounds must be bool.")
+        return result
+    if allow_global_signal:
+        result["ok"] = False; result["errors"].append("Global signal regression blocked in first rollout.")
+        return result
+    if allow_scrubbing:
+        result["ok"] = False; result["errors"].append("Scrubbing/censoring blocked in first rollout.")
+        return result
+
+    # GPU guard
+    dev = validate_gpu_device(device); result["gpu_guard"] = dev.to_dict()
+    if not dev.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in dev.errors)
+        return result
+    cuda = check_cuda_availability(torch_cuda_available=torch_cuda_available, device_count=device_count, require_gpu=require_gpu)
+    result["warnings"].extend(w.message for w in cuda.warnings)
+    if not cuda.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in cuda.errors)
+        return result
+    if functional_shape:
+        mem = validate_gpu_memory_budget(shape=functional_shape, dtype_bytes=dtype_bytes, batch_size=batch_size, max_elements=30_000_000, max_bytes=512*1024*1024)
+        if not mem.ok:
+            result["ok"] = False; result["errors"].extend(e.message for e in mem.errors)
+            return result
+        result["estimated_bytes"] = mem.estimated_bytes
+    tm = validate_gpu_timeout(timeout_seconds, max_timeout_seconds=120)
+    if not tm.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in tm.errors)
+        return result
+    conc = validate_gpu_concurrency(active_jobs=active_jobs, max_concurrent_jobs=max_concurrent_jobs)
+    if not conc.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in conc.errors)
+        return result
+
+    # Output
+    output_dir = derivatives / "gpu" / "gpu_nuisance_regression_subject" / run_id / subject_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    provenance = {
+        "subject_id": subject_id, "run_id": run_id,
+        "confound_columns": confound_columns, "n_confounds": nc,
+        "timepoints": timepoints, "regression_mode": regression_mode,
+        "include_intercept": include_intercept, "standardize_confounds": standardize_confounds,
+        "allow_global_signal": allow_global_signal, "allow_scrubbing": allow_scrubbing,
+        "device": device, "dry_run": dry_run,
     }
-
-    result_json.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
-    qc_json.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qc_md, qc)
-    return output
-
-
-def _fail(subject_id: str, rj: Path, qj: Path, qm: Path,
-          errors: list[str], warnings: list[str] | None = None) -> dict[str, Any]:
-    w = warnings or []
-    qc = {"ok": False, "node_id": "nuisance_regression_qc_subject", "backend": "unknown",
-          "subject_id": subject_id, "regression_qc_status": "FAIL",
-          "outputs": [str(qj), str(qm)], "warnings": w, "errors": errors}
-    result = {"ok": False, "node_id": "nuisance_regression_subject", "backend": "unknown",
-              "subject_id": subject_id, "outputs": [str(rj), str(qj), str(qm)],
-              "warnings": w, "errors": errors}
-    rj.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qj.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qm, qc)
+    (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
+    outputs = {"output_dir": str(output_dir), "provenance": str(output_dir / "provenance.json")}
+    if dry_run:
+        outputs["cleaned_functional"] = str(output_dir / "cleaned_func.nii.gz")
+    else:
+        result["stage"] = "preflight_completed"
+        result["warnings"].append("Nuisance regression not executed (runner is scaffold-only).")
+    result["outputs"] = outputs
     return result
 
 
-def _write_qc_md(path: Path, qc: dict[str, Any]) -> None:
-    lines = [
-        f"# Nuisance Regression QC: {qc.get('subject_id')}", "",
-        f"- OK: {qc.get('ok')}",
-        f"- Status: {qc.get('regression_qc_status')}",
-        f"- Input: `{qc.get('input_nii')}`",
-        f"- Output: `{qc.get('output_nii')}`",
-        f"- Confounds: `{qc.get('confounds_tsv')}`",
-        f"- Confound shape: {qc.get('confound_rows')} x {qc.get('confound_columns')}",
-        f"- Confound rank: {qc.get('confound_rank')}",
-        f"- Finite fraction: {qc.get('finite_fraction')}",
-        f"- Residual std: {qc.get('residual_std')}",
-        f"- Variance ratio: {qc.get('variance_ratio')}",
-        f"- Backend: {qc.get('gpu_backend', 'unknown')}",
-        f"- Runtime: {qc.get('runtime_seconds', 'N/A')}s",
-        "", "## Safety Note", "",
-        "Python nuisance regression reads derivative files only and does not modify rawdata.",
-    ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+# Backward-compatibility alias for existing nodes/gpu_nuisance_regression_node.py
+run_nuisance_regression_subject = run_gpu_nuisance_regression_subject

@@ -1327,6 +1327,30 @@ def run_gpu_functional_connectivity_subject_node(context, node):
 NODE_REGISTRY["gpu_functional_connectivity_subject"] = run_gpu_functional_connectivity_subject_node
 # NOTE: gpu_functional_connectivity_subject IS blocked by reviewed execution allowlist.
 
+# ── M8-GPU-T011b: register gpu_nuisance_regression_subject (BLOCKED by safe allowlist) ──
+def run_gpu_nuisance_regression_subject_node(context, node):
+    from src.backend.app.tools.gpu_nuisance_regression_runner import run_gpu_nuisance_regression_subject
+    p = node.params
+    result = run_gpu_nuisance_regression_subject(
+        subject_id=p.get("subject_id", "sub-001"),
+        input_functional=p.get("input_functional", f"{context.derivatives_dir}/func.nii"),
+        confounds_path=p.get("confounds_path", f"{context.derivatives_dir}/confounds.tsv"),
+        derivatives_dir=context.derivatives_dir, run_id=context.run_id,
+        confound_columns=p.get("confound_columns"),
+        regression_mode=p.get("regression_mode", "ols"),
+        include_intercept=bool(p.get("include_intercept", True)),
+        allow_global_signal=bool(p.get("allow_global_signal", False)),
+        allow_scrubbing=bool(p.get("allow_scrubbing", False)),
+        n_confounds=p.get("n_confounds"), timepoints=p.get("timepoints"),
+        device=p.get("device", "auto"),
+        timeout_seconds=int(p.get("timeout_seconds", 60)),
+        approved=True,
+    )
+    result["node_id"] = node.id
+    return result
+NODE_REGISTRY["gpu_nuisance_regression_subject"] = run_gpu_nuisance_regression_subject_node
+# NOTE: gpu_nuisance_regression_subject IS blocked by reviewed execution allowlist — the final GPU subject node.
+
 
 def get_node_runner(node_id: str) -> NodeRunner:
     try:
