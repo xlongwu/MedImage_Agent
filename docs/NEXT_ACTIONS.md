@@ -1,16 +1,15 @@
 # 下一步行动 (NEXT_ACTIONS)
 
-> M6 SPM Pipeline Near-Complete — 792 passed, 4 skipped
+> M6 Full SPM Sandbox Pipeline — COMPLETE
 
-## M6 SPM Sandbox: 6 nodes allowed, 1 blocked
+## M6: 7 SPM nodes allowed (all sandbox-gated)
 
-| Allowed (sandbox-only) | Blocked |
-|---------|---------|
-| spm_smoke_test | spm_smooth_subject |
-| spm_realign | DPABI/GPU/GUI |
-| spm_slice_timing | |
-| spm_coregister | |
-| spm_segment | |
-| spm_normalize | |
+smoke → realign → slice_timing → coregister → segment → normalize → smooth
 
-## Recommended next: M6-T010a — spm_smooth_subject safety contract
+## Recommended next
+
+1. M6-SPM-SMOKE-E2E: full SPM sandbox pipeline manual smoke guide
+2. M7-DPABI-T001: DPABI contract/capability safety review
+3. M7-DPABI-T002: DPABI non-execution contract nodes allowlist
+
+Do NOT open unrestricted SPM, DPABI execution, GPU, or GUI.

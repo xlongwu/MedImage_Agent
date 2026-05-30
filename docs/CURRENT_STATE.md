@@ -88,7 +88,7 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | M6-T007d：spm_coregister sandbox-only reviewed execution | ✅ | 2026-05-29 |
 | **M6 early sandbox closeout** | ✅ | 2026-05-29 |
 
-### M6 Reviewed Execution Allowlist (Sandbox Pipeline Phase)
+### M6 Reviewed Execution Allowlist (Full SPM Sandbox Pipeline — COMPLETE)
 
 | 节点 | 条件 | 状态 |
 |------|------|:---:|
@@ -104,7 +104,7 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |
 
-> M6 SPM Sandbox Pipeline: 5 SPM nodes allowed (sandbox-only). normalize/smooth blocked. Full pipeline NOT open.
+> M6 Full SPM Sandbox Pipeline COMPLETE (7 SPM nodes, all sandbox-gated). Unrestricted SPM NOT open. DPABI/GPU/GUI blocked.
 
 ## M1 交付物状态
 
