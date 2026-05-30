@@ -1,189 +1,148 @@
+"""GPU temporal filtering subject runner scaffold (M8-GPU-T009b).
+
+Pure Python preflight — no torch import, no CUDA, no GPU allocation.
+Uses gpu_safety.py guards. Bans mixed processing.
+"""
+
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
-from typing import Any
+from typing import Sequence
 
-import nibabel as nib
-import numpy as np
-
-from src.backend.app.tools.temporal_filtering_compute import (
-    compute_temporal_filter_backend,
-    compute_temporal_filter_numpy,
+from src.backend.app.safety.gpu_safety import (
+    validate_gpu_device, check_cuda_availability,
+    validate_gpu_memory_budget, validate_gpu_timeout,
+    validate_gpu_concurrency,
 )
 
 
-def run_temporal_filtering_subject(
-    subject_id: str,
-    input_nii: str,
-    derivatives_dir: str,
-    tr: float | None = None,
-    low_hz: float = 0.01,
-    high_hz: float = 0.08,
-    prefer_gpu: bool = True,
-    require_gpu: bool = False,
-    benchmark_compare_cpu_gpu: bool = True,
-) -> dict[str, Any]:
-    """Run single-subject temporal filtering with optional GPU acceleration."""
-    t_start = time.perf_counter()
-    warnings: list[str] = []
-    errors: list[str] = []
-
-    input_path = Path(input_nii)
-    func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
-    qc_dir = Path(derivatives_dir) / "rsfmri_qc" / subject_id
-    func_dir.mkdir(parents=True, exist_ok=True)
-    qc_dir.mkdir(parents=True, exist_ok=True)
-
-    result_json = func_dir / "temporal_filtering_result.json"
-    qc_json = qc_dir / "temporal_filtering_qc.json"
-    qc_md = qc_dir / "temporal_filtering_qc.md"
-
-    if not input_path.exists():
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Input NIfTI not found: {input_path}"], warnings)
-
+def _is_scoped_path(path: Path, scope_dir: Path) -> bool:
     try:
-        img = nib.load(str(input_path))
-        data = img.get_fdata(dtype="float32")
-    except Exception as exc:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Failed to read input: {exc}"], warnings)
+        rp = path.resolve(); rs = scope_dir.resolve()
+        rp.relative_to(rs)
+    except ValueError:
+        return False
+    ps = str(rp).replace("\\", "/")
+    if ".." in ps: return False
+    if any(seg in ("rawdata", "data") for seg in rp.parts): return False
+    return True
 
-    if data.ndim != 4:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Must be 4D. Got {data.shape}"], warnings)
 
-    _, _, _, n_time = data.shape
-    if n_time < 4:
-        return _fail(subject_id, result_json, qc_json, qc_md,
-                     [f"Need >= 4 timepoints, got {n_time}."], warnings)
+_ALLOWED_MODES = frozenset({"bandpass"})
+_ALLOWED_METHODS = frozenset({"butterworth"})
 
-    # Read TR from NIfTI header if not provided
-    if tr is None:
-        try:
-            tr = float(img.header.get_zooms()[3])
-        except Exception:
-            tr = 2.0
-            warnings.append("TR not found in header; using default 2.0s.")
 
-    result = compute_temporal_filter_backend(
-        data_4d=data,
-        tr=tr,
-        low_hz=low_hz,
-        high_hz=high_hz,
-        prefer_gpu=prefer_gpu,
-        require_gpu=require_gpu,
-    )
+def run_gpu_temporal_filtering_subject(
+    *, subject_id: str, input_functional: str | Path, derivatives_dir: str | Path,
+    run_id: str, tr: float, frequency_band: tuple[float, float] = (0.01, 0.08),
+    filter_mode: str = "bandpass", filter_method: str = "butterworth",
+    filter_order: int = 2, device: str = "auto",
+    functional_shape: Sequence[int] | None = None, dtype_bytes: int = 4,
+    batch_size: int = 1, timeout_seconds: int = 60,
+    require_gpu: bool = False, torch_cuda_available: bool | None = None,
+    device_count: int | None = None, active_jobs: int = 0,
+    max_concurrent_jobs: int = 1, approved: bool = True, dry_run: bool = False,
+) -> dict:
 
-    if not result["ok"]:
-        errors.extend(result.get("errors", []))
-        return _fail(subject_id, result_json, qc_json, qc_md, errors, warnings)
-
-    filtered_4d = result["filtered_4d"]
-    output_path = input_path.with_name(f"filt_{input_path.name}")
-    out_img = nib.Nifti1Image(filtered_4d, affine=img.affine, header=img.header)
-    nib.save(out_img, str(output_path))
-
-    # Benchmark comparison
-    benchmark = None
-    if benchmark_compare_cpu_gpu and result["backend"] != "cpu-numpy":
-        try:
-            cpu_result = compute_temporal_filter_numpy(data, tr, low_hz, high_hz)
-            if cpu_result["ok"] and cpu_result["filtered_4d"] is not None:
-                diff = np.abs(filtered_4d - cpu_result["filtered_4d"])
-                benchmark = {
-                    "gpu_backend": result["backend"],
-                    "gpu_runtime_s": result["runtime_seconds"],
-                    "cpu_runtime_s": cpu_result["runtime_seconds"],
-                    "speedup": round(cpu_result["runtime_seconds"] / max(result["runtime_seconds"], 0.001), 2),
-                    "max_abs_diff": float(np.max(diff)),
-                    "mean_abs_diff": float(np.mean(diff)),
-                }
-                if benchmark["max_abs_diff"] > 1e-4:
-                    warnings.append(
-                        f"GPU vs CPU max_abs_diff = {benchmark['max_abs_diff']:.2e} exceeds 1e-4."
-                    )
-        except Exception as exc:
-            warnings.append(f"CPU benchmark comparison failed: {exc}")
-
-    input_std = result.get("input_std", float(np.std(data)))
-    filtered_std_val = result.get("filtered_std", float(np.std(filtered_4d)))
-    finite_fraction = result.get("finite_fraction", 1.0)
-    retained_bins = result.get("retained_frequency_bin_count", 0)
-
-    status = "PASS"
-    if finite_fraction < 0.95:
-        status = "WARNING"
-        warnings.append(f"Finite fraction {finite_fraction:.4f} below 0.95.")
-    if retained_bins == 0:
-        status = "FAIL"
-        errors.append("No frequency bins retained; check filter band.")
-
-    qc = {
-        "ok": status != "FAIL", "node_id": "temporal_filtering_qc_subject",
-        "backend": result["backend"], "subject_id": subject_id,
-        "input_nii": str(input_path), "output_nii": str(output_path),
-        "input_shape": list(data.shape), "output_shape": list(filtered_4d.shape),
-        "timepoints": n_time, "tr": tr,
-        "low_hz": low_hz, "high_hz": high_hz,
-        "retained_frequency_bin_count": retained_bins,
-        "finite_fraction": finite_fraction,
-        "input_intensity_std": input_std, "filtered_std": filtered_std_val,
-        "gpu_backend": result["backend"], "runtime_seconds": result["runtime_seconds"],
-        "benchmark": benchmark, "temporal_filtering_qc_status": status,
-        "outputs": [str(qc_json), str(qc_md)], "warnings": warnings, "errors": errors,
+    result: dict = {
+        "ok": True, "node_id": "gpu_temporal_filtering_subject", "backend": "gpu",
+        "subject_id": subject_id, "run_id": run_id,
+        "cuda_called": False, "gpu_called": False, "tensor_allocated": False,
+        "runs_training": False, "runs_model_inference": False,
+        "runs_nuisance_regression": False, "runs_alff": False,
+        "runs_reho": False, "runs_functional_connectivity": False,
+        "writes_rawdata": False, "errors": [], "warnings": [],
     }
 
-    output = {
-        "ok": status != "FAIL", "node_id": "temporal_filtering_subject",
-        "backend": result["backend"], "subject_id": subject_id,
-        "input_nii": str(input_path), "output_nii": str(output_path),
-        "qc": qc,
-        "outputs": [str(output_path), str(result_json), str(qc_json), str(qc_md)],
-        "gpu_backend": result["backend"], "runtime_seconds": result["runtime_seconds"],
-        "benchmark": benchmark,
-        "warnings": warnings, "errors": errors,
+    if not approved:
+        result["ok"] = False; result["errors"].append("GPU temporal filtering requires approved=true.")
+        return result
+    if not subject_id or not isinstance(subject_id, str):
+        result["ok"] = False; result["errors"].append(f"Invalid subject_id: {subject_id!r}.")
+        return result
+
+    # Input
+    derivatives = Path(derivatives_dir)
+    input_path = Path(input_functional)
+    if not _is_scoped_path(input_path, derivatives):
+        result["ok"] = False; result["errors"].append(f"Input not under derivatives_dir: {input_functional}")
+        return result
+
+    # TR
+    if not isinstance(tr, (int, float)) or tr != tr or tr == float("inf") or tr <= 0 or tr < 0.1 or tr > 10.0:
+        result["ok"] = False; result["errors"].append(f"Invalid TR: {tr}. Must be 0.1 <= TR <= 10.0.")
+        return result
+
+    # Band + Nyquist
+    if not isinstance(frequency_band, (list, tuple)) or len(frequency_band) != 2:
+        result["ok"] = False; result["errors"].append("frequency_band must be [low, high].")
+        return result
+    low, high = frequency_band
+    nyquist = 1.0 / (2.0 * tr)
+    if not isinstance(low, (int, float)) or not isinstance(high, (int, float)) or low != low or high != high or low == float("inf") or high == float("inf"):
+        result["ok"] = False; result["errors"].append("Frequency band values must be finite numeric.")
+        return result
+    if low <= 0 or high <= low or high >= nyquist:
+        result["ok"] = False; result["errors"].append(f"Invalid band [{low},{high}] TR={tr} Nyq={nyquist:.3f}. Need 0<low<high<Nyquist.")
+        return result
+
+    # Filter params
+    if filter_mode not in _ALLOWED_MODES:
+        result["ok"] = False; result["errors"].append(f"Invalid filter_mode: {filter_mode}. Allowed: bandpass.")
+        return result
+    if filter_method not in _ALLOWED_METHODS:
+        result["ok"] = False; result["errors"].append(f"Invalid filter_method: {filter_method}. Allowed: butterworth.")
+        return result
+    if not isinstance(filter_order, int) or filter_order < 1 or filter_order > 4:
+        result["ok"] = False; result["errors"].append(f"Invalid filter_order: {filter_order}. Must be 1–4.")
+        return result
+
+    # GPU guard
+    dev = validate_gpu_device(device)
+    result["gpu_guard"] = dev.to_dict()
+    if not dev.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in dev.errors)
+        return result
+    cuda = check_cuda_availability(torch_cuda_available=torch_cuda_available, device_count=device_count, require_gpu=require_gpu)
+    result["warnings"].extend(w.message for w in cuda.warnings)
+    if not cuda.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in cuda.errors)
+        return result
+    if functional_shape:
+        mem = validate_gpu_memory_budget(shape=functional_shape, dtype_bytes=dtype_bytes, batch_size=batch_size, max_elements=25_000_000, max_bytes=512*1024*1024)
+        if not mem.ok:
+            result["ok"] = False; result["errors"].extend(e.message for e in mem.errors)
+            return result
+        result["estimated_bytes"] = mem.estimated_bytes
+    tm = validate_gpu_timeout(timeout_seconds, max_timeout_seconds=120)
+    if not tm.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in tm.errors)
+        return result
+    conc = validate_gpu_concurrency(active_jobs=active_jobs, max_concurrent_jobs=max_concurrent_jobs)
+    if not conc.ok:
+        result["ok"] = False; result["errors"].extend(e.message for e in conc.errors)
+        return result
+
+    # Output
+    output_dir = derivatives / "gpu" / "gpu_temporal_filtering_subject" / run_id / subject_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    provenance = {
+        "subject_id": subject_id, "run_id": run_id, "tr": tr,
+        "frequency_band": list(frequency_band), "filter_mode": filter_mode,
+        "filter_method": filter_method, "filter_order": filter_order,
+        "device": device, "dry_run": dry_run,
     }
-
-    result_json.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
-    qc_json.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qc_md, qc)
-    return output
-
-
-def _fail(subject_id: str, rj: Path, qj: Path, qm: Path,
-          errors: list[str], warnings: list[str] | None = None) -> dict[str, Any]:
-    w = warnings or []
-    qc = {"ok": False, "node_id": "temporal_filtering_qc_subject", "backend": "unknown",
-          "subject_id": subject_id, "temporal_filtering_qc_status": "FAIL",
-          "outputs": [str(qj), str(qm)], "warnings": w, "errors": errors}
-    result = {"ok": False, "node_id": "temporal_filtering_subject", "backend": "unknown",
-              "subject_id": subject_id, "outputs": [str(rj), str(qj), str(qm)],
-              "warnings": w, "errors": errors}
-    rj.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qj.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qm, qc)
+    (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
+    outputs = {"output_dir": str(output_dir), "provenance": str(output_dir / "provenance.json")}
+    if dry_run:
+        outputs["filtered_functional"] = str(output_dir / "filtered_func.nii.gz")
+    else:
+        result["stage"] = "preflight_completed"
+        result["warnings"].append("Temporal filtering not executed (runner is scaffold-only).")
+    result["outputs"] = outputs
     return result
 
 
-def _write_qc_md(path: Path, qc: dict[str, Any]) -> None:
-    lines = [
-        f"# Temporal Filtering QC: {qc.get('subject_id')}", "",
-        f"- OK: {qc.get('ok')}",
-        f"- Status: {qc.get('temporal_filtering_qc_status')}",
-        f"- Input: `{qc.get('input_nii')}`",
-        f"- Output: `{qc.get('output_nii')}`",
-        f"- TR: {qc.get('tr')}s, band: {qc.get('low_hz')}-{qc.get('high_hz')} Hz",
-        f"- Timepoints: {qc.get('timepoints')}",
-        f"- Retained bins: {qc.get('retained_frequency_bin_count')}",
-        f"- Finite fraction: {qc.get('finite_fraction')}",
-        f"- Input std: {qc.get('input_intensity_std')}",
-        f"- Filtered std: {qc.get('filtered_std')}",
-        f"- Backend: {qc.get('gpu_backend', 'unknown')}",
-        f"- Runtime: {qc.get('runtime_seconds', 'N/A')}s",
-        "", "## Safety Note", "",
-        "Temporal filtering reads derivative files only and does not modify rawdata.",
-    ]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+# Backward-compatibility alias for existing nodes/gpu_temporal_filtering_node.py
+run_temporal_filtering_subject = run_gpu_temporal_filtering_subject
