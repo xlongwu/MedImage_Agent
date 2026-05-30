@@ -25,8 +25,6 @@ def test_node_registered():
 
 def test_approved_false_blocks():
     r = run_gpu_reho_subject(subject_id="s", input_functional="/d/f.nii",
-        derivatives_dir="/d", run_id="r")
-    r = run_gpu_reho_subject(subject_id="s", input_functional="/d/f.nii",
         derivatives_dir="/d", run_id="r", approved=False)
     assert r["ok"] is False
 
