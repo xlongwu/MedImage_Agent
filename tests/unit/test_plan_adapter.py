@@ -634,6 +634,27 @@ def test_subject_smooth_no_sandbox_blocked():
     assert "dpabi_subject_smooth" in policy["blocked_dpabi_execution_nodes"]
 
 
+# ── M7-T007d: wrapper report sandbox allowlist ──
+
+def test_wrapper_report_sandbox_allowed():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_subject_wrapper_report", "depends_on": [],
+         "params": {"sandbox_mode": True, "report_only": True,
+                    "report_source": "dpabi_subject_smooth_outputs",
+                    "output_policy": "reports_dir_dpabi_only"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_subject_wrapper_report" in policy["allowed_dpabi_subject_wrapper_report_nodes"]
+
+
+def test_wrapper_report_no_sandbox_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_subject_wrapper_report", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_subject_wrapper_report" in policy["blocked_dpabi_execution_nodes"]
+
+
 def test_dpabi_single_function_bad_normalized_source_blocked():
     plan = {"pipeline_id": "t", "nodes": [
         {"id": "dpabi_single_function_sandbox", "depends_on": [],

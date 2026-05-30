@@ -239,6 +239,15 @@ _DPABI_METADATA_NODES = frozenset([
 ])
 
 
+def _satisfies_wrapper_report_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("report_only") is not True: return False
+    if params.get("report_source") != "dpabi_subject_smooth_outputs": return False
+    if params.get("output_policy") != "reports_dir_dpabi_only": return False
+    return True
+
+
 def _satisfies_subject_smooth_sandbox(node):
     params = node.get("params", {}) or {}
     if params.get("sandbox_mode") is not True: return False
@@ -299,6 +308,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_dpabi_sandbox_smoke_nodes": [],           # M7-DPABI-T004d
         "allowed_dpabi_single_function_sandbox_nodes": [], # M7-DPABI-T005d
         "allowed_dpabi_subject_smooth_sandbox_nodes": [],  # M7-DPABI-T006d
+        "allowed_dpabi_subject_wrapper_report_nodes": [],  # M7-DPABI-T007d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -365,6 +375,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
         if nid == "dpabi_subject_smooth" and _satisfies_subject_smooth_sandbox(node):
             result["allowed_dpabi_subject_smooth_sandbox_nodes"].append(nid)
+            continue
+        if nid == "dpabi_subject_wrapper_report" and _satisfies_wrapper_report_sandbox(node):
+            result["allowed_dpabi_subject_wrapper_report_nodes"].append(nid)
             continue
         if nid.startswith("dpabi_") and not (
             "contract" in nid or "capability" in nid or "preflight" in nid

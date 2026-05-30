@@ -146,6 +146,7 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
     dpabi_sandbox_smoke_nodes = policy.get("allowed_dpabi_sandbox_smoke_nodes", [])
     dpabi_single_function_sandbox_nodes = policy.get("allowed_dpabi_single_function_sandbox_nodes", [])
     dpabi_subject_smooth_sandbox_nodes = policy.get("allowed_dpabi_subject_smooth_sandbox_nodes", [])
+    dpabi_subject_wrapper_report_nodes = policy.get("allowed_dpabi_subject_wrapper_report_nodes", [])
 
     unsafe = gpu_nodes + contract_nodes
     if unsafe:
@@ -153,7 +154,7 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
 
     # Must have at least one allowed node
     python_nodes = policy.get("allowed_python_nodes", [])
-    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes + spm_slice_timing_sandbox_nodes + spm_coregister_sandbox_nodes + spm_segment_sandbox_nodes + spm_normalize_sandbox_nodes + spm_smooth_sandbox_nodes + dpabi_metadata_nodes + dpabi_sandbox_smoke_nodes + dpabi_single_function_sandbox_nodes + dpabi_subject_smooth_sandbox_nodes
+    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes + spm_slice_timing_sandbox_nodes + spm_coregister_sandbox_nodes + spm_segment_sandbox_nodes + spm_normalize_sandbox_nodes + spm_smooth_sandbox_nodes + dpabi_metadata_nodes + dpabi_sandbox_smoke_nodes + dpabi_single_function_sandbox_nodes + dpabi_subject_smooth_sandbox_nodes + dpabi_subject_wrapper_report_nodes
     if not total_allowed:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
     return None
