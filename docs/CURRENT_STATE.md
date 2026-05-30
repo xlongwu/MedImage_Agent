@@ -124,8 +124,14 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 | M7-DPABI-T006d：subject smooth sandbox-only allowlist | ✅ |
 | **M7 DPABI subject smooth closeout** | ✅ |
 
-> 15 metadata + sandbox_smoke + single_function + subject_smooth (sandbox + synthetic + bounded FWHM) allowlisted.
-> wrapper_report, validation_matrix blocked. Unrestricted DPABI execution blocked.
+| M7-DPABI-T007a：wrapper report safety contract | ✅ |
+| M7-DPABI-T007b：wrapper report output hardening | ✅ |
+| M7-DPABI-T007c：wrapper report contract tests | ✅ |
+| M7-DPABI-T007d：wrapper report sandbox-only allowlist | ✅ |
+| **M7 DPABI wrapper report closeout** | ✅ |
+
+> 15 metadata + sandbox_smoke + single_function + subject_smooth + wrapper_report (report-only) allowlisted.
+> validation_matrix blocked. Unrestricted DPABI execution blocked. 19 DPABI nodes total.
 | DPABI execution | — | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |
