@@ -297,3 +297,60 @@ def test_issue_to_dict():
     assert d["severity"] == "error"
     assert d["field"] == "test_field"
     json.dumps(d)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T005b-fix: SPM-only validator
+# ══════════════════════════════════════════════════════════════════════════════
+
+from src.backend.app.safety.matlab_safety import validate_spm_runtime_config
+
+# ── 30. validate_spm_runtime_config("matlab", safe_dir) → ok ──
+
+def test_validate_spm_runtime_config_ok(tmp_path):
+    spm = tmp_path / "spm12"
+    spm.mkdir()
+    result = validate_spm_runtime_config(matlab_command="matlab", spm_dir=str(spm))
+    assert result.ok is True
+
+
+# ── 31. validate_spm_runtime_config does not require dpabi_dir ──
+
+def test_validate_spm_runtime_config_no_dpabi():
+    result = validate_spm_runtime_config(matlab_command="matlab", spm_dir="/tmp/spm12")
+    assert result.ok is True
+
+
+# ── 32. unsafe matlab_command blocked ──
+
+def test_validate_spm_runtime_config_bad_matlab():
+    result = validate_spm_runtime_config(matlab_command="matlab -r evil", spm_dir="/tmp/spm12")
+    assert result.ok is False
+
+
+# ── 33. unsafe spm_dir blocked ──
+
+def test_validate_spm_runtime_config_bad_spm_dir(tmp_path):
+    raw = tmp_path / "rawdata"
+    raw.mkdir()
+    result = validate_spm_runtime_config(matlab_command="matlab", spm_dir=str(raw))
+    assert result.ok is False
+
+
+# ── 34. nonexistent spm_dir → warning ──
+
+def test_validate_spm_runtime_config_nonexistent_warns():
+    result = validate_spm_runtime_config(matlab_command="matlab", spm_dir="/nonexistent/spm12")
+    assert result.ok is True
+    assert any(w.code == "THIRD_PARTY_DIR_NOT_FOUND" for w in result.warnings)
+
+
+# ── 35. validate_matlab_runtime_config() not regressed ──
+
+def test_validate_matlab_runtime_config_not_regressed():
+    from src.backend.app.safety.matlab_safety import validate_matlab_runtime_config
+    result = validate_matlab_runtime_config(
+        matlab_command="matlab", spm_dir="/tmp/spm12", dpabi_dir="/tmp/dpabi",
+    )
+    # Just verify it still works (both paths nonexistent → warning)
+    assert result.ok is True

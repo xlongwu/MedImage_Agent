@@ -1,7 +1,0 @@
-pipeline_id: rsfmri_report_exporter_pipeline
-version: "0.1.0"
-modality: rs-fMRI
-description: "Export existing synthetic rs-fMRI reports into a zip report package."
-execution: {stop_on_failure: true, run_id: "run_rsfmri_report_exporter_001", scheduler: {mode: "local", max_workers: 1, matlab_max_workers: 0}}
-nodes:
-  - {id: rsfmri_report_exporter, backend: python, depends_on: [], params: {exports_dir: "./exports", export_id: null}, parallel_level: project}

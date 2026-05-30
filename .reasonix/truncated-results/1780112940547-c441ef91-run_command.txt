@@ -1,0 +1,303 @@
+$ git diff --name-only
+[exit 0]
+warning: in the working copy of '.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/CURRENT_STATE.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/EXECUTION_INTEGRATION_DESIGN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/GATED_EXECUTION_SAFETY_REVIEW.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/NEXT_ACTIONS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/SAFE_REVIEWED_EXECUTION_DESIGN.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/TASK_BACKLOG.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/api/execute_reviewed_routes.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/memory/session_db.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/nodes/gpu_alff_node.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/runtime/memory_providers/file_provider.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/runtime/memory_providers/sqlite_provider.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_contract_registry.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_safety.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_sandbox_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_single_function_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_subject_wrapper.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_template_instantiator.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_template_library.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_template_wizard.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/dpabi_wrapper.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/session_indexer.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/session_query.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_coregister_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_normalize_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_realign_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_segment_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_slice_timing_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_smooth_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/backend/app/tools/spm_subject_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/frontend/src/api.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/frontend/src/components/PlanReviewConsole.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/frontend/src/components/workflow/AdvancedModePanel.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/frontend/src/components/workflow/IntroCard.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/frontend/src/components/workflow/ResultsOverviewStep.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/frontend/src/components/workflow/RunConfirmStep.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/frontend/src/styles.css', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/api/test_api_basic.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/unit/test_execute_reviewed_api.py', LF will be replaced by CRLF the next time Git touches it
+.claude/worktrees/focused-hellman-2eddec/.claude/settings.local.json
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/algorithmic-art/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/algorithmic-art/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/algorithmic-art/templates/generator_template.js
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/algorithmic-art/templates/viewer.html
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/brand-guidelines/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/brand-guidelines/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/ArsenalSC-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/ArsenalSC-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/BigShoulders-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/BigShoulders-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/BigShoulders-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Boldonse-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Boldonse-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/BricolageGrotesque-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/BricolageGrotesque-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/BricolageGrotesque-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/CrimsonPro-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/CrimsonPro-Italic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/CrimsonPro-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/CrimsonPro-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/DMMono-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/DMMono-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/EricaOne-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/EricaOne-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/GeistMono-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/GeistMono-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/GeistMono-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Gloock-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Gloock-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/IBMPlexMono-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/IBMPlexMono-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/IBMPlexMono-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/IBMPlexSerif-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/IBMPlexSerif-BoldItalic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/IBMPlexSerif-Italic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/IBMPlexSerif-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/InstrumentSans-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/InstrumentSans-BoldItalic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/InstrumentSans-Italic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/InstrumentSans-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/InstrumentSans-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/InstrumentSerif-Italic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/InstrumentSerif-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Italiana-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Italiana-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/JetBrainsMono-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/JetBrainsMono-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/JetBrainsMono-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Jura-Light.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Jura-Medium.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Jura-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/LibreBaskerville-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/LibreBaskerville-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Lora-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Lora-BoldItalic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Lora-Italic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Lora-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Lora-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/NationalPark-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/NationalPark-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/NationalPark-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/NothingYouCouldDo-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/NothingYouCouldDo-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Outfit-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Outfit-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Outfit-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/PixelifySans-Medium.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/PixelifySans-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/PoiretOne-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/PoiretOne-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/RedHatMono-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/RedHatMono-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/RedHatMono-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Silkscreen-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Silkscreen-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/SmoochSans-Medium.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/SmoochSans-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Tektur-Medium.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Tektur-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/Tektur-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/WorkSans-Bold.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/WorkSans-BoldItalic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/WorkSans-Italic.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/WorkSans-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/WorkSans-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/YoungSerif-OFL.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/canvas-design/canvas-fonts/YoungSerif-Regular.ttf
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/csharp/claude-api.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/curl/examples.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/curl/managed-agents.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/go/claude-api.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/go/managed-agents/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/java/claude-api.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/java/managed-agents/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/php/claude-api.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/php/managed-agents/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/python/claude-api/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/python/claude-api/batches.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/python/claude-api/files-api.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/python/claude-api/streaming.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/python/claude-api/tool-use.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/python/managed-agents/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/ruby/claude-api.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/ruby/managed-agents/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/agent-design.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/error-codes.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/live-sources.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-api-reference.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-client-patterns.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-core.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-environments.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-events.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-memory.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-onboarding.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-overview.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/managed-agents-tools.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/model-migration.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/models.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/prompt-caching.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/shared/tool-use-concepts.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/typescript/claude-api/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/typescript/claude-api/batches.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/typescript/claude-api/files-api.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/typescript/claude-api/streaming.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/typescript/claude-api/tool-use.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/claude-api/typescript/managed-agents/README.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/doc-coauthoring/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/__init__.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/accept_changes.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/comment.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/helpers/__init__.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/helpers/merge_runs.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/helpers/simplify_redlines.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/pack.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-presentationDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-spreadsheetDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-wordprocessingDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/wml.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ISO-IEC29500-4_2016/xml.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-contentTypes.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-coreProperties.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-digSig.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/ecma/fouth-edition/opc-relationships.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/mce/mc.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/microsoft/wml-2010.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/microsoft/wml-2012.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/microsoft/wml-2018.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/microsoft/wml-cex-2018.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/microsoft/wml-cid-2016.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/microsoft/wml-sdtdatahash-2020.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/schemas/microsoft/wml-symex-2015.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/soffice.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/unpack.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/validate.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/validators/__init__.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/validators/base.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/validators/docx.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/validators/pptx.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/office/validators/redlining.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/templates/comments.xml
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/templates/commentsExtended.xml
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/templates/commentsExtensible.xml
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/templates/commentsIds.xml
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/docx/scripts/templates/people.xml
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/frontend-design/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/frontend-design/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/internal-comms/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/internal-comms/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/internal-comms/examples/3p-updates.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/internal-comms/examples/company-newsletter.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/internal-comms/examples/faq-answers.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/internal-comms/examples/general-comms.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/karpathy-guidelines/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/reference/evaluation.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/reference/mcp_best_practices.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/reference/node_mcp_server.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/reference/python_mcp_server.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/scripts/connections.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/scripts/evaluation.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/scripts/example_evaluation.xml
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/mcp-builder/scripts/requirements.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/forms.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/reference.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/check_bounding_boxes.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/check_fillable_fields.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/convert_pdf_to_images.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/create_validation_image.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/extract_form_field_info.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/extract_form_structure.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/fill_fillable_fields.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pdf/scripts/fill_pdf_form_with_annotations.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/LICENSE.txt
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/SKILL.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/editing.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/pptxgenjs.md
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/__init__.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/add_slide.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/clean.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/helpers/__init__.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/helpers/merge_runs.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/helpers/simplify_redlines.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/pack.py
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chart.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-chartDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-diagram.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-lockedCanvas.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-main.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-picture.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-spreadsheetDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/dml-wordprocessingDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/pml.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-additionalCharacteristics.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-bibliography.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-commonSimpleTypes.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlDataProperties.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-customXmlSchemaProperties.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesCustom.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesExtended.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-documentPropertiesVariantTypes.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-math.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/shared-relationshipReference.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/sml.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-main.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/office/schemas/ISO-IEC29500-4_2016/vml-officeDrawing.xsd
+.claude/worktrees/focused-hellman-2eddec/.claude/skills/pptx/scripts/off
+
+[… truncated 224000 chars …]

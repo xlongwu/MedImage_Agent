@@ -1,1 +1,0 @@
-# MedImage Agent Tests

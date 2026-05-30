@@ -102,12 +102,11 @@ def run_spm_realign_subject(
         return data
 
     # ── M6-T005b: MATLAB/SPM safety preflight ──
-    from src.backend.app.safety.matlab_safety import validate_matlab_runtime_config
+    from src.backend.app.safety.matlab_safety import validate_spm_runtime_config
 
-    safety_result = validate_matlab_runtime_config(
+    safety_result = validate_spm_runtime_config(
         matlab_command=matlab_command,
         spm_dir=spm_dir,
-        dpabi_dir="./third_party/DPABI",
     )
     if not safety_result.ok:
         return {

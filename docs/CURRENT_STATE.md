@@ -71,6 +71,7 @@
 | **M6-T004c：SPM smoke manual validation guide** | ✅ | 2026-05-29 |
 | **M6-T005a：spm realign safety contract** | ✅ | 2026-05-29 |
 | **M6-T005b：spm realign MATLAB safety preflight** | ✅ | 2026-05-29 |
+| **M6-T005b-fix：SPM-only validator, remove dummy dpabi_dir** | ✅ | 2026-05-29 |
 
 ## M1 交付物状态
 
@@ -113,7 +114,7 @@
 
 | 指标 | 当前值 |
 |------|--------|
-| pytest 全量（本地） | **628 passed, 4 skipped** |
+| pytest 全量（本地） | **634 passed, 4 skipped** |
 | pytest CI（Linux） | ✅ 全绿 |
 | CI frontend build | ✅ 通过 |
 | frontend build（本地） | ✅ 已验证 |

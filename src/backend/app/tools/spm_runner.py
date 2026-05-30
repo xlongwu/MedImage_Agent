@@ -137,15 +137,20 @@ def spm_smoke_preflight(
     """
     from src.backend.app.safety.matlab_safety import (
         validate_matlab_runtime_config,
-        validate_matlab_command,
-        validate_third_party_dir,
+        validate_spm_runtime_config,
     )
 
-    safety_result = validate_matlab_runtime_config(
-        matlab_command=matlab_command,
-        spm_dir=spm_dir,
-        dpabi_dir=dpabi_dir if dpabi_dir else "./third_party/DPABI",
-    )
+    if dpabi_dir:
+        safety_result = validate_matlab_runtime_config(
+            matlab_command=matlab_command,
+            spm_dir=spm_dir,
+            dpabi_dir=dpabi_dir,
+        )
+    else:
+        safety_result = validate_spm_runtime_config(
+            matlab_command=matlab_command,
+            spm_dir=spm_dir,
+        )
 
     safety_errors = [e.to_dict() for e in safety_result.errors]
     safety_warnings = [w.to_dict() for w in safety_result.warnings]

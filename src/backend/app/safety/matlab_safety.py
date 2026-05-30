@@ -264,3 +264,28 @@ def validate_matlab_runtime_config(
         errors=all_errors,
         warnings=all_warnings,
     )
+
+
+# ── SPM-only runtime config validation ──────────────────────────────────────
+
+def validate_spm_runtime_config(
+    *,
+    matlab_command: str,
+    spm_dir: str | Path,
+) -> MatlabSafetyResult:
+    """Validate MATLAB + SPM runtime config for SPM-only nodes.
+
+    Does NOT validate dpabi_dir.  Use validate_matlab_runtime_config()
+    for nodes that also require DPABI.
+    """
+    cmd_result = validate_matlab_command(matlab_command)
+    spm_result = validate_third_party_dir(spm_dir, name="spm_dir")
+
+    all_errors = cmd_result.errors + spm_result.errors
+    all_warnings = cmd_result.warnings + spm_result.warnings
+
+    return MatlabSafetyResult(
+        ok=len(all_errors) == 0,
+        errors=all_errors,
+        warnings=all_warnings,
+    )

@@ -26,6 +26,11 @@ env/
 *~
 
 # Project runtime
+work/
+logs/
+derivatives/
+exports/
+outputs/
 outputs/work/
 outputs/logs/
 outputs/derivatives/
@@ -38,6 +43,15 @@ outputs/memory/
 node_modules/
 src/frontend/dist/
 src/frontend/.vite/
+src/frontend/dist-electron/
+src/frontend/release/
+src/frontend/release2/
+src/frontend/final_release/
+src/frontend/MedImage_Agent/
+
+# Local agent/worktree state
+.agents/
+.claude/worktrees/
 
 # OS
 .DS_Store
