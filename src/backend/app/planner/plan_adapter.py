@@ -229,6 +229,16 @@ def _satisfies_normalize_sandbox(node):
     return True
 
 
+_DPABI_METADATA_NODES = frozenset([
+    "dpabi_capability_inspection", "dpabi_input_manifest", "dpabi_preflight",
+    "dpabi_run_plan", "dpabi_signature_probe", "dpabi_wrapper_contracts",
+    "dpabi_wrapper_scaffold", "dpabi_alff_falff_contract",
+    "dpabi_functional_connectivity_contract", "dpabi_nuisance_regression_contract",
+    "dpabi_reho_contract", "dpabi_temporal_filtering_contract",
+    "dpabi_template_library", "dpabi_template_instantiate", "dpabi_template_execute",
+])
+
+
 def _satisfies_smooth_sandbox(node):
     params = node.get("params", {}) or {}
     if params.get("sandbox_mode") is not True: return False
@@ -254,6 +264,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_spm_segment_sandbox_nodes": [],            # M6-T008d
         "allowed_spm_normalize_sandbox_nodes": [],         # M6-T009d
         "allowed_spm_smooth_sandbox_nodes": [],            # M6-T010d
+        "allowed_dpabi_metadata_nodes": [],               # M7-DPABI-T002b
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -308,7 +319,10 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             result["blocked_spm_nodes"].append(nid)
             continue
 
-        # DPABI execution
+        # DPABI — M7-T002b: metadata/contract nodes allowed, execution blocked
+        if nid in _DPABI_METADATA_NODES:
+            result["allowed_dpabi_metadata_nodes"].append(nid)
+            continue
         if nid.startswith("dpabi_") and not (
             "contract" in nid or "capability" in nid or "preflight" in nid
             or "scaffold" in nid or "signature" in nid or "template" in nid

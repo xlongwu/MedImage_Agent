@@ -166,7 +166,7 @@ def test_contract_allowed():
         {"id": "dpabi_capability_inspection", "depends_on": []},
     ]}
     policy = classify_plan_nodes(plan)
-    assert "dpabi_capability_inspection" in policy["allowed_contract_nodes"]
+    assert "dpabi_capability_inspection" in policy["allowed_dpabi_metadata_nodes"]
 
 
 # ── 16. Adapter result JSON ──
@@ -532,6 +532,24 @@ def test_smooth_no_sandbox_blocked():
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_smooth_subject" in policy["blocked_spm_nodes"]
+
+
+# ── M7-T002b: DPABI metadata allowlist ──
+
+def test_dpabi_metadata_classified_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_capability_inspection" in policy["allowed_dpabi_metadata_nodes"]
+
+
+def test_dpabi_exec_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "dpabi_subject_smooth", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_subject_smooth" in policy["blocked_dpabi_execution_nodes"]
 
 
 def test_smooth_bad_normalized_source_blocked():

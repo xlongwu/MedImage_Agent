@@ -107,6 +107,7 @@ Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GU
 |------|:---:|
 | **M7-DPABI-T001：DPABI safety review** | ✅ |
 | **M7-DPABI-T002a：register safe DPABI metadata runners** | ✅ |
+| **M7-DPABI-T002b：allowlist safe DPABI metadata contract nodes** | ✅ |
 | DPABI execution | — | ❌ |
 | GPU | — | ❌ |
 | GUI/manual | — | ❌ |

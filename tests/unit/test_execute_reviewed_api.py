@@ -1264,16 +1264,15 @@ def test_m5t017_executor_throws_submitted_false(monkeypatch, tmp_path):
 # ── 95. contract node → executor not called (blocked by safe allowlist) ──
 
 def test_m5t017_contract_node_no_executor(monkeypatch, tmp_path):
-    # dpabi_capability_inspection is classified as allowed_contract_nodes
-    # by the adapter, then blocked by the safe allowlist
+    # M7-T002b: dpabi_capability_inspection now allowed through safe allowlist
     body = _preflight_body(monkeypatch, tmp_path, plan={
         "pipeline_id": "test",
         "nodes": [{"id": "dpabi_capability_inspection", "depends_on": [], "params": {}}],
     })
     resp = client.post("/api/plans/execute-reviewed", json=body)
     data = resp.json()
-    assert data["status"] == "SAFE_EXECUTION_POLICY_BLOCKED"
-    assert data["execution"]["executor_called"] is False
+    assert data["status"] == "EXECUTION_SUBMITTED"
+    assert data["execution"]["executor_called"] is True
 
 
 # ── 96. pipeline YAML on disk is before executor call ──
