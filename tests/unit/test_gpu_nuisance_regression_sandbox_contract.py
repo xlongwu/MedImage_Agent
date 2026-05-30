@@ -104,6 +104,33 @@ def test_gpu_fc_allowed():
     assert "gpu_functional_connectivity_subject" in policy["allowed_gpu_functional_connectivity_sandbox_nodes"]
 
 
+# ── M8-T011d: sandbox declaration allowlist ──
+
+def test_nuisance_sandbox_allowed():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_nuisance_regression_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "subject_level": True,
+                    "input_source": "scoped_functional_derivative",
+                    "confounds_source": "scoped_confounds_derivative",
+                    "output_policy": "derivatives_dir_scoped",
+                    "device_policy": "guarded_auto_cpu_cuda0",
+                    "memory_policy": "bounded_subject_gpu_512mb",
+                    "nuisance_policy": "bounded_ols_confounds_only"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_nuisance_regression_subject" in policy["allowed_gpu_nuisance_regression_sandbox_nodes"]
+
+
+def test_nuisance_no_sandbox_blocked():
+    from src.backend.app.planner.plan_adapter import classify_plan_nodes
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "gpu_nuisance_regression_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "gpu_nuisance_regression_subject" not in policy["allowed_gpu_nuisance_regression_sandbox_nodes"]
+
+
 def test_json_serializable(tmp_path):
     func, conf, deriv = _make_derivative(tmp_path)
     r = run_gpu_nuisance_regression_subject(subject_id="s",
