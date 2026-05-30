@@ -611,6 +611,39 @@ def test_single_func_arbitrary_function_blocked():
     assert "dpabi_single_function_sandbox" in policy["blocked_dpabi_execution_nodes"]
 
 
+# ── M7-T006d: subject smooth sandbox allowlist ──
+
+def test_subject_smooth_sandbox_allowed():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_subject_smooth", "depends_on": [],
+         "params": {"sandbox_mode": True, "subject_level": True,
+                    "subject_source": "synthetic_sandbox",
+                    "input_source": "synthetic_sandbox_derivatives",
+                    "fwhm_policy": "bounded_3d",
+                    "output_policy": "derivatives_dir_scoped"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_subject_smooth" in policy["allowed_dpabi_subject_smooth_sandbox_nodes"]
+
+
+def test_subject_smooth_no_sandbox_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_subject_smooth", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_subject_smooth" in policy["blocked_dpabi_execution_nodes"]
+
+
+def test_dpabi_single_function_bad_normalized_source_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_single_function_sandbox", "depends_on": [],
+         "params": {"sandbox_mode": True, "single_function_only": True,
+                    "function_policy": "allowlisted_contract_only", "function_name": "evil_eval"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_single_function_sandbox" in policy["blocked_dpabi_execution_nodes"]
+
+
 def test_smooth_bad_normalized_source_blocked():
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_smooth_subject", "depends_on": [],

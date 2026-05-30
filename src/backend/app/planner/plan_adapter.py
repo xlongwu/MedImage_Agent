@@ -239,6 +239,17 @@ _DPABI_METADATA_NODES = frozenset([
 ])
 
 
+def _satisfies_subject_smooth_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("subject_level") is not True: return False
+    if params.get("subject_source") != "synthetic_sandbox": return False
+    if params.get("input_source") != "synthetic_sandbox_derivatives": return False
+    if params.get("fwhm_policy") != "bounded_3d": return False
+    if params.get("output_policy") != "derivatives_dir_scoped": return False
+    return True
+
+
 def _satisfies_single_function_sandbox(node):
     params = node.get("params", {}) or {}
     if params.get("sandbox_mode") is not True: return False
@@ -287,6 +298,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_dpabi_metadata_nodes": [],               # M7-DPABI-T002b
         "allowed_dpabi_sandbox_smoke_nodes": [],           # M7-DPABI-T004d
         "allowed_dpabi_single_function_sandbox_nodes": [], # M7-DPABI-T005d
+        "allowed_dpabi_subject_smooth_sandbox_nodes": [],  # M7-DPABI-T006d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -350,6 +362,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
         if nid == "dpabi_single_function_sandbox" and _satisfies_single_function_sandbox(node):
             result["allowed_dpabi_single_function_sandbox_nodes"].append(nid)
+            continue
+        if nid == "dpabi_subject_smooth" and _satisfies_subject_smooth_sandbox(node):
+            result["allowed_dpabi_subject_smooth_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("dpabi_") and not (
             "contract" in nid or "capability" in nid or "preflight" in nid
