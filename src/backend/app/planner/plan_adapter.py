@@ -210,6 +210,17 @@ def _satisfies_slice_timing_sandbox(node: dict[str, Any]) -> bool:
     return _is_safe_sandbox_input(str(input_bold), allow_derivative=allow_derivative)
 
 
+def _satisfies_segment_sandbox(node: dict[str, Any]) -> bool:
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True:
+        return False
+    if params.get("anatomical_source") != "coregistered_t1w":
+        return False
+    if params.get("tpm_source") != "spm_default_tpm":
+        return False
+    return True
+
+
 def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     """Classify every node in a reviewed plan by execution policy.
 
@@ -224,6 +235,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_spm_realign_sandbox_nodes": [],           # M6-T005d
         "allowed_spm_slice_timing_sandbox_nodes": [],       # M6-T006d
         "allowed_spm_coregister_sandbox_nodes": [],         # M6-T007d
+        "allowed_spm_segment_sandbox_nodes": [],            # M6-T008d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -264,6 +276,9 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             continue
         if nid == "spm_coregister_subject" and _satisfies_coregister_sandbox(node):
             result["allowed_spm_coregister_sandbox_nodes"].append(nid)
+            continue
+        if nid == "spm_segment_subject" and _satisfies_segment_sandbox(node):
+            result["allowed_spm_segment_sandbox_nodes"].append(nid)
             continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":
             result["blocked_spm_nodes"].append(nid)

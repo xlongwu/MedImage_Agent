@@ -422,3 +422,53 @@ def test_segment_still_blocked():
     ]}
     policy = classify_plan_nodes(plan)
     assert "spm_segment_subject" in policy["blocked_spm_nodes"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T008d: sandbox-only spm_segment_subject allowlist
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_segment_sandbox_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_segment_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "anatomical_source": "coregistered_t1w",
+                    "tpm_source": "spm_default_tpm"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_segment_subject" in policy["allowed_spm_segment_sandbox_nodes"]
+
+
+def test_segment_no_sandbox_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_segment_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_segment_subject" in policy["blocked_spm_nodes"]
+
+
+def test_segment_bad_anatomical_source_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_segment_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "anatomical_source": "arbitrary_path",
+                    "tpm_source": "spm_default_tpm"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_segment_subject" in policy["blocked_spm_nodes"]
+
+
+def test_segment_bad_tpm_source_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_segment_subject", "depends_on": [],
+         "params": {"sandbox_mode": True, "anatomical_source": "coregistered_t1w",
+                    "tpm_source": "custom_tpm"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_segment_subject" in policy["blocked_spm_nodes"]
+
+
+def test_normalize_still_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_normalize_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_normalize_subject" in policy["blocked_spm_nodes"]
