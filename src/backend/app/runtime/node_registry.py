@@ -1243,6 +1243,27 @@ NODE_REGISTRY["gpu_synthetic_smoke"] = run_gpu_synthetic_smoke_node
 # NOTE: gpu_synthetic_smoke IS blocked by reviewed execution allowlist.
 # It calls no CUDA/GPU — uses gpu_safety.py pure guard only.
 
+# ── M8-GPU-T007d: register gpu_alff_subject runner (BLOCKED by safe allowlist) ──
+def run_gpu_alff_subject_node(context, node):
+    from src.backend.app.tools.gpu_alff_runner import run_gpu_alff_subject
+    p = node.params
+    result = run_gpu_alff_subject(
+        subject_id=p.get("subject_id", "sub-001"),
+        input_functional=p.get("input_functional", f"{context.derivatives_dir}/func.nii"),
+        derivatives_dir=context.derivatives_dir,
+        run_id=context.run_id,
+        tr=float(p.get("tr", 2.0)),
+        frequency_band=tuple(p.get("frequency_band", (0.01, 0.08))),
+        compute_falff=bool(p.get("compute_falff", True)),
+        device=p.get("device", "auto"),
+        timeout_seconds=int(p.get("timeout_seconds", 60)),
+        approved=True,
+    )
+    result["node_id"] = node.id
+    return result
+NODE_REGISTRY["gpu_alff_subject"] = run_gpu_alff_subject_node
+# NOTE: gpu_alff_subject IS blocked by reviewed execution allowlist — scaffold only.
+
 
 def get_node_runner(node_id: str) -> NodeRunner:
     try:

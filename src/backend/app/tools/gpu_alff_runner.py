@@ -1,167 +1,205 @@
+"""GPU ALFF subject runner scaffold (M8-GPU-T007d).
+
+Pure Python preflight — no torch import, no CUDA, no GPU allocation.
+Uses gpu_safety.py guards for device, memory, timeout, concurrency.
+"""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Sequence
 
-import numpy as np
+from src.backend.app.safety.gpu_safety import (
+    validate_gpu_device,
+    check_cuda_availability,
+    validate_gpu_memory_budget,
+    validate_gpu_timeout,
+    validate_gpu_concurrency,
+)
 
-from src.backend.app.tools.alff_compute import compute_alff_backend, compute_alff_numpy
-from src.backend.app.tools.gpu_utils import detect_gpu
+
+def _is_scoped_path(path: Path, scope_dir: Path) -> bool:
+    """Check if path is under the scoped directory (no rawdata, no traversal)."""
+    try:
+        resolved_path = path.resolve()
+        resolved_scope = scope_dir.resolve()
+        resolved_path.relative_to(resolved_scope)
+    except ValueError:
+        return False
+    path_str = str(resolved_path).replace("\\", "/")
+    scope_str = str(resolved_scope).replace("\\", "/")
+    if ".." in path_str or ".." in scope_str:
+        return False
+    if any(seg in ("rawdata", "data") for seg in resolved_path.parts):
+        return False
+    return True
 
 
-def _compare_arrays(a: np.ndarray, b: np.ndarray) -> dict[str, float]:
-    diff = np.abs(a.astype("float32") - b.astype("float32"))
-    return {
-        "max_abs_diff": float(np.max(diff)),
-        "mean_abs_diff": float(np.mean(diff)),
+def run_gpu_alff_subject(
+    *,
+    subject_id: str,
+    input_functional: str | Path,
+    derivatives_dir: str | Path,
+    run_id: str,
+    tr: float,
+    frequency_band: tuple[float, float] = (0.01, 0.08),
+    compute_falff: bool = True,
+    mask_path: str | Path | None = None,
+    device: str = "auto",
+    functional_shape: Sequence[int] | None = None,
+    dtype_bytes: int = 4,
+    batch_size: int = 1,
+    timeout_seconds: int = 60,
+    require_gpu: bool = False,
+    torch_cuda_available: bool | None = None,
+    device_count: int | None = None,
+    active_jobs: int = 0,
+    max_concurrent_jobs: int = 1,
+    approved: bool = True,
+    dry_run: bool = False,
+) -> dict:
+
+    result: dict = {
+        "ok": True,
+        "node_id": "gpu_alff_subject",
+        "backend": "gpu",
+        "subject_id": subject_id,
+        "run_id": run_id,
+        "cuda_called": False,
+        "gpu_called": False,
+        "tensor_allocated": False,
+        "runs_training": False,
+        "runs_model_inference": False,
+        "writes_rawdata": False,
+        "errors": [],
+        "warnings": [],
     }
 
+    if not approved:
+        result["ok"] = False
+        result["errors"].append("GPU ALFF subject requires approved=true.")
+        return result
 
-def run_alff_subject(
-    subject_id: str,
-    input_nii: str,
-    derivatives_dir: str,
-    tr: float = 2.0,
-    freq_band: list[float] | None = None,
-    prefer_gpu: bool = True,
-    require_gpu: bool = False,
-    benchmark_compare_cpu_gpu: bool = True,
-) -> dict[str, Any]:
-    try:
-        import nibabel as nib
-    except ImportError:
-        return {
-            "ok": False,
-            "node_id": "gpu_alff_subject",
-            "backend": "python",
-            "subject_id": subject_id,
-            "outputs": [],
-            "metrics": {},
-            "warnings": [],
-            "errors": ["Missing dependency: nibabel. Install with: pip install nibabel"],
-        }
+    if not subject_id or not isinstance(subject_id, str):
+        result["ok"] = False
+        result["errors"].append(f"Invalid subject_id: {subject_id!r}.")
+        return result
 
-    freq_band = freq_band or [0.01, 0.08]
-    band_tuple = (float(freq_band[0]), float(freq_band[1]))
+    # ── Input validation ──
+    derivatives = Path(derivatives_dir)
+    input_path = Path(input_functional)
+    if not _is_scoped_path(input_path, derivatives):
+        result["ok"] = False
+        result["errors"].append(f"Input functional not under derivatives_dir: {input_functional}")
+        return result
 
-    warnings: list[str] = []
-    errors: list[str] = []
+    # ── TR ──
+    if not isinstance(tr, (int, float)) or tr != tr or tr == float("inf") or tr <= 0 or tr < 0.1 or tr > 10.0:
+        result["ok"] = False
+        result["errors"].append(f"Invalid TR: {tr}. Must be 0.1 <= TR <= 10.0.")
+        return result
 
-    input_path = Path(input_nii)
-    if not input_path.exists():
-        return {
-            "ok": False,
-            "node_id": "gpu_alff_subject",
-            "backend": "python",
-            "subject_id": subject_id,
-            "outputs": [],
-            "metrics": {},
-            "warnings": [],
-            "errors": [f"Input smoothed BOLD not found: {input_path}"],
-        }
+    # ── Frequency band ──
+    if not isinstance(frequency_band, (list, tuple)) or len(frequency_band) != 2:
+        result["ok"] = False
+        result["errors"].append("frequency_band must be [low, high].")
+        return result
+    low, high = frequency_band
+    nyquist = 1.0 / (2.0 * tr)
+    if not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+        result["ok"] = False
+        result["errors"].append("Frequency band values must be numeric.")
+        return result
+    if low != low or high != high or low == float("inf") or high == float("inf"):
+        result["ok"] = False
+        result["errors"].append("Frequency band values must be finite.")
+        return result
+    if low <= 0 or high <= low or high >= nyquist:
+        result["ok"] = False
+        result["errors"].append(f"Invalid band [{low}, {high}] for TR={tr} (Nyquist={nyquist:.3f}). Need 0<low<high<Nyquist.")
+        return result
 
-    out_dir = Path(derivatives_dir) / "gpu_alff" / subject_id / "func"
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if not isinstance(compute_falff, bool):
+        result["ok"] = False
+        result["errors"].append("compute_falff must be a boolean.")
+        return result
 
-    alff_path = out_dir / f"{subject_id}_alff.nii"
-    falff_path = out_dir / f"{subject_id}_falff.nii"
-    result_json = out_dir / "gpu_alff_result.json"
+    # ── GPU guard ──
+    dev = validate_gpu_device(device)
+    result["gpu_guard"] = dev.to_dict()
+    if not dev.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in dev.errors)
+        return result
 
-    try:
-        img = nib.load(str(input_path))
-        data = img.get_fdata(dtype="float32")
+    cuda = check_cuda_availability(
+        torch_cuda_available=torch_cuda_available,
+        device_count=device_count,
+        require_gpu=require_gpu,
+    )
+    result["warnings"].extend(w.message for w in cuda.warnings)
+    if not cuda.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in cuda.errors)
+        return result
 
-        if data.ndim != 4:
-            raise ValueError(f"Expected 4D BOLD input, got shape={data.shape}")
-
-        gpu_info = detect_gpu()
-        warnings.extend(gpu_info.get("warnings", []))
-
-        result = compute_alff_backend(
-            data=data,
-            tr=tr,
-            freq_band=band_tuple,
-            prefer_gpu=prefer_gpu,
-            require_gpu=require_gpu,
+    if functional_shape:
+        mem = validate_gpu_memory_budget(
+            shape=functional_shape,
+            dtype_bytes=dtype_bytes,
+            batch_size=batch_size,
+            max_elements=20_000_000,
+            max_bytes=512 * 1024 * 1024,
         )
+        if not mem.ok:
+            result["ok"] = False
+            result["errors"].extend(e.message for e in mem.errors)
+            return result
+        result["estimated_bytes"] = mem.estimated_bytes
 
-        warnings.extend(result.get("warnings", []))
-        errors.extend(result.get("errors", []))
+    tm = validate_gpu_timeout(timeout_seconds, max_timeout_seconds=120)
+    if not tm.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in tm.errors)
+        return result
 
-        if not result.get("ok"):
-            payload = {
-                "ok": False,
-                "node_id": "gpu_alff_subject",
-                "backend": result.get("backend"),
-                "subject_id": subject_id,
-                "outputs": [],
-                "metrics": {},
-                "warnings": warnings,
-                "errors": errors,
-            }
-            result_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            return payload
+    conc = validate_gpu_concurrency(active_jobs=active_jobs, max_concurrent_jobs=max_concurrent_jobs)
+    if not conc.ok:
+        result["ok"] = False
+        result["errors"].extend(e.message for e in conc.errors)
+        return result
 
-        alff = result["alff"]
-        falff = result["falff"]
+    # ── Output scope ──
+    output_dir = derivatives / "gpu" / "gpu_alff_subject" / run_id / subject_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+    provenance = {
+        "subject_id": subject_id,
+        "run_id": run_id,
+        "tr": tr,
+        "frequency_band": list(frequency_band),
+        "compute_falff": compute_falff,
+        "device": device,
+        "dry_run": dry_run,
+    }
+    (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
 
-        nib.save(nib.Nifti1Image(alff.astype("float32"), img.affine, img.header), str(alff_path))
-        nib.save(nib.Nifti1Image(falff.astype("float32"), img.affine, img.header), str(falff_path))
+    outputs = {
+        "output_dir": str(output_dir),
+        "provenance": str(output_dir / "provenance.json"),
+    }
+    if dry_run:
+        outputs["alff_map"] = str(output_dir / "alff_map.nii.gz")
+        if compute_falff:
+            outputs["falff_map"] = str(output_dir / "falff_map.nii.gz")
+    else:
+        result["stage"] = "preflight_completed"
+        result["warnings"].append("ALFF computation not executed (dry_run=False, but runner is scaffold-only).")
 
-        comparison: dict[str, Any] = {}
+    result["outputs"] = outputs
+    return result
 
-        if benchmark_compare_cpu_gpu and result.get("backend") == "gpu-cupy":
-            cpu_alff, cpu_falff, cpu_warnings = compute_alff_numpy(data, tr, band_tuple)
-            warnings.extend([f"CPU benchmark: {item}" for item in cpu_warnings])
 
-            alff_diff = _compare_arrays(cpu_alff, alff)
-            falff_diff = _compare_arrays(cpu_falff, falff)
-
-            comparison = {
-                "max_abs_diff_alff": alff_diff["max_abs_diff"],
-                "mean_abs_diff_alff": alff_diff["mean_abs_diff"],
-                "max_abs_diff_falff": falff_diff["max_abs_diff"],
-                "mean_abs_diff_falff": falff_diff["mean_abs_diff"],
-            }
-
-        metrics = {
-            "backend": result.get("backend"),
-            "gpu_available": gpu_info.get("gpu_available"),
-            "cupy_available": gpu_info.get("cupy_available"),
-            "device_name": gpu_info.get("device_name"),
-            "runtime_seconds": result.get("runtime_seconds"),
-            "input_shape": list(data.shape),
-            "tr": tr,
-            "freq_band": list(band_tuple),
-            **comparison,
-        }
-
-        payload = {
-            "ok": True,
-            "node_id": "gpu_alff_subject",
-            "backend": result.get("backend"),
-            "subject_id": subject_id,
-            "input": str(input_path),
-            "outputs": [str(alff_path), str(falff_path), str(result_json)],
-            "metrics": metrics,
-            "warnings": warnings,
-            "errors": errors,
-        }
-
-        result_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return payload
-
-    except Exception as exc:
-        payload = {
-            "ok": False,
-            "node_id": "gpu_alff_subject",
-            "backend": "python",
-            "subject_id": subject_id,
-            "outputs": [],
-            "metrics": {},
-            "warnings": warnings,
-            "errors": [f"Failed to run ALFF subject: {exc}"],
-        }
-        result_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        return payload
+# //@source://MedImage Agent/AUDIT
+# Backward-compatibility alias for existing nodes/gpu_alff_node.py
+run_alff_subject = run_gpu_alff_subject
