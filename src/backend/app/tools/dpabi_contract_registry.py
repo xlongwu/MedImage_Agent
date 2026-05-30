@@ -10,6 +10,12 @@ FULL_PIPELINE_RUNNERS = {"DPARSF_run", "DPARSFA_run"}
 SAFE_IO = {"y_Read", "y_Write", "rest_readfile", "rest_writefile"}
 SINGLE_FUNCTION_CANDIDATES = {
     "y_Smooth",
+    "y_Filter",
+    "y_RegressOutImgCovariates",
+    "y_alff_falff",
+    "y_Reho",
+    "y_ROItseries",
+    "y_FC",
     "y_Reslice",
     "y_ALFF",
     "y_fALFF",

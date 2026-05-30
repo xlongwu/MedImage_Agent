@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.runtime.external_tool_result import (
+    external_tool_failure,
+    from_subprocess_result,
+    standard_external_safety,
+)
 from src.backend.app.tools.nifti_utils import prepare_nifti_for_spm
 
 
@@ -32,7 +38,24 @@ def run_spm_smooth_subject(
     derivatives_dir: str,
     matlab_script_dir: str = "./matlab",
     fwhm: list[int] | None = None,
+    approved: bool = False,
 ) -> dict[str, Any]:
+    """DEPRECATED: Use spm_smooth_runner for standard SPM batch smoothing.
+    Requires explicit approved=True for safety."""
+    if not approved:
+        data = {
+            "ok": False, "node_id": "spm_smooth_subject", "backend": "matlab-spm",
+            "subject_id": subject_id, "outputs": [],
+            "errors": ["SPM subject smooth requires approved=True. This runner is deprecated; use spm_smooth_runner instead."],
+        }
+        data["external_tool_result"] = external_tool_failure(
+            tool_name="spm.smooth.deprecated",
+            backend="matlab-spm",
+            errors=data["errors"],
+            approval={"approved": False, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
     fwhm = fwhm or [4, 4, 4]
 
     bold_path = _find_first_bold(subject_record)
@@ -103,7 +126,7 @@ def run_spm_smooth_subject(
     ]
 
     with stdout_log.open("w", encoding="utf-8") as out, stderr_log.open("w", encoding="utf-8") as err:
-        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False)
+        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False, timeout=600)
 
     if result_json.exists():
         try:
@@ -140,4 +163,17 @@ def run_spm_smooth_subject(
         data.setdefault("errors", [])
         data["errors"].append(f"Expected smoothed output not found: {output_nii}")
 
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name="spm.smooth.deprecated",
+        backend="matlab-spm",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[input_nii],
+        outputs=data.get("outputs", []),
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval={"approved": approved, "required": True},
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
     return data

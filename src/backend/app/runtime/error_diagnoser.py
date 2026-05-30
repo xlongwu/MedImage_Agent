@@ -38,54 +38,6 @@ def _read_text_excerpt(path: str | None) -> str:
     )
 
 
-def _categorize_issue(message: str, matched_errors: list[dict[str, Any]]) -> str:
-    text = message.lower()
-
-    for item in matched_errors:
-        source = str(item.get("source", "")).lower()
-        if source == "matlab":
-            return "MATLAB_ERROR"
-        if source == "spm":
-            return "SPM_ERROR"
-        if source == "dpabi":
-            return "DPABI_ERROR"
-        if source == "python":
-            return "PYTHON_DEPENDENCY_ERROR"
-
-    if "matlab" in text:
-        return "MATLAB_ERROR"
-    if "spm" in text:
-        return "SPM_ERROR"
-    if "nifti" in text or ".nii" in text:
-        return "NIFTI_IO_ERROR"
-    if "missing dependency" in text or "importerror" in text:
-        return "PYTHON_DEPENDENCY_ERROR"
-    if "dataset" in text or "bids" in text:
-        return "DATASET_STRUCTURE_ERROR"
-    if "qc" in text or "nan_count" in text:
-        return "QC_FAILURE"
-
-    return "UNKNOWN_ERROR"
-
-
-def _retry_recommendation(category: str, matched_errors: list[dict[str, Any]]) -> str:
-    if matched_errors:
-        retryable_values = {str(item.get("retryable")) for item in matched_errors}
-        if "false" in retryable_values:
-            return "FIX_CONFIG_THEN_RETRY"
-        if "true" in retryable_values:
-            return "SAFE_RETRY"
-
-    if category in {"PYTHON_DEPENDENCY_ERROR"}:
-        return "FIX_DEPENDENCY_THEN_RETRY"
-    if category in {"MATLAB_ERROR", "SPM_ERROR"}:
-        return "RERUN_ENVIRONMENT_CHECK"
-    if category in {"QC_FAILURE"}:
-        return "MANUAL_REVIEW"
-
-    return "MANUAL_REVIEW"
-
-
 def _collect_issue_from_state(
     issue_id: str,
     state: dict[str, Any],

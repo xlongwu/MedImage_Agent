@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.runtime.external_tool_result import from_subprocess_result, standard_external_safety
+
 
 def _matlab_quote(value: str) -> str:
     return value.replace("'", "''")
@@ -101,4 +103,70 @@ def run_spm_smoke_test(
         data.setdefault("errors", [])
         data["errors"].append(f"Expected output not found: {smoothed_nii}")
 
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name="spm.smoke_test",
+        backend="matlab-spm",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[],
+        outputs=[str(smoothed_nii), str(result_json), str(stdout_log), str(stderr_log)],
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval={"approved": True, "required": False, "reason": "environment smoke test"},
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
     return data
+
+
+# ── M6-T004a: SPM smoke safety preflight ────────────────────────────────────
+
+def spm_smoke_preflight(
+    *,
+    matlab_command: str,
+    spm_dir: str | Path,
+    dpabi_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Run safety checks before calling MATLAB for SPM smoke test.
+
+    Uses matlab_safety.py validators.  Errors block execution;
+    warnings are advisory but do not block.
+
+    Returns a dict with ok, safety, and preflight detail.
+    Does NOT call MATLAB or subprocess.
+    """
+    from src.backend.app.safety.matlab_safety import (
+        validate_matlab_runtime_config,
+        validate_matlab_command,
+        validate_third_party_dir,
+    )
+
+    safety_result = validate_matlab_runtime_config(
+        matlab_command=matlab_command,
+        spm_dir=spm_dir,
+        dpabi_dir=dpabi_dir if dpabi_dir else "./third_party/DPABI",
+    )
+
+    safety_errors = [e.to_dict() for e in safety_result.errors]
+    safety_warnings = [w.to_dict() for w in safety_result.warnings]
+
+    preflight_ok = len(safety_errors) == 0
+
+    return {
+        "ok": preflight_ok,
+        "safety": {
+            "ok": safety_result.ok,
+            "errors": safety_errors,
+            "warnings": safety_warnings,
+        },
+        "matlab_command_checked": True,
+        "spm_dir_checked": True,
+        "dpabi_dir_checked": dpabi_dir is not None,
+        "would_call_matlab": preflight_ok,  # Only if no safety errors
+        "notes": [
+            "SPM smoke test preflight completed.",
+            "No MATLAB was called during preflight.",
+        ] if preflight_ok else [
+            "SPM smoke test preflight FAILED — safety checks blocked execution.",
+        ],
+    }

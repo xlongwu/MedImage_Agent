@@ -151,6 +151,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_python_nodes": [],
         "allowed_gpu_nodes": [],
         "allowed_contract_nodes": [],
+        "allowed_spm_smoke_nodes": [],  # M6-T004b: spm_smoke_test only
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -179,7 +180,10 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             result["blocked_manual_required_nodes"].append(nid)
             continue
 
-        # SPM
+        # SPM — M6-T004b: spm_smoke_test is the only allowed SPM node
+        if nid == "spm_smoke_test":
+            result["allowed_spm_smoke_nodes"].append(nid)
+            continue
         if nid.startswith("spm_") or cat.backend == "matlab-spm":
             result["blocked_spm_nodes"].append(nid)
             continue

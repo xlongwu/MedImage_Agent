@@ -64,6 +64,13 @@
 | 任务 | 状态 | 完成日期 |
 |------|:---:|---------|
 | **M6-T001：SPM/DPABI execution safety review** | ✅ | 2026-05-29 |
+| **M6-T002a：MATLAB command / third-party path safety guard** | ✅ | 2026-05-29 |
+| **M6-T003：node-level + backend-level approval** | ✅ | 2026-05-29 |
+| **M6-T004a：SPM smoke safety preflight** | ✅ | 2026-05-29 |
+| **M6-T004b：spm_smoke_test reviewed execution allowlist** | ✅ | 2026-05-29 |
+| **M6-T004c：SPM smoke manual validation guide** | ✅ | 2026-05-29 |
+| **M6-T005a：spm realign safety contract** | ✅ | 2026-05-29 |
+| **M6-T005b：spm realign MATLAB safety preflight** | ✅ | 2026-05-29 |
 
 ## M1 交付物状态
 
@@ -106,7 +113,7 @@
 
 | 指标 | 当前值 |
 |------|--------|
-| pytest 全量（本地） | **550 passed, 4 skipped** |
+| pytest 全量（本地） | **628 passed, 4 skipped** |
 | pytest CI（Linux） | ✅ 全绿 |
 | CI frontend build | ✅ 通过 |
 | frontend build（本地） | ✅ 已验证 |

@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.runtime.external_tool_result import (
+    external_tool_failure,
+    from_subprocess_result,
+    missing_output_errors,
+    standard_external_safety,
+)
 from src.backend.app.tools.tissue_qc import compute_tissue_qc_for_subject
 
 
@@ -46,7 +53,7 @@ def run_spm_segment_subject(
     matlab_script_dir: str = "./matlab",
 ) -> dict[str, Any]:
     if not approved:
-        return {
+        data = {
             "ok": False,
             "node_id": "spm_segment_subject",
             "backend": "matlab-spm",
@@ -55,6 +62,15 @@ def run_spm_segment_subject(
             "warnings": [],
             "errors": ["SPM segmentation requires approved=true."],
         }
+        data["external_tool_result"] = external_tool_failure(
+            tool_name="spm.segment",
+            backend="matlab-spm",
+            errors=data["errors"],
+            inputs=[],
+            approval={"approved": False, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     input_t1w = _expected_coreg_t1w(subject_id, derivatives_dir)
 
@@ -100,16 +116,13 @@ def run_spm_segment_subject(
         "catch ME, disp(getReport(ME)); exit(1); end; exit(0);"
     )
 
-    cmd = [
-        matlab_command,
-        "-nodisplay",
-        "-nosplash",
-        "-r",
-        matlab_code,
-    ]
+    if sys.platform == "win32":
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-batch", matlab_code]
+    else:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-r", matlab_code]
 
     with stdout_log.open("w", encoding="utf-8") as out, stderr_log.open("w", encoding="utf-8") as err:
-        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False)
+        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False, timeout=600)
 
     data = _read_json(result_json) or {
         "ok": False,
@@ -144,12 +157,31 @@ def run_spm_segment_subject(
         qc_outputs = qc.get("outputs", [])
 
     outputs = []
+    required_outputs = []
     for key in ["gm_file", "wm_file", "csf_file", "deformation_field"]:
         if data.get(key):
             outputs.append(data[key])
+            required_outputs.append(data[key])
 
     outputs.extend(qc_outputs)
     outputs.extend([str(result_json), str(stdout_log), str(stderr_log)])
+    missing_errors = missing_output_errors(required_outputs)
+    if missing_errors:
+        data["ok"] = False
+        data.setdefault("errors", []).extend(missing_errors)
 
     data["outputs"] = sorted(set(outputs))
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name="spm.segment",
+        backend="matlab-spm",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[str(input_t1w)],
+        outputs=data["outputs"],
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval={"approved": approved, "required": True},
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
     return data

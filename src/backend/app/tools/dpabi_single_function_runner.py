@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Any
 
 
-ALLOWLISTED_SINGLE_FUNCTIONS = {"y_Smooth", "rest_Smooth"}
+from src.backend.app.runtime.external_tool_result import (
+    external_tool_failure,
+    from_subprocess_result,
+    standard_external_safety,
+)
+from src.backend.app.tools.dpabi_function_contracts import get_dpabi_single_function_contract
+from src.backend.app.tools.dpabi_safety import ALLOWED_FUNCTIONS as ALLOWLISTED_SINGLE_FUNCTIONS
 
 
 def _now_iso() -> str:
@@ -45,7 +51,7 @@ def run_dpabi_single_function_sandbox(
     matlab_script_dir: str = "./matlab",
 ) -> dict[str, Any]:
     if not approved:
-        return {
+        data = {
             "ok": False,
             "node_id": "dpabi_single_function_sandbox",
             "backend": "matlab-dpabi",
@@ -54,6 +60,14 @@ def run_dpabi_single_function_sandbox(
             "warnings": [],
             "errors": ["DPABI single-function sandbox requires approved=true."],
         }
+        data["external_tool_result"] = external_tool_failure(
+            tool_name=f"dpabi.{function_name}",
+            backend="matlab-dpabi",
+            errors=data["errors"],
+            approval={"approved": False, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     if function_name not in ALLOWLISTED_SINGLE_FUNCTIONS:
         return {
@@ -94,6 +108,7 @@ def run_dpabi_single_function_sandbox(
         }
 
     contract = _find_contract(contracts, function_name)
+    function_contract = get_dpabi_single_function_contract(function_name)
     if not contract:
         return {
             "ok": False,
@@ -188,11 +203,16 @@ def run_dpabi_single_function_sandbox(
     data["stderr_log"] = str(stderr_log)
     data["result_json"] = str(result_json)
     data["approval_record"] = str(approval_path)
+    data["contract"] = function_contract or contract
 
     if completed.returncode != 0:
         data["ok"] = False
         data.setdefault("errors", [])
         data["errors"].append(f"MATLAB exited with return code {completed.returncode}.")
+    elif not data.get("outputs"):
+        data["ok"] = False
+        data.setdefault("errors", [])
+        data["errors"].append("DPABI sandbox completed but did not report output artifacts.")
 
     audit = {
         "ok": bool(data.get("ok")),
@@ -255,5 +275,18 @@ def run_dpabi_single_function_sandbox(
     data["audit_json"] = str(audit_json)
     data["audit_report"] = str(report_path)
     data["outputs"] = data.get("outputs", []) + [str(audit_json), str(report_path)]
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name=f"dpabi.{function_name}",
+        backend="matlab-dpabi",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[str(contracts_path)],
+        outputs=data["outputs"],
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval=approval_record,
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
 
     return data

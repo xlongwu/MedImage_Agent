@@ -1,0 +1,16 @@
+appId: org.medimage.agent
+productName: MedImage Agent
+directories:
+  output: dist-electron
+files:
+  - dist/**/*
+  - electron/**/*
+extraMetadata:
+  main: electron/main.cjs
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true

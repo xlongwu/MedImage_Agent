@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-ALLOWLISTED_SINGLE_FUNCTIONS = {"y_Smooth", "rest_Smooth"}
+from src.backend.app.tools.dpabi_safety import ALLOWED_FUNCTIONS as ALLOWLISTED_SINGLE_FUNCTIONS
 
 
 def _matlab_quote(value: str) -> str:

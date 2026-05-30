@@ -14,8 +14,8 @@ FORBIDDEN_PATTERNS = [
 ]
 
 ALLOWED_FUNCTIONS = {
-    "y_Smooth",
-    "y_Filter",
+    "y_Smooth", "rest_Smooth",
+    "y_Filter", "rest_Filter",
     "y_RegressOutImgCovariates",
     "y_alff_falff",
     "y_Reho",

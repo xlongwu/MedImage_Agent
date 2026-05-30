@@ -69,6 +69,7 @@ class SQLiteMemoryProvider:
             db.upsert_run({
                 "run_id": run_id,
                 "pipeline_id": safe.get("pipeline_id", ""),
+                "project_name": project_name,
                 "status": safe.get("status", "UNKNOWN"),
                 "started_at": safe.get("started_at"),
                 "finished_at": safe.get("finished_at"),
@@ -89,7 +90,8 @@ class SQLiteMemoryProvider:
     def query_events(self, project_name: str, filters: dict[str, Any] | None = None, limit: int = 50) -> list[dict[str, Any]]:
         db = self._get_db()
         try:
-            return db.query_runs(limit=limit)
+            status = filters.get("status") if filters else None
+            return db.query_runs_filtered(project_name=project_name, status=status, limit=limit)
         except Exception:
             return []
 

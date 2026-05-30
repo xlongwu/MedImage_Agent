@@ -29,3 +29,44 @@ def test_path_traversal_rejected():
     response = client.get("/api/files/read", params={"path": "../../etc/passwd"})
 
     assert response.status_code in {400, 403}
+
+
+def test_planner_draft_api():
+    client = TestClient(app)
+    response = client.post(
+        "/api/planner/draft",
+        json={"downstream_task": "ALFF analysis", "disease_type": "AD"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["advice_only"] is True
+    assert payload["recommended_pipeline_path"].endswith("pipeline_rsfmri_alff_falff.yaml")
+
+
+def test_gui_agent_api_mock_session():
+    client = TestClient(app)
+    create = client.post(
+        "/api/gui-agent/sessions",
+        json={"target_app": "dpabi", "objective": "inspect GUI", "approved": True},
+    )
+    assert create.status_code == 200
+    session_id = create.json()["session_id"]
+
+    step = client.post(
+        f"/api/gui-agent/sessions/{session_id}/step",
+        json={"action": "record_observation", "parameters": {"title": "DPABI"}},
+    )
+    assert step.status_code == 200
+    assert step.json()["step"]["executed"] is False
+
+
+def test_desktop_health_api():
+    client = TestClient(app)
+    response = client.get("/api/desktop/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert "checks" in payload

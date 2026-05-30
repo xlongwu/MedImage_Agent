@@ -28,6 +28,9 @@ import { Section } from "../Section";
 import SessionMemoryBrowserPanel from "../SessionMemoryBrowserPanel";
 import InsightsDashboardPanel from "../InsightsDashboardPanel";
 import AdvisorCenterPanel from "../AdvisorCenterPanel";
+import DesktopSettingsPanel from "../DesktopSettingsPanel";
+import ExternalSmokePanel from "../ExternalSmokePanel";
+import ImportDiagnosticsPanel from "../ImportDiagnosticsPanel";
 
 interface Props { baseUrl: string; }
 
@@ -72,6 +75,9 @@ export default function AdvancedModePanel({ baseUrl }: Props) {
         {tab === "system" && (
           <>
             <Section title="API Health"><StatusBadge status="HEALTHY" /></Section>
+            <Section title="Desktop Settings"><DesktopSettingsPanel baseUrl={baseUrl} /></Section>
+            <Section title="Import Diagnostics"><ImportDiagnosticsPanel baseUrl={baseUrl} /></Section>
+            <Section title="External SPM / DPABI Smoke"><ExternalSmokePanel baseUrl={baseUrl} /></Section>
             <Section title="Pipeline Explorer"><PipelineExplorer baseUrl={baseUrl} selectedPipeline={selectedPipeline} onSelectPipeline={setSelectedPipeline} /></Section>
             <Section title="Run Monitor"><RunMonitor baseUrl={baseUrl} /></Section>
           </>

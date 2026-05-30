@@ -11,6 +11,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
     pipeline_id TEXT NOT NULL,
+    project_name TEXT DEFAULT '',
     status TEXT NOT NULL,
     started_at TEXT,
     finished_at TEXT,
@@ -76,6 +77,14 @@ class SessionDB:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
             self._conn.executescript(SCHEMA)
+            # Migration: add project_name column to existing databases
+            try:
+                self._conn.execute("ALTER TABLE runs ADD COLUMN project_name TEXT DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_name)"
+            )
         return self._conn
 
     def close(self) -> None:
@@ -88,11 +97,11 @@ class SessionDB:
     def upsert_run(self, run: dict[str, Any]) -> None:
         self.conn.execute(
             """INSERT OR REPLACE INTO runs
-               (run_id, pipeline_id, status, started_at, finished_at,
+               (run_id, pipeline_id, project_name, status, started_at, finished_at,
                 duration_seconds, source_path, errors_json)
-               VALUES (?,?,?,?,?,?,?,?)""",
-            (run["run_id"], run.get("pipeline_id", ""), run.get("status", ""),
-             run.get("started_at"), run.get("finished_at"),
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (run["run_id"], run.get("pipeline_id", ""), run.get("project_name", ""),
+             run.get("status", ""), run.get("started_at"), run.get("finished_at"),
              run.get("duration_seconds"), run.get("source_path"),
              json.dumps(run.get("errors", []), ensure_ascii=False)),
         )
@@ -145,6 +154,28 @@ class SessionDB:
             rows = self.conn.execute(
                 "SELECT * FROM runs ORDER BY started_at DESC LIMIT ?", (limit,),
             ).fetchall()
+        return [dict(r) for r in rows]
+
+    def query_runs_filtered(
+        self,
+        project_name: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        conditions: list[str] = []
+        params: list[Any] = []
+        if project_name:
+            conditions.append("project_name = ?")
+            params.append(project_name)
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+        params.append(limit)
+        rows = self.conn.execute(
+            f"SELECT * FROM runs {where} ORDER BY started_at DESC LIMIT ?",
+            params,
+        ).fetchall()
         return [dict(r) for r in rows]
 
     def query_nodes_by_run(self, run_id: str) -> list[dict[str, Any]]:

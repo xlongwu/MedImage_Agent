@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Template instantiation is intentionally restricted to smoothing-only for safety.
 ALLOWLISTED_FUNCTIONS = {"y_Smooth", "rest_Smooth"}
 
 

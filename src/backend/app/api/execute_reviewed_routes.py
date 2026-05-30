@@ -126,20 +126,25 @@ def _is_policy_blocked(policy: dict[str, list[str]]) -> bool:
 
 
 def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
-    """Check that all allowed nodes are in the first-edition safe allowlist.
+    """Check that all allowed nodes are in the safe allowlist.
 
     Returns error status string if any node is not in the allowlist, else None.
-    First edition only allows pure-Python nodes (no GPU, no contract).
+
+    M5: pure-Python nodes only.
+    M6-T004b: also allows spm_smoke_test (verified MATLAB/SPM environment smoke).
     """
-    # Only allowed_python_nodes are safe for first edition
     gpu_nodes = policy.get("allowed_gpu_nodes", [])
     contract_nodes = policy.get("allowed_contract_nodes", [])
+    spm_smoke_nodes = policy.get("allowed_spm_smoke_nodes", [])
+
     unsafe = gpu_nodes + contract_nodes
     if unsafe:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
-    # Also check that there are actually allowed python nodes (not an empty plan)
+
+    # Must have at least one allowed node
     python_nodes = policy.get("allowed_python_nodes", [])
-    if not python_nodes:
+    total_allowed = python_nodes + spm_smoke_nodes
+    if not total_allowed:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
     return None
 

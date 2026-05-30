@@ -190,3 +190,159 @@ def test_risk_summary_triggers_approval():
     result = check_approval_gate({}, v, None)
     assert result.execution_allowed is False
     assert result.approval_required is True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T003: node-level + backend-level approval
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def _hr_plan(nodes=None):
+    """Build a plan with high-risk backend nodes."""
+    return {
+        "pipeline_id": "test",
+        "nodes": nodes or [
+            {"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}},
+        ],
+    }
+
+
+def _hr_approval(approved_nodes=None, approved_backends=None, rejected_nodes=None):
+    return ApprovalRecord(
+        approved=True,
+        approved_by="test-user",
+        approved_nodes=approved_nodes or [],
+        rejected_nodes=rejected_nodes or [],
+        approved_backends=approved_backends or [],
+    )
+
+
+# ── 18. ApprovalRecord supports approved_backends ──
+
+def test_approval_record_supports_approved_backends():
+    a = ApprovalRecord(
+        approved=True,
+        approved_backends=["matlab-spm"],
+    )
+    assert a.approved_backends == ["matlab-spm"]
+
+
+# ── 19. SPM node with wildcard → blocked ──
+
+def test_spm_node_wildcard_blocked():
+    v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
+    plan = _hr_plan()
+    a = _hr_approval(approved_nodes=["*"])
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is False
+    assert any(e.code == "WILDCARD_APPROVAL_NOT_ALLOWED_FOR_HIGH_RISK_BACKEND" for e in result.errors)
+
+
+# ── 20. SPM node without explicit node approval → blocked ──
+
+def test_spm_node_no_explicit_approval():
+    v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
+    plan = _hr_plan()
+    a = _hr_approval(approved_nodes=["data_inspection"], approved_backends=["matlab-spm"])
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is False
+    assert any(e.code == "HIGH_RISK_NODE_REQUIRES_EXPLICIT_APPROVAL" for e in result.errors)
+
+
+# ── 21. SPM node without backend approval → blocked ──
+
+def test_spm_node_no_backend_approval():
+    v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
+    plan = _hr_plan()
+    a = _hr_approval(approved_nodes=["spm_realign_subject"], approved_backends=[])
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is False
+    assert any(e.code == "HIGH_RISK_BACKEND_REQUIRES_APPROVAL" for e in result.errors)
+
+
+# ── 22. SPM node with explicit node + backend approval → passes ──
+
+def test_spm_node_full_approval_passes():
+    v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
+    plan = _hr_plan()
+    a = _hr_approval(approved_nodes=["spm_realign_subject"], approved_backends=["matlab-spm"])
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is True
+
+
+# ── 23. Python-only node still works with wildcard ──
+
+def test_python_only_node_wildcard_still_works():
+    v = _valid_validation(approval_required_nodes=["data_inspection"])
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "data_inspection", "backend": "python", "depends_on": [], "params": {}},
+    ]}
+    a = _hr_approval(approved_nodes=["*"])
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is True
+
+
+# ── 24. DPABI execution node requires explicit node + backend ──
+
+def test_dpabi_execution_requires_explicit():
+    v = _valid_validation(approval_required_nodes=["dpabi_subject_smooth"])
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "dpabi_subject_smooth", "backend": "dpabi", "depends_on": [], "params": {}},
+    ]}
+    a = _hr_approval(approved_nodes=["*"])
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is False  # wildcard blocked
+
+
+# ── 25. DPABI contract Python-only node NOT treated as high-risk ──
+
+def test_dpabi_contract_python_not_high_risk():
+    v = _valid_validation()
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "dpabi_capability_inspection", "backend": "python", "depends_on": [], "params": {}},
+    ]}
+    result = check_approval_gate(plan, v, None)  # no approval needed
+    assert result.execution_allowed is True
+
+
+# ── 26. Rejected nodes still block (priority) ──
+
+def test_rejected_blocks_even_with_backend_approval():
+    v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
+    plan = _hr_plan()
+    a = _hr_approval(
+        approved_nodes=["spm_realign_subject"],
+        approved_backends=["matlab-spm"],
+        rejected_nodes=["spm_realign_subject"],
+    )
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is False
+    assert any(e.code == "APPROVAL_REJECTED_NODE" for e in result.errors)
+
+
+# ── 27. Manual required still blocks ──
+
+def test_manual_required_still_blocks():
+    v = _valid_validation(manual_required_nodes=["gui_acpc_location"])
+    plan = _hr_plan()
+    a = _hr_approval(
+        approved_nodes=["spm_realign_subject", "gui_acpc_location"],
+        approved_backends=["matlab-spm"],
+    )
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is False
+    assert any(e.code == "MANUAL_REQUIRED_NODE" for e in result.errors)
+
+
+# ── 28. High risk approved still warns ──
+
+def test_high_risk_still_warns():
+    v = _valid_validation(
+        approval_required_nodes=["spm_realign_subject"],
+        high_risk_nodes=["spm_realign_subject"],
+    )
+    plan = _hr_plan()
+    a = _hr_approval(approved_nodes=["spm_realign_subject"], approved_backends=["matlab-spm"])
+    result = check_approval_gate(plan, v, a)
+    assert result.execution_allowed is True
+    assert any(w.code == "HIGH_RISK_APPROVED" for w in result.warnings)

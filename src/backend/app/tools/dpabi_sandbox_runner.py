@@ -6,6 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.runtime.external_tool_result import (
+    external_tool_failure,
+    from_subprocess_result,
+    standard_external_safety,
+)
+
 
 def _matlab_quote(value: str) -> str:
     return value.replace("'", "''")
@@ -34,7 +40,7 @@ def run_dpabi_sandbox_smoke(
     matlab_script_dir: str = "./matlab",
 ) -> dict[str, Any]:
     if not approved:
-        return {
+        data = {
             "ok": False,
             "node_id": "dpabi_sandbox_smoke_run",
             "backend": "matlab-dpabi",
@@ -42,6 +48,14 @@ def run_dpabi_sandbox_smoke(
             "errors": ["DPABI sandbox smoke run requires approved=true."],
             "warnings": [],
         }
+        data["external_tool_result"] = external_tool_failure(
+            tool_name="dpabi.sandbox_smoke",
+            backend="matlab-dpabi",
+            errors=data["errors"],
+            approval={"approved": False, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     dpabi_work = Path(work_dir) / "dpabi"
     sandbox_dir = dpabi_work / "sandbox"
@@ -60,7 +74,7 @@ def run_dpabi_sandbox_smoke(
     run_plan = _read_json(run_plan_path)
 
     if not run_plan:
-        return {
+        data = {
             "ok": False,
             "node_id": "dpabi_sandbox_smoke_run",
             "backend": "matlab-dpabi",
@@ -68,6 +82,15 @@ def run_dpabi_sandbox_smoke(
             "errors": [f"Missing DPABI run plan: {run_plan_path}"],
             "warnings": [],
         }
+        data["external_tool_result"] = external_tool_failure(
+            tool_name="dpabi.sandbox_smoke",
+            backend="matlab-dpabi",
+            errors=data["errors"],
+            inputs=[str(run_plan_path)],
+            approval={"approved": approved, "approved_by": approved_by, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     approval_record = {
         "approved": True,
@@ -210,5 +233,18 @@ def run_dpabi_sandbox_smoke(
     data["outputs"] = outputs
     data["audit_json"] = str(audit_json)
     data["audit_report"] = str(audit_md)
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name="dpabi.sandbox_smoke",
+        backend="matlab-dpabi",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[str(run_plan_path)],
+        outputs=outputs,
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval=approval_record,
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
 
     return data

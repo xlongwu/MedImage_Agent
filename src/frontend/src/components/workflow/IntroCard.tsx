@@ -1,4 +1,5 @@
 import React from "react";
+import { DEFAULT_API_BASE } from "../../api";
 
 export function IntroCard({ onStart }: { onStart: () => void }) {
   return (
@@ -29,7 +30,7 @@ export function IntroCard({ onStart }: { onStart: () => void }) {
       </button>
 
       <div style={{ marginTop: 24, fontSize: 12, color: "#999" }}>
-        Backend: <a href="http://127.0.0.1:8000/health" target="_blank" style={{ color: "#1976d2" }}>http://127.0.0.1:8000</a>
+        Backend: <a href={`${DEFAULT_API_BASE}/api/health`} target="_blank" style={{ color: "#1976d2" }}>{DEFAULT_API_BASE}</a>
       </div>
     </div>
   );

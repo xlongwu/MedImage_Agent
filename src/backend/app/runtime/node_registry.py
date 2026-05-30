@@ -1085,19 +1085,47 @@ NODE_REGISTRY["dpabi_reho_contract"] = run_dpabi_reho_contract_node
 
 
 def run_functional_connectivity_subject_node(context, node, subject_record=None, subject_id=None):
-    if not subject_id: return {"ok": False, "node_id": node.id, "backend": "python", "outputs": [], "errors": ["Missing subject_id"]}
-    r = run_functional_connectivity_subject(subject_id=subject_id, derivatives_dir=context.derivatives_dir, backend=node.params.get("backend", "python"), roi_count=int(node.params.get("roi_count", 4)), atlas_path=node.params.get("atlas_path"), generate_seed_map=bool(node.params.get("generate_seed_map", False)))
-    r["node_id"] = node.id; return r
+    """Compute ROI-based functional connectivity for a subject."""
+    if not subject_id:
+        return {
+            "ok": False, "node_id": node.id, "backend": "python",
+            "outputs": [], "errors": ["Missing subject_id"],
+        }
+    result = run_functional_connectivity_subject(
+        subject_id=subject_id,
+        derivatives_dir=context.derivatives_dir,
+        backend=node.params.get("backend", "python"),
+        roi_count=int(node.params.get("roi_count", 4)),
+        atlas_path=node.params.get("atlas_path"),
+        generate_seed_map=bool(node.params.get("generate_seed_map", False)),
+    )
+    result["node_id"] = node.id
+    return result
+
 
 def run_functional_connectivity_qc_dataset_report_node(context, node):
-    r = write_functional_connectivity_dataset_report(derivatives_dir=context.derivatives_dir, report_dir=context.project_config.get("runtime", {}).get("report_dir", "./reports"))
-    r["node_id"] = node.id; return r
+    """Write dataset-level FC QC report."""
+    result = write_functional_connectivity_dataset_report(
+        derivatives_dir=context.derivatives_dir,
+        report_dir=context.project_config.get("runtime", {}).get("report_dir", "./reports"),
+    )
+    result["node_id"] = node.id
+    return result
+
 
 def run_functional_connectivity_gpu_candidate_contract_node(context, node):
-    r = write_functional_connectivity_gpu_candidate_contract(work_dir=context.work_dir); r["node_id"] = node.id; return r
+    """Generate GPU candidate contract for FC computation."""
+    result = write_functional_connectivity_gpu_candidate_contract(work_dir=context.work_dir)
+    result["node_id"] = node.id
+    return result
+
 
 def run_dpabi_functional_connectivity_contract_node(context, node):
-    r = write_dpabi_functional_connectivity_contract(work_dir=context.work_dir); r["node_id"] = node.id; return r
+    """Generate DPABI contract for FC computation."""
+    result = write_dpabi_functional_connectivity_contract(work_dir=context.work_dir)
+    result["node_id"] = node.id
+    return result
+
 
 NODE_REGISTRY["functional_connectivity_subject"] = run_functional_connectivity_subject_node
 NODE_REGISTRY["functional_connectivity_qc_dataset_report"] = run_functional_connectivity_qc_dataset_report_node
@@ -1105,36 +1133,68 @@ NODE_REGISTRY["functional_connectivity_gpu_candidate_contract"] = run_functional
 NODE_REGISTRY["dpabi_functional_connectivity_contract"] = run_dpabi_functional_connectivity_contract_node
 
 
-def run_group_dataset_summary_node(context, node):
-    r = build_group_dataset_summary(derivatives_dir=context.derivatives_dir, reports_dir=context.project_config.get("runtime", {}).get("report_dir", "./reports"), work_dir=context.work_dir)
-    r["node_id"] = node.id; return r
+# ── Report / Export nodes ──────────────────────────────────────────────────
 
-NODE_REGISTRY["group_dataset_summary"] = run_group_dataset_summary_node
+def run_group_dataset_summary_node(context, node):
+    """Build group-level dataset summary report."""
+    result = build_group_dataset_summary(
+        derivatives_dir=context.derivatives_dir,
+        reports_dir=context.project_config.get("runtime", {}).get("report_dir", "./reports"),
+        work_dir=context.work_dir,
+    )
+    result["node_id"] = node.id
+    return result
 
 
 def run_rsfmri_report_exporter_node(context, node):
-    r = export_rsfmri_report_package(derivatives_dir=context.derivatives_dir, reports_dir=context.project_config.get("runtime", {}).get("report_dir", "./reports"), work_dir=context.work_dir, exports_dir=node.params.get("exports_dir", "./exports"), export_id=node.params.get("export_id"), include_subject_qc=bool(node.params.get("include_subject_qc", True)), include_metrics=bool(node.params.get("include_metrics", True)), include_fc=bool(node.params.get("include_fc", True)), include_contracts=bool(node.params.get("include_contracts", True)), include_pipeline_runs=bool(node.params.get("include_pipeline_runs", True)))
-    r["node_id"] = node.id; return r
-
-NODE_REGISTRY["rsfmri_report_exporter"] = run_rsfmri_report_exporter_node
+    """Export rs-fMRI report package with checksums and safety manifest."""
+    result = export_rsfmri_report_package(
+        derivatives_dir=context.derivatives_dir,
+        reports_dir=context.project_config.get("runtime", {}).get("report_dir", "./reports"),
+        work_dir=context.work_dir,
+        exports_dir=node.params.get("exports_dir", "./exports"),
+        export_id=node.params.get("export_id"),
+        include_subject_qc=bool(node.params.get("include_subject_qc", True)),
+        include_metrics=bool(node.params.get("include_metrics", True)),
+        include_fc=bool(node.params.get("include_fc", True)),
+        include_contracts=bool(node.params.get("include_contracts", True)),
+        include_pipeline_runs=bool(node.params.get("include_pipeline_runs", True)),
+    )
+    result["node_id"] = node.id
+    return result
 
 
 def run_rsfmri_report_package_validator_node(context, node):
-    r = validate_rsfmri_report_package(exports_dir=node.params.get("exports_dir", "./exports"), export_id=node.params.get("export_id"), package_dir=node.params.get("package_dir"), zip_path=node.params.get("zip_path"), strict=bool(node.params.get("strict", False)))
-    r["node_id"] = node.id; return r
-
-NODE_REGISTRY["rsfmri_report_package_validator"] = run_rsfmri_report_package_validator_node
+    """Validate exported report package integrity."""
+    result = validate_rsfmri_report_package(
+        exports_dir=node.params.get("exports_dir", "./exports"),
+        export_id=node.params.get("export_id"),
+        package_dir=node.params.get("package_dir"),
+        zip_path=node.params.get("zip_path"),
+        strict=bool(node.params.get("strict", False)),
+    )
+    result["node_id"] = node.id
+    return result
 
 
 def run_project_release_readiness_node(context, node):
-    r = build_release_readiness(); r["node_id"] = node.id; return r
-
-NODE_REGISTRY["project_release_readiness"] = run_project_release_readiness_node
+    """Check project release readiness against quality gates."""
+    result = build_release_readiness()
+    result["node_id"] = node.id
+    return result
 
 
 def run_docs_inventory_node(context, node):
-    r = build_docs_inventory(); r["node_id"] = node.id; return r
+    """Build documentation inventory for the project."""
+    result = build_docs_inventory()
+    result["node_id"] = node.id
+    return result
 
+
+NODE_REGISTRY["group_dataset_summary"] = run_group_dataset_summary_node
+NODE_REGISTRY["rsfmri_report_exporter"] = run_rsfmri_report_exporter_node
+NODE_REGISTRY["rsfmri_report_package_validator"] = run_rsfmri_report_package_validator_node
+NODE_REGISTRY["project_release_readiness"] = run_project_release_readiness_node
 NODE_REGISTRY["docs_inventory"] = run_docs_inventory_node
 
 

@@ -43,7 +43,7 @@ class FileMemoryProvider:
 
         error_kb = self._global_dir / "ERROR_KB.yaml"
         if not error_kb.exists():
-            error_kb.write_text("version: '0.1.0'\nerrors: []\n", encoding="utf-8")
+            error_kb.write_text("version: '0.2.0'\ncategories: {}\n", encoding="utf-8")
 
     def read_global(self, key: str) -> str | None:
         path = self._global_dir / key

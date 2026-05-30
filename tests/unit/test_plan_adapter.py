@@ -205,3 +205,39 @@ def test_no_runner():
 
 def test_no_rawdata():
     adapt_reviewed_plan(_valid_plan())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T004b: spm_smoke_test allowlist
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── 21. spm_smoke_test classified as allowed_spm_smoke_nodes ──
+
+def test_spm_smoke_test_allowed():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_smoke_test", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_smoke_test" in policy["allowed_spm_smoke_nodes"]
+    assert "spm_smoke_test" not in policy["blocked_spm_nodes"]
+
+
+# ── 22. spm_realign_subject still blocked ──
+
+def test_spm_realign_still_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_realign_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_realign_subject" in policy["blocked_spm_nodes"]
+    assert "spm_realign_subject" not in policy["allowed_spm_smoke_nodes"]
+
+
+# ── 23. spm_slice_timing_subject still blocked ──
+
+def test_spm_slice_timing_still_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_slice_timing_subject", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "spm_slice_timing_subject" in policy["blocked_spm_nodes"]

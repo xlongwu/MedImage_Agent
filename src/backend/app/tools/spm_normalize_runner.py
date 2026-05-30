@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.runtime.external_tool_result import (
+    external_tool_failure,
+    from_subprocess_result,
+    missing_output_errors,
+    standard_external_safety,
+)
 from src.backend.app.tools.normalization_qc import compute_normalization_qc_for_subject
 
 
@@ -100,7 +107,7 @@ def run_spm_normalize_subject(
     matlab_script_dir: str = "./matlab",
 ) -> dict[str, Any]:
     if not approved:
-        return {
+        data = {
             "ok": False,
             "node_id": "spm_normalize_subject",
             "backend": "matlab-spm",
@@ -109,6 +116,15 @@ def run_spm_normalize_subject(
             "warnings": [],
             "errors": ["SPM normalization requires approved=true."],
         }
+        data["external_tool_result"] = external_tool_failure(
+            tool_name="spm.normalize",
+            backend="matlab-spm",
+            errors=data["errors"],
+            inputs=[],
+            approval={"approved": False, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     voxel_size = voxel_size or [3.0, 3.0, 3.0]
     bounding_box = bounding_box or [[-90.0, -126.0, -72.0], [90.0, 90.0, 108.0]]
@@ -178,16 +194,13 @@ def run_spm_normalize_subject(
         "catch ME, disp(getReport(ME)); exit(1); end; exit(0);"
     )
 
-    cmd = [
-        matlab_command,
-        "-nodisplay",
-        "-nosplash",
-        "-r",
-        matlab_code,
-    ]
+    if sys.platform == "win32":
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-batch", matlab_code]
+    else:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-r", matlab_code]
 
     with stdout_log.open("w", encoding="utf-8") as out, stderr_log.open("w", encoding="utf-8") as err:
-        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False)
+        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False, timeout=600)
 
     data = _read_json(result_json) or {
         "ok": False,
@@ -226,13 +239,33 @@ def run_spm_normalize_subject(
         qc_outputs = qc.get("outputs", [])
 
     outputs = []
+    required_outputs = []
     if data.get("normalized_file"):
         outputs.append(data["normalized_file"])
+        required_outputs.append(data["normalized_file"])
     if data.get("normalized_mean_file"):
         outputs.append(data["normalized_mean_file"])
+        required_outputs.append(data["normalized_mean_file"])
 
     outputs.extend(qc_outputs)
     outputs.extend([str(result_json), str(stdout_log), str(stderr_log)])
+    missing_errors = missing_output_errors(required_outputs)
+    if missing_errors:
+        data["ok"] = False
+        data.setdefault("errors", []).extend(missing_errors)
 
     data["outputs"] = sorted(set(outputs))
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name="spm.normalize",
+        backend="matlab-spm",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[str(deformation_field), str(input_func)],
+        outputs=data["outputs"],
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval={"approved": approved, "required": True},
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
     return data

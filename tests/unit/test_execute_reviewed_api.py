@@ -273,7 +273,8 @@ def test_spm_node_policy_blocked():
         "dry_run": True,
     })
     data = resp.json()
-    assert data["status"] == "EXECUTION_POLICY_BLOCKED"
+    # M6-T003: wildcard no longer covers high-risk backend nodes
+    assert data["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED")
 
 
 # ── 23. DPABI execution → EXECUTION_POLICY_BLOCKED ──
@@ -304,9 +305,8 @@ def test_adapter_summary_present_on_blocked():
         "dry_run": True,
     })
     data = resp.json()
-    assert data["status"] == "EXECUTION_POLICY_BLOCKED"
-    # Adapter succeeded (plan is structurally valid) but policy blocked
-    assert data["adapter"]["ok"] is True
+    # M6-T003: wildcard blocked at approval gate for SPM nodes
+    assert data["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED")
 
 
 # ── 25. Policy blocked → would_execute false ──
@@ -340,7 +340,8 @@ def test_policy_blocked_writes_audit():
         "persist_audit": True,
     })
     data = resp.json()
-    assert data["status"] == "EXECUTION_POLICY_BLOCKED"
+    # M6-T003: wildcard blocked at approval gate for SPM nodes
+    assert data["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED")
     assert data["audit"]["persisted"] is True
     assert data["audit"]["event_type"] == "execution_blocked"
 
@@ -529,7 +530,8 @@ def test_policy_blocked_no_yaml():
         "persist_audit": True,
     })
     data = resp.json()
-    assert data["status"] == "EXECUTION_POLICY_BLOCKED"
+    # M6-T003: wildcard blocked at approval gate for SPM nodes
+    assert data["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED")
     assert data["pipeline_yaml"]["written"] is False
 
 
@@ -846,7 +848,8 @@ def test_preflight_policy_blocked(monkeypatch, tmp_path):
         "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
     })
     resp = client.post("/api/plans/execute-reviewed", json=body)
-    assert resp.json()["status"] == "EXECUTION_POLICY_BLOCKED"
+    # M6-T003: wildcard blocked at approval gate for SPM nodes
+    assert resp.json()["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED")
 
 
 # ── 58. preflight → write_pipeline_yaml=false → PIPELINE_YAML_REQUIRED ──
@@ -1360,3 +1363,115 @@ def test_m5t017_all_blocked_statuses_no_executor(monkeypatch, tmp_path):
         data = resp.json()
         assert data["status"] == expected
         assert data["execution"]["executor_called"] is False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T004b: spm_smoke_test reviewed execution allowlist
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _spm_smoke_body(monkeypatch, tmp_path, **overrides):
+    """Preflight body with spm_smoke_test + matlab-spm backend approval."""
+    monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
+    monkeypatch.setattr(
+        "src.backend.app.api.execute_reviewed_routes.pipeline_writer.REVIEWED_PIPELINE_DIR",
+        tmp_path,
+    )
+    monkeypatch.setattr(
+        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        lambda **kw: {"status": "SUCCESS", "run_id": "mock-spm-smoke-001"},
+    )
+    cfg = tmp_path / "project_config.yaml"
+    import yaml
+    config = {
+        "project": {"name": "test", "description": "spm smoke", "root_dir": "."},
+        "runtime": {
+            "work_dir": str(tmp_path / "work"),
+            "log_dir": str(tmp_path / "logs"),
+            "derivatives_dir": str(tmp_path / "derivatives"),
+            "report_dir": str(tmp_path / "reports"),
+        },
+        "third_party": {
+            "spm_dir": str(tmp_path / "spm"),
+            "dpabi_dir": str(tmp_path / "dpabi"),
+        },
+        "safety": {"rawdata_readonly": True},
+    }
+    cfg.write_text(yaml.safe_dump(config), encoding="utf-8")
+    body = {
+        "plan": {
+            "pipeline_id": "spm_smoke",
+            "nodes": [{"id": "spm_smoke_test", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+        },
+        "approval": {
+            "approved": True,
+            "approved_by": "ci-smoke",
+            "approved_nodes": ["spm_smoke_test"],
+            "approved_backends": ["matlab-spm"],
+            "rejected_nodes": [],
+        },
+        "project_config_path": str(cfg),
+        "dry_run": False,
+        "persist_audit": True,
+        "write_pipeline_yaml": True,
+        "confirm_execution": True,
+        "actor": "ci-smoke",
+    }
+    body.update(overrides)
+    return body
+
+
+# ── 101. spm_smoke_test + explicit node + backend approval → EXECUTION_SUBMITTED ──
+
+def test_m6t004b_spm_smoke_execution_submitted(monkeypatch, tmp_path):
+    body = _spm_smoke_body(monkeypatch, tmp_path)
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    data = resp.json()
+    assert data["status"] == "EXECUTION_SUBMITTED"
+    assert data["execution"]["executor_called"] is True
+
+
+# ── 102. spm_smoke_test + wildcard approval → blocked ──
+
+def test_m6t004b_spm_smoke_wildcard_blocked(monkeypatch, tmp_path):
+    body = _spm_smoke_body(monkeypatch, tmp_path,
+                           approval={"approved": True, "approved_nodes": ["*"], "approved_backends": [], "rejected_nodes": []})
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    data = resp.json()
+    assert data["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED", "SAFE_EXECUTION_POLICY_BLOCKED")
+    assert data["execution"]["executor_called"] is False
+
+
+# ── 103. spm_smoke_test missing approved_backends → blocked ──
+
+def test_m6t004b_spm_smoke_missing_backend_approval(monkeypatch, tmp_path):
+    body = _spm_smoke_body(monkeypatch, tmp_path,
+                           approval={"approved": True, "approved_nodes": ["spm_smoke_test"], "approved_backends": [], "rejected_nodes": []})
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    data = resp.json()
+    assert data["execution"]["executor_called"] is False
+
+
+# ── 104. spm_realign_subject still blocked ──
+
+def test_m6t004b_spm_realign_still_blocked(monkeypatch, tmp_path):
+    body = _spm_smoke_body(monkeypatch, tmp_path, plan={
+        "pipeline_id": "test",
+        "nodes": [{"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}}],
+    })
+    resp = client.post("/api/plans/execute-reviewed", json=body)
+    data = resp.json()
+    assert data["execution"]["executor_called"] is False
+    assert data["status"] in ("EXECUTION_POLICY_BLOCKED", "APPROVAL_GATE_BLOCKED", "SAFE_EXECUTION_POLICY_BLOCKED")
+
+
+# ── 105. dry_run=true not regressed ──
+
+def test_m6t004b_dry_run_true_not_regressed():
+    resp = client.post("/api/plans/execute-reviewed", json={
+        "plan": {"pipeline_id": "test", "nodes": [
+            {"id": "data_inspection", "backend": "python", "depends_on": [], "params": {}},
+        ]},
+        "approval": None,
+        "dry_run": True,
+    })
+    assert resp.json()["status"] == "DRY_RUN_OK"

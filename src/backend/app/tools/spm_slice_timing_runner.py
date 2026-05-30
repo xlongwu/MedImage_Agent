@@ -3,9 +3,16 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.runtime.external_tool_result import (
+    external_tool_failure,
+    from_subprocess_result,
+    missing_output_errors,
+    standard_external_safety,
+)
 from src.backend.app.tools.slice_timing_qc import (
     build_slice_timing_parameters,
     write_slice_timing_qc_for_subject,
@@ -64,7 +71,7 @@ def run_spm_slice_timing_subject(
     matlab_script_dir: str = "./matlab",
 ) -> dict[str, Any]:
     if not approved:
-        return {
+        data = {
             "ok": False,
             "node_id": "spm_slice_timing_subject",
             "backend": "matlab-spm",
@@ -73,6 +80,15 @@ def run_spm_slice_timing_subject(
             "warnings": [],
             "errors": ["SPM slice timing requires approved=true."],
         }
+        data["external_tool_result"] = external_tool_failure(
+            tool_name="spm.slice_timing",
+            backend="matlab-spm",
+            errors=data["errors"],
+            inputs=[input_bold],
+            approval={"approved": False, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     normalized_input = str(input_bold).replace("\\", "/")
     if "examples/synthetic_bids/rawdata" not in normalized_input:
@@ -159,16 +175,13 @@ def run_spm_slice_timing_subject(
         "catch ME, disp(getReport(ME)); exit(1); end; exit(0);"
     )
 
-    cmd = [
-        matlab_command,
-        "-nodisplay",
-        "-nosplash",
-        "-r",
-        matlab_code,
-    ]
+    if sys.platform == "win32":
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-batch", matlab_code]
+    else:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-r", matlab_code]
 
     with stdout_log.open("w", encoding="utf-8") as out, stderr_log.open("w", encoding="utf-8") as err:
-        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False)
+        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False, timeout=600)
 
     data = _read_json(result_json) or {
         "ok": False,
@@ -192,10 +205,29 @@ def run_spm_slice_timing_subject(
         data["errors"].append(f"MATLAB exited with return code {completed.returncode}.")
 
     outputs = []
+    required_outputs = []
     if data.get("corrected_file"):
         outputs.append(data["corrected_file"])
+        required_outputs.append(data["corrected_file"])
     outputs.extend(qc.get("outputs", []))
     outputs.extend([str(result_json), str(stdout_log), str(stderr_log)])
+    missing_errors = missing_output_errors(required_outputs)
+    if missing_errors:
+        data["ok"] = False
+        data.setdefault("errors", []).extend(missing_errors)
 
     data["outputs"] = sorted(set(outputs))
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name="spm.slice_timing",
+        backend="matlab-spm",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[prepared_input],
+        outputs=data["outputs"],
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval={"approved": approved, "required": True},
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
     return data

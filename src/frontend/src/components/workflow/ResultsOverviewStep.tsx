@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { DEFAULT_API_BASE } from "../../api";
 import type { WorkflowState, WorkflowAction } from "../../state/workflowTypes";
 
 interface Props { state: WorkflowState; dispatch: React.Dispatch<WorkflowAction>; }
@@ -20,10 +21,10 @@ export function ResultsOverviewStep({ state, dispatch }: Props) {
       if (stored) {
         setDemoData(stored);
       } else {
-        const demoRes = await fetch("http://127.0.0.1:8000/api/quickstart-demo/latest").then(r => r.ok ? r.json() : null);
+        const demoRes = await fetch(`${DEFAULT_API_BASE}/api/quickstart-demo/latest`).then(r => r.ok ? r.json() : null);
         setDemoData(demoRes);
       }
-      const insRes = await fetch("http://127.0.0.1:8000/api/insights").then(r => r.ok ? r.json() : null);
+      const insRes = await fetch(`${DEFAULT_API_BASE}/api/insights`).then(r => r.ok ? r.json() : null);
       setInsights(insRes);
     } catch {}
     setLoading(false);

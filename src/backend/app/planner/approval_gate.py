@@ -2,13 +2,40 @@
 
 The Approval Gate sits between Plan Validator and Pipeline Executor.
 It checks that: validation passed, required approvals are granted,
-no nodes are rejected, and manual/GUI nodes are not yet executed.
+no nodes are rejected, manual/GUI nodes are not yet executed, and
+high-risk backends (MATLAB/SPM/DPABI) have explicit approval.
+
+M6-T003: node-level + backend-level approval for high-risk backends.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+
+
+# ── High-risk backends ──────────────────────────────────────────────────────
+
+HIGH_RISK_BACKENDS: frozenset[str] = frozenset({
+    "matlab-spm",
+    "matlab-dpabi",
+    "dpabi",
+    "matlab",
+})
+
+
+def _high_risk_node_ids_from_plan(plan: dict[str, Any]) -> set[str]:
+    """Return node ids in the plan whose backend is high-risk."""
+    nodes = plan.get("nodes", []) or []
+    result: set[str] = set()
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        nid = node.get("id")
+        backend = node.get("backend", "")
+        if nid and backend in HIGH_RISK_BACKENDS:
+            result.add(str(nid))
+    return result
 
 
 # ── Dataclasses ──────────────────────────────────────────────────────────────
@@ -24,6 +51,7 @@ class ApprovalRecord:
     approved_nodes: list[str] | None = None
     rejected_nodes: list[str] | None = None
     review_draft_schema_version: str | None = None
+    approved_backends: list[str] | None = None  # M6-T003
 
 
 @dataclass(frozen=True)
@@ -80,13 +108,9 @@ def check_approval_gate(
     """Check whether a plan may proceed to execution given its validation
     and approval state.
 
-    Args:
-        plan: Pipeline plan dict (used only for node count / sanity).
-        validation: PlanValidationResult.to_dict().
-        approval: ApprovalRecord or dict, or None if no approval yet.
-
-    Returns:
-        ApprovalGateResult — execution_allowed=True only when all checks pass.
+    M6-T003: high-risk backends (matlab-spm, dpabi, etc.) require both
+    explicit node approval AND explicit backend approval.  Wildcard
+    approved_nodes=["*"] does not cover high-risk backend nodes.
     """
     errors: list[ApprovalGateIssue] = []
     warnings: list[ApprovalGateIssue] = []
@@ -118,14 +142,17 @@ def check_approval_gate(
         or risk_summary.get("requires_approval")
     )
 
-    # ── 3. No approval needed → green light ──
+    # ── 3. Identify high-risk backend nodes from plan ──
+    high_risk_backend_nodes = _high_risk_node_ids_from_plan(plan)
+
+    # ── 4. No approval needed → green light ──
     if not approval_required:
         return ApprovalGateResult(
             ok=True, execution_allowed=True,
             approval_required=False, approved=False,
         )
 
-    # ── 4. Approval required but no approval record ──
+    # ── 5. Approval required but no approval record ──
     if approval is None:
         return ApprovalGateResult(
             ok=False, execution_allowed=False,
@@ -140,11 +167,12 @@ def check_approval_gate(
             "approved": approval.approved,
             "approved_nodes": approval.approved_nodes,
             "rejected_nodes": approval.rejected_nodes,
+            "approved_backends": approval.approved_backends,
         }
     else:
         appr_dict = approval
 
-    # ── 5. approved must be True ──
+    # ── 6. approved must be True ──
     if appr_dict.get("approved") is not True:
         return ApprovalGateResult(
             ok=False, execution_allowed=False,
@@ -155,9 +183,10 @@ def check_approval_gate(
 
     approved_nodes: list[str] = list(appr_dict.get("approved_nodes") or [])
     rejected_nodes: list[str] = list(appr_dict.get("rejected_nodes") or [])
+    approved_backends: list[str] = list(appr_dict.get("approved_backends") or [])
     is_wildcard = "*" in approved_nodes
 
-    # ── 6. rejected nodes block execution ──
+    # ── 7. rejected nodes block execution ──
     if rejected_nodes:
         errors.append(ApprovalGateIssue(
             "APPROVAL_REJECTED_NODE",
@@ -171,7 +200,65 @@ def check_approval_gate(
             errors=errors,
         )
 
-    # ── 7. approved_nodes must cover required nodes ──
+    # ── 8. M6-T003: High-risk backend nodes require explicit approval ──
+    if high_risk_backend_nodes and is_wildcard:
+        errors.append(ApprovalGateIssue(
+            "WILDCARD_APPROVAL_NOT_ALLOWED_FOR_HIGH_RISK_BACKEND",
+            f"Wildcard approval '[*]' cannot cover high-risk backend nodes: "
+            f"{', '.join(sorted(high_risk_backend_nodes))}. "
+            f"Add them to approved_nodes and include approved_backends.",
+        ))
+        return ApprovalGateResult(
+            ok=False, execution_allowed=False,
+            approval_required=True, approved=True,
+            missing_approval_nodes=list(approval_required_nodes),
+            errors=errors,
+        )
+
+    # ── 9. M6-T003: High-risk backend nodes must be explicitly listed ──
+    if high_risk_backend_nodes and not is_wildcard:
+        missing_hr = [n for n in high_risk_backend_nodes if n not in approved_nodes]
+        if missing_hr:
+            errors.append(ApprovalGateIssue(
+                "HIGH_RISK_NODE_REQUIRES_EXPLICIT_APPROVAL",
+                f"High-risk backend nodes must be explicitly approved: "
+                f"{', '.join(missing_hr)}",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+    # ── 10. M6-T003: High-risk backends require approved_backends ──
+    if high_risk_backend_nodes:
+        # Determine which backends are used by high-risk nodes
+        nodes = plan.get("nodes", []) or []
+        needed_backends: set[str] = set()
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            nid = node.get("id")
+            backend = str(node.get("backend", ""))
+            if nid and str(nid) in high_risk_backend_nodes and backend in HIGH_RISK_BACKENDS:
+                needed_backends.add(backend)
+
+        missing_backends = needed_backends - set(approved_backends)
+        if missing_backends:
+            errors.append(ApprovalGateIssue(
+                "HIGH_RISK_BACKEND_REQUIRES_APPROVAL",
+                f"High-risk backends must be listed in approved_backends: "
+                f"{', '.join(sorted(missing_backends))}",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+    # ── 11. approved_nodes must cover required nodes ──
     if not is_wildcard:
         missing = [n for n in approval_required_nodes if n not in approved_nodes]
         if missing:
@@ -186,7 +273,7 @@ def check_approval_gate(
                 errors=errors,
             )
 
-    # ── 8. manual_required nodes block execution (MVP) ──
+    # ── 12. manual_required nodes block execution (MVP) ──
     if manual_required_nodes:
         errors.append(ApprovalGateIssue(
             "MANUAL_REQUIRED_NODE",
@@ -199,7 +286,7 @@ def check_approval_gate(
             errors=errors,
         )
 
-    # ── 9. high risk approved → warning ──
+    # ── 13. high risk approved → warning ──
     if high_risk_nodes:
         warnings.append(ApprovalGateIssue(
             "HIGH_RISK_APPROVED",

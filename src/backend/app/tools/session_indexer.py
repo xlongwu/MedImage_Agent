@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from src.backend.app.memory.session_db import SessionDB
+from src.backend.app.tools.error_classifier import classify_error
 
 
 def index_pipeline_runs(work_dir: str = "./work", db_path: str = "outputs/memory/sessions/archive.sqlite") -> dict[str, Any]:
@@ -60,12 +61,14 @@ def index_pipeline_runs(work_dir: str = "./work", db_path: str = "outputs/memory
                 indexed_nodes += 1
 
                 for err_msg in nr.get("errors", []):
+                    classified = classify_error(str(err_msg))
                     db.insert_error({
                         "run_id": run_id,
                         "node_id": nr.get("node_id", ""),
                         "subject_id": nr.get("subject_id", nr.get("subject", "project")),
-                        "category": "UNKNOWN",
+                        "category": classified.get("category", "UNKNOWN_ERROR"),
                         "message": str(err_msg),
+                        "retryable": classified.get("retryable", False),
                     })
                     indexed_errors += 1
 

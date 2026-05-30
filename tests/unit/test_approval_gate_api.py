@@ -149,3 +149,70 @@ def test_no_runner():
 def test_json_serializable():
     resp = client.post("/api/approval/check", json=_body())
     json.loads(resp.text)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M6-T003: API tests for approved_backends
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── 15. API accepts approved_backends field ──
+
+def test_api_accepts_approved_backends():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}},
+    ]}
+    resp = client.post("/api/approval/check", json={
+        "plan": plan,
+        "validation": {
+            "ok": True,
+            "approval_required_nodes": ["spm_realign_subject"],
+            "high_risk_nodes": [],
+            "manual_required_nodes": [],
+            "risk_summary": {"requires_approval": False},
+        },
+        "approval": {
+            "approved": True,
+            "approved_nodes": ["spm_realign_subject"],
+            "approved_backends": ["matlab-spm"],
+            "rejected_nodes": [],
+        },
+    })
+    assert resp.status_code == 200
+    assert resp.json()["execution_allowed"] is True
+
+
+# ── 16. API wildcard with SPM node → blocked ──
+
+def test_api_wildcard_spm_blocked():
+    plan = {"pipeline_id": "test", "nodes": [
+        {"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}},
+    ]}
+    resp = client.post("/api/approval/check", json={
+        "plan": plan,
+        "validation": {
+            "ok": True,
+            "approval_required_nodes": ["spm_realign_subject"],
+            "high_risk_nodes": [],
+            "manual_required_nodes": [],
+            "risk_summary": {},
+        },
+        "approval": {
+            "approved": True,
+            "approved_nodes": ["*"],
+            "approved_backends": [],
+            "rejected_nodes": [],
+        },
+    })
+    data = resp.json()
+    assert data["execution_allowed"] is False
+    assert any(
+        e["code"] == "WILDCARD_APPROVAL_NOT_ALLOWED_FOR_HIGH_RISK_BACKEND"
+        for e in data.get("errors", [])
+    )
+
+
+# ── 17. API JSON serializable ──
+
+def test_api_m6t003_json_serializable():
+    resp = client.post("/api/approval/check", json=_body())
+    json.loads(resp.text)

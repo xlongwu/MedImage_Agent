@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DEFAULT_API_BASE } from "../../api";
 import type { WorkflowState, WorkflowAction } from "../../state/workflowTypes";
 
 interface Props { state: WorkflowState; dispatch: React.Dispatch<WorkflowAction>; }
@@ -14,7 +15,7 @@ export function RunConfirmStep({ state, dispatch }: Props) {
     setRunning(true);
     dispatch({ type: "SET_RUN_STATUS", runId: "running", status: "RUNNING" });
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/workflow/run", {
+      const res = await fetch(`${DEFAULT_API_BASE}/api/workflow/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -29,7 +30,7 @@ export function RunConfirmStep({ state, dispatch }: Props) {
         (window as any).__workflowResult = data;
       }
       // Also trigger insights build
-      await fetch("http://127.0.0.1:8000/api/insights/build", { method: "POST" });
+      await fetch(`${DEFAULT_API_BASE}/api/insights/build`, { method: "POST" });
     } catch {
       dispatch({ type: "SET_RUN_STATUS", runId: "error", status: "FAILED" });
     }

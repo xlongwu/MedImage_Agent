@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-import json, subprocess
+import json, subprocess, sys
 from pathlib import Path
 from typing import Any
+from src.backend.app.runtime.external_tool_result import (
+    external_tool_failure,
+    from_subprocess_result,
+    missing_output_errors,
+    standard_external_safety,
+)
 from src.backend.app.tools.smoothing_qc import compute_smoothing_qc_for_subject
 
 
@@ -43,7 +49,16 @@ def run_spm_smooth_subject(
     fwhm: list[float] | None = None, matlab_script_dir: str = "./matlab",
 ) -> dict[str, Any]:
     if not approved:
-        return {"ok": False, "node_id": "spm_smooth_subject", "backend": "matlab-spm", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": ["SPM smoothing requires approved=true."]}
+        data = {"ok": False, "node_id": "spm_smooth_subject", "backend": "matlab-spm", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": ["SPM smoothing requires approved=true."]}
+        data["external_tool_result"] = external_tool_failure(
+            tool_name="spm.smooth",
+            backend="matlab-spm",
+            errors=data["errors"],
+            inputs=[],
+            approval={"approved": False, "required": True},
+            safety=standard_external_safety(),
+        )
+        return data
 
     fwhm = fwhm or [6.0, 6.0, 6.0]
     input_func = _find_normalized_functional(subject_id, derivatives_dir)
@@ -69,9 +84,12 @@ def run_spm_smooth_subject(
         "catch ME, disp(getReport(ME)); exit(1); end; exit(0);"
     )
 
-    cmd = [matlab_command, "-nodisplay", "-nosplash", "-r", matlab_code]
+    if sys.platform == "win32":
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-batch", matlab_code]
+    else:
+        cmd = [matlab_command, "-nodisplay", "-nosplash", "-r", matlab_code]
     with stdout_log.open("w", encoding="utf-8") as out, stderr_log.open("w", encoding="utf-8") as err:
-        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False)
+        completed = subprocess.run(cmd, stdout=out, stderr=err, check=False, timeout=600)
 
     data = _read_json(result_json) or {"ok": False, "errors": ["SPM smoothing did not produce result JSON."]}
     data["node_id"] = "spm_smooth_subject"
@@ -90,7 +108,27 @@ def run_spm_smooth_subject(
         data["smoothing_qc"] = qc; qc_outputs = qc.get("outputs", [])
 
     outputs = []
-    if data.get("smoothed_file"): outputs.append(data["smoothed_file"])
+    required_outputs = []
+    if data.get("smoothed_file"):
+        outputs.append(data["smoothed_file"])
+        required_outputs.append(data["smoothed_file"])
     outputs.extend(qc_outputs); outputs.extend([str(result_json), str(stdout_log), str(stderr_log)])
+    missing_errors = missing_output_errors(required_outputs)
+    if missing_errors:
+        data["ok"] = False
+        data.setdefault("errors", []).extend(missing_errors)
     data["outputs"] = sorted(set(outputs))
+    data["external_tool_result"] = from_subprocess_result(
+        tool_name="spm.smooth",
+        backend="matlab-spm",
+        command=cmd,
+        returncode=completed.returncode,
+        inputs=[str(input_func)],
+        outputs=data["outputs"],
+        logs={"stdout": str(stdout_log), "stderr": str(stderr_log), "result_json": str(result_json)},
+        approval={"approved": approved, "required": True},
+        safety=standard_external_safety(),
+        errors=data.get("errors", []),
+        warnings=data.get("warnings", []),
+    )
     return data
