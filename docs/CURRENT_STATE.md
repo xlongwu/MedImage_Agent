@@ -59,25 +59,46 @@
 | **M5-T019：frontend safe execution button** | ✅ | 2026-05-29 |
 | **M5-T020：frontend smoke + final closeout** | ✅ | 2026-05-29 |
 
-### M6 任务（SPM/DPABI Execution Safety）
+### M6 任务（SPM/DPABI Execution Safety）— Partial Complete
+
+**状态**: M6 Phase 1-3 完成。SPM smoke + realign sandbox + slice timing sandbox 已开放。
+Full SPM pipeline (coregister/segment/normalize/smooth) 仍阻断。DPABI/GPU/GUI 仍阻断。
 
 | 任务 | 状态 | 完成日期 |
 |------|:---:|---------|
-| **M6-T001：SPM/DPABI execution safety review** | ✅ | 2026-05-29 |
-| **M6-T002a：MATLAB command / third-party path safety guard** | ✅ | 2026-05-29 |
-| **M6-T003：node-level + backend-level approval** | ✅ | 2026-05-29 |
-| **M6-T004a：SPM smoke safety preflight** | ✅ | 2026-05-29 |
-| **M6-T004b：spm_smoke_test reviewed execution allowlist** | ✅ | 2026-05-29 |
-| **M6-T004c：SPM smoke manual validation guide** | ✅ | 2026-05-29 |
-| **M6-T005a：spm realign safety contract** | ✅ | 2026-05-29 |
-| **M6-T005b：spm realign MATLAB safety preflight** | ✅ | 2026-05-29 |
-| **M6-T005b-fix：SPM-only validator, remove dummy dpabi_dir** | ✅ | 2026-05-29 |
-| **M6-T005c：spm realign sandbox contract tests** | ✅ | 2026-05-29 |
-| **M6-T005d：sandbox-only spm realign reviewed execution allowlist** | ✅ | 2026-05-29 |
-| **M6-T006a：spm slice timing safety contract** | ✅ | 2026-05-29 |
-| **M6-T006b：spm slice timing runner hardening** | ✅ | 2026-05-29 |
-| **M6-T006c：spm slice timing sandbox contract tests** | ✅ | 2026-05-29 |
-| **M6-T006d：sandbox-only spm_slice_timing reviewed execution allowlist** | ✅ | 2026-05-29 |
+| M6-T001：SPM/DPABI execution safety review | ✅ | 2026-05-29 |
+| M6-T002a：MATLAB command / third-party path safety guard | ✅ | 2026-05-29 |
+| M6-T003：node-level + backend-level approval | ✅ | 2026-05-29 |
+| M6-T004a：SPM smoke safety preflight | ✅ | 2026-05-29 |
+| M6-T004b：spm_smoke_test reviewed execution allowlist | ✅ | 2026-05-29 |
+| M6-T004c：SPM smoke manual validation guide | ✅ | 2026-05-29 |
+| M6-T005a：spm realign safety contract | ✅ | 2026-05-29 |
+| M6-T005b：spm realign MATLAB safety preflight | ✅ | 2026-05-29 |
+| M6-T005b-fix：SPM-only validator | ✅ | 2026-05-29 |
+| M6-T005c：spm realign sandbox contract tests | ✅ | 2026-05-29 |
+| M6-T005d：spm_realign sandbox-only reviewed execution | ✅ | 2026-05-29 |
+| M6-T006a：spm slice timing safety contract | ✅ | 2026-05-29 |
+| M6-T006b：spm slice timing runner hardening | ✅ | 2026-05-29 |
+| M6-T006c：spm slice timing sandbox contract tests | ✅ | 2026-05-29 |
+| M6-T006d：spm_slice_timing sandbox-only reviewed execution | ✅ | 2026-05-29 |
+| M6-T006d-fix：tighten slice timing sandbox input validation | ✅ | 2026-05-29 |
+| **M6 partial closeout** | ✅ | 2026-05-29 |
+
+### M6 Reviewed Execution Allowlist
+
+| 节点 | 条件 | 状态 |
+|------|------|:---:|
+| Python-only safe nodes | — | ✅ |
+| `spm_smoke_test` | — | ✅ |
+| `spm_realign_subject` | sandbox_mode=true | ✅ |
+| `spm_slice_timing_subject` | sandbox_mode=true | ✅ |
+| `spm_coregister_subject` | — | ❌ |
+| `spm_segment_subject` | — | ❌ |
+| `spm_normalize_subject` | — | ❌ |
+| `spm_smooth_subject` | — | ❌ |
+| DPABI execution | — | ❌ |
+| GPU | — | ❌ |
+| GUI/manual | — | ❌ |
 
 ## M1 交付物状态
 
