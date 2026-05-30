@@ -165,13 +165,13 @@ gpu_alff_subject, gpu_functional_connectivity_subject, gpu_nuisance_regression_s
 
 > 4 GPU nodes allowlisted (3 contract + 1 synthetic smoke). 5 subject-level GPU nodes blocked. No CUDA/GPU call by any allowlisted runner.
 
-### Summary: 34 reviewed execution nodes (7 SPM + 20 DPABI + 7 GPU)
+### Summary: 35 reviewed execution nodes (7 SPM + 20 DPABI + 8 GPU)
 
 | Phase | Nodes | Status |
 |-------|:---:|:---:|
 | M6 SPM | 7 | ✅ |
 | M7 DPABI | 20 | ✅ |
-| M8 GPU | 7 | ✅ |
+| M8 GPU | 8 | ✅ |
 | **Total** | **32** | ✅ |
 
 ### GPU Allowlist (5)
@@ -183,12 +183,13 @@ gpu_alff_subject, gpu_functional_connectivity_subject, gpu_nuisance_regression_s
 | Subject-level ALFF | 1 |
 | Subject-level ReHo | 1 |
 | Subject-level Temporal Filtering | 1 |
+| Subject-level Functional Connectivity | 1 |
 
 ### Still Blocked
 
 | Category | Count |
 |----------|:---:|
-| GPU subject execution (connectivity, nuisance) | 2 |
+| GPU subject execution (nuisance) | 1 |
 | GUI/manual | TBD |
 | Unrestricted SPM/DPABI/GPU | ❌ |
 
