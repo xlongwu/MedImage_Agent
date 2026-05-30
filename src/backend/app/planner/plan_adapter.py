@@ -239,6 +239,14 @@ _DPABI_METADATA_NODES = frozenset([
 ])
 
 
+def _satisfies_dpabi_smoke_sandbox(node):
+    params = node.get("params", {}) or {}
+    if params.get("sandbox_mode") is not True: return False
+    if params.get("smoke_only") is not True: return False
+    if params.get("input_source") != "synthetic_sandbox": return False
+    return True
+
+
 def _satisfies_smooth_sandbox(node):
     params = node.get("params", {}) or {}
     if params.get("sandbox_mode") is not True: return False
@@ -265,6 +273,7 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_spm_normalize_sandbox_nodes": [],         # M6-T009d
         "allowed_spm_smooth_sandbox_nodes": [],            # M6-T010d
         "allowed_dpabi_metadata_nodes": [],               # M7-DPABI-T002b
+        "allowed_dpabi_sandbox_smoke_nodes": [],           # M7-DPABI-T004d
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
         "blocked_gui_nodes": [],
@@ -319,9 +328,12 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             result["blocked_spm_nodes"].append(nid)
             continue
 
-        # DPABI — M7-T002b: metadata/contract nodes allowed, execution blocked
+        # DPABI — M7-T002b: metadata allowed, M7-T004d: sandbox smoke allowed (declaration-gated)
         if nid in _DPABI_METADATA_NODES:
             result["allowed_dpabi_metadata_nodes"].append(nid)
+            continue
+        if nid == "dpabi_sandbox_smoke_run" and _satisfies_dpabi_smoke_sandbox(node):
+            result["allowed_dpabi_sandbox_smoke_nodes"].append(nid)
             continue
         if nid.startswith("dpabi_") and not (
             "contract" in nid or "capability" in nid or "preflight" in nid

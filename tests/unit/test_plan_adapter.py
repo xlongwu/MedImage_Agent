@@ -552,6 +552,25 @@ def test_dpabi_exec_blocked():
     assert "dpabi_subject_smooth" in policy["blocked_dpabi_execution_nodes"]
 
 
+# ── M7-T004d: DPABI sandbox smoke allowlist ──
+
+def test_dpabi_smoke_sandbox_allowed():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_sandbox_smoke_run", "depends_on": [],
+         "params": {"sandbox_mode": True, "smoke_only": True, "input_source": "synthetic_sandbox"}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_sandbox_smoke_run" in policy["allowed_dpabi_sandbox_smoke_nodes"]
+
+
+def test_dpabi_smoke_no_sandbox_blocked():
+    plan = {"pipeline_id": "t", "nodes": [
+        {"id": "dpabi_sandbox_smoke_run", "depends_on": [], "params": {}},
+    ]}
+    policy = classify_plan_nodes(plan)
+    assert "dpabi_sandbox_smoke_run" in policy["blocked_dpabi_execution_nodes"]
+
+
 def test_smooth_bad_normalized_source_blocked():
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_smooth_subject", "depends_on": [],
