@@ -5,7 +5,7 @@ import json
 import os
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timezone as _tz
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -113,11 +113,27 @@ def _stable_session_id(payload: dict[str, Any]) -> str:
 
 
 def _provider(name: str) -> GuiProvider:
+    """Return the GuiProvider for the given name.
+
+    M9-GUI-GUARD-T002: runtime-level defense.  Before constructing any
+    provider, the provider policy gate is checked.  Only provider="mock"
+    is allowed in T002; all real/desktop/browser/manual providers are
+    blocked unconditionally.
+    """
+    from src.backend.app.runtime.gui_agent_guard import validate_gui_provider_policy  # noqa: E402
+
+    guard_result = validate_gui_provider_policy(provider=name)
+    if not guard_result.ok:
+        raise ValueError(str(guard_result.to_dict()))
+
+    # Only mock is reachable after the guard
     if name == "mock":
         return MockGuiProvider()
+    # Defense-in-depth: pywinauto and any other provider are unreachable
+    # because the guard blocks them above.  This branch is a safety net.
     if name == "pywinauto":
-        return PyWinAutoGuiProvider()
-    raise ValueError(f"Unsupported GUI provider: {name}")
+        raise ValueError(str(guard_result.to_dict()))
+    raise ValueError(str(guard_result.to_dict()))
 
 
 def _write_replay_script(session: dict[str, Any]) -> str:
@@ -186,6 +202,22 @@ def create_gui_agent_session(payload: dict[str, Any]) -> dict[str, Any]:
         "approved": approved,
         "created_at": _now_iso(),
         "updated_at": _now_iso(),
+        "_created_at_ts": time.time(),
+        "step_count": 0,
+        # Store session declaration fields for stop-condition / audit checks
+        "target_window": payload.get("target_window", "declared_window"),
+        "allowed_action_tiers": payload.get("allowed_action_tiers", [0]),
+        "file_scope": payload.get("file_scope", ["outputs/work/gui_agent/"]),
+        "screenshot_policy": payload.get("screenshot_policy", "disabled"),
+        "clipboard_policy": payload.get("clipboard_policy", "disabled"),
+        "network_policy": payload.get("network_policy", "disabled"),
+        "external_app_policy": payload.get("external_app_policy", "declared_target_only"),
+        "duration_limit_seconds": payload.get("duration_limit_seconds", 300),
+        "step_limit": payload.get("step_limit", 20),
+        "human_present": payload.get("human_present", True),
+        "emergency_abort_enabled": payload.get("emergency_abort_enabled", True),
+        "audit_log_required": payload.get("audit_log_required", True),
+        "redaction_policy": payload.get("redaction_policy", "required_for_persistence"),
         "safety": {
             "scope": "SPM/DPABI GUI assistance only",
             "system_wide_automation": False,
@@ -258,6 +290,8 @@ def step_gui_agent_session(session_id: str, payload: dict[str, Any]) -> dict[str
         session["status"] = "RUNNING"
 
     session.setdefault("steps", []).append(step)
+    # Increment step count on every step attempt (success or failure)
+    session["step_count"] = session.get("step_count", 0) + 1
     session["updated_at"] = _now_iso()
     session["session_path"] = str(_write_session(session))
     return {"ok": step.get("provider_status") != "FAILED", "session_id": session_id, "step": step, "session_path": session["session_path"], "replay_script": session["replay_script"]}

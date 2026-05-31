@@ -1,6 +1,6 @@
 # 当前状态 (CURRENT_STATE)
 
-> 最后更新：2026-05-29
+> 最后更新：2026-07-11 (M9-GUI-GUARD-CLOSEOUT)
 
 ## 里程碑进度
 
@@ -10,6 +10,58 @@
 | M2：Tool Catalog MVP | ✅ 已完成 | 2026-05-29 |
 | M3：LLM Planner MVP | ✅ 已完成 | 2026-05-29 |
 | M5：Reviewed Execution Pipeline | ✅ 已完成 | 2026-05-29 |
+| M9-GUI-T001：GUI/manual threat model and inventory | ✅ 已完成 | 2026-07-11 |
+| M9-GUI-T002：GUI approval and HITL design | ✅ 已完成 | 2026-07-11 |
+| M9-GUI-T003：GUI action taxonomy and sandbox contract | ✅ 已完成 | 2026-07-11 |
+| M9-GUI-T004：plan_adapter GUI blocklist tests | ✅ 已完成 | 2026-07-11 |
+| M9-GUI-T005：Read-only GUI observation contract | ✅ 已完成 | 2026-07-11 |
+| M9-GUI-T006：Manual-only GUI smoke guide | ✅ 已完成 | 2026-07-11 |
+| **M9-GUI-CLOSEOUT：GUI/manual phase closeout** | ✅ 已完成 | 2026-07-11 |
+
+**M9 GUI/manual Agent Phase: COMPLETE 🎉**  
+Reviewed execution allowlist total: **36** (M6 SPM: 7 / M7 DPABI: 20 / M8 GPU: 9 / **M9 GUI: 0**)  
+GUI/manual reviewed execution nodes: **0** — all blocked by design.  
+Real desktop control (PyWinAuto): **disabled** — mock provider safe default.  
+`/api/gui-agent/*` bypass: **known gap** — documented, not fixed.  
+**M6–M9 Safety Architecture Review: COMPLETE** — `docs/M6_M9_SAFETY_ARCHITECTURE_REVIEW.md`.  
+**M9-GUI-GUARD-T001: API Guard Design COMPLETE** — `docs/GUI_AGENT_API_GUARD_DESIGN.md`.  
+**M9-GUI-GUARD-T002: Provider Policy Gate IMPLEMENTED** — `src/backend/app/runtime/gui_agent_guard.py` + route/runtime integration.  
+**M9-GUI-GUARD-T003: Session Declaration Validator IMPLEMENTED** — `validate_gui_session_declaration()` + model + route integration.  
+**M9-GUI-GUARD-T004: Action Validator + Tier Classifier IMPLEMENTED** — `classify_gui_action_tier()` + `validate_gui_action_declaration()` + route integration.  
+**M9-GUI-GUARD-T005: Audit Log + Stop-Condition Checker IMPLEMENTED** — `GuiAuditRecord` + `create_gui_audit_record()` + `validate_gui_stop_conditions()` + session state + route integration.  
+**M9-GUI-GUARD-T006: Guarded API Integration Tests COMPLETE** — 62 end-to-end integration tests.  
+**M9 GUI Agent API Guard Phase: COMPLETE 🎉** — `/api/gui-agent/*` transformed to mock-only guarded API.  
+**M10-GUI-AGENT-T001: Action Adapter Design COMPLETE** — `docs/FINE_TUNED_GUI_AGENT_ACTION_ADAPTER_DESIGN.md`.  
+**M10-GUI-AGENT-T002: Normalized Action Schema COMPLETE** — `docs/NORMALIZED_GUI_ACTION_SCHEMA.md` (41-action count corrected).  
+**M10-GUI-AGENT-T003: Model-Output Validator IMPLEMENTED** — `gui_agent_model_adapter.py` + 58 tests.  
+**M10-GUI-AGENT-T004: Adapter/Guard Compatibility Tests COMPLETE** — 79 compatibility tests.  
+**M10 Fine-Tuned GUI Agent Adapter Phase: COMPLETE 🎉** — adapter + schema + validator + compatibility tests.  
+**M10-GUI-AGENT-MOCK-T001: Mock Adapter API Design COMPLETE** — `docs/MOCK_MODEL_ADAPTER_API_DESIGN.md`.  
+**M10-GUI-AGENT-MOCK-T002: Mock Fixtures IMPLEMENTED** — `gui_agent_mock_model_fixtures.py` (45 fixtures, 32 tests).  
+**M10-GUI-AGENT-MOCK-T003: Mock Adapter API Route IMPLEMENTED** — 2 new routes + 32 API tests.  
+**M10-GUI-AGENT-MOCK-T004: Adapter-to-Guard E2E Tests COMPLETE** — 54 end-to-end tests.  
+**M10 Mock-Only Model Integration Phase: COMPLETE 🎉** — fixture→adapter→guard→provider chain verified.  
+**M10-GUI-AGENT-STABILIZE-T001: Error Code Audit COMPLETE** — 55 codes surveyed, 44 audit tests.  
+**M10-GUI-AGENT-STABILIZE-T002: Schema Consistency Review COMPLETE** — 2 fixes + 32 tests.  
+**M10-GUI-AGENT-STABILIZE-T003: Full Test Baseline Lock COMPLETE** — 1772 passed, 4 skipped, 25 invariants.  
+**M11-GUI-MODEL-T001: Real Model Threat Model COMPLETE** — `docs/REAL_MODEL_INTEGRATION_THREAT_MODEL.md` (15 threat surfaces, 17 invariants).  
+**M11-GUI-MODEL-T002: Runtime Isolation Design COMPLETE** — `docs/MODEL_RUNTIME_ISOLATION_DESIGN.md` (7-layer architecture, 20 test benchmarks).  
+**M11-GUI-MODEL-T003: Model Provider Policy Gate Design COMPLETE** — `docs/MODEL_PROVIDER_POLICY_GATE_DESIGN.md` (8 provider types, 15 error codes).  
+**M11-GUI-MODEL-T004: Input Minimization Design COMPLETE** — `docs/MODEL_INFERENCE_INPUT_REDACTION_DESIGN.md` (20 blocked classes, 14 error codes).  
+**M11-GUI-MODEL-T005: Audit Metadata Persistence Design COMPLETE** — `docs/MODEL_OUTPUT_AUDIT_METADATA_PERSISTENCE_DESIGN.md` (15 events, unified schema, 19 forbidden fields).  
+**M11-GUI-MODEL-T006: Mock-Real Boundary Tests Design COMPLETE** — `docs/MOCK_REAL_BOUNDARY_TESTS_DESIGN.md` (~120 tests, 10 categories, acceptance gate).  
+**M11 Real Model Integration Design Phase: COMPLETE 🎉** — 7 design documents, 0 implementation. Real model not connected.  
+**M11-GUI-MODEL-CONTRACT-T001: Provider Policy Gate IMPLEMENTED** — `gui_model_provider_policy.py` + 46 tests.  
+**M11-GUI-MODEL-CONTRACT-T002: Runtime Isolation Contract IMPLEMENTED** — `gui_model_runtime_isolation.py` + 59 tests.  
+**M11-GUI-MODEL-CONTRACT-T003: Model Source Policy IMPLEMENTED** — `gui_model_source_policy.py` + 69 tests.  
+**M11-GUI-MODEL-CONTRACT-T004: Input Redaction Contract IMPLEMENTED** — `gui_model_input_redaction.py` + 63 tests.  
+**M11-GUI-MODEL-CONTRACT-T005: Audit Metadata Contract IMPLEMENTED** — `gui_model_audit_contract.py` + 112 tests.  
+**M11-GUI-MODEL-CONTRACT-T006: Mock-Real Boundary Tests IMPLEMENTED** — `test_gui_model_mock_real_boundary.py` + 98 tests. **2219 passed, 4 skipped.**  
+**M11 Real Model Safety Contract Phase: COMPLETE 🎉** — 5 pure-function contracts + 447 tests. Real model not connected.  
+**M11-GUI-MODEL-CONTRACT-STABILIZE-T001: Schema Consistency Review COMPLETE** — `docs/M11_CONTRACT_SCHEMA_CONSISTENCY_REVIEW.md` + 56 tests.  
+**M11-GUI-MODEL-CONTRACT-STABILIZE-T002: Error Code Taxonomy Audit COMPLETE** — `docs/M11_CONTRACT_ERROR_CODE_TAXONOMY_AUDIT.md` + 53 tests.  
+**M11-GUI-MODEL-CONTRACT-STABILIZE-T003: Test Baseline Lock COMPLETE** — `docs/M11_CONTRACT_TEST_BASELINE_LOCK.md`. **2328 passed, 4 skipped.**  
+**M11-GUI-MODEL-RELEASE-CHECKPOINT: COMPLETE 🎉** — `docs/M11_FIXTURE_ONLY_GUI_MODEL_RELEASE_CHECKPOINT.md` (12 exit criteria, 24 invariants).
 
 ### M2 任务
 
@@ -330,9 +382,110 @@ M5 Reviewed Execution Pipeline **全部完成**（M5-T001 至 M5-T020）。
 - **safe allowlist 限制**: Python-only nodes; SPM/DPABI/GUI/GPU/contract/manual/unknown 全部阻断
 - **12-gate gated execution**: env var → confirm → audit → config → validation → approval → adapter → policy → allowlist → yaml → audit → executor
 
+## M9 GUI/manual Agent
+
+### M9-GUI-T001：威胁模型与盘点 — ✅ 已完成 (2026-07-11)
+
+- 完整盘点：0 个 GUI/manual 节点在 NODE_REGISTRY / reviewed execution allowlist 中
+- GUI Agent 子系统独立存在（`gui_agent.py`），但**不在 reviewed execution pipeline 内**
+- 确定了 5 类威胁：无监督控制、敏感数据泄露、外部应用控制、注入攻击、截图泄露
+- 制定了 4 级操作风险分类（只读观察 > 低风险导航 > 中风险交互 > 高风险/默认阻断）
+- 存档位置：`docs/GUI_MANUAL_AGENT_THREAT_MODEL.md`
+
+### M9-GUI-T002：Approval and HITL Design — ✅ 已完成 (2026-07-11)
+
+- 完整的三层 Approval 模型（Session → Action-Plan → Per-Action）
+- GUI Action Approval Schema 提案（8 个必填字段 + 13 个 Session Safety 字段）
+- Provider Policy：mock 安全默认 / pywinauto 须 disabled-by-default + feature flag
+- `/api/gui-agent/*` 安全集成路线比较（Option A vs B），推荐 Option B Phase 1
+- Human-in-the-Loop UI 需求：语义确认、结构化 Action Plan 展示、紧急中止按钮
+- 截图 / 剪贴板 / 敏感数据策略
+- Audit 日志结构（13 字段 + 敏感字段脱敏）
+- Emergency Abort 方案（7 条自动停止条件 + 3 层执行）
+- Prompt Injection / UI Injection 防御
+- 存档位置：`docs/GUI_MANUAL_APPROVAL_HITL_DESIGN.md`
+
+### M9-GUI-T003：Action Taxonomy and Sandbox Contract — ✅ 已完成 (2026-07-11)
+
+- 定义了完整的 GUI Action Taxonomy（29 个 action，4 个 tier）
+- 每个 action 映射了当前 `gui_agent.py` 的 `PyWinAutoGuiProvider.perform_step()` action 字符串
+- 定义了 GUI Session Sandbox Declaration Schema（23 字段 + 验证规则）
+- 定义了 GUI Action Declaration Schema（22 字段）
+- 定义了 Provider Policy Contract（Mock vs PyWinAuto vs CI）
+- 定义了 Screenshot / Clipboard / File-Path / Network / External-App 5 个独立政策合约
+- 定义了 Blocked Action Contract（22 个永久阻断 action）
+- 定义了 Policy Classification Rules（`classify_gui_action` + `validate_gui_session_declaration` 伪代码）
+- 定义了 M9-GUI-T004 的 25 个测试基准
+- 存档位置：`docs/GUI_ACTION_TAXONOMY_AND_SANDBOX_CONTRACT.md`
+
+### M9-GUI-T004：plan_adapter GUI Blocklist Tests — ✅ 已完成 (2026-07-11)
+
+- 新增 `tests/unit/test_gui_reviewed_execution_blocklist.py`（38 个测试）
+- 覆盖 7 个测试类别：Plan Adapter (12) + Approval Gate (6) + Execute-Reviewed (11) + Tool Catalog (5) + Safety Gap (1) + Regression (3)
+- 关键覆盖：gui_* prefix blocked, backend=gui-agent/manual/desktop/browser 全部 blocked, wildcard approval 不能覆盖, approved_backends=["gui"] 单独不能执行, executor_called=false, tool_catalog gui_* fallback metadata 校验
+- SPM / DPABI / GPU allowlist regression 全部通过
+- `/api/gui-agent/*` bypass 仍存在（T004 不修复）
+- 总测试数：1192 passed, 4 skipped
+- 未修改 production code
+
+### M9-GUI-T005：Read-Only GUI Observation Contract — ✅ 已完成 (2026-07-11)
+
+- 新增 `docs/GUI_READ_ONLY_OBSERVATION_CONTRACT.md`（~1,078 行）
+- 明确 Tier 0 read-only observation action set（7 个动作）
+- 定义 Mock provider observation policy（safe by default, CI-allowed, no real screenshot/desktop）
+- 定义 Real provider observation policy（仍 blocked, design-only, 需 future guard）
+- 定义 Screenshot policy（4 个级别：disabled → ephemeral_only → persist_redacted → persist_raw=blocked）
+- 定义 Window/Control/Visible text sensitive data policy（untrusted, 须脱敏, 禁止跟随 UI 指令）
+- 定义 Session Declaration schema（24 字段 + 13 条必须阻断条件）
+- 定义 Action Declaration schema（22 字段 + 9 条必须阻断条件）
+- 定义 Blocked actions（16 个 Tier 1/2/3 动作在此 contract 中禁止）
+- 定义 Audit requirements（17 个必须记录字段 + 5 个不得记录字段）
+- 定义 Stop conditions（11 条自动停止条件）
+- 明确 `/api/gui-agent/*` bypass 仍存在
+- 定义 Future guard 设计（7-gate pipeline）和测试策略（16 个测试基准）
+- 存档位置：`docs/GUI_READ_ONLY_OBSERVATION_CONTRACT.md`
+
+### M9-GUI-T006：Manual-Only GUI Smoke Guide — ✅ 已完成 (2026-07-11)
+
+- 新增 `docs/GUI_MANUAL_SMOKE_GUIDE.md`（~624 行）
+- 完整的人工 smoke 检查清单，覆盖 36 个检查项
+- 7 个自动化验证步骤（pytest 运行所有 GUI blocklist 相关测试）
+- 5 个人工代码审查步骤（MockGuiProvider, PyWinAuto, tool_catalog, approval_gate, bypass）
+- 明确的 Failure Diagnostics：7 种异常场景和处理建议
+- Cleanup 指南和环境变量清理
+- 完整的 Manual Smoke Checklist（可打印/可复制）
+- `/api/gui-agent/*` bypass 记录（T006 不修复）
+- 存档位置：`docs/GUI_MANUAL_SMOKE_GUIDE.md`
+
+### M9-GUI-CLOSEOUT：Phase Closeout — ✅ 已完成 (2026-07-11)
+
+- 新增 `docs/M9_GUI_MANUAL_PHASE_CLOSEOUT.md`（阶段收口文档）
+- M9 阶段完成：7 个任务全部标记 ✅
+- reviewed execution allowlist: 36 total, **M9 GUI: 0**
+- 安全边界：PyWinAuto 禁用, mock 默认, reviewed execution 侧完全阻断
+- 已知缺口：`/api/gui-agent/*` bypass — 已记录，未修复
+- 后续推荐：Route A (GUI Guard Implementation Planning) 或 Route B (Pause and Stabilize)
+- 20 条未来 real-provider 验收标准已定义
+- 存档位置：`docs/M9_GUI_MANUAL_PHASE_CLOSEOUT.md`
+
+### M9 后续阶段
+
+| 任务 | 状态 | 说明 |
+|------|:---:|------|
+| M9-GUI-T001 | ✅ 已完成 | 威胁模型与盘点 |
+| M9-GUI-T002 | ✅ 已完成 | GUI/manual approval 与人机交互设计 |
+| M9-GUI-T003 | ✅ 已完成 | GUI 操作分类与沙箱声明合约 |
+| M9-GUI-T004 | ✅ 已完成 | plan_adapter GUI 阻断列表测试 |
+| M9-GUI-T005 | ✅ 已完成 | 只读 GUI 观察合约 |
+| M9-GUI-T006 | ✅ 已完成 | 仅手动 smoke 指南（无自动化） |
+| M9-GUI-CLOSEOUT | ✅ 已完成 | GUI/manual 阶段收尾 |
+
+> **GUI/manual execution 仍 blocked。M9 从威胁建模开始，不实现 GUI 自动化。**
+
 ## 已知问题
 
 1. **audit_logger.py 不存在**：已被 M5-T007（audit_record.py）取代。
 2. **Python-only 项目兼容性**：ProjectSettings 要求 `third_party.spm_dir/dpabi_dir` 为关键字段。
-3. **前端执行按钮未实现**：需 M5-T019。
+3. **前端执行按钮已实现**：M5-T019 已完成（文档尾部旧版残留已清理）。
+4. **GUI Agent 子系统未接入 reviewed execution**：`gui_agent.py` 独立于 12-gate 安全管线运行，见 `docs/GUI_MANUAL_AGENT_THREAT_MODEL.md`。
 4. **SPM/DPABI 仍阻断**：需 M6 safety review 后逐步开放。

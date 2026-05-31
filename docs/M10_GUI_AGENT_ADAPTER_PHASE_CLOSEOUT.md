@@ -1,0 +1,379 @@
+# M10 Fine-Tuned GUI Agent Adapter Phase Closeout
+
+> M10-GUI-AGENT-CLOSEOUT | Adapter phase final documentation  
+> Status: COMPLETE | Date: 2026-07-11  
+> Depends on: M10-GUI-AGENT-T001 through T004
+
+---
+
+## 1. Executive Summary
+
+The **M10 Fine-Tuned GUI Agent Adapter Phase** is now complete. Over four tasks plus closeout, the phase has established a safe adapter layer that transforms untrusted model outputs into normalized, guard-compatible actions — without connecting a real model, calling inference, or opening any execution path beyond the existing `record_observation`.
+
+**The phase delivered:**
+- An adapter architecture design separating model output from provider access (T001)
+- A formal Normalized GUI Action Schema as a data contract (T002, 41-action taxonomy corrected)
+- A pure-function model-output validator with 21+ rejection reasons (T003)
+- 79 adapter/guard compatibility tests (T004)
+
+**The phase did NOT deliver:**
+- Real model integration or inference
+- Any new GUI actions beyond `record_observation`
+- Provider call capability from the adapter
+- PyWinAuto or real provider enablement
+- Screenshot, clipboard, mouse, keyboard, or network access
+
+---
+
+## 2. Phase Completion Status
+
+| Task | Status | Output | Code Changed | Real Model | GUI Opened |
+|------|:---:|------|:---:|:---:|:---:|
+| **M10-GUI-AGENT-T001** | ✅ | Adapter design document | No | No | No |
+| **M10-GUI-AGENT-T002** | ✅ | Normalized schema document | No | No | No |
+| **M10-GUI-AGENT-T003** | ✅ | Pure-function validator module | Yes (pure) | No | No |
+| **M10-GUI-AGENT-T004** | ✅ | 79 compatibility tests | Test only | No | No |
+| **M10-GUI-AGENT-CLOSEOUT** | ✅ | This document | No | No | No |
+
+> T003 production code is a pure-function adapter/validator. It does not call model inference, GUI API, provider, pywinauto, or GUI automation.
+
+---
+
+## 3. Current Safety Baseline
+
+### Reviewed Execution Allowlist
+
+| Phase | Nodes | Status |
+|-------|:---:|------|
+| M6 SPM | 7 | ✅ |
+| M7 DPABI | 20 | ✅ |
+| M8 GPU | 9 | ✅ |
+| M9 GUI/manual | **0** | ❌ Blocked |
+| **Total** | **36** | |
+
+### Guarded API Status
+
+`/api/gui-agent/*` is mock-only guarded. Only `provider=mock` + valid session + `record_observation` reaches `MockGuiProvider`. PyWinAuto, real providers, screenshots, clipboard, mouse/keyboard, network, Tier 1/2/3 all blocked.
+
+### Adapter Status
+
+Model-output adapter is implemented as a pure-function module. It validates raw model output against the Normalized GUI Action Schema. Only safe observation intent → `record_observation` is mapped. All other intents produce structured `MODEL_ACTION_REJECTED` responses. The adapter never grants `provider_call_allowed=true`.
+
+---
+
+## 4. M10 Task Completion Table
+
+| Task | Status | Key Deliverable | Tests |
+|------|:---:|------|:---:|
+| T001 | ✅ | Adapter architecture, 6 model output classes | — |
+| T002 | ✅ | Normalized schema, 5 envelope types, 41-action taxonomy correction | — |
+| T003 | ✅ | `gui_agent_model_adapter.py`, 21+ rejection reasons | 58 |
+| T004 | ✅ | Adapter ↔ Guard compatibility verification | 79 |
+| **Total** | | | **137** |
+
+---
+
+## 5. Artifact Summary
+
+### Key Documents
+
+| Document | Content |
+|----------|---------|
+| `docs/FINE_TUNED_GUI_AGENT_ACTION_ADAPTER_DESIGN.md` | Adapter architecture, model output classes, rejection policy |
+| `docs/NORMALIZED_GUI_ACTION_SCHEMA.md` | 5 schema envelopes, field-level constraints, 34 T003 test benchmarks |
+| `docs/M10_GUI_AGENT_ADAPTER_PHASE_CLOSEOUT.md` | This document |
+
+### Key Code
+
+| File | Description |
+|------|-------------|
+| `src/backend/app/runtime/gui_agent_model_adapter.py` | Pure-function validator: `validate_and_normalize_model_output()`, `classify_model_intent()`, `ModelOutputValidationResult` |
+
+### Key Tests
+
+| File | Tests | Coverage |
+|------|:---:|------|
+| `tests/unit/test_gui_agent_model_output_validator.py` | 58 | Valid mapping, 21+ rejection reasons, structural integrity |
+| `tests/unit/test_gui_agent_model_adapter_guard_compatibility.py` | 79 | Guard compatibility, safety flags, rejection isolation, no sensitive logging |
+
+---
+
+## 6. Adapter Architecture Summary
+
+```
+Fine-tuned GUI Agent (future)
+  → Raw Model Output (untrusted)
+  → validate_and_normalize_model_output()   ← T003
+  → ModelOutputValidationResult
+       ├── ok=true → normalized_action      ← only record_observation
+       └── ok=false → rejection             ← 21+ reasons
+  → Existing GUI API Guard (T002–T005)      ← provider/session/action/stop/audit
+  → MockGuiProvider                         ← only provider reachable
+```
+
+**Key invariants:**
+- Model output is data, not authority.
+- Model cannot call provider directly.
+- Model cannot set provider, approved=true, or `provider_call_allowed`.
+- Adapter never grants execution permission.
+- Guard remains the sole source of truth for authorization.
+
+---
+
+## 7. Normalized Schema Summary
+
+5 schema envelopes defined in `docs/NORMALIZED_GUI_ACTION_SCHEMA.md`:
+
+| Envelope | Purpose |
+|----------|---------|
+| Raw Model Output | Untrusted model response encapsulation |
+| Normalized Action | Adapter output with `normalized_action` or `rejection` |
+| Normalized Action Object | The 15-field action declaration |
+| Rejection Result | Structured rejection with 21 reason codes |
+| Audit Metadata | Model-level fields for audit trail |
+
+**Action taxonomy corrected:** 41 actions (7+6+6+22), not the previously stated 29.
+
+---
+
+## 8. Model-Output Validator Summary
+
+**`validate_and_normalize_model_output()`** — T003
+
+| Aspect | Detail |
+|--------|--------|
+| v1 allowed mapping | Safe observation → `record_observation` |
+| Rejection reasons | 21+ unique codes |
+| Provider permission | Never granted at adapter stage |
+| Chain-of-thought | Never stored |
+| Sensitive data | Never stored (no screenshots, clipboard, credentials) |
+| Model confidence | Does not override policy |
+| Model rationale | Does not override policy |
+
+---
+
+## 9. Adapter / Guard Compatibility Summary
+
+79 tests (T004) verified:
+- Normalized action has all 15 `GuiAgentStepRequest` fields
+- Normalized action passes `validate_gui_action_declaration()` → `ok=true`
+- Adapter output has `provider_call_allowed=false` (guard sets `true` later)
+- Rejected outputs have `normalized_action=None` and are not submitted to guard
+- All 21+ rejection categories produce `MODEL_ACTION_REJECTED`
+- No chain-of-thought, reasoning, screenshot bytes, clipboard contents, or credentials in results
+- API smoke: adapter output → POST step → HTTP 200 (mock-only)
+- PyWinAuto never imported or called
+
+---
+
+## 10. Current Allowed Model-Output Path
+
+**Only: Safe observation intent → `record_observation`**
+
+```
+Raw model text: "observe current state" / "record observation"...
+
+Adapter maps to:
+  action_type=record_observation
+  action_tier=0
+  read_only=true
+  uses_screenshot/clipboard/keyboard/mouse=false
+  network_access=false
+  input_paths=[], output_paths=[]
+  expected_side_effects=none
+  requires_per_action_confirmation=false
+  rollback_plan=none
+  stop_conditions=["unexpected_window", "credential_field"]
+
+Adapter output: provider_call_allowed=false
+
+Guard validates → MockGuiProvider records observation
+```
+
+**Everything else is rejected with structured `MODEL_ACTION_REJECTED`.**
+
+---
+
+## 11. Rejected Model-Output Categories
+
+| Category | Reason Code | Examples |
+|----------|------|------|
+| Ambiguous | `ambiguous_intent` | "continue", "fix it", "do the next step" |
+| Unknown | `unknown_intent` | Empty text, unrecognized intent |
+| Coordinates | `raw_coordinate_click_blocked` | "click at 100,200", `{"action":"click","x":1}` |
+| Keyboard/Mouse | `tier_1_action_blocked`, `keyboard_mouse_blocked` | "press enter", "scroll down", "focus window" |
+| Provider | `provider_selection_blocked` | "use pywinauto", `{"provider":"pywinauto"}` |
+| Approval | `approval_override_blocked` | "approved=true", `{"approved":true}` |
+| Policy | `policy_override_attempt` | "disable guard", "ignore safety rules" |
+| Screenshot | `screenshot_request_blocked` | "take screenshot" |
+| Clipboard | `clipboard_request_blocked` | "read clipboard", "copy paste" |
+| Files | `file_path_blocked`, `rawdata_path_blocked`, `derivatives_write_blocked` | "open rawdata/...", "write derivatives" |
+| Network | `network_request_blocked` | "upload file", "open browser" |
+| Credentials | `credential_request_blocked` | "enter password", "use API key" |
+| Shell | `shell_command_blocked` | "run command", "exec(...)" |
+| Tier 3 | `tier_3_action_blocked` | "click Run", "save file", "delete file" |
+| Multi-action | `multi_action_plan_blocked` | `{"actions":[{...},{...}]}` |
+
+All rejections: `ok=false`, `status=MODEL_ACTION_REJECTED`, `normalized_action=null`, `provider_call_allowed=false`.
+
+---
+
+## 12. Current Blocked Capabilities
+
+### Adapter Layer
+- All intents except safe observation
+- Raw coordinate clicks
+- Provider selection
+- Approved=true override
+- Screenshot/clipboard/keyboard/mouse/network requests
+- File path/rawdata/derivatives requests
+- Credential requests
+- Shell commands
+- Multi-action plans
+- Tier 1/2/3 actions
+
+### Guard Layer
+- PyWinAuto provider
+- Real/desktop/browser/manual providers
+- Screenshots
+- Clipboard
+- Mouse/keyboard
+- Network
+- File paths
+- Rawdata/derivatives
+- Tier 1/2/3 actions
+
+### Reviewed Execution
+- GUI/manual reviewed execution nodes: **0 in allowlist**
+- `executor_called=false` for all GUI reviewed execution requests
+
+---
+
+## 13. Fine-Tuned GUI Agent Integration Implications
+
+1. **Model cannot call provider directly.** All model output must go through `validate_and_normalize_model_output()` before guard.
+
+2. **Model must output structured intent**, not raw coordinates or free-form commands. Raw clicks, provider names, and `approved=true` are rejected.
+
+3. **Only `record_observation` is reachable today.** Any model proposing navigation, interaction, or destructive actions will be rejected.
+
+4. **Provider permission is never granted by the adapter.** Only the guard pipeline can authorize `provider_call_allowed=true`.
+
+5. **Real provider remains blocked.** PyWinAuto requires a dedicated future contract beyond any single feature flag.
+
+6. **Model confidence and rationale do not override policy.** A high-confidence unsafe proposal is still unsafe.
+
+### Future Integration Path
+
+```
+Fine-tuned model (future)
+  → model-output adapter (T003)
+  → normalized action schema (T002)
+  → existing guard pipeline (T002–T005)
+  → MockGuiProvider (today)
+  → Real provider (future, after dedicated contract)
+```
+
+---
+
+## 14. Remaining Limitations
+
+| Limitation | Status |
+|-------|:---:|
+| Real model not connected | Design-only; no inference API |
+| No dataset-driven GUI action replay | Future |
+| No PyWinAuto / real provider | Blocked by guard |
+| No screenshot observation | Blocked |
+| No `get_window_title` / `list_windows` | Blocked |
+| No Tier 1 navigation | Blocked |
+| No Tier 2 interaction | Blocked |
+| No Tier 3 actions | Permanently blocked |
+| No HITL confirmation for model actions | Future |
+| No model-output audit persistence | Future (schema defined, not implemented) |
+| Action taxonomy count mismatch in older docs | Corrected to 41 in M10 docs |
+
+---
+
+## 15. Recommended Next Roadmap
+
+### Route A — Mock-Only Model Integration Planning
+
+```
+M10-GUI-AGENT-MOCK-T001: Model adapter API design
+M10-GUI-AGENT-MOCK-T002: Mock model fixture integration
+M10-GUI-AGENT-MOCK-T003: Adapter-to-guard end-to-end API tests
+M10-GUI-AGENT-MOCK-T004: Model-output audit metadata persistence
+```
+
+### Route B — Stabilization
+
+```
+M10-GUI-AGENT-STABILIZE-T001: Adapter error code audit
+M10-GUI-AGENT-STABILIZE-T002: Schema consistency review
+M10-GUI-AGENT-STABILIZE-T003: Full test baseline lock
+```
+
+### Route C — Read-Only Observation Expansion (Mock-Only)
+
+```
+M9-GUI-OBS-T001: get_window_title mock-only contract
+M9-GUI-OBS-T002: list_windows mock-only contract
+M9-GUI-OBS-T003: Screenshot remains blocked / redaction design deferred
+```
+
+### Hard Constraints
+
+```
+Do NOT connect a real fine-tuned model yet.
+Do NOT enable PyWinAuto.
+Do NOT enable real provider.
+Do NOT allow screenshots.
+Do NOT allow mouse/keyboard.
+Do NOT open GUI/manual reviewed execution allowlist.
+```
+
+---
+
+## 16. Test Baseline
+
+| Metric | Value |
+|--------|------|
+| Total tests | **1578 passed, 4 skipped** |
+| M10 adapter validator tests (T003) | 58/58 |
+| M10 compatibility tests (T004) | 79/79 |
+| M9 guard tests (T002–T006) | 249/249 |
+| M9 GUI blocklist tests (T004) | 38/38 |
+| SPM/DPABI/GPU regression | All passed |
+| Frontend build | Passed |
+
+---
+
+## 17. Acceptance Criteria Before Real Model Integration
+
+Before connecting a real fine-tuned GUI Agent:
+
+1. Mock model fixture exists with deterministic test outputs
+2. Adapter-to-guard end-to-end API tests pass under mock model
+3. Model-output audit metadata persistence is implemented
+4. HITL confirmation for model-derived actions is designed (at minimum)
+5. All 137 adapter tests continue to pass
+6. All 249 guard tests continue to pass
+7. PyWinAuto remains blocked
+8. Real provider remains blocked
+9. GUI/manual reviewed execution allowlist remains 0
+10. SPM (7), DPABI (20), GPU (9) allowlists unaffected
+11. Phase closeout document updated
+
+---
+
+## 18. References
+
+| Document | Content |
+|----------|---------|
+| `docs/FINE_TUNED_GUI_AGENT_ACTION_ADAPTER_DESIGN.md` | Adapter architecture, model output classes |
+| `docs/NORMALIZED_GUI_ACTION_SCHEMA.md` | 5 schema envelopes, field constraints |
+| `docs/M9_GUI_AGENT_API_GUARD_CLOSEOUT.md` | Guard phase closeout |
+| `docs/M6_M9_SAFETY_ARCHITECTURE_REVIEW.md` | Cross-phase safety architecture |
+| `docs/M10_GUI_AGENT_ADAPTER_PHASE_CLOSEOUT.md` | This document |
+| `src/backend/app/runtime/gui_agent_model_adapter.py` | Model-output validator |
+| `src/backend/app/runtime/gui_agent_guard.py` | Guard pipeline |

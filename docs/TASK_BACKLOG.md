@@ -1138,4 +1138,395 @@
 
 ---
 
-*最后更新：2025-07-18*
+## M9 任务：GUI/manual Agent 安全集成
+
+### M9-GUI-T001：GUI/manual node inventory and threat model
+
+- **task_id**: M9-GUI-T001
+- **title**: 盘点所有 GUI/manual 相关节点，建立威胁模型
+- **priority**: P1
+- **scope**: 纯文档任务 — 盘点、威胁建模、安全边界文档
+- **allowed_files**:
+  - `docs/GUI_MANUAL_AGENT_THREAT_MODEL.md`（新增）
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/SAFE_REVIEWED_EXECUTION_DESIGN.md`
+  - `docs/EXECUTION_INTEGRATION_DESIGN.md`
+  - `docs/DEV_LOG/YYYY-MM-DD-M9-GUI-T001.md`
+- **forbidden_changes**:
+  - 不注册 GUI/manual runner
+  - 不开放 GUI/manual allowlist
+  - 不调用 GUI automation library（pyautogui/pynput/selenium/playwright）
+  - 不控制鼠标/键盘
+  - 不读取剪贴板
+  - 不截屏并保存
+  - 不打开外部应用
+  - 不修改 executor / approval gate / frontend 行为
+- **acceptance_criteria**:
+  - 新增 `docs/GUI_MANUAL_AGENT_THREAT_MODEL.md`
+  - 完成 GUI/manual node inventory（含完整的各维度表格）
+  - 明确 GUI/manual execution 当前仍 blocked
+  - 明确 M6/M7/M8 不开放 GUI/manual
+  - 覆盖 5 类威胁模型
+  - 定义 human-in-the-loop requirements
+  - 定义 approval requirements
+  - 定义 action risk taxonomy（4 级）
+  - 定义 sensitive data / credential boundary
+  - 覆盖 prompt injection / UI injection 风险
+  - 明确 future M9 rollout plan
+  - pytest 全量通过
+  - frontend build 通过
+- **test_commands**:
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M8 GPU closeout
+
+### M9-GUI-T002：GUI/manual approval and human-in-the-loop design
+
+- **task_id**: M9-GUI-T002
+- **title**: 设计 GUI/manual 节点的审批流程和人机交互协议
+- **priority**: P1
+- **scope**: 设计文档 + approval_gate 扩展建议（不实现）
+- **allowed_files**:
+  - `docs/GUI_MANUAL_APPROVAL_HITL_DESIGN.md`（新增）
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/GUI_MANUAL_AGENT_THREAT_MODEL.md`（小更新可选）
+  - `docs/DEV_LOG/2026-07-11-M9-GUI-T002.md`
+- **forbidden_changes**:
+  - 不修改 approval_gate.py（仅提建议）
+  - 不注册 runner
+  - 不开放 allowlist
+  - 不调用 GUI automation
+  - 不修改 /api/gui-agent/* 行为
+- **acceptance_criteria**:
+  - GUI/manual approval flow 设计文档
+  - 三层 Approval 模型（Session / Action-Plan / Per-Action）
+  - 说明 `approved=true` 不足以控制真实桌面
+  - GUI Action Approval Schema 提案
+  - Provider policy（mock 默认 / pywinauto disabled-by-default）
+  - `/api/gui-agent/*` 安全集成方案比较（Option A vs B）
+  - HITL UI 需求
+  - 截图 / 剪贴板 / 敏感数据策略
+  - Audit 日志结构
+  - Emergency abort / stop conditions
+  - Prompt injection / UI injection 防御
+  - 测试策略
+  - pytest 全部通过
+  - frontend build 通过
+- **test_commands**:
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M9-GUI-T001
+
+### M9-GUI-T003：GUI action taxonomy and sandbox declaration contract
+
+- **task_id**: M9-GUI-T003
+- **title**: 定义 GUI 操作分类和沙箱声明合约格式
+- **priority**: P1
+- **scope**: 设计文档 + 合约 schema + 分类规则 + M9-GUI-T004 测试基准
+- **allowed_files**:
+  - `docs/GUI_ACTION_TAXONOMY_AND_SANDBOX_CONTRACT.md`（新增）
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/GUI_MANUAL_APPROVAL_HITL_DESIGN.md`（小更新可选）
+  - `docs/DEV_LOG/2026-07-11-M9-GUI-T003.md`
+- **forbidden_changes**:
+  - 不实现代码
+  - 不注册 runner
+  - 不开放 allowlist
+  - 不调用 GUI automation
+  - 不修改 /api/gui-agent/* 行为
+- **acceptance_criteria**:
+  - 完整的 GUI Action Taxonomy（29 个 action，4 个 tier）
+  - 每个 action 含 14 个维度字段
+  - 当前 `gui_agent.py` action 字符串到 tier 的映射
+  - GUI Session Sandbox Declaration Schema（23 字段 + 验证规则）
+  - GUI Action Declaration Schema（22 字段）
+  - 5 个独立政策合约（Screenshot, Clipboard, File/Path, Network, External App/Window）
+  - Blocked Action Contract（22 个永久阻断 action）
+  - Policy Classification Rules（`classify_gui_action` + `validate_gui_session_declaration` 伪代码）
+  - M9-GUI-T004 的 25 个测试基准
+  - pytest 全部通过
+  - frontend build 通过
+- **test_commands**:
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M9-GUI-T002
+
+### M9-GUI-T004：GUI/manual plan_adapter blocklist tests
+
+- **task_id**: M9-GUI-T004
+- **title**: 为 GUI/manual 节点在当前阻断逻辑中的正确性添加测试
+- **priority**: P1
+- **scope**: 新增专用测试文件 + 回归验证
+- **allowed_files**:
+  - `tests/unit/test_gui_reviewed_execution_blocklist.py`（新增）
+  - `docs/`（文档更新）
+- **forbidden_changes**:
+  - 不修改 production code（plan_adapter, approval_gate, execute_reviewed, tool_catalog）
+  - 不开放 allowlist
+  - 不注册 runner
+  - 不调用 GUI automation
+- **acceptance_criteria**:
+  - 38 个新测试，覆盖 7 个类别
+  - gui_ 前缀节点被 blocked_unknown_nodes 捕获（当前 NODE_REGISTRY 中无 gui_* 条目）
+  - backend=gui-agent/manual/desktop/browser 被 blocked_unknown_nodes 捕获
+  - manual_required 节点被 approval_gate MANUAL_REQUIRED_NODE 阻断
+  - 通配符 approval 不覆盖 GUI 节点
+  - approved_backends=["gui"] 单独不能执行
+  - executor_called=false for blocked GUI nodes
+  - tool_catalog gui_* fallback manual_required=true, risk_level=high
+  - SPM / DPABI / GPU regression 全部通过
+  - `/api/gui-agent/*` bypass 仍存在（记录）
+  - pytest 1192 passed, 4 skipped
+  - frontend build 通过
+- **test_commands**:
+  - `pytest tests/unit/test_gui_reviewed_execution_blocklist.py -v`
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M9-GUI-T001
+
+### M9-GUI-T005：Read-only GUI observation contract
+
+- **task_id**: M9-GUI-T005
+- **title**: 为只读 GUI 观察（Tier 0）设计安全合约
+- **priority**: P2
+- **scope**: 安全评估 + 合约设计 + 文档
+- **allowed_files**:
+  - `docs/GUI_READ_ONLY_OBSERVATION_CONTRACT.md`（新增）
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/DEV_LOG/2026-07-11-M9-GUI-T005.md`
+- **forbidden_changes**:
+  - 不修改代码
+  - 不开放 GUI/manual execution
+  - 不调用 GUI automation
+  - 不启用 PyWinAuto provider
+- **acceptance_criteria**:
+  - 7 个 Tier 0 read-only action 正式合约化
+  - Mock provider observation policy
+  - Real provider observation policy (blocked, design-only)
+  - 4 级 screenshot policy
+  - Window/control/visible text sensitive data policy
+  - Session Declaration schema (24 fields)
+  - Action Declaration schema (22 fields)
+  - 16 个 blocked actions (Tier 1+)
+  - Audit requirements (17 required + 5 prohibited)
+  - 11 stop conditions
+  - `/api/gui-agent/*` bypass 状态记录
+  - Future guard 设计 (7-gate pipeline)
+  - 16 个未来测试基准
+  - pytest 通过
+  - frontend build 通过
+- **test_commands**:
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成 (2026-07-11)
+- **depends_on**: M9-GUI-T003
+
+### M9-GUI-T006：Manual-only smoke guide
+
+- **task_id**: M9-GUI-T006
+- **title**: 编写手动 smoke 测试指南（不自动化）
+- **priority**: P2
+- **scope**: 文档 — manual smoke checklist + verification guide
+- **allowed_files**:
+  - `docs/GUI_MANUAL_SMOKE_GUIDE.md`（新增）
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/DEV_LOG/2026-07-11-M9-GUI-T006.md`
+- **forbidden_changes**:
+  - 不修改代码
+  - 不实现 GUI automation
+  - 不启用 PyWinAuto
+  - 不控制鼠标键盘
+  - 不截屏保存
+  - 不修改 /api/gui-agent/* 行为
+- **acceptance_criteria**:
+  - 36-item manual smoke checklist
+  - 7 automated verification steps
+  - 5 manual code inspection steps
+  - 7 failure diagnostic scenarios
+  - Cleanup guide
+  - Printable checklist
+  - pytest 通过
+  - frontend build 通过
+- **test_commands**:
+  - `pytest tests/unit/test_gui_reviewed_execution_blocklist.py -v`
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M9-GUI-T005
+
+### M9-GUI-CLOSEOUT：GUI/manual phase closeout
+
+- **task_id**: M9-GUI-CLOSEOUT
+- **title**: GUI/manual 阶段收尾文档与状态摘要
+- **priority**: P1
+- **scope**: 文档 — 阶段收口 + 后续路线推荐
+- **allowed_files**:
+  - `docs/M9_GUI_MANUAL_PHASE_CLOSEOUT.md`（新增）
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/DEV_LOG/2026-07-11-M9-GUI-CLOSEOUT.md`
+- **forbidden_changes**:
+  - 不修改 production code
+  - 不开放 GUI/manual execution
+  - 不修复 `/api/gui-agent/*` bypass
+- **acceptance_criteria**:
+  - Phase closeout 文档
+  - reviewed execution allowlist 总数确认 (36)
+  - GUI/manual allowlist 确认 (0)
+  - T001-T006 全部标记完成
+  - 安全边界明确
+  - `/api/gui-agent/*` bypass 状态明确
+  - 后续路线推荐 (Route A / Route B)
+  - 20 条未来验收标准
+  - pytest 通过
+  - frontend build 通过
+- **test_commands**:
+  - `pytest tests/unit/test_gui_reviewed_execution_blocklist.py -v`
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M9-GUI-T006
+
+---
+
+## M9 后续候选任务（Route A — GUI Guard Implementation）
+
+以下任务尚未开始，标记为候选，待用户决策后激活。
+
+### M9-GUI-GUARD-T001：API guard for /api/gui-agent/* design
+
+- **task_id**: M9-GUI-GUARD-T001
+- **title**: 设计 /api/gui-agent/* 的等效安全守卫（14-layer guard pipeline）
+- **priority**: P1
+- **scope**: 设计文档 — guard pipeline, validation schemas, error codes, rollout strategy
+- **allowed_files**:
+  - `docs/GUI_AGENT_API_GUARD_DESIGN.md`（新增）
+  - `docs/CURRENT_STATE.md`
+  - `docs/NEXT_ACTIONS.md`
+  - `docs/TASK_BACKLOG.md`
+  - `docs/DEV_LOG/2026-07-11-M9-GUI-GUARD-T001.md`
+- **forbidden_changes**:
+  - 不修改 production code
+  - 不实现 guard
+  - 不启用 PyWinAuto
+  - 不调用 GUI automation
+- **acceptance_criteria**:
+  - 14-layer guard pipeline design
+  - 13 structured error codes + response schema
+  - Provider policy gate: mock-only default, PyWinAuto blocked
+  - Action tier classifier: 29 actions → 4 tiers
+  - Session/action declaration validators
+  - Approval/HITL integration design
+  - Audit log design (17 required + 4 prohibited fields)
+  - Stop-condition checker (12 conditions)
+  - Emergency abort design (3-layer)
+  - Mock-only rollout strategy (6-phase)
+  - Fine-tuned GUI Agent integration path
+  - 25 future test benchmarks
+  - pytest 通过, frontend build 通过
+- **test_commands**:
+  - `pytest --tb=short`
+  - `npm --prefix src/frontend run build`
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M9-GUI-CLOSEOUT
+
+### M9-GUI-GUARD-T002：Provider policy gate (mock-only by default)
+
+- **task_id**: M9-GUI-GUARD-T002
+- **title**: 实现 provider policy gate，mock-only 默认
+- **priority**: P1
+- **scope**: 实现 — guard module + route/runtime integration + 43 tests
+- **files**:
+  - `src/backend/app/runtime/gui_agent_guard.py` (NEW)
+  - `src/backend/app/api/gui_agent_routes.py` (MODIFIED)
+  - `src/backend/app/runtime/gui_agent.py` (MODIFIED)
+  - `tests/unit/test_gui_agent_provider_policy_gate.py` (NEW)
+- **acceptance_criteria**:
+  - Only provider=mock allowed
+  - provider=pywinauto/real/desktop/browser/manual blocked (HTTP 403)
+  - approved=true does not bypass
+  - Feature flags do not bypass in T002
+  - PyWinAuto never constructed
+  - Mock sessions/steps still work
+  - GUI reviewed execution blocklist unchanged
+  - SPM/DPABI/GPU regression: 0 failures
+  - 1235 passed, 4 skipped
+- **status**: ✅ 已完成（2026-07-11）
+- **depends_on**: M9-GUI-GUARD-T001
+
+### M9-GUI-GUARD-T003：Session declaration validator
+
+- **task_id**: M9-GUI-GUARD-T003
+- **title**: 实现 session declaration 验证器
+- **priority**: P2 (candidate)
+- **scope**: 实现
+- **status**: 🔮 候选
+- **depends_on**: M9-GUI-GUARD-T002
+
+### M9-GUI-GUARD-T004：Action tier classifier
+
+- **task_id**: M9-GUI-GUARD-T004
+- **title**: 实现 action declaration 验证器 + tier 分类器
+- **priority**: P2 (candidate)
+- **scope**: 实现
+- **status**: 🔮 候选
+- **depends_on**: M9-GUI-GUARD-T003
+
+### M9-GUI-GUARD-T005：Audit log + stop conditions
+
+- **task_id**: M9-GUI-GUARD-T005
+- **title**: 实现审计日志和停止条件检查
+- **priority**: P2 (candidate)
+- **scope**: 实现
+- **status**: 🔮 候选
+- **depends_on**: M9-GUI-GUARD-T004
+
+### M9-GUI-GUARD-T006：Mock-only guarded API tests
+
+- **task_id**: M9-GUI-GUARD-T006
+- **title**: 仅在 mock-only 模式下测试 guarded API
+- **priority**: P2 (candidate)
+- **scope**: 测试
+- **status**: 🔮 候选
+- **depends_on**: M9-GUI-GUARD-T005
+
+---
+
+## M9 后续候选任务（Route B — Pause and Stabilize）
+
+### M9-DOCS-REVIEW：Cross-document consistency review
+
+- **task_id**: M9-DOCS-REVIEW
+- **title**: 审查所有 M9 文档的跨文档一致性
+- **priority**: P3 (candidate)
+- **scope**: 文档审查
+- **status**: 🔮 候选
+- **depends_on**: M9-GUI-CLOSEOUT
+
+### M9-TEST-BASELINE：Record full test baseline
+
+- **task_id**: M9-TEST-BASELINE
+- **title**: 记录完整的 M9 测试基线
+- **priority**: P3 (candidate)
+- **scope**: 测试文档
+- **status**: 🔮 候选
+- **depends_on**: M9-GUI-CLOSEOUT
+
+---
+
+*最后更新：2026-07-11 (M9-GUI-GUARD-T001)*

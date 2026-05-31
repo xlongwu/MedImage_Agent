@@ -1,0 +1,449 @@
+# M9 GUI/Manual Agent Phase Closeout
+
+> M9-GUI-CLOSEOUT | M9 Phase final documentation  
+> Status: COMPLETE | Date: 2026-07-11  
+> Depends on: M9-GUI-T001 through T006
+
+---
+
+## 1. Executive Summary
+
+The **M9 GUI/Manual Agent Phase** is now complete. Over seven tasks (T001 through T006 + CLOSEOUT), the phase has established a comprehensive safety framework for GUI/manual agent operations — without opening a single GUI execution path, enabling real desktop control, or registering any GUI node in the reviewed execution allowlist.
+
+**M9 delivered:**
+- A threat model identifying 7 attack surfaces and 5 safety gaps
+- A three-layer approval model (Session → Action-Plan → Per-Action)
+- A 29-action taxonomy across 4 risk tiers
+- A sandbox declaration contract with 5 standalone policy contracts
+- 38 automated blocklist tests locking down reviewed-execution-side blocking
+- A read-only observation contract defining the narrowest safe observation surface
+- A manual smoke guide for human operators
+
+**M9 did NOT deliver:**
+- GUI/manual reviewed execution nodes (allowlist remains 0)
+- Real desktop control via PyWinAuto
+- Screenshot capture or persistence
+- Clipboard access
+- Mouse/keyboard automation
+- Browser or external app control
+- A fix for the known `/api/gui-agent/*` bypass gap
+
+---
+
+## 2. Reviewed Execution Status
+
+| Allowlist Category | Count | Status |
+|-------|:---:|------|
+| M6 SPM | 7 | ✅ Reviewed execution sandbox-gated |
+| M7 DPABI | 20 | ✅ Reviewed execution sandbox/metadata/report-gated |
+| M8 GPU | 9 | ✅ Reviewed execution sandbox scaffold |
+| **M9 GUI/manual** | **0** | ❌ **Blocked — design phase only** |
+| **Total** | **36** | ✅ |
+
+> No GUI/manual node has been added to the reviewed execution allowlist.  
+> No GUI/manual node can reach `EXECUTION_SUBMITTED`.  
+> `executor_called=false` is verified by 38 automated tests for all GUI/manual scenarios.
+
+---
+
+## 3. M9 Task Completion Table
+
+| Task | Status | Output | Code Changed? | Execution Opened? |
+|------|:---:|------|:---:|:---:|
+| **M9-GUI-T001** | ✅ | `docs/GUI_MANUAL_AGENT_THREAT_MODEL.md` | No | No |
+| **M9-GUI-T002** | ✅ | `docs/GUI_MANUAL_APPROVAL_HITL_DESIGN.md` | No | No |
+| **M9-GUI-T003** | ✅ | `docs/GUI_ACTION_TAXONOMY_AND_SANDBOX_CONTRACT.md` | No | No |
+| **M9-GUI-T004** | ✅ | `tests/unit/test_gui_reviewed_execution_blocklist.py` (38 tests) | Test only | No |
+| **M9-GUI-T005** | ✅ | `docs/GUI_READ_ONLY_OBSERVATION_CONTRACT.md` | No | No |
+| **M9-GUI-T006** | ✅ | `docs/GUI_MANUAL_SMOKE_GUIDE.md` | No | No |
+| **M9-GUI-CLOSEOUT** | ✅ | `docs/M9_GUI_MANUAL_PHASE_CLOSEOUT.md` | No | No |
+
+---
+
+## 4. Artifact Summary
+
+### 4.1 Key Documents
+
+| Document | Task | Description |
+|----------|:---:|------|
+| `docs/GUI_MANUAL_AGENT_THREAT_MODEL.md` | T001 | Threat model, node inventory, 7 attack surfaces, 5 safety gaps |
+| `docs/GUI_MANUAL_APPROVAL_HITL_DESIGN.md` | T002 | Three-layer approval model, provider policy, HITL requirements, integration strategy |
+| `docs/GUI_ACTION_TAXONOMY_AND_SANDBOX_CONTRACT.md` | T003 | 29-action taxonomy, sandbox declaration schema (23 fields), 5 policy contracts, classification rules |
+| `docs/GUI_READ_ONLY_OBSERVATION_CONTRACT.md` | T005 | Tier 0 observation contract, screenshot policy, sensitive data policy, audit requirements |
+| `docs/GUI_MANUAL_SMOKE_GUIDE.md` | T006 | 36-item manual smoke checklist, failure diagnostics, cleanup guide |
+| `docs/M9_GUI_MANUAL_PHASE_CLOSEOUT.md` | CLOSEOUT | This document — phase summary |
+
+### 4.2 Key Tests
+
+| File | Tests | Description |
+|------|:---:|------|
+| `tests/unit/test_gui_reviewed_execution_blocklist.py` | 38 | Full GUI blocklist: plan_adapter, approval_gate, execute-reviewed, tool_catalog |
+
+### 4.3 Dev Logs
+
+| Log | Task |
+|------|:---:|
+| `docs/DEV_LOG/2026-07-11-M9-GUI-T001.md` | Threat model |
+| `docs/DEV_LOG/2026-07-11-M9-GUI-T002.md` | Approval + HITL design |
+| `docs/DEV_LOG/2026-07-11-M9-GUI-T003.md` | Taxonomy + sandbox contract |
+| `docs/DEV_LOG/2026-07-11-M9-GUI-T004.md` | Blocklist tests |
+| `docs/DEV_LOG/2026-07-11-M9-GUI-T005.md` | Observation contract |
+| `docs/DEV_LOG/2026-07-11-M9-GUI-T006.md` | Smoke guide |
+| `docs/DEV_LOG/2026-07-11-M9-GUI-CLOSEOUT.md` | Phase closeout |
+
+---
+
+## 5. GUI/Manual Threat Model Summary
+
+**7 Attack Surfaces Identified (T001):**
+
+| # | Attack Surface | Risk Level | Current Mitigation |
+|:---:|------|:---:|------|
+| 1 | Unattended control | HIGH | Mock default; PyWinAuto blocked |
+| 2 | Sensitive data exposure | HIGH | No real screenshots; redaction contract defined |
+| 3 | External application risk | HIGH | No app allowlist yet; blocked by default |
+| 4 | Prompt injection / UI injection | MEDIUM | Policy: UI text is untrusted |
+| 5 | Credential capture | HIGH | type_text blocked; screenshot persistence blocked |
+| 6 | Path traversal | LOW | Session ID validated in `_session_dir()` |
+| 7 | Reviewed execution bypass | MEDIUM | `/api/gui-agent/*` separate; documented |
+
+**5 Safety Gaps Documented (T001):**
+
+1. `/api/gui-agent/*` API surface ungated by reviewed execution
+2. No application allowlist in `create_gui_agent_session()`
+3. No per-action confirmation — `approved=true` is session-level boolean
+4. No screenshot redaction mechanism
+5. No audit record integration with reviewed execution audit trail
+
+---
+
+## 6. Approval / HITL Design Summary
+
+**Three-Layer Approval Model (T002):**
+
+| Layer | Timing | Content |
+|:---:|------|------|
+| **1 — Session** | Session creation | Target app, provider, allowed tiers, file scope, screenshot/clipboard policy, duration/step limits, human-present flag |
+| **2 — Action-Plan** | Before execution | Structured action sequence with natural-language descriptions, expected side effects, rollback plan |
+| **3 — Per-Action** | Each Tier 2+ step | Semantic confirmation text, not `approved=true` boolean |
+
+**Key Design Decisions:**
+
+- `approved=true` boolean alone is **insufficient** for real desktop control
+- `approved_nodes=["*"]` must NOT cover GUI/manual nodes
+- `approved_backends=["gui"]` alone is **insufficient**
+- Real provider requires: feature flag + session approval + action-plan approval + per-action confirmation + human-present flag
+
+**Integration Strategy Recommendation (T002):**
+
+Option B Phase 1 — add equivalent 12-gate guard to GUI agent API without modifying reviewed execution pipeline. Defer full integration to Phase 2.
+
+---
+
+## 7. Action Taxonomy Summary
+
+**29 Actions Across 4 Tiers (T003):**
+
+| Tier | Name | Count | Default Status |
+|:---:|------|:---:|------|
+| **0** | Read-Only Observation | 7 | Mock allowed; real requires session approval |
+| **1** | Low-Risk Navigation | 8 | Session + window scope |
+| **2** | Medium-Risk Interaction | 7 | Session + Action-Plan + Per-Action |
+| **3** | High-Risk / Blocked | 22 | **Blocked by default** |
+
+**5 Standalone Policy Contracts:**
+
+1. **Screenshot Policy** — 4 levels: `disabled` (default) → `ephemeral_only` → `persist_redacted` → `persist_raw` (permanently blocked)
+2. **Clipboard Policy** — `disabled` only (v1)
+3. **File/Path Scope Policy** — explicit paths only; rawdata/home/desktop/downloads/system paths blocked
+4. **Network Policy** — `disabled` or `local_only` only
+5. **External App/Window Policy** — `declared_target_only`; browser/email/messaging permanently blocked
+
+**Sandbox Declaration Schema (T003):**
+
+- GUI Session: 23 fields + 15 rejection conditions
+- GUI Action: 22 fields + 9 rejection conditions
+
+**Policy Classification Rules (T003):**
+
+- `classify_gui_action()` pseudocode for tier assignment
+- `validate_gui_session_declaration()` pseudocode for session validation
+- 25 test benchmarks provided for T004
+
+---
+
+## 8. Reviewed Execution Blocklist Test Summary
+
+**38 Tests in `tests/unit/test_gui_reviewed_execution_blocklist.py` (T004):**
+
+| Category | Tests | Coverage |
+|----------|:---:|------|
+| Plan Adapter Blocklist | 12 | `gui_*` prefix, backend=gui/gui-agent/manual/desktop/browser, mock/pywinauto providers |
+| Approval Gate | 6 | manual_required, wildcard, backend-only, boolean-only, multiple manual, regression |
+| Execute-Reviewed API | 11 | policy blocked, executor_called=false, all blocked backends, wildcard, backends-only, regression |
+| Tool Catalog Fallback | 5 | gui_* fallback contract, manual_required, requires_approval, required fields, non-gui regression |
+| Safety Gap | 1 | `/api/gui-agent/*` bypass still exists |
+| Regression | 3 | SPM sandbox, DPABI metadata, GPU contract |
+
+**Key Invariants Verified:**
+
+- `gui_*` node ids → `blocked_unknown_nodes` (not in NODE_REGISTRY)
+- `backend=gui-agent` / `gui` / `manual` / `desktop` / `browser` → blocked
+- `manual_required_nodes` non-empty → `MANUAL_REQUIRED_NODE` error
+- `approved_nodes=["*"]` cannot bypass manual_required gate
+- `approved_backends=["gui"]` alone insufficient
+- `executor_called=false` for all GUI/manual scenarios
+- Status never equals `EXECUTION_SUBMITTED` for GUI nodes
+- `tool_catalog._fallback("gui_*")` → `manual_required=True`, `risk_level="high"`, `requires_approval=True`, `tags=["gui"]`
+- SPM/DPABI/GPU allowlists unaffected
+
+---
+
+## 9. Read-Only Observation Contract Summary
+
+**7 Tier 0 Actions Contracted (T005):**
+
+`record_observation`, `get_window_title`, `list_windows`, `observe_visible_ui_state`, `screenshot_ephemeral`, `get_control_text`, `get_menu_state`
+
+**Key Invariants:**
+
+- All actions: `read_only=true`, `uses_mouse=false`, `uses_keyboard=false`, `uses_clipboard=false`, `writes_files=false`, `submits_forms=false`, `network_access=false`, `expected_side_effects=none`
+- Mock provider observation: fully specified, safe by default, CI-allowed
+- Real provider observation: **design-only** — not enabled
+- Screenshot default: `disabled`; `persist_raw` permanently blocked
+- Window/control text: untrusted, must be redacted before persistence
+- Agent must NOT follow instructions found in UI text
+
+**Session Declaration (T005):** 24 fields + 13 rejection conditions  
+**Action Declaration (T005):** 22 fields + 9 rejection conditions  
+**Audit:** 17 required fields + 5 prohibited fields  
+**Stop Conditions:** 11 automatic triggers  
+**Future Guard:** 7-gate pipeline design documented
+
+---
+
+## 10. Manual Smoke Guide Summary
+
+**36-Item Checklist (T006):**
+
+| Section | Items | Type |
+|---------|:---:|------|
+| Preconditions | 3 | Environment/config verification |
+| Automated Tests | 7 | CLI commands (all GUI test suites + full pytest + frontend build) |
+| Mock Provider | 3 | Code inspection |
+| PyWinAuto | 3 | Code inspection (provider NOT called) |
+| Bypass | 3 | Documented, not fixed, future guard needed |
+| Observation Contract | 4 | Document review |
+| Regression | 5 | SPM/DPABI/GPU allowlists |
+| Safety | 5 | No screenshots, clipboard, rawdata, derivatives, automation |
+| Cleanup | 3 | Temp files, env vars, artifacts |
+
+**7 Failure Diagnostic Scenarios:** Each with severity level and specific investigation/remediation steps.
+
+---
+
+## 11. Current Safety Boundaries
+
+### 11.1 What M9 Does NOT Enable
+
+```
+M9 does NOT allow GUI/manual reviewed execution.
+M9 does NOT allow real desktop control (PyWinAuto inactive).
+M9 does NOT allow screenshot capture from real desktop.
+M9 does NOT allow clipboard read or write.
+M9 does NOT allow mouse control.
+M9 does NOT allow keyboard control.
+M9 does NOT allow browser automation.
+M9 does NOT allow external application control.
+M9 does NOT allow form submission.
+M9 does NOT allow Run / Execute / Submit clicks.
+M9 does NOT allow file mutation through GUI paths.
+M9 does NOT allow rawdata access through GUI paths.
+M9 does NOT allow credential entry or capture.
+M9 does NOT allow email or messaging app control.
+```
+
+### 11.2 What Remains Blocked at Reviewed Execution Layer
+
+| Blocked Item | Mechanism | Source |
+|------|------|------|
+| `gui_*` node ids | `blocked_unknown_nodes` | `plan_adapter.py:414-416` |
+| `backend=gui-agent` | `blocked_unknown_nodes` (not registered) | `plan_adapter.py:414-416` |
+| `backend=gui/manual/desktop/browser` | `blocked_unknown_nodes` | `plan_adapter.py:414-416` |
+| `manual_required_nodes` | `MANUAL_REQUIRED_NODE` error | `approval_gate.py:276-284` |
+| Wildcard approval for GUI | Step 12 blocks before wildcard evaluation | `approval_gate.py:276-284` |
+| Backend-only approval | Insufficient without per-node approval | `approval_gate.py:276-284` |
+| `executor_called` for GUI | Remains `false` | `execute_reviewed_routes.py` |
+| `gui_*` fallback metadata | `manual_required=True`, `risk_level="high"` | `tool_catalog.py:505-509` |
+
+### 11.3 Provider State
+
+| Provider | Real Control | Default | CI | T006 Status |
+|----------|:---:|:---:|:---:|------|
+| `MockGuiProvider` | No | ✅ | ✅ | Inspected — safe |
+| `PyWinAutoGuiProvider` | Yes (click/type/screenshot) | ❌ | ❌ | **NOT called — blocked** |
+
+---
+
+## 12. Known Safety Gap: `/api/gui-agent/*` Bypass
+
+### 12.1 The Gap
+
+```
+The reviewed execution pipeline (12 gates) blocks GUI/manual nodes correctly.
+However, /api/gui-agent/* endpoints are registered separately in main.py (line 18, 55).
+They do NOT pass through plan_validator → approval_gate → plan_adapter → execute_reviewed.
+This means reviewed execution allowlist safety does not automatically protect
+GUI Agent API calls.
+```
+
+### 12.2 Current State
+
+- Gap documented in T001 (threat model), T002 (HITL design), T004 (blocklist tests), T006 (smoke guide)
+- Test `test_gui_bypass_gap_still_exists` confirms the gap is known and documented
+- **M9 closeout does NOT fix this gap**
+
+### 12.3 Required Future Fix
+
+Before any real provider is enabled, `/api/gui-agent/*` must implement an equivalent guard:
+
+1. **Session declaration validation** — verify `gui_sandbox_mode`, `provider`, `allowed_action_tiers`, `file_scope`, screenshot/clipboard/network policies
+2. **Provider policy validation** — real provider blocked unless feature flag + session approval
+3. **Action tier classification** — map action to tier; reject unknown/Tier 3
+4. **Action declaration validation** — verify `action_tier`, usage flags, `input_paths`, `output_paths`
+5. **Screenshot / clipboard / network policy enforcement** — block unapproved access
+6. **Audit log creation** — record every step with required fields, redact sensitive data
+7. **Stop-condition checks** — abort on unexpected window, credential field, permission dialog, etc.
+8. **Per-action confirmation for Tier 2+** — semantic confirmation, not `approved=true` boolean
+9. **Tier 3 default block** — all Tier 3 actions rejected unless explicit future contract
+10. **Emergency abort registration** — cancel session from client or server at any step
+
+---
+
+## 13. What Remains Blocked
+
+### 13.1 Reviewed Execution Layer
+
+| Scope | Status |
+|-------|:---:|
+| GUI/manual reviewed execution nodes | ❌ 0 in allowlist |
+| Real CUDA medical-image processing | ❌ Blocked |
+| Model inference / training / finetuning | ❌ Blocked |
+| Unrestricted SPM / DPABI / GPU execution | ❌ Blocked |
+
+### 13.2 GUI Agent Layer
+
+| Capability | Status |
+|-------|:---:|
+| PyWinAuto real desktop control | ❌ Disabled |
+| Real screenshot capture/persistence | ❌ Blocked |
+| Clipboard read/write | ❌ Blocked |
+| Mouse/keyboard automation | ❌ Blocked |
+| Browser automation | ❌ Blocked |
+| External app control | ❌ Blocked |
+| Run / Execute / Submit clicks | ❌ Blocked |
+| File save / overwrite / delete | ❌ Blocked |
+| Rawdata access | ❌ Blocked |
+| Credential entry | ❌ Blocked |
+| Email/messaging control | ❌ Blocked |
+
+---
+
+## 14. Recommended Next Phase
+
+> **Important: The following are recommendations only. Do NOT automatically begin any next-phase work.**
+
+### 14.1 Route A — GUI Guard Implementation Planning (Recommended)
+
+```
+M9-GUI-GUARD-T001: Design API guard for /api/gui-agent/*
+M9-GUI-GUARD-T002: Implement provider policy gate (mock-only by default)
+M9-GUI-GUARD-T003: Implement session declaration validator
+M9-GUI-GUARD-T004: Implement action declaration + tier classifier
+M9-GUI-GUARD-T005: Implement audit log + stop-condition checks
+M9-GUI-GUARD-T006: Mock-only guarded API tests
+```
+
+**Before any real provider enablement, the guard must be complete and tested.**
+
+### 14.2 Route B — Pause and Stabilize
+
+```
+M9-DOCS-REVIEW:     Review all M9 docs for cross-document consistency
+M9-TEST-BASELINE:    Record full M9 test baseline (1192 passed, 4 skipped)
+M9-ARCHITECTURE-NOTE: Summarize GUI Agent architecture for future model integration
+```
+
+### 14.3 Hard Constraints for Any Future Work
+
+```
+Do NOT enable PyWinAuto before guard exists.
+Do NOT open GUI/manual reviewed execution allowlist before guard exists.
+Do NOT implement real GUI control before guard exists.
+Do NOT call pywinauto / pyautogui / pynput / selenium / playwright before guard exists.
+Do NOT capture real screenshots before guard + redaction exist.
+Do NOT access clipboard before guard exists.
+MockGuiProvider remains the only safe default provider until guard exists.
+```
+
+---
+
+## 15. Acceptance Criteria for Future GUI Real-Provider Work
+
+Before any GUI/manual reviewed execution node or real provider is enabled:
+
+1. `/api/gui-agent/*` guard is implemented and tested (10-gate pipeline minimum)
+2. `HIGH_RISK_BACKENDS` includes `gui`, `manual`, `desktop`, `browser`
+3. `plan_adapter.classify_plan_nodes()` has explicit sandbox contract for allowed GUI nodes
+4. `approval_gate.check_approval_gate()` blocks wildcard and backend-only for GUI nodes
+5. `execute_reviewed._check_safe_allowlist()` explicitly excludes Tier 2/3 actions
+6. Session declaration validator rejects invalid sessions (13+ conditions)
+7. Action declaration validator + tier classifier rejects invalid actions (9+ conditions)
+8. Screenshot policy enforces `disabled`/`ephemeral_only`/`persist_redacted`; `persist_raw` blocked
+9. Clipboard policy enforces `disabled` only (v1)
+10. Network policy enforces `disabled` or `local_only`
+11. External app policy enforces `declared_target_only`
+12. Per-action semantic confirmation implemented for Tier 2+ actions
+13. Emergency abort available at every step
+14. Audit log with 17 required fields; sensitive data redacted
+15. 11 stop conditions enforced
+16. Regression tests: SPM (7), DPABI (20), GPU (9) allowlists unchanged
+17. Manual smoke checklist updated
+18. `executor_called=false` for any untested GUI scenario
+19. All M9 contracts updated to reflect implemented state
+20. Phase closeout document updated
+
+---
+
+## 16. Test Baseline
+
+| Metric | Value |
+|--------|------|
+| Total tests | **1192 passed, 4 skipped** |
+| GUI blocklist tests (T004) | 38/38 passed |
+| SPM regression | 7 sandbox nodes test-verified |
+| DPABI regression | 20 sandbox/metadata/report nodes test-verified |
+| GPU regression | 9 sandbox scaffold nodes test-verified |
+| Frontend build | Passed |
+| Code modified in M9 | **Test file only** (T004) |
+| Execution opened in M9 | **None** |
+
+---
+
+## 17. References
+
+| Document | Content |
+|----------|---------|
+| `docs/GUI_MANUAL_AGENT_THREAT_MODEL.md` | Threat model, inventory, 7 attack surfaces, 5 safety gaps |
+| `docs/GUI_MANUAL_APPROVAL_HITL_DESIGN.md` | Three-layer approval model, provider policy, integration strategy |
+| `docs/GUI_ACTION_TAXONOMY_AND_SANDBOX_CONTRACT.md` | 29-action taxonomy, sandbox declaration schema, 5 policy contracts, classification rules |
+| `docs/GUI_READ_ONLY_OBSERVATION_CONTRACT.md` | Tier 0 observation contract, screenshot/clipboard/audit policies |
+| `docs/GUI_MANUAL_SMOKE_GUIDE.md` | 36-item manual smoke checklist, failure diagnostics |
+| `docs/M9_GUI_MANUAL_PHASE_CLOSEOUT.md` | This document |
+| `tests/unit/test_gui_reviewed_execution_blocklist.py` | 38 automated blocklist tests |
+| `src/backend/app/runtime/gui_agent.py` | GUI Agent runtime (Mock + PyWinAuto providers) |
+| `src/backend/app/api/gui_agent_routes.py` | GUI Agent API endpoints |
+| `src/backend/app/planner/plan_adapter.py` | Plan adapter with GUI blocking |
+| `src/backend/app/planner/approval_gate.py` | Approval gate (step 12: MANUAL_REQUIRED_NODE) |
+| `src/backend/app/api/execute_reviewed_routes.py` | Gated execution with policy checks |
+| `src/backend/app/runtime/tool_catalog.py` | Tool catalog with gui_* fallback |
