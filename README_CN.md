@@ -4,10 +4,12 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-green)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6)](https://www.typescriptlang.org/)
+![Tests](https://img.shields.io/badge/tests-2328%20passed-brightgreen)  ![Status](https://img.shields.io/badge/release-M12-blue)
 
-MedImage Agent 是一个面向静息态 fMRI（rs-fMRI）研究的**确定性 Agentic Pipeline 工程平台**。它借鉴 Hermes Agent 的 Plan-then-Execute 架构思想，但摒弃了通用 LLM Agent 的开放式对话循环，构建了一个安全、可复现、可审计的医学影像分析工作流系统。
+MedImage Agent 是一个面向静息态 fMRI（rs-fMRI）研究的**确定性 Agentic Pipeline 工程平台**。它借鉴 Plan-then-Execute 架构思想，摒弃了通用 LLM Agent 的开放式对话循环，构建了一个安全、可复现、可审计的医学影像分析工作流系统。
 
-**核心定位**：医学影像 AI workflow / agentic pipeline / research engineering platform
+**核心定位**：医学影像 AI workflow / agentic pipeline / research engineering platform  
+**当前版本**：M12 — Fixture-Only GUI 模型安全基线（2328 测试通过，零真实模型，零 PyWinAuto）
 
 ---
 
@@ -189,11 +191,15 @@ cd frontend && npm install
 ### 启动服务
 
 ```bash
-# 启动后端（开发模式）
-uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
+# 启动后端（端口 8000）
+uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000
 
-# 启动前端（开发模式）
-cd frontend && npm run dev
+# 启动前端 Web（端口 5173）
+cd src/frontend && npm run dev:renderer
+
+# 或一键启动
+./start.sh          # Linux/macOS
+start.bat           # Windows
 ```
 
 ### Docker 演示模式
@@ -243,7 +249,7 @@ MedImage_Agent/
 │   │       ├── core/                   # 核心配置与模型
 │   │       │   ├── config.py
 │   │       │   └── models.py
-│   │       ├── runtime/                # Pipeline + Agent Runtime
+│   │       ├── runtime/                # Pipeline + Agent Runtime + 安全
 │   │       │   ├── agent_runtime.py    # Agent 规划与执行
 │   │       │   ├── pipeline_executor.py # DAG 执行引擎
 │   │       │   ├── scheduler.py        # 并行调度器
@@ -252,7 +258,16 @@ MedImage_Agent/
 │   │       │   ├── hook_manager.py     # Hook 系统
 │   │       │   ├── error_diagnoser.py  # 错误诊断
 │   │       │   ├── retry_runtime.py    # 重试机制
-│   │       │   └── run_inspector.py    # 运行检查器
+│   │       │   ├── run_inspector.py    # 运行检查器
+│   │       │   ├── gui_agent.py        # GUI Agent（仅 mock provider）
+│   │       │   ├── gui_agent_guard.py  # 6 层 GUI API guard（42 种错误码）
+│   │       │   ├── gui_agent_model_adapter.py     # 模型输出 → record_observation
+│   │       │   ├── gui_agent_mock_model_fixtures.py # 45 个 mock fixtures
+│   │       │   ├── gui_model_provider_policy.py    # 提供者准入 gate（M11 合约）
+│   │       │   ├── gui_model_runtime_isolation.py  # 运行时隔离（M11 合约）
+│   │       │   ├── gui_model_source_policy.py      # 模型来源/权重策略（M11 合约）
+│   │       │   ├── gui_model_input_redaction.py    # 输入脱敏（M11 合约）
+│   │       │   ├── gui_model_audit_contract.py     # 审计元数据合约（M11 合约）
 │   │       ├── nodes/                  # Pipeline 节点处理函数
 │   │       │   ├── gpu_alff_node.py    # GPU ALFF 节点
 │   │       │   ├── gpu_reho_node.py    # GPU ReHo 节点
@@ -398,23 +413,29 @@ MedImage Agent 采用多层安全设计，确保研究数据不被误修改：
 - ✅ Agent Runtime（Plan-then-Execute、Approval Gate、Tool Registry）
 - ✅ 核心影像算法（ALFF/fALFF、ReHo、Functional Connectivity）
 - ✅ SPM 集成接口（Contract-only 设计，6 个核心模块）
+- ✅ DPABI 集成（20 个 reviewed execution 节点，沙箱门控）
 - ✅ QC 自动化（Motion QC、数据集评估）
 - ✅ 报告系统（Markdown/HTML 双格式、可复现包）
 - ✅ 前端可视化（Pipeline Canvas、QC Viewer、Run History、Insights Dashboard）
 - ✅ 安全机制（Path Safety、权限分级、审计日志）
-- ✅ 错误诊断与重试系统
+- ✅ GPU 脚手架（9 个预检节点，CuPy 后端 — `pip install cupy-cuda12x`）
+- ✅ **GUI Agent API Guard** — 6 层 mock-only guard（provider/session/action/stop/audit）
+- ✅ **Mock Adapter** — 45 个静态 fixtures → `record_observation` → Mock provider
+- ✅ **M11 安全合约** — 5 个纯函数模块（provider/runtime/source/input/audit）
+- ✅ **M12 发布检查点** — API 冻结、前端标注、文档一致、冒烟清单
 
-### 设计中 / 预留扩展
-- ✅ GPU 加速（5 个模块：ALFF/fALFF、ReHo、Nuisance Regression、Temporal Filtering、Functional Connectivity；CuPy + CPU 回退）
-- 🔄 DPABI 完整集成（接口设计完成，待实现）
-- 🔄 分布式执行（多机并行，架构预留）
-- 🔄 Docker 容器化一键部署（配置文件已创建）
-- 🔄 真实临床数据验证（当前使用合成数据）
+### 当前能力边界
+- **Reviewed execution**：36 个节点（SPM:7、DPABI:20、GPU:9）。GUI：**0** — 所有 GUI 节点被阻断。
+- **GUI Agent**：仅 mock（`provider=mock`），仅 `record_observation`。PyWinAuto 被阻断。
+- **模型**：仅 fixture（45 个静态 fixtures）。未连接真实模型。未调用推理。
+- **GPU**：仅脚手架/预检（CI 中 CuPy 不可用 — 4 个测试跳过）。
+- **Tier 1/2/3 动作**：被阻断（41 个动作中仅 1 个可用）。仅 `record_observation` 可执行。
 
 ### 明确边界
-- **非临床产品**：本项目定位为研究工程平台，不用于临床诊断或临床决策
-- **合成数据演示**：当前默认使用合成 BIDS 数据，真实数据需额外配置
-- **MATLAB 依赖可选**：SPM 步骤需要 MATLAB，核心算法不依赖
+- **非临床产品**：研究工程平台，不用于临床诊断
+- **GUI Agent 仅 mock**：无真实桌面控制，无截图，无剪贴板，无鼠标/键盘
+- **无真实模型**：仅 fixture 基线 — 未连接 LLM/VLM，未调用推理，未加载权重
+- **MATLAB 依赖可选**：SPM/DPABI 步骤需要 MATLAB，核心算法不依赖
 
 ---
 
@@ -422,20 +443,45 @@ MedImage Agent 采用多层安全设计，确保研究数据不被误修改：
 
 | 阶段 | 目标 | 状态 |
 |------|------|------|
-| Phase 1 | Pipeline Runtime + 核心算法 | ✅ 完成 |
-| Phase 2 | Agent Runtime + 安全机制 | ✅ 完成 |
-| Phase 3 | SPM 集成 + QC 系统 | ✅ 完成 |
-| Phase 4 | 前端可视化 + 报告系统 | ✅ 完成 |
-| Phase 5 | GPU 加速 + 性能优化 | ✅ 完成 |
-| Phase 6 | 真实数据验证 + 论文发表 | 📋 计划中 |
+| M1–M5 | Pipeline Runtime、Agent Runtime、核心算法、Reviewed Execution | ✅ 完成 |
+| M6 | SPM 沙箱 Pipeline（7 个 reviewed execution 节点） | ✅ 完成 |
+| M7 | DPABI Phase（20 个 reviewed execution 节点，沙箱/元数据门控） | ✅ 完成 |
+| M8 | GPU Phase（9 个脚手架 reviewed execution 节点） | ✅ 完成 |
+| M9 | GUI/手工安全设计 + API Guard（6 层，249 测试） | ✅ 完成 |
+| M10 | Adapter + Mock 集成 + 稳定性（1772 测试） | ✅ 完成 |
+| M11 | 模型集成设计 + 安全合约（2328 测试） | ✅ 完成 |
+| M12 | 发布准备 + API 冻结 + 前端标注 + 冒烟清单 | ✅ 完成 |
+| M13+ | 未来：真实模型、真实 GUI，或新功能里程碑（需先从威胁模型开始） | 📋 计划中 |
+
+**当前总计：2328 通过，4 跳过。Reviewed execution 允许列表：36（GUI: 0）。**
 
 ---
 
 ## 文档
 
+### 架构与设计
 - [架构设计文档](docs/architecture.md)
 - [Agent Runtime 规范](docs/agent_runtime_spec.md)
 - [Pipeline Executor 规范](docs/pipeline_executor.md)
+- [安全架构审查（M6–M9）](docs/M6_M9_SAFETY_ARCHITECTURE_REVIEW.md)
+
+### GUI Agent 安全（M9–M12）
+- [GUI 威胁模型](docs/GUI_MANUAL_AGENT_THREAT_MODEL.md)
+- [GUI API Guard 设计](docs/GUI_AGENT_API_GUARD_DESIGN.md)
+- [标准化 GUI Action Schema](docs/NORMALIZED_GUI_ACTION_SCHEMA.md)
+
+### 模型安全合约（M11）
+- [真实模型集成威胁模型](docs/REAL_MODEL_INTEGRATION_THREAT_MODEL.md)
+- [模型提供者准入 Gate](docs/MODEL_PROVIDER_POLICY_GATE_DESIGN.md)
+- [模型运行时隔离](docs/MODEL_RUNTIME_ISOLATION_DESIGN.md)
+- [推理输入脱敏](docs/MODEL_INFERENCE_INPUT_REDACTION_DESIGN.md)
+- [审计元数据持久化](docs/MODEL_OUTPUT_AUDIT_METADATA_PERSISTENCE_DESIGN.md)
+
+### 发布（M12）
+- [系统发布准备审查](docs/M12_SYSTEM_RELEASE_READINESS_REVIEW.md)
+- [后端 API Surface 冻结](docs/M12_BACKEND_API_SURFACE_FREEZE.md)
+- [发布冒烟清单](docs/M12_RELEASE_SMOKE_CHECKLIST.md)
+- [项目发布检查点](docs/M12_PROJECT_RELEASE_CHECKPOINT.md)
 
 ---
 
