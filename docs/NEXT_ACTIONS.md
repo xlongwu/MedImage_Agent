@@ -362,4 +362,31 @@ See `docs/M11_CONTRACT_TEST_BASELINE_LOCK.md`. 2328 passed, 4 skipped. 30 invari
 See `docs/M11_FIXTURE_ONLY_GUI_MODEL_RELEASE_CHECKPOINT.md`. 2328 passed, 4 skipped. 24 invariants. 12 exit criteria for future real model phase. Fixture-only path frozen as release baseline.
 
 **M11: COMPLETE 🎉 (Design → Contract → Stabilization → Release Checkpoint)**  
-**Next: M12-GUI-MODEL-IMPL-T001 (implementation threat review) — awaiting user decision.**
+## M12-RELEASE-T001：System Release Readiness Review — ✅ COMPLETE (2026-07-11)
+
+See `docs/M12_SYSTEM_RELEASE_READINESS_REVIEW.md`. 14-module completion matrix, API inventory (7 endpoints), risk register (8 items), release-ready vs non-release classification, M12 roadmap (5 tasks).
+
+## M12-RELEASE-T002：Backend API Surface Freeze — ✅ COMPLETE (2026-07-11)
+
+See `docs/M12_BACKEND_API_SURFACE_FREEZE.md`. 7 API surfaces classified (5 release, 1 blocked, 1 internal). Capability flags documented. API compatibility policy defined. 12 security invariants recorded.
+
+## M12-RELEASE-T003：Frontend Capability Labeling Review — ✅ COMPLETE (2026-07-11)
+
+See `docs/M12_FRONTEND_CAPABILITY_LABELING_REVIEW.md`. 3 UI issues found, 3 fixed in `DesktopSettingsPanel.tsx`: pywinauto disabled, "Allow GUI Agent" → mock-only, provider label clarified. Build passes, 2328 tests pass.
+
+## M12-RELEASE-T004：Documentation Consistency Pass — ✅ COMPLETE (2026-07-11)
+
+See `docs/M12_DOCUMENTATION_CONSISTENCY_PASS.md`. 14 documents reviewed. 1 inconsistency found (API surface count), 4 fixes applied. Canonical terminology aligned. Capability classifications unified.
+
+## M12-RELEASE-T005：Release Smoke Checklist — ✅ COMPLETE (2026-07-11)
+
+See `docs/M12_RELEASE_SMOKE_CHECKLIST.md`. 10-area smoke scope. 23 blocked-capability items. 12-point final readiness checklist. Automated critical path + manual frontend/documentation checks. Failure diagnostics table.
+
+**M12 Release Phase: COMPLETE 🎉 (T001–T005)**  
+## M12-RELEASE-CHECKPOINT：Project Release Checkpoint — ✅ COMPLETE (2026-07-11)
+
+See `docs/M12_PROJECT_RELEASE_CHECKPOINT.md`. Final frozen baseline. 5 capability classifications. 20 blocked items. 18 safety invariants. 12-point acceptance criteria. Post-release change policy. 3 recommended next-milestone options.
+
+**M12: COMPLETE 🎉 (T001–T005 + RELEASE-CHECKPOINT)**  
+**Project total: M6→M12 complete. 2328 passed, 4 skipped.**  
+**Next: Release tag `v0.4.0-m12` or Hardening — awaiting user decision.**

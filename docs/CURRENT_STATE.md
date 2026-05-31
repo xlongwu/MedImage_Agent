@@ -61,7 +61,13 @@ Real desktop control (PyWinAuto): **disabled** — mock provider safe default.
 **M11-GUI-MODEL-CONTRACT-STABILIZE-T001: Schema Consistency Review COMPLETE** — `docs/M11_CONTRACT_SCHEMA_CONSISTENCY_REVIEW.md` + 56 tests.  
 **M11-GUI-MODEL-CONTRACT-STABILIZE-T002: Error Code Taxonomy Audit COMPLETE** — `docs/M11_CONTRACT_ERROR_CODE_TAXONOMY_AUDIT.md` + 53 tests.  
 **M11-GUI-MODEL-CONTRACT-STABILIZE-T003: Test Baseline Lock COMPLETE** — `docs/M11_CONTRACT_TEST_BASELINE_LOCK.md`. **2328 passed, 4 skipped.**  
-**M11-GUI-MODEL-RELEASE-CHECKPOINT: COMPLETE 🎉** — `docs/M11_FIXTURE_ONLY_GUI_MODEL_RELEASE_CHECKPOINT.md` (12 exit criteria, 24 invariants).
+**M11-GUI-MODEL-RELEASE-CHECKPOINT: COMPLETE 🎉** — `docs/M11_FIXTURE_ONLY_GUI_MODEL_RELEASE_CHECKPOINT.md` (12 exit criteria, 24 invariants).  
+**M12-RELEASE-T001: System Release Readiness Review COMPLETE** — `docs/M12_SYSTEM_RELEASE_READINESS_REVIEW.md` (module matrix, API inventory, risk register).  
+**M12-RELEASE-T002: Backend API Surface Freeze COMPLETE** — `docs/M12_BACKEND_API_SURFACE_FREEZE.md` (7 API surfaces, capability flags, compatibility policy).  
+**M12-RELEASE-T003: Frontend Capability Labeling Review COMPLETE** — `docs/M12_FRONTEND_CAPABILITY_LABELING_REVIEW.md` + 2 fixes in `DesktopSettingsPanel.tsx`.  
+**M12-RELEASE-T004: Documentation Consistency Pass COMPLETE** — `docs/M12_DOCUMENTATION_CONSISTENCY_PASS.md` (14 docs reviewed, 4 fixes).  
+**M12-RELEASE-T005: Release Smoke Checklist COMPLETE** — `docs/M12_RELEASE_SMOKE_CHECKLIST.md` (23 blocked-capability items, 12-point readiness checklist).  
+**M12-RELEASE-CHECKPOINT: Project Release Checkpoint COMPLETE 🎉** — `docs/M12_PROJECT_RELEASE_CHECKPOINT.md` (final frozen baseline, post-release change policy).
 
 ### M2 任务
 

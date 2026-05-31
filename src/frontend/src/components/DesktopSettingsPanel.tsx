@@ -144,13 +144,13 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
           />
         </label>
         <label>
-          GUI provider
+          GUI provider (mock only)
           <select
             value={settings.gui_agent.provider}
             onChange={(event) => update("gui_agent", { ...settings.gui_agent, provider: event.target.value })}
           >
-            <option value="mock">Mock</option>
-            <option value="pywinauto">pywinauto</option>
+            <option value="mock">Mock (safe default)</option>
+            <option value="pywinauto" disabled>pywinauto (blocked)</option>
           </select>
         </label>
       </div>
@@ -169,7 +169,7 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
             checked={settings.gui_agent.approved}
             onChange={(event) => update("gui_agent", { ...settings.gui_agent, approved: event.target.checked })}
           />
-          Allow GUI Agent
+          Enable GUI Agent (mock-only, record_observation)
         </label>
         <button onClick={save} disabled={saving}>{saving ? "Saving..." : "Save settings"}</button>
         <button onClick={refresh}>Refresh checks</button>
