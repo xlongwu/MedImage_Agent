@@ -5,13 +5,14 @@
 [![React](https://img.shields.io/badge/React-18-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6)](https://www.typescriptlang.org/)
 
-[![CI](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml)
+[![CI](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml)  ![Tests](https://img.shields.io/badge/tests-2328%20passed-brightgreen)  ![Status](https://img.shields.io/badge/release-M12-blue)
 
 **English** | [中文](README_CN.md)
 
-MedImage Agent is a **deterministic agentic pipeline engineering platform** for resting-state fMRI (rs-fMRI) research. Inspired by the Plan-then-Execute architecture of Hermes Agent, it abandons the open-ended conversational loop of general LLM Agents and builds a secure, reproducible, and auditable medical image analysis workflow system.
+MedImage Agent is a **deterministic agentic pipeline engineering platform** for resting-state fMRI (rs-fMRI) research. Inspired by the Plan-then-Execute architecture, it abandons the open-ended conversational loop of general LLM Agents and builds a secure, reproducible, and auditable medical image analysis workflow system.
 
-**Core Positioning**: Medical Imaging AI Workflow / Agentic Pipeline / Research Engineering Platform
+**Core Positioning**: Medical Imaging AI Workflow / Agentic Pipeline / Research Engineering Platform  
+**Current Release**: M12 — Fixture-Only GUI Model Safety Baseline (2328 tests, 0 real model, 0 PyWinAuto)
 
 ---
 
@@ -193,11 +194,15 @@ cd src/frontend && npm install
 ### Start Services
 
 ```bash
-# Start backend (development mode)
+# Start backend (port 8000)
 uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000
 
-# Start frontend (development mode)
-cd src/frontend && npm run dev
+# Start frontend web (port 5173)
+cd src/frontend && npm run dev:renderer
+
+# Or one-click startup
+./start.sh          # Linux/macOS
+start.bat           # Windows
 ```
 
 ### Docker Demo Mode
@@ -262,6 +267,15 @@ MedImage_Agent/
 │   │       │   ├── run_inspector.py    # Run inspector
 │   │       │   ├── path_safety.py      # Path safety
 │   │       │   ├── tool_registry.py    # Tool permission registry
+│   │       │   ├── gui_agent.py        # GUI Agent (mock-only provider)
+│   │       │   ├── gui_agent_guard.py  # 6-layer GUI API guard (42 error codes)
+│   │       │   ├── gui_agent_model_adapter.py     # Model output → record_observation
+│   │       │   ├── gui_agent_mock_model_fixtures.py # 45 mock fixtures
+│   │       │   ├── gui_model_provider_policy.py    # Provider gate (M11 contract)
+│   │       │   ├── gui_model_runtime_isolation.py  # Runtime isolation (M11)
+│   │       │   ├── gui_model_source_policy.py      # Source/weights policy (M11)
+│   │       │   ├── gui_model_input_redaction.py    # Input minimization (M11)
+│   │       │   ├── gui_model_audit_contract.py     # Audit metadata (M11)
 │   │       │   └── agent_plan.py       # Agent plan creation
 │   │       ├── nodes/                  # Pipeline node handlers (GPU)
 │   │       │   ├── gpu_alff_node.py    # GPU ALFF node
@@ -415,23 +429,29 @@ MedImage Agent adopts a multi-layer security design to ensure research data is n
 - ✅ Agent Runtime (Plan-then-Execute, Approval Gate, Tool Registry)
 - ✅ Core imaging algorithms (ALFF/fALFF, ReHo, Functional Connectivity)
 - ✅ SPM integration interfaces (Contract-only design, 6 core modules)
+- ✅ DPABI integration (20 reviewed execution nodes, sandbox-gated)
 - ✅ QC automation (Motion QC, dataset evaluation)
 - ✅ Reporting system (Markdown/HTML dual format, reproducibility bundle)
 - ✅ Frontend visualization (Pipeline Canvas, QC Viewer, Run History, Insights Dashboard)
 - ✅ Security mechanisms (Path Safety, permission grading, audit logging)
-- ✅ Error diagnosis and retry system
+- ✅ GPU scaffold (9 preflight nodes, CuPy backend — `pip install cupy-cuda12x`)
+- ✅ **GUI Agent API Guard** — 6-layer mock-only guard (provider/session/action/stop/audit)
+- ✅ **Mock Adapter** — 45 static fixtures → `record_observation` → Mock provider
+- ✅ **M11 Safety Contracts** — 5 pure-function modules (provider/runtime/source/input/audit)
+- ✅ **M12 Release Checkpoint** — API frozen, frontend labeled, docs consistent, smoke checklist
 
-### In Design / Extensible
-- ✅ GPU acceleration (5 modules: ALFF/fALFF, ReHo, Nuisance Regression, Temporal Filtering, Functional Connectivity; CuPy + CPU fallback)
-- 🔄 Full DPABI integration (interface design complete, pending implementation)
-- 🔄 Distributed execution (multi-machine parallelism, architecture reserved)
-- 🔄 Docker containerized one-click deployment (config files created)
-- 🔄 Real clinical data validation (currently using synthetic data)
+### Current Capability Boundaries
+- **Reviewed execution**: 36 nodes (SPM:7, DPABI:20, GPU:9). GUI: **0** — all GUI nodes blocked.
+- **GUI Agent**: Mock-only (`provider=mock`), `record_observation` only. PyWinAuto blocked.
+- **Model**: Fixture-only (45 static fixtures). No real model connected. No inference.
+- **GPU**: Scaffold/preflight only (CuPy unavailable in CI — 4 tests skipped).
+- **Tier 1/2/3 actions**: Blocked (40 of 41 actions). Only `record_observation` executable.
 
 ### Clear Boundaries
-- **Not a clinical product**: This project is positioned as a research engineering platform, not for clinical diagnosis or clinical decision-making
-- **Synthetic data demo**: Currently defaults to synthetic BIDS data, real data requires additional configuration
-- **Optional MATLAB dependency**: SPM steps require MATLAB, core algorithms do not depend on it
+- **Not a clinical product**: Research engineering platform, not for clinical diagnosis
+- **GUI Agent is mock-only**: No real desktop control, no screenshots, no clipboard, no mouse/keyboard
+- **No real model**: Fixture-only baseline — no LLM/VLM connected, no inference, no weights loaded
+- **Optional MATLAB dependency**: SPM/DPABI steps require MATLAB, core algorithms do not depend on it
 
 ---
 
@@ -439,20 +459,45 @@ MedImage Agent adopts a multi-layer security design to ensure research data is n
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| Phase 1 | Pipeline Runtime + Core Algorithms | ✅ Complete |
-| Phase 2 | Agent Runtime + Security Mechanisms | ✅ Complete |
-| Phase 3 | SPM Integration + QC System | ✅ Complete |
-| Phase 4 | Frontend Visualization + Reporting System | ✅ Complete |
-| Phase 5 | GPU Acceleration + Performance Optimization | ✅ Complete |
-| Phase 6 | Real Data Validation + Publication | 📋 Planned |
+| M1–M5 | Pipeline Runtime, Agent Runtime, Core Algorithms, Reviewed Execution | ✅ Complete |
+| M6 | SPM Sandbox Pipeline (7 reviewed execution nodes) | ✅ Complete |
+| M7 | DPABI Phase (20 reviewed execution nodes, sandbox/metadata-gated) | ✅ Complete |
+| M8 | GPU Phase (9 scaffold reviewed execution nodes) | ✅ Complete |
+| M9 | GUI/manual Safety Design + API Guard (6-layer, 249 tests) | ✅ Complete |
+| M10 | Adapter + Mock Integration + Stabilization (1772 tests) | ✅ Complete |
+| M11 | Model Integration Design + Safety Contracts (2328 tests) | ✅ Complete |
+| M12 | Release Readiness + API Freeze + Frontend Labeling + Smoke Checklist | ✅ Complete |
+| M13+ | Future: real model, real GUI, or new feature milestones (requires threat model) | 📋 Planned |
+
+**Current total: 2328 passed, 4 skipped. Reviewed execution allowlist: 36 (GUI: 0).**
 
 ---
 
 ## Documentation
 
+### Architecture & Design
 - [Architecture Design Document](docs/architecture.md)
 - [Agent Runtime Specification](docs/agent_runtime_spec.md)
 - [Pipeline Executor Specification](docs/pipeline_executor.md)
+- [Safety Architecture Review (M6–M9)](docs/M6_M9_SAFETY_ARCHITECTURE_REVIEW.md)
+
+### GUI Agent Safety (M9–M12)
+- [GUI Threat Model](docs/GUI_MANUAL_AGENT_THREAT_MODEL.md)
+- [GUI API Guard Design](docs/GUI_AGENT_API_GUARD_DESIGN.md)
+- [Normalized GUI Action Schema](docs/NORMALIZED_GUI_ACTION_SCHEMA.md)
+
+### Model Safety Contracts (M11)
+- [Real Model Integration Threat Model](docs/REAL_MODEL_INTEGRATION_THREAT_MODEL.md)
+- [Model Provider Policy Gate](docs/MODEL_PROVIDER_POLICY_GATE_DESIGN.md)
+- [Model Runtime Isolation](docs/MODEL_RUNTIME_ISOLATION_DESIGN.md)
+- [Input Minimization & Redaction](docs/MODEL_INFERENCE_INPUT_REDACTION_DESIGN.md)
+- [Audit Metadata Persistence](docs/MODEL_OUTPUT_AUDIT_METADATA_PERSISTENCE_DESIGN.md)
+
+### Release (M12)
+- [System Release Readiness Review](docs/M12_SYSTEM_RELEASE_READINESS_REVIEW.md)
+- [Backend API Surface Freeze](docs/M12_BACKEND_API_SURFACE_FREEZE.md)
+- [Release Smoke Checklist](docs/M12_RELEASE_SMOKE_CHECKLIST.md)
+- [Project Release Checkpoint](docs/M12_PROJECT_RELEASE_CHECKPOINT.md)
 
 ---
 
