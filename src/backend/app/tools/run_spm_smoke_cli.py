@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -9,6 +8,7 @@ from src.backend.app.runtime.state_store import (
     now_iso,
     write_node_state,
 )
+from src.backend.app.tools.cli_utils import emit_json_result
 from src.backend.app.tools.spm_runner import run_spm_smoke_test
 
 
@@ -61,8 +61,7 @@ def main() -> int:
 
     result["state_path"] = str(state_path)
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ok") else 2
+    return emit_json_result(result, failure_code=2)
 
 
 if __name__ == "__main__":

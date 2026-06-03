@@ -6,34 +6,14 @@ Uses gpu_safety.py guards for device, memory, timeout, concurrency.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Sequence
 
-from src.backend.app.safety.gpu_safety import (
-    validate_gpu_device,
-    check_cuda_availability,
-    validate_gpu_memory_budget,
-    validate_gpu_timeout,
-    validate_gpu_concurrency,
+from src.backend.app.tools.gpu_utils import (
+    apply_gpu_guard,
+    is_scoped_derivative_path,
+    write_gpu_provenance,
 )
-
-
-def _is_scoped_path(path: Path, scope_dir: Path) -> bool:
-    """Check if path is under the scoped directory (no rawdata, no traversal)."""
-    try:
-        resolved_path = path.resolve()
-        resolved_scope = scope_dir.resolve()
-        resolved_path.relative_to(resolved_scope)
-    except ValueError:
-        return False
-    path_str = str(resolved_path).replace("\\", "/")
-    scope_str = str(resolved_scope).replace("\\", "/")
-    if ".." in path_str or ".." in scope_str:
-        return False
-    if any(seg in ("rawdata", "data") for seg in resolved_path.parts):
-        return False
-    return True
 
 
 def run_gpu_alff_subject(
@@ -89,7 +69,7 @@ def run_gpu_alff_subject(
     # ── Input validation ──
     derivatives = Path(derivatives_dir)
     input_path = Path(input_functional)
-    if not _is_scoped_path(input_path, derivatives):
+    if not is_scoped_derivative_path(input_path, derivatives):
         result["ok"] = False
         result["errors"].append(f"Input functional not under derivatives_dir: {input_functional}")
         return result
@@ -126,53 +106,25 @@ def run_gpu_alff_subject(
         return result
 
     # ── GPU guard ──
-    dev = validate_gpu_device(device)
-    result["gpu_guard"] = dev.to_dict()
-    if not dev.ok:
-        result["ok"] = False
-        result["errors"].extend(e.message for e in dev.errors)
-        return result
-
-    cuda = check_cuda_availability(
+    if not apply_gpu_guard(
+        result,
+        device=device,
+        functional_shape=functional_shape,
+        dtype_bytes=dtype_bytes,
+        batch_size=batch_size,
+        timeout_seconds=timeout_seconds,
+        require_gpu=require_gpu,
         torch_cuda_available=torch_cuda_available,
         device_count=device_count,
-        require_gpu=require_gpu,
-    )
-    result["warnings"].extend(w.message for w in cuda.warnings)
-    if not cuda.ok:
-        result["ok"] = False
-        result["errors"].extend(e.message for e in cuda.errors)
-        return result
-
-    if functional_shape:
-        mem = validate_gpu_memory_budget(
-            shape=functional_shape,
-            dtype_bytes=dtype_bytes,
-            batch_size=batch_size,
-            max_elements=20_000_000,
-            max_bytes=512 * 1024 * 1024,
-        )
-        if not mem.ok:
-            result["ok"] = False
-            result["errors"].extend(e.message for e in mem.errors)
-            return result
-        result["estimated_bytes"] = mem.estimated_bytes
-
-    tm = validate_gpu_timeout(timeout_seconds, max_timeout_seconds=120)
-    if not tm.ok:
-        result["ok"] = False
-        result["errors"].extend(e.message for e in tm.errors)
-        return result
-
-    conc = validate_gpu_concurrency(active_jobs=active_jobs, max_concurrent_jobs=max_concurrent_jobs)
-    if not conc.ok:
-        result["ok"] = False
-        result["errors"].extend(e.message for e in conc.errors)
+        active_jobs=active_jobs,
+        max_concurrent_jobs=max_concurrent_jobs,
+        max_elements=20_000_000,
+        max_bytes=512 * 1024 * 1024,
+    ):
         return result
 
     # ── Output scope ──
     output_dir = derivatives / "gpu" / "gpu_alff_subject" / run_id / subject_id
-    output_dir.mkdir(parents=True, exist_ok=True)
     provenance = {
         "subject_id": subject_id,
         "run_id": run_id,
@@ -182,11 +134,11 @@ def run_gpu_alff_subject(
         "device": device,
         "dry_run": dry_run,
     }
-    (output_dir / "provenance.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
+    provenance_path = write_gpu_provenance(output_dir, provenance)
 
     outputs = {
         "output_dir": str(output_dir),
-        "provenance": str(output_dir / "provenance.json"),
+        "provenance": str(provenance_path),
     }
     if dry_run:
         outputs["alff_map"] = str(output_dir / "alff_map.nii.gz")

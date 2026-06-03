@@ -8,6 +8,9 @@ import type {
 
 declare global {
   interface Window {
+    __MEDIMAGE_DESKTOP_CONFIG__?: {
+      backendBaseUrl: string;
+    };
     MEDIMAGE_API_BASE_URL?: string;
     MEDIMAGE_DESKTOP_RUNTIME?: {
       apiBaseUrl: string;
@@ -18,16 +21,22 @@ declare global {
         status: string;
         pid: number | null;
         logPath: string;
+        executablePath?: string;
+        port?: number | null;
       };
     };
     medimageDesktop?: {
       runtime: Window["MEDIMAGE_DESKTOP_RUNTIME"];
+      getBackendBaseUrl?: () => Promise<string>;
+      getRuntime?: () => Promise<Window["MEDIMAGE_DESKTOP_RUNTIME"]>;
     };
   }
 }
 
 export const DEFAULT_API_BASE =
+  window.__MEDIMAGE_DESKTOP_CONFIG__?.backendBaseUrl ||
   window.MEDIMAGE_API_BASE_URL ||
+  window.MEDIMAGE_DESKTOP_RUNTIME?.apiBaseUrl ||
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000";
 

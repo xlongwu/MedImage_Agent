@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
@@ -8,6 +7,7 @@ from src.backend.app.runtime.retry_runtime import (
     dry_run_retry_plan,
     execute_retry_plan,
 )
+from src.backend.app.tools.cli_utils import emit_json_result
 
 
 def main() -> int:
@@ -32,8 +32,7 @@ def main() -> int:
             retry_run_id=retry_run_id,
         )
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ok") else 2
+    return emit_json_result(result, failure_code=2)
 
 
 if __name__ == "__main__":

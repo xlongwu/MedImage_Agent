@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from src.backend.app.planner.pipeline_planner import draft_pipeline_plan, validate_pipeline_plan
+from src.backend.app.tools.cli_utils import emit_json_result
 
 
 def main() -> int:
@@ -46,8 +47,7 @@ def main() -> int:
     draft = draft_pipeline_plan(payload)
     validation = validate_pipeline_plan({"draft": draft})
     result = {"ok": bool(draft.get("ok")) and bool(validation.get("ok")), "draft": draft, "validation": validation}
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result["ok"] else 1
+    return emit_json_result(result, failure_code=1)
 
 
 if __name__ == "__main__":

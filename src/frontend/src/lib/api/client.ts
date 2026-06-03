@@ -9,7 +9,9 @@ export async function getApiBaseUrl(): Promise<string> {
     return cachedBaseUrl;
   }
   cachedBaseUrl =
+    window.__MEDIMAGE_DESKTOP_CONFIG__?.backendBaseUrl ||
     window.MEDIMAGE_API_BASE_URL ||
+    window.MEDIMAGE_DESKTOP_RUNTIME?.apiBaseUrl ||
     import.meta.env.VITE_API_BASE_URL ||
     "http://127.0.0.1:8000";
   return cachedBaseUrl;
@@ -18,7 +20,9 @@ export async function getApiBaseUrl(): Promise<string> {
 export function getFallbackApiBaseUrl(): string {
   return (
     cachedBaseUrl ||
+    window.__MEDIMAGE_DESKTOP_CONFIG__?.backendBaseUrl ||
     window.MEDIMAGE_API_BASE_URL ||
+    window.MEDIMAGE_DESKTOP_RUNTIME?.apiBaseUrl ||
     import.meta.env.VITE_API_BASE_URL ||
     "http://127.0.0.1:8000"
   );
@@ -66,4 +70,3 @@ export function postJson<T>(path: string, payload: unknown): Promise<T> {
     body: JSON.stringify(payload),
   });
 }
-

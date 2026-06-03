@@ -1,10 +1,11 @@
 from __future__ import annotations
-import json
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.tools.artifact_utils import write_json_artifact
+
 def write_dpabi_alff_falff_contract(work_dir: str = "./work") -> dict[str, Any]:
-    out_dir = Path(work_dir) / "dpabi" / "contracts"; out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(work_dir) / "dpabi" / "contracts"
     path = out_dir / "alff_falff_backend_contract.json"
     payload = {
         "ok": True, "node_id": "dpabi_alff_falff_contract", "backend": "python",
@@ -21,5 +22,5 @@ def write_dpabi_alff_falff_contract(work_dir: str = "./work") -> dict[str, Any]:
         "warnings": ["Contract only. DPABI ALFF/fALFF execution not implemented in Step 44."],
         "errors": [],
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_artifact(path, payload)
     return payload

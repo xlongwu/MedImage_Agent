@@ -1,21 +1,12 @@
 from __future__ import annotations
 
 import csv
-import json
 from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
+from src.backend.app.tools.artifact_utils import read_json_artifact, write_json_artifact
 from src.backend.app.tools.experiment_tracker import build_run_index
-
-
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
 
 
 def _safe_number(value: Any, default: float = 0.0) -> float:
@@ -92,7 +83,7 @@ def build_experiment_dashboard(
     if refresh_index:
         index = build_run_index(work_dir=work_dir, report_dir=report_dir)
     else:
-        index = _read_json(experiments_dir / "run_index.json")
+        index = read_json_artifact(experiments_dir / "run_index.json")
         if not index:
             index = build_run_index(work_dir=work_dir, report_dir=report_dir)
 
@@ -181,10 +172,7 @@ def build_experiment_dashboard(
     csv_path = experiments_dir / "dashboard_data.csv"
     report_path = report_out / "dashboard_report.md"
 
-    json_path.write_text(
-        json.dumps(dashboard, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(json_path, dashboard)
 
     fieldnames = [
         "index",

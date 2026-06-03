@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 from src.backend.app.runtime.pipeline_executor import run_pipeline
+from src.backend.app.tools.cli_utils import emit_json
 
 
 def main() -> int:
@@ -24,7 +24,7 @@ def main() -> int:
         pipeline_path=pipeline_path,
     )
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    emit_json(result)
 
     status = result.get("status")
     if status == "SUCCESS":

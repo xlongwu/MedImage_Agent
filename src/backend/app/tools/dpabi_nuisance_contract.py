@@ -1,11 +1,11 @@
 from __future__ import annotations
-import json
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.tools.artifact_utils import write_json_artifact
+
 def write_dpabi_nuisance_regression_contract(work_dir: str = "./work") -> dict[str, Any]:
     out_dir = Path(work_dir) / "dpabi" / "contracts"
-    out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "nuisance_regression_backend_contract.json"
     payload = {
         "ok": True, "node_id": "dpabi_nuisance_regression_contract", "backend": "python",
@@ -30,5 +30,5 @@ def write_dpabi_nuisance_regression_contract(work_dir: str = "./work") -> dict[s
         "warnings": ["This is a contract only. DPABI nuisance regression execution is intentionally not implemented in Step 42."],
         "errors": [],
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_artifact(path, payload)
     return payload

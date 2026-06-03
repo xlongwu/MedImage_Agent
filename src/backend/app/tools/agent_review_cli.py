@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 from src.backend.app.runtime.background_review import run_background_review
+from src.backend.app.tools.cli_utils import emit_json_result
 
 
 def main() -> int:
@@ -18,8 +18,7 @@ def main() -> int:
         agent_summary_path=agent_summary,
     )
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ok") else 1
+    return emit_json_result(result, failure_code=1)
 
 
 if __name__ == "__main__":

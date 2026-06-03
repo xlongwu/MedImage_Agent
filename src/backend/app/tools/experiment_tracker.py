@@ -1,26 +1,14 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.tools.artifact_utils import is_safe_artifact_id, read_json_artifact, write_json_artifact
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
-
-def _safe_id(value: str) -> bool:
-    return bool(value) and "/" not in value and "\\" not in value and ".." not in value
 
 
 def _count_node_status(summary: dict[str, Any]) -> dict[str, int]:
@@ -71,7 +59,7 @@ def _count_messages(summary: dict[str, Any], key: str) -> int:
 
 
 def _summarize_pipeline_run(path: Path) -> dict[str, Any] | None:
-    summary = _read_json(path)
+    summary = read_json_artifact(path)
     if not summary:
         return None
 
@@ -106,7 +94,7 @@ def _summarize_pipeline_run(path: Path) -> dict[str, Any] | None:
 
 
 def _summarize_template_instance(path: Path) -> dict[str, Any] | None:
-    payload = _read_json(path)
+    payload = read_json_artifact(path)
     if not payload:
         return None
 
@@ -202,10 +190,7 @@ def build_run_index(
     }
 
     index_path = out_dir / "run_index.json"
-    index_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(index_path, payload)
 
     payload["outputs"] = [str(index_path)]
     return payload
@@ -219,7 +204,7 @@ def create_experiment_record(
     notes: str = "",
     work_dir: str = "./work",
 ) -> dict[str, Any]:
-    if not _safe_id(experiment_id):
+    if not is_safe_artifact_id(experiment_id):
         return {
             "ok": False,
             "errors": ["Invalid experiment_id."],
@@ -249,10 +234,7 @@ def create_experiment_record(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     record_path = out_dir / f"{experiment_id}.json"
-    record_path.write_text(
-        json.dumps(record, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(record_path, record)
 
     record["outputs"] = [str(record_path)]
     return record
@@ -264,7 +246,7 @@ def compare_experiment_runs(
     work_dir: str = "./work",
     report_dir: str = "./reports",
 ) -> dict[str, Any]:
-    if not _safe_id(experiment_id):
+    if not is_safe_artifact_id(experiment_id):
         return {
             "ok": False,
             "errors": ["Invalid experiment_id."],
@@ -318,10 +300,7 @@ def compare_experiment_runs(
         "errors": [] if selected else ["No runs selected for comparison."],
     }
 
-    comparison_json.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(comparison_json, payload)
 
     lines = []
     lines.append("# Experiment Run Comparison Report")

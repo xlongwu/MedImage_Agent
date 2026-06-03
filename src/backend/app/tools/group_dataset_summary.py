@@ -1,8 +1,10 @@
 from __future__ import annotations
-import csv, json
+import csv
 from pathlib import Path
 from statistics import mean
 from typing import Any
+
+from src.backend.app.tools.artifact_utils import read_json_artifact, write_json_artifact
 
 STAGE_ORDER = ["slice_timing","motion","registration","segmentation","normalization","smoothing","confounds","nuisance_regression","temporal_filtering","alff_falff","reho","functional_connectivity"]
 STAGE_FILES = {
@@ -18,11 +20,6 @@ STAGE_FILES = {
     "reho": ("reho_qc.json", ["reho_qc_status"]),
     "functional_connectivity": ("functional_connectivity_qc.json", ["fc_qc_status"]),
 }
-
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists(): return None
-    try: return json.loads(path.read_text(encoding="utf-8"))
-    except Exception: return None
 
 def _safe_float(value: Any) -> float | None:
     if value is None: return None
@@ -62,8 +59,8 @@ def _ec(payload: dict[str, Any] | None) -> int:
 def _read_subject_qc(derivatives: Path, subject_id: str) -> dict[str, Any]:
     qc_dir = derivatives / "rsfmri_qc" / subject_id; conf_dir = derivatives / "rsfmri_confounds" / subject_id
     payloads: dict[str, Any] = {}
-    for stage, (fn, _) in STAGE_FILES.items(): payloads[stage] = {"path": str(qc_dir / fn), "payload": _read_json(qc_dir / fn)}
-    payloads["confounds"] = {"path": str(conf_dir / "confound_qc.json"), "payload": _read_json(conf_dir / "confound_qc.json")}
+    for stage, (fn, _) in STAGE_FILES.items(): payloads[stage] = {"path": str(qc_dir / fn), "payload": read_json_artifact(qc_dir / fn)}
+    payloads["confounds"] = {"path": str(conf_dir / "confound_qc.json"), "payload": read_json_artifact(conf_dir / "confound_qc.json")}
     return payloads
 
 def _extract_row(subject_id: str, payloads: dict[str, Any]) -> dict[str, Any]:
@@ -115,7 +112,7 @@ def _contracts(work: Path) -> dict[str, Any]:
         cpaths.extend(sorted(base.glob("*.json")))
     contracts = []
     for path in cpaths:
-        p = _read_json(path)
+        p = read_json_artifact(path)
         contracts.append({"path": str(path), "exists": path.exists(), "backend_id": p.get("backend_id") if p else None, "status": p.get("status") if p else None, "execution_allowed": p.get("execution_allowed") if p else None, "gpu_executed": p.get("gpu_executed") if p else None, "dpabi_executed": (p.get("safety") or {}).get("dpabi_executed") if p else None, "payload_ok": p.get("ok") if p else False})
     return {"contracts_total": len(contracts), "contracts": contracts}
 
@@ -123,7 +120,7 @@ def _runs(work: Path, max_runs: int = 20) -> list[dict[str, Any]]:
     rp = sorted((work / "pipeline_runs").glob("*/summary.json"))[-max_runs:]
     runs = []
     for path in rp:
-        p = _read_json(path)
+        p = read_json_artifact(path)
         if not p: continue
         runs.append({"path": str(path), "status": p.get("status"), "pipeline_id": p.get("pipeline_id"), "run_id": p.get("run_id"), "started_at": p.get("started_at"), "finished_at": p.get("finished_at")})
     return runs
@@ -161,9 +158,9 @@ def build_group_dataset_summary(derivatives_dir: str = "./derivatives", reports_
     summary = {"ok": True, "node_id": "group_dataset_summary", "backend": "python", "subjects_total": len(subs), "subjects_with_any_qc": swq, "stage_order": STAGE_ORDER, "stage_status_counts": sc, "warnings_total": wt, "errors_total": et, "metric_means": mm, "contracts_overview": ct, "pipeline_runs": pr, "outputs": [str(dsj),str(ddj),str(smc),str(pcj),str(coj),str(rm)], "warnings": [], "errors": []}
     dashboard = {"summary_cards": {"subjects_total": len(subs), "subjects_with_any_qc": swq, "warnings_total": wt, "errors_total": et, "contracts_total": ct.get("contracts_total")}, "stage_order": STAGE_ORDER, "stage_status_counts": sc, "metric_means": mm, "subject_rows": rows, "pipeline_completeness": comp, "contracts_overview": ct, "pipeline_runs": pr}
 
-    dsj.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    ddj.write_text(json.dumps(dashboard, ensure_ascii=False, indent=2), encoding="utf-8")
-    pcj.write_text(json.dumps(comp, ensure_ascii=False, indent=2), encoding="utf-8")
-    coj.write_text(json.dumps(ct, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_artifact(dsj, summary)
+    write_json_artifact(ddj, dashboard)
+    write_json_artifact(pcj, comp)
+    write_json_artifact(coj, ct)
     _write_csv(smc, rows); _write_md(rm, summary, rows)
     return summary

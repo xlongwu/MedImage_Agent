@@ -1,0 +1,35 @@
+appId: org.medimage.agent.desktop
+productName: MedImage Agent
+asar: true
+npmRebuild: false
+directories:
+  output: dist
+files:
+  - package.json
+  - main.cjs
+  - preload.cjs
+extraResources:
+  - from: ../../src/frontend/dist
+    to: frontend
+  - from: ../packaging/dist/backend_payload
+    to: backend
+  - from: ../../examples
+    to: workspace_seed/examples
+  - from: ../../matlab
+    to: workspace_seed/matlab
+win:
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: "${productName} Setup.${ext}"
+portable:
+  artifactName: "${productName}.${ext}"

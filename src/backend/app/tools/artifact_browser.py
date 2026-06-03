@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from src.backend.app.tools.artifact_utils import write_json_artifact
+
 
 TEXT_EXTENSIONS = {
     ".json",
@@ -192,10 +194,7 @@ def build_artifact_index(
         "errors": errors,
     }
 
-    index_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(index_path, payload)
 
     payload["outputs"] = [str(index_path)]
     return payload

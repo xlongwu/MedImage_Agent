@@ -1,9 +1,9 @@
 """SPM chain validation CLI — run full 6-node SPM preprocessing chain."""
 from __future__ import annotations
 
-import json
 import sys
 
+from src.backend.app.tools.cli_utils import emit_json_result
 from src.backend.app.tools.spm_chain_validator import validate_spm_chain
 
 
@@ -17,8 +17,7 @@ def main() -> int:
         approved=approved,
         stop_on_failure=True,
     )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ok") else 2
+    return emit_json_result(result, failure_code=2)
 
 
 if __name__ == "__main__":

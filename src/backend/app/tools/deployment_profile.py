@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import json
 import os
 import platform
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+
+from src.backend.app.tools.artifact_utils import write_json_artifact
 
 
 REQUIRED_DEPLOYMENT_FILES = [
@@ -210,10 +211,7 @@ def build_deployment_profile(
         },
     }
 
-    json_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(json_path, payload)
 
     lines = []
     lines.append("# Deployment Profile Report")

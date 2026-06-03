@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 from src.backend.app.runtime.agent_plan import _load_project_config
 from src.backend.app.runtime.scheduler import create_scheduler_plan
 from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
+from src.backend.app.tools.cli_utils import emit_json_result
 
 
 def main() -> int:
@@ -18,8 +18,7 @@ def main() -> int:
 
     result = create_scheduler_plan(pipeline, project_config)
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ok") else 1
+    return emit_json_result(result, failure_code=1)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import json
 import sys
 
+from src.backend.app.tools.cli_utils import emit_json, emit_json_result
 from src.backend.app.tools.reproducibility_bundle import (
     create_reproducibility_bundle,
     list_reproducibility_bundles,
@@ -17,7 +17,7 @@ def main() -> int:
         result = list_reproducibility_bundles()
     elif args and args[0] == "--inspect":
         if len(args) < 2:
-            print(json.dumps({"ok": False, "errors": ["Missing bundle_id after --inspect"]}, indent=2))
+            emit_json({"ok": False, "errors": ["Missing bundle_id after --inspect"]})
             return 2
         result = inspect_reproducibility_bundle(args[1])
     elif args and args[0] == "--create":
@@ -26,8 +26,7 @@ def main() -> int:
     else:
         result = create_reproducibility_bundle()
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ok") else 2
+    return emit_json_result(result, failure_code=2)
 
 
 if __name__ == "__main__":

@@ -1523,7 +1523,8 @@ async def real_data_inspect(request: dict[str, Any]):
     return inspect_real_data_directory(
         root_dir=request.get("root_dir", "./data/DemoData"),
         work_dir=request.get("work_dir", "./work"),
-        report_dir=request.get("report_dir", "./reports"),
+        report_dir=request.get("report_dir", "outputs/reports"),
+        max_subjects=int(request.get("max_subjects", 500)),
     )
 
 
@@ -1541,7 +1542,10 @@ async def real_data_risk_report():
     """Generate risk report from latest data inventory."""
     from src.backend.app.tools.real_data_risk_reporter import build_risk_report
 
-    return build_risk_report()
+    return build_risk_report(
+        inventory_path="outputs/reports/real_data_sandbox/data_inventory.json",
+        output_dir="outputs/reports/real_data_sandbox",
+    )
 
 
 @router.get("/api/real-data/risk-report/latest")
@@ -1558,7 +1562,10 @@ async def real_data_protocol_recommend():
     """Generate protocol recommendation from latest data inventory."""
     from src.backend.app.tools.real_data_protocol_advisor import recommend_protocol_from_inventory
 
-    return recommend_protocol_from_inventory()
+    return recommend_protocol_from_inventory(
+        inventory_path="outputs/reports/real_data_sandbox/data_inventory.json",
+        output_dir="outputs/reports/real_data_sandbox",
+    )
 
 
 @router.get("/api/sandbox/status")

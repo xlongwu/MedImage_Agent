@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import json
 import sys
 
+from src.backend.app.tools.cli_utils import emit_json_result
 from src.backend.app.tools.validation_runner import run_validation_suite
 
 
@@ -19,8 +19,7 @@ def main() -> int:
         include_gpu_optional=include_gpu_optional,
     )
 
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    return 0 if result.get("ok") else 1
+    return emit_json_result(result, failure_code=1)
 
 
 if __name__ == "__main__":

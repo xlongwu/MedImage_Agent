@@ -1,8 +1,10 @@
 from __future__ import annotations
-import hashlib, json, zipfile
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from src.backend.app.tools.artifact_utils import read_json_artifact, sha256_file, write_json_artifact
 
 REQUIRED_FILES = ["MANIFEST.json","README.md","index.md","export_summary.json","checksums/SHA256SUMS.txt"]
 FORBIDDEN_PARTS = {"rawdata"}
@@ -11,16 +13,6 @@ FORBIDDEN_COMPOUND = {".nii.gz"}
 SAFETY_FALSE = ["rawdata_included","rawdata_modified","derivatives_modified","reports_modified","work_modified","spm_executed","matlab_executed","dpabi_executed","gpu_executed","files_deleted","clinical_conclusions_generated","statistical_inference_performed"]
 
 def _iso_now() -> str: return datetime.now().isoformat(timespec="seconds")
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists(): return None
-    try: return json.loads(path.read_text(encoding="utf-8"))
-    except Exception: return None
-def _write_json(path: Path, p: dict[str, Any]) -> None: path.parent.mkdir(parents=True, exist_ok=True); path.write_text(json.dumps(p, ensure_ascii=False, indent=2), encoding="utf-8")
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for c in iter(lambda: f.read(1048576), b""): h.update(c)
-    return h.hexdigest()
 def _safe_path(v: str) -> bool: return bool(v) and not v.startswith("/") and all(p not in {"..",""} for p in Path(v).parts)
 def _forbidden(v: str) -> bool:
     l = v.lower()
@@ -71,7 +63,7 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
         checks.append({"name": f"required:{rel}", "status": st, "path": str(path), "exists": ex, "non_empty": ne})
 
     # Manifest
-    manifest = _read_json(pkg/"MANIFEST.json")
+    manifest = read_json_artifact(pkg/"MANIFEST.json")
     ms = {"manifest_files_total":0,"missing_files_total":0,"checksum_mismatch_total":0,"size_mismatch_total":0,"unsafe_path_total":0,"forbidden_file_total":0}
     if not manifest: e.append("MANIFEST.json unreadable.")
     else:
@@ -85,7 +77,7 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
                 if _forbidden(rel): ms["forbidden_file_total"] += 1; e.append(f"Forbidden file: {rel}")
                 fp = pkg/rel
                 if not fp.exists(): ms["missing_files_total"] += 1; e.append(f"Missing from package: {rel}"); continue
-                asize = int(fp.stat().st_size); asha = _sha256(fp)
+                asize = int(fp.stat().st_size); asha = sha256_file(fp)
                 so = esize is None or int(esize) == asize; sho = esha == asha
                 cso = cm.get(rel); cfo = cso is None or cso == asha
                 if not so: ms["size_mismatch_total"] += 1; e.append(f"Size mismatch: {rel}")
@@ -132,7 +124,7 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
 
     result = {"ok": ok, "node_id": "rsfmri_report_package_validator", "backend": "python", "export_id": rid, "validated_at": _iso_now(), "validation_status": status, "strict": strict, "package_dir": str(pkg), "zip_path": str(zp), "validation_result_json": str(vrj), "validation_report_md": str(vrm), "stats": stats, "checks": checks, "warnings": w, "errors": e, "outputs": [str(vrj), str(vrm), str(Path(exports_dir)/"rsfmri_report_package"/"VALIDATION_INDEX.json")]}
 
-    _write_json(vrj, result)
+    write_json_artifact(vrj, result)
 
     # Report
     lines = [f"# rs-fMRI Report Package Validation", "", f"- Export: `{rid}`", f"- Status: **{status}**", f"- OK: {ok}", f"- Package: `{pkg}`", f"- ZIP: `{zp}`", "", "## Summary", ""]
@@ -149,23 +141,23 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
     # Index
     root = Path(exports_dir)/"rsfmri_report_package"
     idx = root/"VALIDATION_INDEX.json"
-    cur = _read_json(idx) or {"ok":True,"validations":[]}
+    cur = read_json_artifact(idx) or {"ok":True,"validations":[]}
     vals = cur.get("validations",[])
     if not isinstance(vals, list): vals = []
     entry = {"export_id": rid, "validated_at": result["validated_at"], "validation_status": status, "ok": ok, "package_dir": str(pkg), "zip_path": str(zp), "validation_result": str(vrj), "validation_report": str(vrm)}
     vals = [x for x in vals if x.get("export_id") != rid]; vals.append(entry)
-    _write_json(idx, {"ok":True,"updated_at":_iso_now(),"validations_total":len(vals),"validations":vals})
+    write_json_artifact(idx, {"ok":True,"updated_at":_iso_now(),"validations_total":len(vals),"validations":vals})
     return result
 
 def list_rsfmri_report_validations(exports_dir: str = "./exports") -> dict[str, Any]:
     root = Path(exports_dir)/"rsfmri_report_package"
     idx = root/"VALIDATION_INDEX.json"
-    cur = _read_json(idx); vals = []
+    cur = read_json_artifact(idx); vals = []
     if cur and isinstance(cur.get("validations"), list): vals = cur["validations"]
     elif root.exists():
         for pkg in sorted(root.iterdir()):
             if not pkg.is_dir(): continue
-            vp = pkg/"validation"/"validation_result.json"; pl = _read_json(vp)
+            vp = pkg/"validation"/"validation_result.json"; pl = read_json_artifact(vp)
             if pl: vals.append({"export_id": pkg.name, "validated_at": pl.get("validated_at"), "validation_status": pl.get("validation_status"), "ok": pl.get("ok"), "package_dir": str(pkg), "zip_path": pl.get("zip_path"), "validation_result": str(vp), "validation_report": str(pkg/"validation"/"validation_report.md")})
     return {"ok": True, "validations_total": len(vals), "validations": vals}
 
@@ -173,6 +165,6 @@ def get_latest_rsfmri_report_validation(exports_dir: str = "./exports") -> dict[
     listing = list_rsfmri_report_validations(exports_dir=exports_dir); vv = listing.get("validations",[])
     if not vv: return {"ok": False, "warnings": [], "errors": ["No validations found."]}
     latest = vv[-1]; rp = latest.get("validation_result"); rr = latest.get("validation_report")
-    res = _read_json(Path(rp)) if rp else None
+    res = read_json_artifact(Path(rp)) if rp else None
     rep = Path(rr).read_text(encoding="utf-8") if rr and Path(rr).exists() else None
     return {"ok": bool(res), "latest": latest, "validation_result": res, "validation_report": rep}

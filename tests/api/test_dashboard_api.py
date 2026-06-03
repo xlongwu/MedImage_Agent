@@ -208,6 +208,41 @@ def test_dicom_preflight_api_reads_demodata_metadata_only():
     )
     assert imported.status_code == 200
 
+
+def test_real_data_inspect_api_reads_demodata_inventory():
+    pytest.importorskip("pydicom")
+    demo_data = Path("data/DemoData")
+    if not demo_data.exists():
+        pytest.skip("DemoData is not available in this checkout.")
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/real-data/inspect",
+        json={
+            "root_dir": str(demo_data),
+            "report_dir": "outputs/reports",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["mode"] == "readonly_sandbox"
+    assert payload["format"] == "DICOM"
+    assert payload["completeness"]["subjects_total"] == 3
+    assert payload["completeness"]["has_t1w"] == 3
+    assert payload["completeness"]["has_bold"] == 3
+    assert Path("outputs/reports/real_data_sandbox/data_inventory.json").exists()
+
+    risk = client.post("/api/real-data/risk-report")
+    recommendation = client.post("/api/real-data/protocol-recommend")
+    assert risk.status_code == 200
+    assert recommendation.status_code == 200
+    assert risk.json()["ok"] is True
+    assert recommendation.json()["ok"] is True
+    assert Path("outputs/reports/real_data_sandbox/risk_report.json").exists()
+    assert Path("outputs/reports/real_data_sandbox/protocol_recommendation.json").exists()
+
     package = client.post("/api/datasets/diagnostics/package", params={"project_id": "brain-tumor-study"})
     assert package.status_code == 200
     package_payload = package.json()

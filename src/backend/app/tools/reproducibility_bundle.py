@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import platform
 import shutil
@@ -10,6 +9,8 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from src.backend.app.tools.artifact_utils import is_safe_artifact_id, sha256_file, write_json_artifact
 
 
 EXCLUDED_PARTS = {
@@ -45,18 +46,6 @@ def _now_iso() -> str:
 
 def _bundle_id_now() -> str:
     return "bundle_" + datetime.now().strftime("%Y%m%d_%H%M%S")
-
-
-def _safe_id(value: str) -> bool:
-    return bool(value) and "/" not in value and "\\" not in value and ".." not in value
-
-
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
-            h.update(chunk)
-    return h.hexdigest()
 
 
 def _run_cmd(cmd: list[str], timeout: int = 10) -> dict[str, Any]:
@@ -194,7 +183,7 @@ def _copy_artifacts(
             "source_path": str(src),
             "bundle_path": str(dst.relative_to(bundle_dir)),
             "size_bytes": size,
-            "sha256": _sha256(src),
+            "sha256": sha256_file(src),
         })
 
     return copied, skipped
@@ -227,10 +216,7 @@ def _write_bundle_index(work_dir: str, item: dict[str, Any]) -> None:
         "bundles": bundles,
     }
 
-    index_path.write_text(
-        json.dumps(index, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(index_path, index)
 
 
 def create_reproducibility_bundle(
@@ -244,7 +230,7 @@ def create_reproducibility_bundle(
 ) -> dict[str, Any]:
     bundle_id = bundle_id or _bundle_id_now()
 
-    if not _safe_id(bundle_id):
+    if not is_safe_artifact_id(bundle_id):
         return {
             "ok": False,
             "errors": ["Invalid bundle_id."],
@@ -306,15 +292,8 @@ def create_reproducibility_bundle(
     zip_path = bundle_dir / "bundle.zip"
     report_path = report_out / f"{bundle_id}_bundle_report.md"
 
-    environment_path.write_text(
-        json.dumps(environment, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    artifact_manifest_path.write_text(
-        json.dumps(artifact_manifest, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(environment_path, environment)
+    write_json_artifact(artifact_manifest_path, artifact_manifest)
 
     readme_lines = []
     readme_lines.append(f"# Reproducibility Bundle: {bundle_id}")
@@ -351,10 +330,7 @@ def create_reproducibility_bundle(
         str(report_path),
     ]
 
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(manifest_path, manifest)
 
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for path in bundle_dir.rglob("*"):
@@ -363,14 +339,11 @@ def create_reproducibility_bundle(
             if path.is_file():
                 zf.write(path, arcname=str(path.relative_to(bundle_dir)))
 
-    zip_sha = _sha256(zip_path)
+    zip_sha = sha256_file(zip_path)
     manifest["zip_sha256"] = zip_sha
     manifest["zip_size_bytes"] = zip_path.stat().st_size
 
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_artifact(manifest_path, manifest)
 
     report_lines = []
     report_lines.append(f"# Reproducibility Bundle Report: {bundle_id}")
@@ -445,7 +418,7 @@ def inspect_reproducibility_bundle(
     bundle_id: str,
     work_dir: str = "./work",
 ) -> dict[str, Any]:
-    if not _safe_id(bundle_id):
+    if not is_safe_artifact_id(bundle_id):
         return {
             "ok": False,
             "errors": ["Invalid bundle_id."],

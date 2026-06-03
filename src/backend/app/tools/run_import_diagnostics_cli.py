@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 from pathlib import Path
 
 from src.backend.app.api.dashboard_routes import (
@@ -11,6 +10,7 @@ from src.backend.app.api.dashboard_routes import (
     verify_dataset_diagnostics_package,
 )
 from src.backend.app.schemas.desktop import DatasetImportRequest
+from src.backend.app.tools.cli_utils import emit_json_result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -98,8 +98,7 @@ def run(project_id: str, mode: str, import_path: str = "", dataset_type: str = "
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     payload = run(project_id=args.project_id, mode=args.mode, import_path=args.import_path, dataset_type=args.dataset_type)
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0 if payload.get("ok") else 2
+    return emit_json_result(payload, failure_code=2)
 
 
 if __name__ == "__main__":

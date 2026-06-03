@@ -42,6 +42,22 @@ def inspect_real_dataset(
     return {"ok": False, "errors": [f"No recognizable data found in {rawdata_path}. Expected BIDS (sub-*/), DICOM (FunRaw/Sub_*/), or NIfTI files."]}
 
 
+def inspect_real_data_directory(
+    root_dir: str = "./data/DemoData",
+    work_dir: str = "./work",
+    report_dir: str = "./reports",
+    max_subjects: int = 500,
+) -> dict[str, Any]:
+    """API-compatible wrapper for read-only real-data inspection."""
+    report_root = Path(report_dir)
+    output_dir = report_root if report_root.name == "real_data_sandbox" else report_root / "real_data_sandbox"
+    result = inspect_real_dataset(root_dir, output_dir=str(output_dir), max_subjects=max_subjects)
+    if result.get("ok"):
+        result["work_dir"] = str(Path(work_dir))
+        result["outputs"] = [str(output_dir / "data_inventory.json")]
+    return result
+
+
 def _scan_bids(root: Path, max_subjects: int) -> list[dict[str, Any]]:
     """Scan BIDS-style: sub-*/anat/*.nii.gz, sub-*/func/*.nii.gz"""
     subjects = []

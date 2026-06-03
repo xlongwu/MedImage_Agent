@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.backend.app.tools.real_data_inspector import inspect_real_dataset
+from src.backend.app.tools.real_data_inspector import inspect_real_data_directory, inspect_real_dataset
 from src.backend.app.tools.real_data_risk_reporter import build_risk_report
 from src.backend.app.tools.real_data_protocol_advisor import recommend_protocol_from_inventory
 
@@ -41,6 +41,30 @@ def test_risk_report_from_inventory(tmp_path: Path):
     assert result["ok"] is True
     assert result["risks_total"] >= 2  # missing_bold + no_fieldmap + tr variation
     assert Path(out_dir, "risk_report.json").exists()
+
+
+def test_inspect_real_data_directory_api_wrapper_writes_inventory(tmp_path: Path):
+    demo = tmp_path / "DemoData"
+    fun = demo / "FunRaw" / "Sub_001"
+    t1 = demo / "T1Raw" / "Sub_001"
+    fun.mkdir(parents=True)
+    t1.mkdir(parents=True)
+    (fun / "0000001.dcm").write_bytes(b"DICOM placeholder")
+    (t1 / "0000001.dcm").write_bytes(b"DICOM placeholder")
+
+    result = inspect_real_data_directory(
+        root_dir=str(demo),
+        work_dir=str(tmp_path / "work"),
+        report_dir=str(tmp_path / "reports"),
+    )
+
+    inventory = tmp_path / "reports" / "real_data_sandbox" / "data_inventory.json"
+    assert result["ok"] is True
+    assert result["mode"] == "readonly_sandbox"
+    assert result["format"] == "DICOM"
+    assert result["completeness"]["subjects_total"] == 1
+    assert result["outputs"] == [str(inventory)]
+    assert inventory.exists()
 
 
 def test_protocol_recommendation(tmp_path: Path):

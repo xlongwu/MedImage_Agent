@@ -1,28 +1,19 @@
 from __future__ import annotations
-import hashlib, json, shutil, zipfile
+import shutil, zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from src.backend.app.tools.artifact_utils import read_json_artifact, sha256_file, write_json_artifact
 
 TEXT_EXTENSIONS = {".json",".md",".csv",".tsv",".txt",".log",".yaml",".yml"}
 EXCLUDED_EXTENSIONS = {".nii",".gz",".mat"}
 
 def _now_id() -> str: return datetime.now().strftime("rsfmri_export_%Y%m%d_%H%M%S")
 def _iso_now() -> str: return datetime.now().isoformat(timespec="seconds")
-def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists(): return None
-    try: return json.loads(path.read_text(encoding="utf-8"))
-    except Exception: return None
-
-def _sha256(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1048576), b""): h.update(chunk)
-    return h.hexdigest()
-
 def _copy_file(source: Path, destination: Path) -> dict[str, Any]:
     destination.parent.mkdir(parents=True, exist_ok=True); shutil.copy2(source, destination)
-    return {"relative_path": None, "source_path": str(source), "size_bytes": int(destination.stat().st_size), "sha256": _sha256(destination)}
+    return {"relative_path": None, "source_path": str(source), "size_bytes": int(destination.stat().st_size), "sha256": sha256_file(destination)}
 
 def _safe_collect_files(base: Path, patterns: list[str]) -> list[Path]:
     files: list[Path] = []
@@ -131,34 +122,34 @@ def export_rsfmri_report_package(derivatives_dir: str = "./derivatives", reports
     csd = pkg / "checksums"; csd.mkdir(parents=True, exist_ok=True); csp = csd / "SHA256SUMS.txt"
     cl = [f"{item['sha256']}  {item['relative_path']}" for item in copied]
     csp.write_text("\n".join(cl) + ("\n" if cl else ""), encoding="utf-8")
-    copied.append({"relative_path": str(csp.relative_to(pkg)), "source_path": None, "size_bytes": int(csp.stat().st_size), "sha256": _sha256(csp), "category": "checksum"})
+    copied.append({"relative_path": str(csp.relative_to(pkg)), "source_path": None, "size_bytes": int(csp.stat().st_size), "sha256": sha256_file(csp), "category": "checksum"})
 
-    gs = _read_json(pkg / "summary" / "group_summary" / "dataset_summary.json")
+    gs = read_json_artifact(pkg / "summary" / "group_summary" / "dataset_summary.json")
     es = {"ok": len(copied) > 1, "node_id": "rsfmri_report_exporter", "backend": "python", "export_id": eid, "package_dir": str(pkg), "zip_path": str(zp), "created_at": _iso_now(), "exported_subjects": subs, "exported_subjects_total": len(subs), "exported_files_total": len(copied), "excluded_files_total": len(excluded), "warnings": warnings, "errors": errors}
     if len(copied) <= 1: es["ok"] = False; warnings.append("No source files exported.")
 
     rp = pkg / "README.md"; ip = pkg / "index.md"; ep = pkg / "export_summary.json"; mp = pkg / "MANIFEST.json"
     _write_readme(rp, eid, es); _write_index(ip, eid, gs, es)
-    for gp, cat in [(rp, "package_readme"), (ip, "package_index")]: copied.append({"relative_path": str(gp.relative_to(pkg)), "source_path": None, "size_bytes": int(gp.stat().st_size), "sha256": _sha256(gp), "category": cat})
+    for gp, cat in [(rp, "package_readme"), (ip, "package_index")]: copied.append({"relative_path": str(gp.relative_to(pkg)), "source_path": None, "size_bytes": int(gp.stat().st_size), "sha256": sha256_file(gp), "category": cat})
     es["exported_files_total"] = len(copied) + 2
-    ep.write_text(json.dumps(es, ensure_ascii=False, indent=2), encoding="utf-8")
-    copied.append({"relative_path": str(ep.relative_to(pkg)), "source_path": None, "size_bytes": int(ep.stat().st_size), "sha256": _sha256(ep), "category": "export_summary"})
+    write_json_artifact(ep, es)
+    copied.append({"relative_path": str(ep.relative_to(pkg)), "source_path": None, "size_bytes": int(ep.stat().st_size), "sha256": sha256_file(ep), "category": "export_summary"})
 
     manifest = {"package_id": eid, "export_id": eid, "created_at": es["created_at"], "source_roots": {"derivatives": str(d), "reports": str(rpt), "work": str(w)}, "safety": {"rawdata_included": False, "rawdata_modified": False, "derivatives_modified": False, "reports_modified": False, "work_modified": False, "spm_executed": False, "matlab_executed": False, "dpabi_executed": False, "gpu_executed": False, "files_deleted": False, "clinical_conclusions_generated": False, "statistical_inference_performed": False}, "files": copied, "excluded_files": excluded, "warnings": warnings, "errors": errors}
-    mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    copied.append({"relative_path": str(mp.relative_to(pkg)), "source_path": None, "size_bytes": int(mp.stat().st_size), "sha256": _sha256(mp), "category": "manifest"})
-    manifest["files"] = copied; mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_artifact(mp, manifest)
+    copied.append({"relative_path": str(mp.relative_to(pkg)), "source_path": None, "size_bytes": int(mp.stat().st_size), "sha256": sha256_file(mp), "category": "manifest"})
+    manifest["files"] = copied; write_json_artifact(mp, manifest)
     cl2 = [f"{item['sha256']}  {item['relative_path']}" for item in copied if item["relative_path"] != "checksums/SHA256SUMS.txt"]
     csp.write_text("\n".join(cl2) + ("\n" if cl2 else ""), encoding="utf-8")
     _zip_directory(pkg, zp)
 
     es["zip_size_bytes"] = int(zp.stat().st_size) if zp.exists() else None
     es["outputs"] = [str(pkg), str(zp), str(mp), str(rp), str(ip), str(ep), str(csp)]
-    ep.write_text(json.dumps(es, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json_artifact(ep, es)
     return es
 
 def _read_export(pkg: Path) -> dict[str, Any]:
-    s = _read_json(pkg / "export_summary.json") or {}; m = _read_json(pkg / "MANIFEST.json")
+    s = read_json_artifact(pkg / "export_summary.json") or {}; m = read_json_artifact(pkg / "MANIFEST.json")
     ip = pkg / "index.md"; rp = pkg / "README.md"
     return {"ok": bool(s), "export_id": pkg.name, "package_dir": str(pkg), "zip_path": str(pkg.parent / f"{pkg.name}.zip"), "export_summary": s, "manifest": m, "index_md": ip.read_text(encoding="utf-8") if ip.exists() else None, "readme_md": rp.read_text(encoding="utf-8") if rp.exists() else None}
 
@@ -167,7 +158,7 @@ def list_rsfmri_report_exports(exports_dir: str = "./exports") -> dict[str, Any]
     if proot.exists():
         for c in sorted(proot.iterdir()):
             if c.is_dir():
-                s = _read_json(c / "export_summary.json") or {}
+                s = read_json_artifact(c / "export_summary.json") or {}
                 packages.append({"export_id": c.name, "package_dir": str(c), "zip_path": str(proot / f"{c.name}.zip"), "created_at": s.get("created_at"), "ok": s.get("ok"), "exported_files_total": s.get("exported_files_total"), "exported_subjects_total": s.get("exported_subjects_total")})
     return {"ok": True, "exports_total": len(packages), "exports": packages}
 

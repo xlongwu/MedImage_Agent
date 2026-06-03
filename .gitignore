@@ -48,6 +48,13 @@ src/frontend/release/
 src/frontend/release2/
 src/frontend/final_release/
 src/frontend/MedImage_Agent/
+desktop/electron/node_modules/
+desktop/electron/.npm-cache/
+desktop/electron/.electron-cache/
+desktop/electron/.electron-builder-cache/
+desktop/electron/dist/
+desktop/packaging/build/
+desktop/packaging/dist/
 
 # Local agent/worktree state
 .agents/
