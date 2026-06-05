@@ -28,6 +28,10 @@ env/
 # Project runtime
 work/
 logs/
+reports/
+*.db
+*.sqlite
+*.sqlite3
 derivatives/
 exports/
 outputs/

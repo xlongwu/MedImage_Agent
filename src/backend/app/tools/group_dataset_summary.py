@@ -4,7 +4,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from src.backend.app.tools.artifact_utils import read_json_artifact, write_json_artifact
+from src.backend.app.tools.artifact_utils import read_json_artifact, read_optional_json_artifact, write_json_artifact
 
 STAGE_ORDER = ["slice_timing","motion","registration","segmentation","normalization","smoothing","confounds","nuisance_regression","temporal_filtering","alff_falff","reho","functional_connectivity"]
 STAGE_FILES = {
@@ -59,8 +59,8 @@ def _ec(payload: dict[str, Any] | None) -> int:
 def _read_subject_qc(derivatives: Path, subject_id: str) -> dict[str, Any]:
     qc_dir = derivatives / "rsfmri_qc" / subject_id; conf_dir = derivatives / "rsfmri_confounds" / subject_id
     payloads: dict[str, Any] = {}
-    for stage, (fn, _) in STAGE_FILES.items(): payloads[stage] = {"path": str(qc_dir / fn), "payload": read_json_artifact(qc_dir / fn)}
-    payloads["confounds"] = {"path": str(conf_dir / "confound_qc.json"), "payload": read_json_artifact(conf_dir / "confound_qc.json")}
+    for stage, (fn, _) in STAGE_FILES.items(): payloads[stage] = {"path": str(qc_dir / fn), "payload": read_optional_json_artifact(qc_dir / fn)}
+    payloads["confounds"] = {"path": str(conf_dir / "confound_qc.json"), "payload": read_optional_json_artifact(conf_dir / "confound_qc.json")}
     return payloads
 
 def _extract_row(subject_id: str, payloads: dict[str, Any]) -> dict[str, Any]:

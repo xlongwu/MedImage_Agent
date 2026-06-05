@@ -3,25 +3,34 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from src.backend.app.main import app
 
 client = TestClient(app)
+EXAMPLE_CONFIG = str(Path("examples/project_config_dataset.yaml").resolve())
+
+
+def _post_plan(payload: dict):
+    return client.post(
+        "/api/planner/plan-from-goal",
+        json={"project_config_path": EXAMPLE_CONFIG, **payload},
+    )
 
 
 # ── 1. Returns 200 ──
 
 def test_returns_200():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion correction"})
+    resp = _post_plan({"goal": "motion correction"})
     assert resp.status_code == 200
 
 
 # ── 2. ok == true ──
 
 def test_ok_true():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     data = resp.json()
     assert data["ok"] is True
 
@@ -29,7 +38,7 @@ def test_ok_true():
 # ── 3. contains plan ──
 
 def test_contains_plan():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     data = resp.json()
     assert "plan" in data
     assert data["plan"]["pipeline_id"] == "planned_motion_qc"
@@ -38,7 +47,7 @@ def test_contains_plan():
 # ── 4. contains validation ──
 
 def test_contains_validation():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     data = resp.json()
     assert "validation" in data
     assert data["validation"]["ok"] is True
@@ -47,7 +56,7 @@ def test_contains_validation():
 # ── 5. spm_realign in plan ──
 
 def test_spm_realign_in_plan():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     data = resp.json()
     nids = [n["id"] for n in data["plan"]["nodes"]]
     assert "spm_realign_subject" in nids
@@ -56,7 +65,7 @@ def test_spm_realign_in_plan():
 # ── 6. approval_required in validation ──
 
 def test_approval_required_in_validation():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     data = resp.json()
     assert "spm_realign_subject" in data["validation"]["approval_required_nodes"]
 
@@ -64,7 +73,7 @@ def test_approval_required_in_validation():
 # ── 7. empty goal → 200, ok=false ──
 
 def test_empty_goal():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": ""})
+    resp = _post_plan({"goal": ""})
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -74,7 +83,7 @@ def test_empty_goal():
 # ── 8. unsupported goal → 200, ok=false ──
 
 def test_unsupported_goal():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "xyz unknown"})
+    resp = _post_plan({"goal": "xyz unknown"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -84,7 +93,7 @@ def test_unsupported_goal():
 # ── 9. unsupported provider → 200, ok=false ──
 
 def test_unsupported_provider():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion", "provider": "openai"})
+    resp = _post_plan({"goal": "motion", "provider": "openai"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -94,28 +103,28 @@ def test_unsupported_provider():
 # ── 10. missing goal → 422 ──
 
 def test_missing_goal_422():
-    resp = client.post("/api/planner/plan-from-goal", json={})
+    resp = _post_plan({})
     assert resp.status_code == 422
 
 
 # ── 11. No pipeline execution ──
 
 def test_no_pipeline_execution():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     assert resp.status_code == 200
 
 
 # ── 12. No node runner execution ──
 
 def test_no_runner_execution():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     assert resp.status_code == 200
 
 
 # ── 13. JSON serializable ──
 
 def test_json_serializable():
-    resp = client.post("/api/planner/plan-from-goal", json={"goal": "motion"})
+    resp = _post_plan({"goal": "motion"})
     raw = resp.text
     back = json.loads(raw)
     assert back["ok"] is True
@@ -125,7 +134,7 @@ def test_json_serializable():
 
 def test_openai_compatible_no_api_key(monkeypatch):
     monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
-    resp = client.post("/api/planner/plan-from-goal", json={
+    resp = _post_plan({
         "goal": "motion correction",
         "provider": "openai_compatible",
     })
@@ -139,7 +148,7 @@ def test_openai_compatible_no_api_key(monkeypatch):
 
 def test_openai_compatible_no_network(monkeypatch):
     monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
-    resp = client.post("/api/planner/plan-from-goal", json={
+    resp = _post_plan({
         "goal": "motion",
         "provider": "openai_compatible",
     })
@@ -153,7 +162,7 @@ def test_openai_compatible_no_network(monkeypatch):
 
 def test_openai_compatible_no_api_key_leak(monkeypatch):
     monkeypatch.setenv("MEDIMAGE_LLM_API_KEY", "sk-secret-test-key")
-    resp = client.post("/api/planner/plan-from-goal", json={
+    resp = _post_plan({
         "goal": "motion",
         "provider": "openai_compatible",
     })
@@ -165,7 +174,7 @@ def test_openai_compatible_no_api_key_leak(monkeypatch):
 # ── 17. mock provider still works (regression) ──
 
 def test_mock_provider_regression():
-    resp = client.post("/api/planner/plan-from-goal", json={
+    resp = _post_plan({
         "goal": "motion correction",
         "provider": "mock",
     })
@@ -179,7 +188,7 @@ def test_mock_provider_regression():
 # ── 18. rule_based provider still works (regression) ──
 
 def test_rule_based_provider_regression():
-    resp = client.post("/api/planner/plan-from-goal", json={
+    resp = _post_plan({
         "goal": "reho analysis",
         "provider": "rule_based",
     })
@@ -195,7 +204,7 @@ def test_openai_compatible_error_not_fallback(monkeypatch):
     """When provider=openai_compatible and API key is missing,
     the response must be ok=false, not silently fallback to deterministic."""
     monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
-    resp = client.post("/api/planner/plan-from-goal", json={
+    resp = _post_plan({
         "goal": "motion",
         "provider": "openai_compatible",
     })

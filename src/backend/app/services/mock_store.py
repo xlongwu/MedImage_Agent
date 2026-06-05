@@ -18,6 +18,8 @@ from src.backend.app.schemas.desktop import (
     ModelStatus,
     ProjectDetail,
     ProjectSummary,
+    ReviewedPlanRecord,
+    RunLinkRecord,
     StudyOverview,
     TaskDetail,
     TaskEvent,
@@ -112,6 +114,31 @@ class SQLiteDesktopStore:
                     dataset_type TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS reviewed_plans (
+                    reviewed_plan_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    plan_hash TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_reviewed_plans_project_hash
+                    ON reviewed_plans(project_id, plan_hash);
+                CREATE INDEX IF NOT EXISTS idx_reviewed_plans_project_updated
+                    ON reviewed_plans(project_id, updated_at);
+                CREATE TABLE IF NOT EXISTS run_links (
+                    run_link_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    reviewed_plan_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL UNIQUE,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_run_links_project_updated
+                    ON run_links(project_id, updated_at);
+                CREATE INDEX IF NOT EXISTS idx_run_links_reviewed_plan
+                    ON run_links(reviewed_plan_id, updated_at);
                 """
             )
 
@@ -346,7 +373,7 @@ class SQLiteDesktopStore:
         with self._lock, self._connect() as conn:
             rows = conn.execute("SELECT payload FROM projects ORDER BY project_order, id").fetchall()
         return [
-            ProjectSummary(**self._load_payload(row["payload"], ProjectDetail).model_dump(exclude={"sequences", "scans_count", "total_size", "current_model_id"}))
+            ProjectSummary(**self._load_payload(row["payload"], ProjectDetail).model_dump(exclude={"sequences", "scans_count", "total_size", "current_model_id", "metadata"}))
             for row in rows
         ]
 
@@ -354,6 +381,260 @@ class SQLiteDesktopStore:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT payload FROM projects WHERE id = ?", (project_id,)).fetchone()
         return self._load_payload(row["payload"], ProjectDetail) if row else None
+
+    def add_project(
+        self,
+        project: ProjectDetail,
+        *,
+        health_status: str,
+        rawdata_dir: str,
+        overwrite: bool = False,
+    ) -> ProjectDetail:
+        """Persist a dashboard project and its referenced rawdata atomically."""
+        dataset_id = f"created-{project.id}-rawdata"
+        created_at = str(project.metadata.get("created_at") or utc_now_iso())
+        with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM projects WHERE id = ?",
+                (project.id,),
+            ).fetchone()
+            if existing and not overwrite:
+                raise ValueError(f"Project already exists: {project.id}")
+
+            if existing:
+                conn.execute(
+                    "UPDATE projects SET payload = ? WHERE id = ?",
+                    (self._dump_model(project), project.id),
+                )
+            else:
+                next_order = conn.execute(
+                    "SELECT COALESCE(MAX(project_order), -1) + 1 FROM projects"
+                ).fetchone()[0]
+                conn.execute(
+                    "INSERT INTO projects (id, payload, project_order) VALUES (?, ?, ?)",
+                    (project.id, self._dump_model(project), next_order),
+                )
+
+            conn.execute(
+                """
+                INSERT INTO dataset_health (project_id, health_status)
+                VALUES (?, ?)
+                ON CONFLICT(project_id) DO UPDATE SET health_status = excluded.health_status
+                """,
+                (project.id, health_status),
+            )
+            conn.execute(
+                """
+                INSERT INTO imports (dataset_id, project_id, path, dataset_type, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(dataset_id) DO UPDATE SET
+                    project_id = excluded.project_id,
+                    path = excluded.path,
+                    dataset_type = excluded.dataset_type,
+                    created_at = excluded.created_at
+                """,
+                (dataset_id, project.id, rawdata_dir, "bids", created_at),
+            )
+        return project
+
+    def add_reviewed_plan(self, record: ReviewedPlanRecord) -> ReviewedPlanRecord:
+        """Insert or refresh the index entry for a stable project/plan hash."""
+        with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                """
+                SELECT reviewed_plan_id, payload FROM reviewed_plans
+                WHERE project_id = ? AND plan_hash = ?
+                """,
+                (record.project_id, record.plan_hash),
+            ).fetchone()
+            if existing:
+                current = ReviewedPlanRecord(**json.loads(existing["payload"]))
+                updated = record.model_copy(
+                    update={
+                        "reviewed_plan_id": current.reviewed_plan_id,
+                        "created_at": current.created_at,
+                        "approval_status": current.approval_status,
+                        "execution_status": current.execution_status,
+                        "last_audit_id": current.last_audit_id,
+                        "last_execution_id": current.last_execution_id,
+                        "warnings": list(
+                            dict.fromkeys([*current.warnings, *record.warnings])
+                        ),
+                    }
+                )
+                conn.execute(
+                    """
+                    UPDATE reviewed_plans
+                    SET payload = ?, updated_at = ?
+                    WHERE reviewed_plan_id = ?
+                    """,
+                    (
+                        self._dump_model(updated),
+                        updated.updated_at,
+                        current.reviewed_plan_id,
+                    ),
+                )
+                return updated
+
+            duplicate_id = conn.execute(
+                "SELECT 1 FROM reviewed_plans WHERE reviewed_plan_id = ?",
+                (record.reviewed_plan_id,),
+            ).fetchone()
+            if duplicate_id:
+                raise ValueError(
+                    f"Reviewed plan id already exists: {record.reviewed_plan_id}"
+                )
+            conn.execute(
+                """
+                INSERT INTO reviewed_plans
+                    (reviewed_plan_id, project_id, plan_hash, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.reviewed_plan_id,
+                    record.project_id,
+                    record.plan_hash,
+                    self._dump_model(record),
+                    record.created_at,
+                    record.updated_at,
+                ),
+            )
+        return record
+
+    def get_reviewed_plan(self, reviewed_plan_id: str) -> ReviewedPlanRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM reviewed_plans WHERE reviewed_plan_id = ?",
+                (reviewed_plan_id,),
+            ).fetchone()
+        return ReviewedPlanRecord(**json.loads(row["payload"])) if row else None
+
+    def find_reviewed_plan(
+        self,
+        project_id: str,
+        plan_hash: str,
+    ) -> ReviewedPlanRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload FROM reviewed_plans
+                WHERE project_id = ? AND plan_hash = ?
+                """,
+                (project_id, plan_hash),
+            ).fetchone()
+        return ReviewedPlanRecord(**json.loads(row["payload"])) if row else None
+
+    def list_reviewed_plans(self, project_id: str) -> list[ReviewedPlanRecord]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM reviewed_plans
+                WHERE project_id = ?
+                ORDER BY updated_at DESC, reviewed_plan_id DESC
+                """,
+                (project_id,),
+            ).fetchall()
+        return [ReviewedPlanRecord(**json.loads(row["payload"])) for row in rows]
+
+    def update_reviewed_plan(
+        self,
+        reviewed_plan_id: str,
+        **updates: object,
+    ) -> ReviewedPlanRecord | None:
+        current = self.get_reviewed_plan(reviewed_plan_id)
+        if current is None:
+            return None
+        payload = current.model_dump()
+        payload.update(updates)
+        payload["updated_at"] = str(updates.get("updated_at") or utc_now_iso())
+        updated = ReviewedPlanRecord(**payload)
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE reviewed_plans SET payload = ?, updated_at = ?
+                WHERE reviewed_plan_id = ?
+                """,
+                (self._dump_model(updated), updated.updated_at, reviewed_plan_id),
+            )
+        return updated
+
+    def add_run_link(self, record: RunLinkRecord) -> RunLinkRecord:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO run_links
+                    (run_link_id, project_id, reviewed_plan_id, run_id, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.run_link_id,
+                    record.project_id,
+                    record.reviewed_plan_id,
+                    record.run_id,
+                    self._dump_model(record),
+                    record.created_at,
+                    record.updated_at,
+                ),
+            )
+        return record
+
+    def get_run_link_by_run_id(
+        self,
+        project_id: str,
+        run_id: str,
+    ) -> RunLinkRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload FROM run_links
+                WHERE project_id = ? AND run_id = ?
+                """,
+                (project_id, run_id),
+            ).fetchone()
+        return RunLinkRecord(**json.loads(row["payload"])) if row else None
+
+    def list_run_links(
+        self,
+        project_id: str,
+        reviewed_plan_id: str | None = None,
+    ) -> list[RunLinkRecord]:
+        query = """
+            SELECT payload FROM run_links
+            WHERE project_id = ?
+        """
+        params: tuple[object, ...] = (project_id,)
+        if reviewed_plan_id:
+            query += " AND reviewed_plan_id = ?"
+            params = (project_id, reviewed_plan_id)
+        query += " ORDER BY updated_at DESC, run_link_id DESC"
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [RunLinkRecord(**json.loads(row["payload"])) for row in rows]
+
+    def update_run_link(
+        self,
+        run_link_id: str,
+        **updates: object,
+    ) -> RunLinkRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM run_links WHERE run_link_id = ?",
+                (run_link_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            payload = json.loads(row["payload"])
+            payload.update(updates)
+            payload["updated_at"] = str(updates.get("updated_at") or utc_now_iso())
+            updated = RunLinkRecord(**payload)
+            conn.execute(
+                """
+                UPDATE run_links SET payload = ?, updated_at = ?
+                WHERE run_link_id = ?
+                """,
+                (self._dump_model(updated), updated.updated_at, run_link_id),
+            )
+        return updated
 
     def get_study_overview(self, study_id: str) -> StudyOverview | None:
         with self._lock, self._connect() as conn:
@@ -597,6 +878,8 @@ class SQLiteDesktopStore:
                 task_count = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
                 event_count = conn.execute("SELECT COUNT(*) FROM task_events").fetchone()[0]
                 approval_count = conn.execute("SELECT COUNT(*) FROM approvals").fetchone()[0]
+                reviewed_plan_count = conn.execute("SELECT COUNT(*) FROM reviewed_plans").fetchone()[0]
+                run_link_count = conn.execute("SELECT COUNT(*) FROM run_links").fetchone()[0]
             return {
                 "name": "desktop_store",
                 "ok": True,
@@ -605,6 +888,8 @@ class SQLiteDesktopStore:
                 "task_count": task_count,
                 "event_count": event_count,
                 "approval_count": approval_count,
+                "reviewed_plan_count": reviewed_plan_count,
+                "run_link_count": run_link_count,
             }
         except Exception as exc:
             return {"name": "desktop_store", "ok": False, "path": str(self.db_path), "error": str(exc)}

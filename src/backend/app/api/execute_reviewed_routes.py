@@ -26,8 +26,22 @@ from src.backend.app.planner.approval_gate import check_approval_gate
 from src.backend.app.planner.audit_record import build_review_audit_record, write_audit_record
 from src.backend.app.planner.plan_adapter import adapt_reviewed_plan
 from src.backend.app.planner.plan_validator import validate_plan
+from src.backend.app.planner.project_context import (
+    ProjectContext,
+    ProjectContextError,
+    load_project_context,
+    validate_plan_project_context,
+)
+from src.backend.app.planner.reviewed_plan_store import (
+    ReviewedPlanStoreError,
+    build_run_link,
+    new_run_identity,
+    resolve_reviewed_plan_for_execution,
+)
 from src.backend.app.planner import pipeline_writer  # imported as module for monkeypatch
 from src.backend.app.runtime.pipeline_executor import run_pipeline  # for monkeypatch
+from src.backend.app.schemas.desktop import ReviewedPlanRecord
+from src.backend.app.services.mock_store import mock_store
 
 router = APIRouter()
 
@@ -37,6 +51,8 @@ AUDIT_RECORD_DIR = Path("outputs/reports/audit_records")
 class ExecuteReviewedRequest(BaseModel):
     plan: dict[str, Any]
     approval: dict[str, Any] | None = None
+    project_id: str | None = None
+    reviewed_plan_id: str | None = None
     project_config_path: str | None = None
     dry_run: bool = True
     persist_audit: bool = False
@@ -255,6 +271,7 @@ def _early_blocked(
 def _try_write_pipeline_yaml(
     adapter: Any,
     request: ExecuteReviewedRequest,
+    plan_hash: str | None = None,
 ) -> tuple[dict[str, Any], str | None, Path | None]:
     if not request.write_pipeline_yaml:
         return _pipeline_yaml_summary(would_write=True, written=False), None, None
@@ -270,7 +287,10 @@ def _try_write_pipeline_yaml(
             return _pipeline_yaml_summary(
                 would_write=True, written=False,
             ), "PIPELINE_WRITE_FAILED", None
-        path = pipeline_writer.write_reviewed_pipeline_yaml(pipeline_dict)
+        path = pipeline_writer.write_reviewed_pipeline_yaml(
+            pipeline_dict,
+            plan_hash=plan_hash,
+        )
         return _pipeline_yaml_summary(
             would_write=True, written=True, path=str(path),
         ), None, path
@@ -292,8 +312,66 @@ def _validate_project_config(project_config_path: str | None) -> tuple[Any, str 
         return None, "PROJECT_CONFIG_INVALID"
 
 
+def _check_project_context(
+    plan: dict[str, Any],
+    project_config_path: str,
+    project_id: str | None = None,
+) -> tuple[ProjectContext | None, str | None, list[str]]:
+    try:
+        context = load_project_context(
+            project_id=project_id,
+            project_config_path=project_config_path,
+        )
+    except ProjectContextError as exc:
+        return None, "PROJECT_CONTEXT_INVALID", [str(exc)]
+
+    errors = validate_plan_project_context(plan, context)
+    if errors:
+        return context, "PROJECT_CONTEXT_MISMATCH", errors
+    return context, None, []
+
+
+def _project_context_blocked(
+    status: str,
+    request: ExecuteReviewedRequest,
+    errors: list[str],
+    context: ProjectContext | None = None,
+) -> dict[str, Any]:
+    result = _early_blocked(status, request)
+    result["errors"] = errors
+    result["project_context"] = context.to_dict() if context else None
+    return result
+
+
 def _is_preflight_enabled() -> bool:
     return os.environ.get("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "") == "1"
+
+
+def _link_fields(
+    *,
+    reviewed_plan_id: str | None = None,
+    run_link_id: str | None = None,
+    run_id: str | None = None,
+    pipeline_path: str | None = None,
+    summary_path: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "reviewed_plan_id": reviewed_plan_id,
+        "run_link_id": run_link_id,
+        "run_id": run_id,
+        "pipeline_path": pipeline_path,
+        "summary_path": summary_path,
+    }
+
+
+def _with_link_fields(result: dict[str, Any], **fields: str | None) -> dict[str, Any]:
+    result.update(_link_fields(**fields))
+    return result
+
+
+def _reviewed_plan_error_status(exc: ReviewedPlanStoreError) -> str:
+    code = str(exc).partition(":")[0].strip()
+    return code if code.startswith("REVIEWED_PLAN_") else "REVIEWED_PLAN_INVALID"
 
 
 # ── Main endpoint ────────────────────────────────────────────────────────────
@@ -328,6 +406,38 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
         settings, pc_error = _validate_project_config(request.project_config_path)
         if pc_error:
             return _early_blocked(pc_error, request)
+
+        context, context_status, context_errors = _check_project_context(
+            plan,
+            request.project_config_path,
+            request.project_id,
+        )
+        if context_status:
+            return _project_context_blocked(
+                context_status,
+                request,
+                context_errors,
+                context,
+            )
+
+        reviewed_plan: ReviewedPlanRecord | None = None
+        if context and context.source == "created":
+            try:
+                reviewed_plan = resolve_reviewed_plan_for_execution(
+                    context,
+                    plan,
+                    request.reviewed_plan_id,
+                )
+            except ReviewedPlanStoreError as exc:
+                return _with_link_fields(
+                    _project_context_blocked(
+                        _reviewed_plan_error_status(exc),
+                        request,
+                        [str(exc)],
+                        context,
+                    ),
+                    reviewed_plan_id=request.reviewed_plan_id,
+                )
 
         # 5. Re-validate plan
         validation = validate_plan(plan).to_dict()
@@ -405,6 +515,28 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             )
             return result
 
+        run_link_id: str | None = None
+        linked_run_id: str | None = None
+        if reviewed_plan is not None:
+            run_link_id, linked_run_id = new_run_identity()
+            pipeline = adapter.pipeline
+            execution_config = pipeline.setdefault("execution", {}) if pipeline else None
+            if not isinstance(execution_config, dict):
+                return _with_link_fields(
+                    _blocked_result(
+                        "PLAN_ADAPTER_FAILED",
+                        plan,
+                        validation,
+                        gate,
+                        adapter,
+                        request,
+                    ),
+                    reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                    run_link_id=run_link_id,
+                    run_id=linked_run_id,
+                )
+            execution_config["run_id"] = linked_run_id
+
         # 9. Pipeline YAML required for execution
         if not request.write_pipeline_yaml:
             result = {
@@ -425,10 +557,19 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "execution_blocked", plan, validation, request.approval,
                 gate, result, request.actor, request,
             )
-            return result
+            return _with_link_fields(
+                result,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+                run_link_id=run_link_id,
+                run_id=linked_run_id,
+            )
 
         # 10. Write pipeline YAML
-        py_info, writer_status, written_path = _try_write_pipeline_yaml(adapter, request)
+        py_info, writer_status, written_path = _try_write_pipeline_yaml(
+            adapter,
+            request,
+            reviewed_plan.plan_hash if reviewed_plan else None,
+        )
         if writer_status is not None:
             result = {
                 "ok": False,
@@ -448,7 +589,50 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "execution_blocked", plan, validation, request.approval,
                 gate, result, request.actor, request,
             )
-            return result
+            return _with_link_fields(
+                result,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+                run_link_id=run_link_id,
+                run_id=linked_run_id,
+            )
+
+        if reviewed_plan is not None:
+            assert run_link_id is not None
+            assert linked_run_id is not None
+            assert written_path is not None
+            run_link = build_run_link(
+                project_id=reviewed_plan.project_id,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                run_link_id=run_link_id,
+                run_id=linked_run_id,
+                project_config_path=reviewed_plan.project_config_path,
+                pipeline_path=str(written_path),
+            )
+            try:
+                mock_store.add_run_link(run_link)
+            except Exception as exc:
+                return _with_link_fields(
+                    {
+                        "ok": False,
+                        "status": "RUN_LINK_WRITE_FAILED",
+                        "dry_run": False,
+                        "would_execute": False,
+                        "execution_allowed": False,
+                        "validation": validation,
+                        "approval_gate": gate,
+                        "adapter": _adapter_summary(adapter),
+                        "pipeline_yaml": py_info,
+                        "plan_summary": _plan_summary(plan, validation),
+                        "project_config_path": request.project_config_path,
+                        "execution": _execution_meta(),
+                        "audit": _no_audit(),
+                        "errors": [f"RUN_LINK_WRITE_FAILED: {exc}"],
+                    },
+                    reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                    run_link_id=run_link_id,
+                    run_id=linked_run_id,
+                    pipeline_path=str(written_path),
+                )
 
         # 11. Audit record → write BEFORE executor
         preflight_result = {
@@ -476,7 +660,65 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             result["would_execute"] = False
             result["execution_allowed"] = False
             result["audit"] = audit_info
-            return result
+            if run_link_id:
+                try:
+                    mock_store.update_run_link(
+                        run_link_id,
+                        status="BLOCKED",
+                        payload={"audit": audit_info},
+                    )
+                except Exception as exc:
+                    result["warnings"] = [f"RUN_LINK_UPDATE_FAILED: {exc}"]
+            return _with_link_fields(
+                result,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+                run_link_id=run_link_id,
+                run_id=linked_run_id,
+                pipeline_path=str(written_path) if written_path else None,
+            )
+
+        if run_link_id and reviewed_plan:
+            try:
+                mock_store.update_run_link(
+                    run_link_id,
+                    status="RUNNING",
+                    audit_id=str(audit_info.get("audit_id") or "") or None,
+                    payload={"audit": audit_info},
+                )
+                mock_store.update_reviewed_plan(
+                    reviewed_plan.reviewed_plan_id,
+                    approval_status="APPROVED",
+                    execution_status="RUNNING",
+                    last_audit_id=str(audit_info.get("audit_id") or "") or None,
+                    last_execution_id=run_link_id,
+                )
+            except Exception as exc:
+                try:
+                    mock_store.update_run_link(
+                        run_link_id,
+                        status="BLOCKED",
+                        warnings=[f"RUN_LINK_UPDATE_FAILED: {exc}"],
+                    )
+                except Exception:
+                    pass
+                result = dict(preflight_result)
+                result.update(
+                    {
+                        "ok": False,
+                        "status": "RUN_LINK_UPDATE_FAILED",
+                        "would_execute": False,
+                        "execution_allowed": False,
+                        "audit": audit_info,
+                        "errors": [f"RUN_LINK_UPDATE_FAILED: {exc}"],
+                    }
+                )
+                return _with_link_fields(
+                    result,
+                    reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                    run_link_id=run_link_id,
+                    run_id=linked_run_id,
+                    pipeline_path=str(written_path) if written_path else None,
+                )
 
         # 12. Call executor — FIRST TIME in M5 series
         try:
@@ -485,6 +727,20 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 pipeline_path=str(written_path),
             )
         except Exception as exc:
+            if run_link_id and reviewed_plan:
+                try:
+                    mock_store.update_run_link(
+                        run_link_id,
+                        status="FAILED",
+                        payload={"audit": audit_info, "error": str(exc)},
+                    )
+                    mock_store.update_reviewed_plan(
+                        reviewed_plan.reviewed_plan_id,
+                        execution_status="FAILED",
+                        last_execution_id=run_link_id,
+                    )
+                except Exception:
+                    pass
             result = {
                 "ok": False,
                 "status": "EXECUTION_FAILED",
@@ -499,12 +755,50 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "project_config_path": request.project_config_path,
                 "execution": _execution_meta(executor_called=True),
                 "audit": audit_info,
+                "errors": [str(exc)],
             }
-            return result
+            return _with_link_fields(
+                result,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+                run_link_id=run_link_id,
+                run_id=linked_run_id,
+                pipeline_path=str(written_path) if written_path else None,
+            )
 
         # 13. Executor returned — success
-        run_id = executor_result.get("run_id") if isinstance(executor_result, dict) else None
-        return {
+        executor_run_id = executor_result.get("run_id") if isinstance(executor_result, dict) else None
+        summary_path = (
+            executor_result.get("summary_path")
+            if isinstance(executor_result, dict)
+            else None
+        )
+        response_warnings: list[str] = []
+        if linked_run_id and executor_run_id and executor_run_id != linked_run_id:
+            response_warnings.append(
+                "EXECUTOR_RUN_ID_MISMATCH: executor returned a different run_id"
+            )
+        if run_link_id and reviewed_plan:
+            execution_status = (
+                str(executor_result.get("status") or "SUBMITTED")
+                if isinstance(executor_result, dict)
+                else "SUBMITTED"
+            )
+            try:
+                mock_store.update_run_link(
+                    run_link_id,
+                    status=execution_status,
+                    summary_path=str(summary_path) if summary_path else None,
+                    payload={"audit": audit_info, "executor_result": executor_result},
+                    warnings=response_warnings,
+                )
+                mock_store.update_reviewed_plan(
+                    reviewed_plan.reviewed_plan_id,
+                    execution_status=execution_status,
+                    last_execution_id=run_link_id,
+                )
+            except Exception as exc:
+                response_warnings.append(f"RUN_LINK_FINALIZE_FAILED: {exc}")
+        result = {
             "ok": True,
             "status": "EXECUTION_SUBMITTED",
             "dry_run": False,
@@ -518,18 +812,44 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "project_config_path": request.project_config_path,
             "execution": _execution_meta(
                 submitted=True,
-                run_id=run_id,
+                run_id=linked_run_id or executor_run_id,
                 executor_called=True,
             ),
             "executor_result": executor_result,
             "audit": audit_info,
+            "warnings": response_warnings,
         }
+        return _with_link_fields(
+            result,
+            reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+            run_link_id=run_link_id,
+            run_id=linked_run_id or executor_run_id,
+            pipeline_path=str(written_path) if written_path else None,
+            summary_path=str(summary_path) if summary_path else None,
+        )
 
     # ═══════════════════════════════════════════════════════════════════════════
     # dry_run=true → readiness check (M5-T005..T014 — unchanged behaviour)
     # ═══════════════════════════════════════════════════════════════════════════
 
     # ── 1. Re-validate plan ──
+    if request.project_config_path:
+        settings, pc_error = _validate_project_config(request.project_config_path)
+        if pc_error:
+            return _early_blocked(pc_error, request)
+        context, context_status, context_errors = _check_project_context(
+            plan,
+            request.project_config_path,
+            request.project_id,
+        )
+        if context_status:
+            return _project_context_blocked(
+                context_status,
+                request,
+                context_errors,
+                context,
+            )
+
     validation = validate_plan(plan).to_dict()
 
     if not validation.get("ok"):

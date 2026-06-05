@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import sys
+from datetime import datetime, timezone
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,9 @@ DESKTOP_CONFIG_PATH = Path("outputs/work/desktop/config.json")
 
 DEFAULT_DESKTOP_CONFIG: dict[str, Any] = {
     "project_dir": ".",
+    "active_project_id": "",
+    "recent_projects": [],
+    "authorized_data_dirs": [],
     "python_path": sys.executable,
     "matlab_command": "matlab",
     "spm_dir": "./third_party/spm12",
@@ -137,6 +141,62 @@ def get_desktop_health() -> dict[str, Any]:
         "all_required_ok": all(item.get("ok", False) for item in checks if item["name"] in {"project_dir", "python_path"}),
         "gpu": gpu,
     }
+
+
+def add_recent_project(project_id: str, project_name: str, project_dir: str) -> None:
+    """Add or update a project in the desktop config recent_projects list."""
+    config = get_desktop_config(redacted=False)
+    raw_recent = config.get("recent_projects", [])
+    recent = [item for item in raw_recent if isinstance(item, dict)]
+    resolved_project_dir = str(Path(project_dir).expanduser().resolve())
+    normalized_name = project_name.strip().casefold()
+    recent = [
+        item
+        for item in recent
+        if item.get("project_id") != project_id
+        and str(item.get("project_name", "")).strip().casefold() != normalized_name
+        and str(item.get("project_dir", "")).casefold()
+        != resolved_project_dir.casefold()
+    ]
+    recent.insert(0, {
+        "project_id": project_id,
+        "project_name": project_name,
+        "project_dir": resolved_project_dir,
+    })
+    save_desktop_config({"recent_projects": recent[:20]})
+
+
+def set_active_project(project_id: str, project_dir: str | None = None) -> None:
+    """Update the active project in desktop config."""
+    payload = {"active_project_id": project_id}
+    if project_dir:
+        payload["project_dir"] = str(Path(project_dir).expanduser().resolve())
+    save_desktop_config(payload)
+
+
+def add_authorized_data_dir(path: str) -> None:
+    """Add a user-authorized data directory to the allow list."""
+    config = get_desktop_config(redacted=False)
+    raw_dirs = config.get("authorized_data_dirs", [])
+    dirs: list[dict[str, str]] = []
+    for item in raw_dirs if isinstance(raw_dirs, list) else []:
+        if isinstance(item, dict) and item.get("path"):
+            dirs.append(item)
+        elif isinstance(item, str):
+            dirs.append({"path": item})
+
+    resolved_path = str(Path(path).expanduser().resolve())
+    if not any(
+        str(item.get("path", "")).casefold() == resolved_path.casefold()
+        for item in dirs
+    ):
+        dirs.append({
+            "path": resolved_path,
+            "authorized_at": datetime.now(timezone.utc).isoformat(),
+            "authorized_by": "user-selection",
+            "scope": "read-only",
+        })
+    save_desktop_config({"authorized_data_dirs": dirs})
 
 
 def _websocket_runtime_check() -> dict[str, Any]:

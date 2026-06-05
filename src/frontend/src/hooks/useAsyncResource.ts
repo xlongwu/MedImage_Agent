@@ -6,7 +6,7 @@ export interface AsyncResource<T> {
   loading: boolean;
   error: string;
   fromFallback: boolean;
-  reload: () => Promise<void>;
+  reload: () => Promise<T | null>;
   setData: Dispatch<SetStateAction<T>>;
 }
 
@@ -20,17 +20,19 @@ export function useAsyncResource<T>(
   const [error, setError] = useState("");
   const [fromFallback, setFromFallback] = useState(true);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (): Promise<T | null> => {
     setLoading(true);
     setError("");
     try {
       const next = await loader();
       setData(next);
       setFromFallback(false);
+      return next;
     } catch (err) {
       setData(fallback);
       setFromFallback(true);
       setError(err instanceof Error ? err.message : String(err));
+      return null;
     } finally {
       setLoading(false);
     }

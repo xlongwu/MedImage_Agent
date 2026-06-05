@@ -1,7 +1,17 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, executeReviewedPlan, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, validatePlan } from "../api";
+import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, executeReviewedPlan, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, listProjectReviewedPlans, saveReviewedPlan, validatePlan } from "../api";
+import type { ProjectDetail } from "../lib/types/project";
+import type { ReviewedPlanRecord } from "../types";
 
 type PlanData = Record<string, unknown> | null;
+
+type Props = {
+  selectedProjectId: string | null;
+  selectedProject: ProjectDetail | null;
+  projectConfigPath?: string;
+  datasetIndexPath?: string | null;
+  rawdataDir?: string;
+};
 
 type CatalogItem = {
   id: string; name: string; backend: string; parallel_level: string;
@@ -34,7 +44,13 @@ type DryRunResult = {
   warnings?: unknown[];
 };
 
-export default function PlanReviewConsole() {
+export default function PlanReviewConsole({
+  selectedProjectId,
+  selectedProject,
+  projectConfigPath: selectedProjectConfigPath,
+  datasetIndexPath,
+  rawdataDir,
+}: Props) {
   const baseUrl = DEFAULT_API_BASE;
   const [goal, setGoal] = useState("");
   const [provider, setProvider] = useState("mock");
@@ -79,11 +95,136 @@ export default function PlanReviewConsole() {
   const [executionResult, setExecutionResult] = useState<Record<string, unknown> | null>(null);
   const [executionError, setExecutionError] = useState("");
   const [confirmExecution, setConfirmExecution] = useState(false);
-  const [projectConfigPath, setProjectConfigPath] = useState("examples/project_config_synthetic_smoke.yaml");
+  const [explicitDemoMode, setExplicitDemoMode] = useState(false);
+  const [demoProjectConfigPath, setDemoProjectConfigPath] = useState(
+    "examples/project_config_synthetic_smoke.yaml"
+  );
   const [actorName, setActorName] = useState("frontend-user");
+
+  // Reviewed plan history for the selected real project
+  const [reviewedPlanId, setReviewedPlanId] = useState<string | null>(null);
+  const [recentPlans, setRecentPlans] = useState<ReviewedPlanRecord[]>([]);
+  const [planHistoryLoading, setPlanHistoryLoading] = useState(false);
+  const [planHistoryError, setPlanHistoryError] = useState("");
+  const [planSaveStatus, setPlanSaveStatus] = useState("");
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  const effectiveProjectConfigPath = explicitDemoMode
+    ? demoProjectConfigPath.trim()
+    : selectedProjectConfigPath?.trim() ?? "";
+  const effectiveProjectId = explicitDemoMode
+    ? undefined
+    : selectedProjectId ?? undefined;
+  const projectContextError = explicitDemoMode
+    ? effectiveProjectConfigPath
+      ? ""
+      : "Explicit demo mode requires a project config path."
+    : !selectedProjectId
+      ? "Select or create a real project before generating a plan."
+      : !selectedProject
+        ? "Selected project details are still loading or unavailable."
+        : !selectedProjectConfigPath
+          ? "Selected project is missing metadata.project_config_path."
+          : "";
+
+  React.useEffect(() => {
+    setResult(null);
+    setPlanJson("");
+    setReValidation(null);
+    setDryRunResult(null);
+    setExecutionResult(null);
+    setConfirmExecution(false);
+    setReviewedPlanId(null);
+    setRecentPlans([]);
+    setPlanHistoryError("");
+    setPlanSaveStatus("");
+  }, [
+    selectedProjectId,
+    selectedProjectConfigPath,
+    explicitDemoMode,
+    demoProjectConfigPath,
+  ]);
+
+  async function refreshRecentPlans(projectId = selectedProjectId) {
+    if (!projectId || explicitDemoMode) {
+      setRecentPlans([]);
+      return;
+    }
+    setPlanHistoryLoading(true);
+    try {
+      const data = await listProjectReviewedPlans(baseUrl, projectId);
+      setRecentPlans(data.reviewed_plans ?? []);
+      setPlanHistoryError("");
+    } catch (e) {
+      setPlanHistoryError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPlanHistoryLoading(false);
+    }
+  }
+
+  React.useEffect(() => {
+    if (selectedProjectId && selectedProjectConfigPath && !explicitDemoMode) {
+      void refreshRecentPlans(selectedProjectId);
+    }
+  }, [selectedProjectId, selectedProjectConfigPath, explicitDemoMode]);
+
+  async function persistReviewedPlan(
+    plan: Record<string, unknown>,
+    validationResult: Record<string, unknown>
+  ) {
+    if (explicitDemoMode || !selectedProjectId || !effectiveProjectConfigPath) return;
+    setPlanSaveStatus("Saving reviewed plan...");
+    setPlanHistoryError("");
+    try {
+      const data = await saveReviewedPlan(baseUrl, selectedProjectId, {
+        plan,
+        project_config_path: effectiveProjectConfigPath,
+        validation: validationResult,
+        goal: goal.trim() || undefined,
+        provider,
+      });
+      setReviewedPlanId(data.reviewed_plan.reviewed_plan_id);
+      setPlanSaveStatus(`Saved ${data.reviewed_plan.reviewed_plan_id}`);
+      await refreshRecentPlans(selectedProjectId);
+    } catch (e) {
+      setReviewedPlanId(null);
+      setPlanSaveStatus("");
+      setPlanHistoryError(
+        `Plan generated but could not be persisted: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+  }
+
+  function restoreReviewedPlan(record: ReviewedPlanRecord) {
+    const restoredPlan = record.payload.plan;
+    if (!restoredPlan || typeof restoredPlan !== "object") {
+      setPlanHistoryError("Stored reviewed plan payload is unavailable.");
+      return;
+    }
+    const restoredValidation =
+      record.payload.validation && typeof record.payload.validation === "object"
+        ? record.payload.validation
+        : {};
+    setResult({
+      ok: true,
+      plan: restoredPlan,
+      validation: restoredValidation,
+      provider: record.payload.provider ?? "persisted",
+      warnings: record.warnings,
+      errors: [],
+    });
+    setPlanJson(JSON.stringify(restoredPlan, null, 2));
+    setReValidation(restoredValidation);
+    setReviewedPlanId(record.reviewed_plan_id);
+    setGoal(typeof record.payload.goal === "string" ? record.payload.goal : "");
+    setPlanSaveStatus(`Restored ${record.reviewed_plan_id}`);
+    setPlanHistoryError("");
+    setDryRunResult(null);
+    setExecutionResult(null);
+    setConfirmExecution(false);
+  }
 
   // Load full catalog on mount
   React.useEffect(() => {
@@ -115,12 +256,24 @@ export default function PlanReviewConsole() {
     setError(""); setResult(null); setPlanJson("");
     setReValidation(null); setJsonError(""); setSelectedNodeId(null);
     if (!goal.trim()) { setError("Please enter a goal."); return; }
+    if (projectContextError) { setError(projectContextError); return; }
     setLoading(true);
     try {
-      const data = await generatePlanFromGoal(baseUrl, { goal: goal.trim(), provider });
+      const data = await generatePlanFromGoal(baseUrl, {
+        goal: goal.trim(),
+        provider,
+        project_id: effectiveProjectId,
+        project_config_path: effectiveProjectConfigPath,
+      });
       setResult(data);
       const plan = data?.plan;
-      if (plan && typeof plan === "object") setPlanJson(JSON.stringify(plan, null, 2));
+      if (plan && typeof plan === "object") {
+        setPlanJson(JSON.stringify(plan, null, 2));
+        await persistReviewedPlan(
+          plan as Record<string, unknown>,
+          (data?.validation ?? {}) as Record<string, unknown>
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
@@ -132,7 +285,11 @@ export default function PlanReviewConsole() {
     try { plan = JSON.parse(planJson); }
     catch (e) { setJsonError(e instanceof Error ? e.message : String(e)); return; }
     setValidateLoading(true);
-    try { setReValidation(await validatePlan(baseUrl, plan) as Record<string, unknown>); }
+    try {
+      const validated = await validatePlan(baseUrl, plan) as Record<string, unknown>;
+      setReValidation(validated);
+      await persistReviewedPlan(plan, validated);
+    }
     catch (e) { setJsonError(e instanceof Error ? e.message : String(e)); }
     finally { setValidateLoading(false); }
   }
@@ -287,6 +444,7 @@ export default function PlanReviewConsole() {
 
   async function handleDryRunCheck() {
     setDryRunError(""); setDryRunResult(null);
+    if (projectContextError) { setDryRunError(projectContextError); return; }
     let plan: Record<string, unknown>;
     try { plan = JSON.parse(planJson || "{}"); }
     catch { setDryRunError("Cannot parse current plan JSON."); return; }
@@ -305,7 +463,9 @@ export default function PlanReviewConsole() {
       const data = await executeReviewedDryRun(baseUrl, {
         plan,
         approval,
-        project_config_path: "examples/project_config_dataset.yaml",
+        project_id: effectiveProjectId,
+        reviewed_plan_id: reviewedPlanId ?? undefined,
+        project_config_path: effectiveProjectConfigPath,
         persist_audit: persistAudit,
         actor: approvalBy || undefined,
       });
@@ -317,10 +477,15 @@ export default function PlanReviewConsole() {
 
   async function handleExecute() {
     setExecutionError(""); setExecutionResult(null);
+    if (projectContextError) { setExecutionError(projectContextError); return; }
     let plan: Record<string, unknown>;
     try { plan = JSON.parse(planJson || "{}"); }
     catch { setExecutionError("Cannot parse current plan JSON."); return; }
-    if (!projectConfigPath.trim()) { setExecutionError("Project config path is required."); return; }
+    if (!effectiveProjectConfigPath) { setExecutionError("Project config path is required."); return; }
+    if (!explicitDemoMode && !reviewedPlanId) {
+      setExecutionError("Save or re-validate this plan before executing it.");
+      return;
+    }
     const nodes = approvalNodesInput.split(",").map(s => s.trim()).filter(Boolean);
     const rejected = rejectedNodesInput.split(",").map(s => s.trim()).filter(Boolean);
     const approval = approvalApproved ? {
@@ -336,7 +501,9 @@ export default function PlanReviewConsole() {
       const data = await executeReviewedPlan(baseUrl, {
         plan,
         approval,
-        project_config_path: projectConfigPath.trim(),
+        project_id: effectiveProjectId,
+        reviewed_plan_id: reviewedPlanId ?? undefined,
+        project_config_path: effectiveProjectConfigPath,
         actor: actorName.trim() || "frontend-user",
       });
       setExecutionResult(data as Record<string, unknown>);
@@ -360,6 +527,75 @@ export default function PlanReviewConsole() {
     <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
       <h2>Plan Review Console</h2>
 
+      <div style={{ marginBottom: 16, padding: 12, background: "#eef4fb", border: "1px solid #b7c9dd", borderRadius: 4, fontSize: 12 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Project Context</div>
+        <label style={{ display: "block", marginBottom: 8 }}>
+          <input
+            type="checkbox"
+            checked={explicitDemoMode}
+            onChange={(event) => setExplicitDemoMode(event.target.checked)}
+          />
+          {" "}Use explicit example/demo project config
+        </label>
+        {explicitDemoMode ? (
+          <label>
+            Demo project config:{" "}
+            <input
+              type="text"
+              value={demoProjectConfigPath}
+              onChange={(event) => setDemoProjectConfigPath(event.target.value)}
+              style={{ width: 360, padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }}
+            />
+          </label>
+        ) : (
+          <div style={{ display: "grid", gap: 3 }}>
+            <div><b>Project:</b> {selectedProject ? `${selectedProject.name} (${selectedProject.id})` : "Unavailable"}</div>
+            <div><b>Config:</b> {selectedProjectConfigPath || "Unavailable"}</div>
+            <div><b>Rawdata:</b> {rawdataDir || "Unavailable"}</div>
+            <div><b>Dataset index:</b> {datasetIndexPath || "Unavailable"}</div>
+          </div>
+        )}
+        {projectContextError && (
+          <div style={{ color: "#c62828", marginTop: 8, fontWeight: 600 }}>{projectContextError}</div>
+        )}
+      </div>
+
+      {!explicitDemoMode && selectedProjectId && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#f8fafc", border: "1px solid #d6dee8", borderRadius: 4, fontSize: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <strong>Recent Plans</strong>
+            <button
+              onClick={() => void refreshRecentPlans()}
+              disabled={planHistoryLoading}
+              style={{ padding: "3px 9px", border: "1px solid #bbb", borderRadius: 3, background: "#fff", cursor: "pointer", fontSize: 11 }}>
+              {planHistoryLoading ? "Loading..." : "Refresh"}
+            </button>
+            {reviewedPlanId && <span style={{ color: "#2e7d32" }}>Active: {reviewedPlanId}</span>}
+            {planSaveStatus && <span style={{ color: "#555" }}>{planSaveStatus}</span>}
+          </div>
+          {planHistoryError && <div style={{ color: "#c62828", marginBottom: 6 }}>{planHistoryError}</div>}
+          {recentPlans.length === 0 && !planHistoryLoading ? (
+            <div style={{ color: "#777" }}>No persisted reviewed plans for this project yet.</div>
+          ) : (
+            <div style={{ display: "grid", gap: 5 }}>
+              {recentPlans.slice(0, 8).map((record) => (
+                <div key={record.reviewed_plan_id} style={{ display: "flex", gap: 8, alignItems: "center", padding: 6, background: "#fff", border: "1px solid #e0e0e0", borderRadius: 3 }}>
+                  <button
+                    onClick={() => restoreReviewedPlan(record)}
+                    style={{ padding: "3px 9px", border: "1px solid #90a4ae", borderRadius: 3, background: "#eceff1", cursor: "pointer", fontSize: 11 }}>
+                    Restore
+                  </button>
+                  <span style={{ fontFamily: "monospace" }}>{record.reviewed_plan_id}</span>
+                  <span>Status: {record.status}</span>
+                  <span>Execution: {record.execution_status}</span>
+                  <span style={{ color: "#777" }}>{record.updated_at}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Input ── */}
       <div style={{ marginBottom: 16 }}>
         <label style={{ fontWeight: 600, display: "block", marginBottom: 4 }}>Goal</label>
@@ -377,7 +613,7 @@ export default function PlanReviewConsole() {
           <option value="rule_based">rule_based</option>
           <option value="openai_compatible">openai_compatible</option>
         </select>
-        <button onClick={handleGenerate} disabled={loading}
+        <button onClick={handleGenerate} disabled={loading || Boolean(projectContextError)}
           style={{ padding: "8px 20px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
           {loading ? "Generating..." : "Generate Plan"}
         </button>
@@ -419,7 +655,13 @@ export default function PlanReviewConsole() {
           </div>
           {jsonError && <div style={{ padding: 8, background: "#ffebee", borderRadius: 4, marginBottom: 8, color: "#c62828", fontSize: 13 }}>JSON Parse Error: {jsonError}</div>}
           <textarea value={planJson}
-            onChange={(e) => { setPlanJson(e.target.value); setReValidation(null); setJsonError(""); }}
+            onChange={(e) => {
+              setPlanJson(e.target.value);
+              setReValidation(null);
+              setReviewedPlanId(null);
+              setPlanSaveStatus("Plan changed; re-validate to save this revision.");
+              setJsonError("");
+            }}
             rows={14}
             style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 8, borderRadius: 4, border: "1px solid #ccc" }}
             spellCheck={false} />
@@ -493,7 +735,7 @@ export default function PlanReviewConsole() {
           <p style={{ fontSize: 12, color: "#777", margin: "0 0 8px 0" }}>
             Backend re-runs Plan Validator + Approval Gate. No pipeline is executed.
           </p>
-          <button onClick={handleDryRunCheck} disabled={dryRunLoading}
+          <button onClick={handleDryRunCheck} disabled={dryRunLoading || Boolean(projectContextError)}
             style={{ padding: "6px 14px", background: "#7b1fa2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
             {dryRunLoading ? "Checking..." : "Dry-run Execution Check"}
           </button>
@@ -575,8 +817,8 @@ export default function PlanReviewConsole() {
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
             <label style={{ fontSize: 12 }}>
               Project config:{" "}
-              <input type="text" value={projectConfigPath}
-                onChange={(e) => setProjectConfigPath(e.target.value)}
+              <input type="text" value={effectiveProjectConfigPath}
+                readOnly
                 style={{ width: 260, padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }} />
             </label>
             <label style={{ fontSize: 12 }}>
@@ -595,7 +837,7 @@ export default function PlanReviewConsole() {
             </label>
           </div>
 
-          {!projectConfigPath.trim() && (
+          {!effectiveProjectConfigPath && (
             <div style={{ fontSize: 11, color: "#e65100", marginBottom: 6 }}>⚠️ Project config path is required.</div>
           )}
 
@@ -610,22 +852,28 @@ export default function PlanReviewConsole() {
               executionLoading ||
               dryRunResult?.status !== "DRY_RUN_OK" ||
               !confirmExecution ||
-              !projectConfigPath.trim()
+              !effectiveProjectConfigPath ||
+              (!explicitDemoMode && !reviewedPlanId) ||
+              Boolean(projectContextError)
             }
             title={
               dryRunResult?.status !== "DRY_RUN_OK"
                 ? "Run Dry-run Execution Check first"
                 : !confirmExecution
                   ? "Check the confirmation box"
-                  : !projectConfigPath.trim()
+                  : !effectiveProjectConfigPath
                     ? "Enter a project config path"
-                    : ""
+                    : !explicitDemoMode && !reviewedPlanId
+                      ? "Save or re-validate this plan before execution"
+                      : projectContextError
+                        ? projectContextError
+                        : ""
             }
             style={{
               padding: "8px 20px",
-              background: (dryRunResult?.status === "DRY_RUN_OK" && confirmExecution && projectConfigPath.trim())
+              background: (dryRunResult?.status === "DRY_RUN_OK" && confirmExecution && effectiveProjectConfigPath && (explicitDemoMode || reviewedPlanId) && !projectContextError)
                 ? "#c62828" : "#ccc",
-              color: (dryRunResult?.status === "DRY_RUN_OK" && confirmExecution && projectConfigPath.trim())
+              color: (dryRunResult?.status === "DRY_RUN_OK" && confirmExecution && effectiveProjectConfigPath && (explicitDemoMode || reviewedPlanId) && !projectContextError)
                 ? "#fff" : "#888",
               border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 700, fontSize: 14,
             }}>
@@ -642,6 +890,10 @@ export default function PlanReviewConsole() {
               <div style={{ fontWeight: 700, marginBottom: 4 }}>{executionStatusLabel(String(executionResult.status))}</div>
               <div>Status: <b>{String(executionResult.status)}</b></div>
               <div>OK: <b>{String(executionResult.ok)}</b></div>
+              <div>Reviewed plan: <b>{String(executionResult.reviewed_plan_id ?? "null")}</b></div>
+              <div>Run link: <b>{String(executionResult.run_link_id ?? "null")}</b></div>
+              <div>Pipeline path: <b>{String(executionResult.pipeline_path ?? "null")}</b></div>
+              <div>Summary path: <b>{String(executionResult.summary_path ?? "null")}</b></div>
               <div style={{ marginTop: 4, fontSize: 11, color: "#555" }}>
                 executor_called: <b>{String((executionResult.execution as Record<string,unknown>|null)?.executor_called ?? "false")}</b>
                 {" | "}submitted: <b>{String((executionResult.execution as Record<string,unknown>|null)?.submitted ?? "false")}</b>

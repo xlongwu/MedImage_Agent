@@ -11,6 +11,7 @@
     "dev:backend": "python -m uvicorn src.backend.app.main:app --app-dir ../.. --host 127.0.0.1 --port 8000",
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
+    "test:project-runs": "node scripts/project-runs-panel-smoke.cjs",
     "preview": "vite preview --host 127.0.0.1 --port 5173",
     "desktop:check": "node electron/smoke-check.cjs",
     "desktop:dev": "electron electron/main.cjs",

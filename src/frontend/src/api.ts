@@ -3,6 +3,13 @@ import type {
   AgentPlanRequest,
   AgentRun,
   DatasetEvaluationReport,
+  ProjectCreateRequest,
+  ProjectCreateResponse,
+  ProjectRunArtifactsResponse,
+  ProjectRunDetailResponse,
+  ReviewedPlanRecord,
+  RunArtifactPreviewResponse,
+  RunLinkRecord,
   RunInspection
 } from "./types";
 
@@ -63,10 +70,14 @@ async function requestJson<T>(
   }
 
   if (!response.ok) {
-    const detail =
+    const detailValue =
       typeof payload === "object" && payload !== null && "detail" in payload
-        ? JSON.stringify((payload as { detail: unknown }).detail, null, 2)
+        ? (payload as { detail: unknown }).detail
         : text;
+    const detail =
+      typeof detailValue === "string"
+        ? detailValue
+        : JSON.stringify(detailValue, null, 2);
     throw new Error(detail || `HTTP ${response.status}`);
   }
 
@@ -79,6 +90,111 @@ export async function getHealth(baseUrl: string) {
 
 export async function getProjectConfig(baseUrl: string) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/project-config");
+}
+
+export async function createProjectFromDirectory(
+  baseUrl: string,
+  payload: ProjectCreateRequest
+): Promise<ProjectCreateResponse> {
+  return requestJson<ProjectCreateResponse>(baseUrl, "/api/projects/create", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function saveReviewedPlan(
+  baseUrl: string,
+  projectId: string,
+  payload: {
+    plan: Record<string, unknown>;
+    project_config_path: string;
+    validation?: Record<string, unknown>;
+    goal?: string;
+    provider?: string;
+    status?: string;
+    warnings?: string[];
+  }
+) {
+  return requestJson<{ ok: boolean; reviewed_plan: ReviewedPlanRecord }>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/plans`,
+    { method: "POST", body: JSON.stringify(payload) }
+  );
+}
+
+export async function listProjectReviewedPlans(baseUrl: string, projectId: string) {
+  return requestJson<{
+    ok: boolean;
+    project_id: string;
+    reviewed_plans: ReviewedPlanRecord[];
+  }>(baseUrl, `/api/projects/${encodeURIComponent(projectId)}/plans`);
+}
+
+export async function getProjectReviewedPlan(
+  baseUrl: string,
+  projectId: string,
+  reviewedPlanId: string
+) {
+  return requestJson<{ ok: boolean; reviewed_plan: ReviewedPlanRecord }>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(reviewedPlanId)}`
+  );
+}
+
+export async function listProjectRunLinks(
+  baseUrl: string,
+  projectId: string,
+  reviewedPlanId?: string
+) {
+  const query = reviewedPlanId
+    ? `?reviewed_plan_id=${encodeURIComponent(reviewedPlanId)}`
+    : "";
+  return requestJson<{ ok: boolean; project_id: string; runs: RunLinkRecord[] }>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/runs${query}`
+  );
+}
+
+export async function listProjectRuns(
+  baseUrl: string,
+  projectId: string,
+  reviewedPlanId?: string
+) {
+  return listProjectRunLinks(baseUrl, projectId, reviewedPlanId);
+}
+
+export async function getProjectRun(
+  baseUrl: string,
+  projectId: string,
+  runId: string
+) {
+  return requestJson<ProjectRunDetailResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}`
+  );
+}
+
+export async function listProjectRunArtifacts(
+  baseUrl: string,
+  projectId: string,
+  runId: string
+) {
+  return requestJson<ProjectRunArtifactsResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/artifacts`
+  );
+}
+
+export async function getProjectRunArtifact(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+  artifactId: string
+) {
+  return requestJson<RunArtifactPreviewResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`
+  );
 }
 
 export async function listPipelines(baseUrl: string) {
@@ -1049,6 +1165,8 @@ export async function generatePlanFromGoal(
   payload: {
     goal: string;
     provider?: string;
+    project_id?: string;
+    project_config_path?: string;
     constraints?: Record<string, unknown>;
   }
 ) {
@@ -1104,6 +1222,8 @@ export async function executeReviewedDryRun(
   payload: {
     plan: Record<string, unknown>;
     approval: Record<string, unknown> | null;
+    project_id?: string;
+    reviewed_plan_id?: string;
     project_config_path?: string;
     persist_audit?: boolean;
     actor?: string;
@@ -1120,6 +1240,8 @@ export async function executeReviewedPlan(
   payload: {
     plan: Record<string, unknown>;
     approval: Record<string, unknown> | null;
+    project_id?: string;
+    reviewed_plan_id?: string;
     project_config_path: string;
     actor?: string;
   }
@@ -1129,6 +1251,8 @@ export async function executeReviewedPlan(
     body: JSON.stringify({
       plan: payload.plan,
       approval: payload.approval,
+      project_id: payload.project_id,
+      reviewed_plan_id: payload.reviewed_plan_id,
       project_config_path: payload.project_config_path,
       dry_run: false,
       confirm_execution: true,

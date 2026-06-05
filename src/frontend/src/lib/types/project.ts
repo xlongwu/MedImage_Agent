@@ -13,6 +13,17 @@ export interface ProjectDetail extends ProjectSummary {
   scans_count: number;
   total_size: string;
   current_model_id: string;
+  metadata?: {
+    source?: string;
+    project_dir?: string;
+    rawdata_dir?: string;
+    project_config_path?: string;
+    dataset_index_path?: string | null;
+    diagnostics?: Record<string, unknown>;
+    created_at?: string;
+    updated_at?: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface StudyOverview {
@@ -26,4 +37,3 @@ export interface StudyOverview {
   total_size: string;
   date: string;
 }
-

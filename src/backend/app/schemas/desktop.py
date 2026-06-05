@@ -34,6 +34,43 @@ class ProjectDetail(ProjectSummary):
     scans_count: int
     total_size: str
     current_model_id: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReviewedPlanRecord(BaseModel):
+    reviewed_plan_id: str
+    project_id: str
+    project_config_path: str
+    dataset_index_path: str | None = None
+    rawdata_dir: str | None = None
+    plan_hash: str
+    plan_path: str | None = None
+    status: str = "REVIEWED"
+    created_at: str
+    updated_at: str
+    approval_status: str = "PENDING"
+    execution_status: str = "NOT_RUN"
+    last_audit_id: str | None = None
+    last_execution_id: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RunLinkRecord(BaseModel):
+    run_link_id: str
+    project_id: str
+    reviewed_plan_id: str
+    run_id: str
+    task_id: str | None = None
+    pipeline_path: str | None = None
+    summary_path: str | None = None
+    project_config_path: str
+    audit_id: str | None = None
+    status: str = "REQUESTED"
+    created_at: str
+    updated_at: str
+    warnings: list[str] = Field(default_factory=list)
+    payload: dict[str, Any] = Field(default_factory=dict)
 
 
 class StudyOverview(BaseModel):

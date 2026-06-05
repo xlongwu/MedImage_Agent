@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -401,3 +403,25 @@ class RsfmriReportValidationRequest(BaseModel):
 class ReleaseReadinessRequest(BaseModel):
     project_config_path: str = Field(default="examples/project_config_dataset.yaml")
     pipeline_path: str = Field(default="examples/pipeline_rsfmri_release_readiness.yaml")
+
+
+class ProjectCreateRequest(BaseModel):
+    project_name: str = Field(..., min_length=1, max_length=128)
+    rawdata_dir: str = Field(..., min_length=1)
+    project_dir: str | None = Field(default=None)
+    copy_mode: Literal["reference"] = Field(default="reference")
+    run_inspection: bool = Field(default=True)
+    overwrite: bool = Field(default=False)
+
+
+class ProjectCreateResponse(BaseModel):
+    ok: bool
+    project_id: str
+    project_name: str
+    project_dir: str
+    rawdata_dir: str
+    project_config_path: str
+    dataset_index_path: str | None = None
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    next_actions: list[str] = Field(default_factory=list)

@@ -20,6 +20,8 @@ from src.backend.app.api.llm_planner_routes import router as llm_planner_router
 from src.backend.app.api.plan_validator_routes import router as plan_validator_router
 from src.backend.app.api.planner_routes import router as planner_router
 from src.backend.app.api.tool_catalog_routes import router as tool_catalog_router
+from src.backend.app.api.project_routes import router as project_router
+from src.backend.app.api.project_history_routes import router as project_history_router
 from src.backend.app.version import API_DESCRIPTION, API_TITLE, APP_VERSION
 
 
@@ -55,6 +57,8 @@ def create_app() -> FastAPI:
     app.include_router(gui_agent_router)
     app.include_router(desktop_router)
     app.include_router(external_smoke_router)
+    app.include_router(project_router)
+    app.include_router(project_history_router)
     return app
 
 

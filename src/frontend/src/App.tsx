@@ -1,7 +1,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { DEFAULT_API_BASE, getHealth } from "./api";
+import { createProjectFromDirectory, DEFAULT_API_BASE, getHealth } from "./api";
 import AdvancedModePanel from "./components/workflow/AdvancedModePanel";
 import PlanReviewConsole from "./components/PlanReviewConsole";
+import ProjectRunsPanel from "./components/ProjectRunsPanel";
 import { useDatasetSummary } from "./hooks/useDatasetSummary";
 import { useImagePreview } from "./hooks/useImagePreview";
 import { useImageSources } from "./hooks/useImageSources";
@@ -14,7 +15,7 @@ import { useTaskDiagnostics } from "./hooks/useTaskDiagnostics";
 import { useTaskEvents } from "./hooks/useTaskEvents";
 import { useTasks } from "./hooks/useTasks";
 import { useTaskStream } from "./hooks/useTaskStream";
-import { approveTask, generateTaskAuditPackage, getTask, importDataset, sendAssistantMessage } from "./lib/api";
+import { approveTask, generateTaskAuditPackage, getTask, sendAssistantMessage } from "./lib/api";
 import { fallbackChat } from "./lib/mockData";
 import type { ChatMessage } from "./lib/types/assistant";
 import type { DatasetSummary } from "./lib/types/dataset";
@@ -23,6 +24,7 @@ import type { ModelStatus } from "./lib/types/model";
 import type { ExecutionMode } from "./lib/types/pipeline";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "./lib/types/project";
 import type { TaskAuditPackage, TaskDiagnostics, TaskEvent, TaskLogEntry, TaskStatus, TaskStreamMessage } from "./lib/types/task";
+import type { ProjectCreateResponse } from "./types";
 
 const navItems = [
   ["Dashboard", "D"],
@@ -35,10 +37,36 @@ const navItems = [
 
 const quickActions = [
   { title: "New Pipeline", subtitle: "Create auditable workflow", kind: "flow", action: "new-pipeline" },
-  { title: "Upload Data", subtitle: "Import DICOM or NIfTI", kind: "cloud", action: "upload-data" },
+  { title: "Upload Data", subtitle: "Create project from BIDS directory", kind: "cloud", action: "upload-data" },
   { title: "Run Pipeline", subtitle: "Start analysis", kind: "play", action: "run-pipeline" },
   { title: "View Results", subtitle: "Open latest report", kind: "chart", action: "view-results" },
 ];
+
+function directoryBasename(path: string): string {
+  const normalized = path.trim().replace(/[\\/]+$/, "");
+  const parts = normalized.split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : "New Project";
+}
+
+function diagnosticNumber(
+  diagnostics: Record<string, unknown>,
+  key: string
+): number {
+  const value = Number(diagnostics[key]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function projectSummaryFromCreateResult(result: ProjectCreateResponse): ProjectSummary {
+  return {
+    id: result.project_id,
+    name: result.project_name,
+    study_id: result.project_id,
+    modality: "rs-fMRI",
+    created_date: new Date().toLocaleDateString(),
+    subjects_count: diagnosticNumber(result.diagnostics, "subjects_total"),
+    current_pipeline_id: "not-selected",
+  };
+}
 
 export default function App() {
   const baseUrl = DEFAULT_API_BASE;
@@ -63,9 +91,19 @@ export default function App() {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantError, setAssistantError] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(fallbackChat);
+  const [projectCreateLoading, setProjectCreateLoading] = useState(false);
+  const [projectCreateError, setProjectCreateError] = useState("");
+  const [projectCreateResult, setProjectCreateResult] = useState<ProjectCreateResponse | null>(null);
 
   const projects = useProjects();
   const project = useProject(selectedProjectId);
+  const selectedProjectForPlanReview =
+    selectedProjectId &&
+    !project.fromFallback &&
+    project.data.id === selectedProjectId
+      ? project.data
+      : null;
+  const selectedProjectMetadata = selectedProjectForPlanReview?.metadata;
   const overview = useProjectOverview(project.data.study_id);
   const dataset = useDatasetSummary(project.data.id);
   const model = useModelStatus(project.data.id);
@@ -272,29 +310,84 @@ export default function App() {
   }
 
   async function handleUploadData() {
-    const selectedPath =
-      (await window.medimage?.selectDirectory?.()) ||
-      window.prompt("Enter a local DICOM / NIfTI / BIDS path to import");
-    if (!selectedPath) {
-      setNotice("Dataset import cancelled");
+    setProjectCreateError("");
+    setProjectCreateResult(null);
+    let selectedPath: string | null = null;
+    try {
+      if (window.medimage?.selectDirectory) {
+        selectedPath = await window.medimage.selectDirectory();
+      } else {
+        selectedPath = window.prompt("Enter a local BIDS / rawdata directory path");
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setProjectCreateError(message);
+      setNotice(`Directory selection failed: ${message}`);
       return;
     }
+
+    if (!selectedPath?.trim()) {
+      setNotice("Project creation cancelled");
+      return;
+    }
+
+    const defaultProjectName = directoryBasename(selectedPath);
+    const projectName = window.prompt("Project name", defaultProjectName);
+    if (projectName === null) {
+      setNotice("Project creation cancelled");
+      return;
+    }
+    if (!projectName.trim()) {
+      setProjectCreateError("Project name is required.");
+      setNotice("Project creation failed: project name is required.");
+      return;
+    }
+
+    setProjectCreateLoading(true);
+    setProjectCreateResult(null);
     try {
-      const result = await importDataset({
-        project_id: project.data.id,
-        path: selectedPath,
-        type: "bids",
+      const result = await createProjectFromDirectory(baseUrl, {
+        project_name: projectName.trim(),
+        rawdata_dir: selectedPath.trim(),
+        copy_mode: "reference",
+        run_inspection: true,
+        overwrite: false,
       });
-      await dataset.reload();
-      await imageSources.reload();
-      await imageValidation.reload();
+
+      const refreshedProjects = await projects.reload();
+      const projectListSynced = Boolean(
+        refreshedProjects?.some((item) => item.id === result.project_id)
+      );
+      const syncWarning =
+        "Project was created, but the project list has not synchronized yet. Showing a temporary entry.";
+      const displayedResult = projectListSynced
+        ? result
+        : {
+            ...result,
+            warnings: [...result.warnings, syncWarning],
+          };
+      if (!projectListSynced) {
+        const temporaryProject = projectSummaryFromCreateResult(result);
+        projects.setData((current) => [
+          temporaryProject,
+          ...current.filter((item) => item.id !== result.project_id),
+        ]);
+      }
+      setSelectedProjectId(result.project_id);
+      setSelectedSubjectId(null);
       setSliceIndex(null);
-      const sourceCount = result.image_source_count ?? 0;
-      const issueText = result.validation_issue_count ? `; ${result.validation_issue_count} validation issues` : "";
-      const warningText = result.warnings?.length ? ` (${result.warnings[0]})` : "";
-      setNotice(`${result.message}: ${result.dataset_id}; ${sourceCount} image sources indexed${issueText}${warningText}`);
+      setProjectCreateResult(displayedResult);
+      const status = String(result.diagnostics.status ?? "UNKNOWN");
+      const warningText = displayedResult.warnings.length
+        ? ` with ${displayedResult.warnings.length} warning(s)`
+        : "";
+      setNotice(`Project created: ${result.project_name} (${status})${warningText}`);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setProjectCreateError(message);
+      setNotice(`Project creation failed: ${message}`);
+    } finally {
+      setProjectCreateLoading(false);
     }
   }
 
@@ -374,7 +467,22 @@ export default function App() {
           onToggleMode={() => setMode("dashboard")}
           modeLabel="Dashboard"
         />
-        <PlanReviewConsole />
+        <PlanReviewConsole
+          selectedProjectId={selectedProjectId}
+          selectedProject={selectedProjectForPlanReview}
+          projectConfigPath={selectedProjectMetadata?.project_config_path}
+          datasetIndexPath={selectedProjectMetadata?.dataset_index_path}
+          rawdataDir={selectedProjectMetadata?.rawdata_dir}
+        />
+        <ProjectRunsPanel
+          baseUrl={baseUrl}
+          projectId={selectedProjectId}
+          projectDir={
+            typeof selectedProjectMetadata?.project_dir === "string"
+              ? selectedProjectMetadata.project_dir
+              : null
+          }
+        />
       </div>
     );
   }
@@ -390,6 +498,15 @@ export default function App() {
       />
       <button onClick={() => setMode("planner")}>Plan Review</button>
       {notice ? <div className="toast-line">{notice}<button onClick={() => setNotice("")}>Dismiss</button></div> : null}
+      <ProjectCreateResultPanel
+        result={projectCreateResult}
+        loading={projectCreateLoading}
+        error={projectCreateError}
+        onDismiss={() => {
+          setProjectCreateResult(null);
+          setProjectCreateError("");
+        }}
+      />
       {taskStream.error ? (
         <div className="api-banner stream-banner">
           Task stream disconnected: {taskStream.error}
@@ -419,7 +536,7 @@ export default function App() {
           </nav>
           <ProjectList
             projects={projects.data}
-            selectedProjectId={project.data.id}
+            selectedProjectId={selectedProjectId || project.data.id}
             loading={projects.loading}
             error={projects.error}
             onSelect={setSelectedProjectId}
@@ -608,6 +725,80 @@ function ProjectList({
         </button>
       ))}
     </div>
+  );
+}
+
+function ProjectCreateResultPanel({
+  result,
+  loading,
+  error,
+  onDismiss,
+}: {
+  result: ProjectCreateResponse | null;
+  loading: boolean;
+  error: string;
+  onDismiss: () => void;
+}) {
+  if (!result && !loading && !error) {
+    return null;
+  }
+
+  const diagnostics = result?.diagnostics ?? {};
+  const status = String(diagnostics.status ?? "UNKNOWN");
+  return (
+    <section className="task-detail-panel">
+      <div className="card-row">
+        <div>
+          <div className="card-title">
+            {loading ? "Creating project..." : error ? "Project creation failed" : `Project created: ${result?.project_name}`}
+          </div>
+          <span>{loading ? "Inspecting the selected BIDS/rawdata directory" : `Status: ${status}`}</span>
+        </div>
+        <div className="detail-actions">
+          {!loading ? <button onClick={onDismiss}>Dismiss</button> : null}
+        </div>
+      </div>
+
+      {error ? <div className="errorBox">{error}</div> : null}
+
+      {result ? (
+        <>
+          <div className="detail-grid">
+            <div><span>Status</span><strong>{status}</strong></div>
+            <div><span>Subjects</span><strong>{diagnosticNumber(diagnostics, "subjects_total")}</strong></div>
+            <div><span>Complete</span><strong>{diagnosticNumber(diagnostics, "subjects_complete")}</strong></div>
+            <div><span>Warning</span><strong>{diagnosticNumber(diagnostics, "subjects_warning")}</strong></div>
+            <div><span>Incomplete</span><strong>{diagnosticNumber(diagnostics, "subjects_incomplete")}</strong></div>
+          </div>
+
+          <div className="event-list">
+            <div className="event-row"><span>Project directory</span><p>{result.project_dir}</p></div>
+            <div className="event-row"><span>Rawdata directory</span><p>{result.rawdata_dir}</p></div>
+            <div className="event-row"><span>Dataset index</span><p>{result.dataset_index_path || "Not generated"}</p></div>
+          </div>
+
+          {result.warnings.length ? (
+            <div className="diagnostic-list">
+              {result.warnings.map((warning, index) => (
+                <div className="diagnostic-item warning" key={`${warning}-${index}`}>
+                  <span>Warning</span>
+                  <p>{warning}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="tool-result-list">
+            <div className="panel-kicker">Next actions</div>
+            {result.next_actions.map((action, index) => (
+              <div className="tool-result-row" key={`${action}-${index}`}>
+                <strong>{index + 1}. {action}</strong>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+    </section>
   );
 }
 

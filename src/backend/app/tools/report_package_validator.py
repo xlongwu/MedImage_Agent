@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from src.backend.app.tools.artifact_utils import read_json_artifact, sha256_file, write_json_artifact
+from src.backend.app.tools.artifact_utils import read_json_artifact, read_optional_json_artifact, sha256_file, write_json_artifact
 
 REQUIRED_FILES = ["MANIFEST.json","README.md","index.md","export_summary.json","checksums/SHA256SUMS.txt"]
 FORBIDDEN_PARTS = {"rawdata"}
@@ -141,7 +141,7 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
     # Index
     root = Path(exports_dir)/"rsfmri_report_package"
     idx = root/"VALIDATION_INDEX.json"
-    cur = read_json_artifact(idx) or {"ok":True,"validations":[]}
+    cur = read_optional_json_artifact(idx, {"ok":True,"validations":[]})
     vals = cur.get("validations",[])
     if not isinstance(vals, list): vals = []
     entry = {"export_id": rid, "validated_at": result["validated_at"], "validation_status": status, "ok": ok, "package_dir": str(pkg), "zip_path": str(zp), "validation_result": str(vrj), "validation_report": str(vrm)}
@@ -152,12 +152,12 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
 def list_rsfmri_report_validations(exports_dir: str = "./exports") -> dict[str, Any]:
     root = Path(exports_dir)/"rsfmri_report_package"
     idx = root/"VALIDATION_INDEX.json"
-    cur = read_json_artifact(idx); vals = []
+    cur = read_optional_json_artifact(idx); vals = []
     if cur and isinstance(cur.get("validations"), list): vals = cur["validations"]
     elif root.exists():
         for pkg in sorted(root.iterdir()):
             if not pkg.is_dir(): continue
-            vp = pkg/"validation"/"validation_result.json"; pl = read_json_artifact(vp)
+            vp = pkg/"validation"/"validation_result.json"; pl = read_optional_json_artifact(vp)
             if pl: vals.append({"export_id": pkg.name, "validated_at": pl.get("validated_at"), "validation_status": pl.get("validation_status"), "ok": pl.get("ok"), "package_dir": str(pkg), "zip_path": pl.get("zip_path"), "validation_result": str(vp), "validation_report": str(pkg/"validation"/"validation_report.md")})
     return {"ok": True, "validations_total": len(vals), "validations": vals}
 
