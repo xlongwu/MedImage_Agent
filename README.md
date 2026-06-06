@@ -1,174 +1,37 @@
 # MedImage Agent
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-green)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.136%2B-green)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6)](https://www.typescriptlang.org/)
+[![Node](https://img.shields.io/badge/Node-24%2B-339933)](https://nodejs.org/)
 
-[![CI](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/xlongwu/MedImage_Agent/actions/workflows/ci.yml)  ![Tests](https://img.shields.io/badge/tests-2328%20passed-brightgreen)  ![Status](https://img.shields.io/badge/release-M12-blue)
+![Tests](https://img.shields.io/badge/tests-2426%20passed-brightgreen)  ![Release](https://img.shields.io/badge/release-v0.3.0--rc1-blue)
 
 **English** | [中文](README_CN.md)
 
-MedImage Agent is a **deterministic agentic pipeline engineering platform** for resting-state fMRI (rs-fMRI) research. Inspired by the Plan-then-Execute architecture, it abandons the open-ended conversational loop of general LLM Agents and builds a secure, reproducible, and auditable medical image analysis workflow system.
+MedImage Agent is a **deterministic Plan-then-Execute desktop platform** for
+resting-state fMRI (rs-fMRI) research. The LLM plans and advises; execution
+stays inside the Pipeline Runtime and registered node runners. It is a
+research engineering platform, **not a clinical diagnosis or clinical decision
+product**.
 
-**Core Positioning**: Medical Imaging AI Workflow / Agentic Pipeline / Research Engineering Platform  
-**Current Release**: M12 — Fixture-Only GUI Model Safety Baseline (2328 tests, 0 real model, 0 PyWinAuto)
+**Latest Release**: [v0.3.0-rc1](https://github.com/xlongwu/MedImage_Agent_WebUI_App/releases/tag/v0.3.0-rc1) — Desktop MVP Release Candidate ([release notes](docs/releases/v0.3.0-rc1.md))
 
 ---
 
 ## Table of Contents
 
-- [Background & Problem](#background--problem)
-- [Core Design Philosophy](#core-design-philosophy)
-- [System Architecture](#system-architecture)
-- [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
+- [Desktop App](#desktop-app)
+- [Architecture](#architecture)
+- [Real Project Workflow](#real-project-workflow)
 - [Project Structure](#project-structure)
-- [Core Modules](#core-modules)
-- [Security Mechanisms](#security-mechanisms)
-- [Current Status & Boundaries](#current-status--boundaries)
-- [Development Roadmap](#development-roadmap)
+- [Test Baseline](#test-baseline)
+- [Safety Architecture](#safety-architecture)
+- [Known Limitations](#known-limitations)
+- [Roadmap](#roadmap)
 - [Documentation](#documentation)
-
----
-
-## Background & Problem
-
-In the field of rs-fMRI research, preprocessing workflows heavily rely on manual operations and researchers' experience. A typical workflow involves tools such as SPM (MATLAB) and DPABI, spanning over a dozen steps, each with numerous parameters to configure. This introduces three core challenges:
-
-1. **Error-proneness**: Manual operations can easily miss steps or misconfigure parameters, leading to unreliable results
-2. **Irreproducibility**: Researchers often fail to fully document all parameters and software versions in publications, making replication difficult for others
-3. **Lack of auditability**: Traditional script-based pipelines lack complete execution records, making it impossible to trace "who did what, when, with which parameters, and what was produced"
-
-Meanwhile, although general LLM Agents (such as Claude Code) are intelligent, directly controlling medical data poses security risks—they may accidentally delete files, modify raw data, and the stochastic nature of LLMs undermines scientific reproducibility.
-
----
-
-## Core Design Philosophy
-
-### Why Not a Regular Pipeline?
-
-Traditional pipelines are static scripts lacking intelligent planning capabilities. MedImage Agent introduces an **Agent Runtime** that can automatically plan pipeline structures based on user goals, while the execution remains fully deterministic.
-
-### Why Not a Regular Chatbot?
-
-General LLM Agents adopt open-ended conversational loops with inherent randomness and security risks. MedImage Agent employs a **Plan-then-Execute** model:
-- **Agent only plans**: Decomposes user goals into a pipeline plan
-- **Engine handles execution**: Deterministic DAG engine executes strictly with no randomness
-- **Human confirmation for critical steps**: Approval Gate ensures researchers' professional judgment is always in place
-
-### Relationship with Hermes Agent
-
-We draw inspiration from Hermes Agent's "plan-then-execute" architectural philosophy, but perform domain-specific refactoring:
-- Retain the core Plan-then-Execute paradigm
-- Replace open-ended conversation with deterministic pipeline execution
-- Add medical imaging-specific security mechanisms (rawdata protection, permission grading, audit logging)
-
----
-
-## System Architecture
-
-The system is divided into four layers:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Frontend Layer                          │
-│  React 18 + TypeScript + Vite + ECharts                     │
-│  Pipeline Canvas | QC Report Viewer | Run History Timeline  │
-│  Insights Dashboard | Approval Gate UI                      │
-├─────────────────────────────────────────────────────────────┤
-│                      API Layer                               │
-│  FastAPI + Pydantic + asyncio + SSE (Server-Sent Events)    │
-│  RESTful Endpoints | Streaming Logs | Health Checks         │
-├─────────────────────────────────────────────────────────────┤
-│                      Agent Runtime                           │
-│  Plan-then-Execute | LLM Advisor | Approval Gate            │
-│  Tool Registry (Permission Grading) | SessionDB | Audit     │
-├─────────────────────────────────────────────────────────────┤
-│                      Pipeline Runtime                        │
-│  DAG Executor (Topological Sort) | Scheduler (Subject-Level │
-│  Parallel) | Node Registry | State Store | Hook System      │
-│  Error Diagnoser | Retry Runtime | Reproducibility Bundle   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow / Control Flow / Audit Flow
-
-**Data Flow**:
-```
-Rawdata (Read-only) → Pipeline Executor → Derivatives → QC → Reports
-```
-
-**Control Flow**:
-```
-User Goal → Agent Runtime (Plan) → Approval Gate → Pipeline Executor (Execute) → Results
-```
-
-**Audit Flow**:
-```
-Every Operation → Audit Logger → SessionDB → Run History → Reproducibility Bundle
-```
-
----
-
-## Tech Stack
-
-### Frontend
-- **Framework**: React 18 + TypeScript
-- **Build Tool**: Vite
-- **Visualization**: ECharts (QC charts, motion parameter curves, ALFF/ReHo distributions)
-- **State Management**: React Hooks
-- **API Communication**: Fetch API + SSE streaming
-
-### Backend
-- **Framework**: FastAPI (Python 3.10+)
-- **Async**: asyncio + async/await
-- **Data Validation**: Pydantic
-- **File Serving**: Static file hosting
-
-### Pipeline Runtime
-- **Execution Engine**: Custom DAG execution engine (topological sorting)
-- **Scheduler**: Custom Scheduler (subject-level parallel processing)
-- **State Management**: File-system-based State Store (run_id isolation)
-- **Hook System**: pre / post / approval three-category hooks
-- **Error Handling**: Error Diagnoser (error classification) + Retry Runtime (retry strategies)
-
-### Agent Runtime
-- **Architecture Pattern**: Plan-then-Execute
-- **Planner**: Agent Runtime (decomposes goals into pipeline plans)
-- **Approval Gate**: Human confirmation for critical steps
-- **Tool Registry**: Three-tier permission system (readonly / write / destructive)
-- **LLM Advisor**: Suggestion generation (does not control execution)
-- **Session Database**: SessionDB (SQLite, records plan/execution/history)
-
-### Medical Image Processing
-- **Core Algorithms** (Native Python implementation):
-  - ALFF / fALFF (FFT-based power spectrum calculation)
-  - ReHo (Kendall's W, 27-neighborhood)
-  - Functional Connectivity (ROI time-series correlation)
-  - Nuisance Regression (linear regression denoising)
-  - Temporal Filtering (band-pass filtering)
-  - Motion QC (FD, DVARS, framewise displacement)
-- **Data Format**: BIDS (Brain Imaging Data Structure)
-
-### MATLAB / SPM / DPABI Integration
-- **Integration Mode**: Contract-only design (extensible)
-- **SPM Tools**: Realign, Slice Timing, Smooth, Normalize, Coregister, Segment
-- **DPABI**: Plugin-style interface (extensible)
-
-### GPU Acceleration
-- **Status**: Implemented (5 modules)
-- **Backend**: CuPy (primary) with automatic NumPy CPU fallback
-- **Accelerated Modules**: ALFF/fALFF, ReHo, Nuisance Regression, Temporal Filtering, Functional Connectivity
-- **Design Pattern**: Triple-backend (NumPy / CuPy / dispatcher) with `prefer_gpu` / `require_gpu` flags
-- **Memory Safety**: Z-slice chunking for large arrays, GPU memory estimation utilities
-- **Scheduling**: Dedicated `gpu_max_workers` (capped at 4) with `gpu_mode` (prefer / require / off)
-
-### Security & Audit
-- **Path Safety**: Path normalization, directory traversal prevention, work_dir isolation
-- **Permission Control**: Tool Registry permission grading
-- **Audit Logging**: Audit Logger (operation logs, result logs)
-- **Raw Data Protection**: Rawdata read-only access
 
 ---
 
@@ -176,67 +39,103 @@ Every Operation → Audit Logger → SessionDB → Run History → Reproducibili
 
 ### Requirements
 
-- Python 3.10+
-- Node.js 18+
-- MATLAB + SPM12 (optional, for SPM preprocessing steps)
-- CuPy (optional, for GPU acceleration; `pip install cupy-cuda12x`)
+- Python 3.11+ (validated: `D:\Anaconda3\envs\mamba\python.exe`)
+- Node.js 20+ (validated: v24.16.0)
+- MATLAB + SPM12 (optional, for SPM preprocessing)
+- CuPy (optional, for GPU acceleration)
 
-### Install Dependencies
+### Install
 
 ```bash
-# Backend dependencies
 pip install -r requirements.txt
-
-# Frontend dependencies
 cd src/frontend && npm install
 ```
 
-### Start Services
+### Start (development)
 
 ```bash
-# Start backend (port 8000)
 uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000
+cd src/frontend && npm run dev
 
-# Start frontend web (port 5173)
-cd src/frontend && npm run dev:renderer
-
-# Or one-click startup
-./start.sh          # Linux/macOS
+# Or one-click:
 start.bat           # Windows
+./start.sh          # Linux/macOS
 ```
 
-### Docker Demo Mode
+### Run Tests
 
 ```bash
-# Start containerized demo (without MATLAB)
-docker compose -f deploy/docker-compose.demo.yml up --build
+D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
 ```
 
-### Run Examples
+---
 
-```bash
-# Generate synthetic BIDS data
-python -m src.backend.app.tools.synthetic_bids
+## Desktop App
 
-# Run dataset evaluation
-python -m src.backend.app.tools.run_dataset_evaluation_cli examples/project_config_dataset.yaml
+v0.3.0-rc1 ships a self-contained Windows desktop application. No Python or
+Node.js installation is required at runtime.
 
-# Run SPM realignment + Motion QC (requires approval)
-python -m src.backend.app.tools.run_rsfmri_spm_realign_motion_qc_cli \
-  examples/project_config_dataset.yaml \
-  examples/pipeline_rsfmri_spm_realign_motion_qc.yaml \
-  --approve
+### Download
 
-# Run GPU-accelerated ALFF (with CPU comparison benchmark)
-python -m src.backend.app.tools.gpu_benchmark_cli
+| Format | File | Size |
+|---|---|---|
+| **NSIS Installer** | `MedImage Agent Setup.exe` | 112 MB |
+| **Portable** | `MedImage Agent.exe` | 112 MB |
 
-# Run GPU-accelerated ReHo
-python -c "
-from src.backend.app.tools.gpu_reho_runner import run_reho_subject
-result = run_reho_subject('sub-001', 'derivatives/spm_smooth/sub-001/func/sub-001_task-rest_bold_smooth.nii', './derivatives', prefer_gpu=True)
-print(f'Backend: {result[\"gpu_backend\"]}, Runtime: {result[\"runtime_seconds\"]}s')
-"
+Download from the [GitHub Release page](https://github.com/xlongwu/MedImage_Agent_WebUI_App/releases/tag/v0.3.0-rc1).
+
+### How It Works
+
+1. Electron shell starts → extracts PyInstaller backend sidecar
+2. Backend binds to `127.0.0.1` on an available port (starting at 8765)
+3. Electron waits for `/api/health` → loads the React frontend
+4. When the app closes, the backend sidecar is stopped cleanly
+5. The frontend communicates through HTTP APIs; it never accesses the filesystem directly
+
+### Build from Source
+
+```powershell
+npm --prefix src/frontend run build
+powershell -File desktop/packaging/build_backend.ps1 -PythonExe "D:\Anaconda3\envs\mamba\python.exe"
+powershell -File desktop/packaging/build_desktop.ps1 -DirOnly -ElectronRuntimeZip "desktop\electron\.electron-cache\manual-runtime\electron-v31.7.7-win32-x64.zip"
 ```
+
+See [Desktop App Packaging](docs/DESKTOP_APP_PACKAGING.md) for detailed instructions.
+
+---
+
+## Architecture
+
+```
+Frontend (React 18 + TypeScript + Vite)
+    ↓ HTTP API
+API Layer (FastAPI + Pydantic)
+    ↓
+Agent Runtime (Plan-then-Execute + Approval Gate)
+    ↓
+Pipeline Runtime (DAG Executor + Scheduler)
+```
+
+Four layers, top to bottom. State is file-system based (SQLite for project
+metadata, JSON for run state). The LLM only advises; the Pipeline Runtime is
+the sole execution path.
+
+---
+
+## Real Project Workflow
+
+```
+Select BIDS/rawdata → Create Project → project_config.yaml + dataset_index.json
+    → Plan Review (project context injected)
+    → Save Reviewed Plan (persisted to SQLite)
+    → Execute Reviewed (Approval Gate gated, unique run_id)
+    → Run Summary / Artifacts
+    → Run History UI → Artifact Preview (JSON/CSV/Markdown/text/log/NIfTI/MAT)
+```
+
+Every execution produces a unique `run_id`, a summary JSON, and run-scoped
+artifacts discoverable through the artifact API. Rawdata is referenced
+read-only and verified unchanged after execution.
 
 ---
 
@@ -245,259 +144,100 @@ print(f'Backend: {result[\"gpu_backend\"]}, Runtime: {result[\"runtime_seconds\"
 ```
 MedImage_Agent/
 ├── src/
-│   ├── backend/
-│   │   └── app/
-│   │       ├── api/                    # FastAPI routes
-│   │       │   ├── routes.py
-│   │       │   ├── models.py
-│   │       │   ├── dashboard_routes.py
-│   │       │   ├── planner_routes.py
-│   │       │   ├── gui_agent_routes.py
-│   │       │   ├── desktop_routes.py
-│   │       │   └── external_smoke_routes.py
-│   │       ├── runtime/                # Pipeline + Agent Runtime + Safety
-│   │       │   ├── agent_runtime.py    # Agent planning & execution
-│   │       │   ├── pipeline_executor.py # DAG execution engine
-│   │       │   ├── scheduler.py        # Parallel scheduler
-│   │       │   ├── node_registry.py    # Node registry
-│   │       │   ├── state_store.py      # State persistence
-│   │       │   ├── hook_manager.py     # Hook system
-│   │       │   ├── error_diagnoser.py  # Error diagnosis
-│   │       │   ├── retry_runtime.py    # Retry mechanism
-│   │       │   ├── run_inspector.py    # Run inspector
-│   │       │   ├── path_safety.py      # Path safety
-│   │       │   ├── tool_registry.py    # Tool permission registry
-│   │       │   ├── gui_agent.py        # GUI Agent (mock-only provider)
-│   │       │   ├── gui_agent_guard.py  # 6-layer GUI API guard (42 error codes)
-│   │       │   ├── gui_agent_model_adapter.py     # Model output → record_observation
-│   │       │   ├── gui_agent_mock_model_fixtures.py # 45 mock fixtures
-│   │       │   ├── gui_model_provider_policy.py    # Provider gate (M11 contract)
-│   │       │   ├── gui_model_runtime_isolation.py  # Runtime isolation (M11)
-│   │       │   ├── gui_model_source_policy.py      # Source/weights policy (M11)
-│   │       │   ├── gui_model_input_redaction.py    # Input minimization (M11)
-│   │       │   ├── gui_model_audit_contract.py     # Audit metadata (M11)
-│   │       │   └── agent_plan.py       # Agent plan creation
-│   │       ├── nodes/                  # Pipeline node handlers (GPU)
-│   │       │   ├── gpu_alff_node.py    # GPU ALFF node
-│   │       │   ├── gpu_reho_node.py    # GPU ReHo node
-│   │       │   ├── gpu_nuisance_regression_node.py
-│   │       │   ├── gpu_temporal_filtering_node.py
-│   │       │   └── gpu_functional_connectivity_node.py
-│   │       ├── tools/                  # Tool modules
-│   │       │   ├── alff_falff.py       # ALFF/fALFF computation
-│   │       │   ├── alff_compute.py     # ALFF GPU backends (NumPy/CuPy/PyTorch)
-│   │       │   ├── reho.py             # ReHo computation
-│   │       │   ├── reho_compute.py     # ReHo GPU backends (NumPy/CuPy)
-│   │       │   ├── functional_connectivity.py  # Functional connectivity
-│   │       │   ├── functional_connectivity_compute.py  # FC GPU backends
-│   │       │   ├── nuisance_regression.py      # Nuisance regression
-│   │       │   ├── nuisance_regression_compute.py  # NR GPU backends
-│   │       │   ├── temporal_filtering.py       # Temporal filtering
-│   │       │   ├── temporal_filtering_compute.py  # TF GPU backends
-│   │       │   ├── motion_qc.py        # Motion QC
-│   │       │   ├── data_inspector.py   # Data inspection
-│   │       │   ├── dataset_evaluator.py        # Dataset evaluation
-│   │       │   ├── report_writer.py    # Report generation
-│   │       │   ├── report_validator.py # Report validation
-│   │       │   ├── reproducibility_bundle.py   # Reproducibility bundle
-│   │       │   ├── synthetic_bids.py   # Synthetic data generation
-│   │       │   ├── gpu_memory.py       # GPU memory monitoring
-│   │       │   ├── gpu_*.py            # GPU runners & contracts
-│   │       │   └── spm_*.py            # SPM integration runners
-│   │       ├── schemas/                # Pipeline schema validation
-│   │       │   └── pipeline_schema.py
-│   │       ├── advisor/                # LLM advisor modules
-│   │       │   ├── advisor_models.py
-│   │       │   ├── advisor_router.py
-│   │       │   ├── advisor_safety.py
-│   │       │   ├── parameter_advisor.py
-│   │       │   ├── protocol_advisor.py
-│   │       │   ├── qc_report_advisor.py
-│   │       │   ├── error_advisor.py
-│   │       │   └── docs_qa_advisor.py
-│   │       └── main.py                 # FastAPI entry point
+│   ├── backend/app/
+│   │   ├── api/              # FastAPI routes
+│   │   ├── services/         # Business logic (SQLite store, artifact services)
+│   │   ├── planner/          # Plan context, reviewed plan store, approval, audit
+│   │   ├── runtime/          # Pipeline executor, node registry, state store
+│   │   ├── tools/            # Processing modules, QC, CLI runners
+│   │   ├── schemas/          # Pipeline YAML schema validation
+│   │   └── advisor/          # LLM advisor modules
 │   └── frontend/
-│       ├── src/
-│       │   ├── App.tsx                 # Main app component
-│       │   ├── components/             # UI components
-│       │   ├── api.ts                  # API wrapper
-│       │   └── types.ts                # TypeScript types
-│       └── package.json
-├── docs/                               # Project documentation
-│   ├── architecture.md                 # Architecture design doc
-│   ├── agent_runtime_spec.md           # Agent Runtime specification
-│   └── pipeline_executor.md            # Pipeline Executor specification
-├── examples/                           # Example configurations
-│   ├── project_config_dataset.yaml
-│   └── pipeline_*.yaml
-├── tests/                              # Tests
-│   └── unit/                           # Unit tests
-├── deploy/                             # Deployment configs
-│   ├── docker-compose.demo.yml
-│   ├── backend.Dockerfile
-│   └── frontend.Dockerfile
-├── requirements.txt                    # Python dependencies
-└── README.md                           # This file
+│       ├── src/components/   # React panels (PlanReviewConsole, ProjectRunsPanel, run-history/*)
+│       ├── electron/         # Electron main/preload/smoke-check
+│       └── scripts/          # Smoke tests
+├── desktop/
+│   ├── electron/             # Electron packaging (main, preload, builder config, smoke)
+│   └── packaging/            # PyInstaller specs, PowerShell build scripts
+├── docs/
+│   ├── releases/             # Release notes and SHA256SUMS
+│   ├── DESKTOP_APP_PACKAGING.md
+│   ├── REAL_PROJECT_RUN_LIFECYCLE.md
+│   └── MVP_RELEASE_SMOKE_CHECKLIST.md
+├── tests/
+│   ├── unit/                 # 100+ unit test files
+│   └── integration/          # Safe smoke, external BIDS smoke, contract smoke
+├── examples/                 # Pipeline YAMLs and project configs
+└── deploy/                   # Dockerfiles and docker-compose
 ```
 
 ---
 
-## Core Modules
+## Test Baseline
 
-### 1. Pipeline Runtime (Deterministic Execution Engine)
+| Metric | Value |
+|---|---|
+| Full pytest | **2426 passed, 8 skipped, 0 failed** |
+| Frontend TypeScript | `tsc --noEmit` ✅ |
+| Frontend Vite build | Vite 8, 86 modules ✅ |
+| Electron smoke check | 51/51 ✅ |
+| GUI desktop startup | Verified on Windows 10/11 ✅ |
+| External BIDS smoke | 1104 DICOM, rawdata unchanged ✅ |
+| Test environment | `D:\Anaconda3\envs\mamba\python.exe` (Python 3.11.15) |
 
-- **DAG Execution**: Dependency-based execution via topological sorting, ensuring steps run in correct order
-- **Parallel Scheduling**: Subject-level parallel processing to improve multi-subject dataset throughput
-- **State Persistence**: State files written immediately after each step completes, supporting breakpoint resumption
-- **Hook System**: pre-hook (parameter validation), post-hook (result verification), approval-hook (human confirmation)
-
-### 2. Agent Runtime (Intelligent Planning Layer)
-
-- **Plan-then-Execute**: Agent generates pipeline plan, deterministic engine executes
-- **Approval Gate**: plan-level approval (overall confirmation) + step-level approval (destructive operation confirmation)
-- **Tool Registry**: Tools declare permission levels at registration, implementing least privilege principle
-- **LLM Advisor**: Natural language descriptions converted to pipeline configuration suggestions (non-mandatory)
-
-### 3. Medical Image Processing
-
-| Module | Function | Status |
-|--------|----------|--------|
-| ALFF / fALFF | Low-frequency amplitude calculation | ✅ Implemented |
-| ReHo | Regional homogeneity calculation | ✅ Implemented |
-| Functional Connectivity | Functional connectivity matrix | ✅ Implemented |
-| Motion QC | Motion metrics (FD/DVARS) | ✅ Implemented |
-| Nuisance Regression | Denoising regression | ✅ Implemented |
-| Temporal Filtering | Band-pass filtering | ✅ Implemented |
-| SPM Realign | Motion correction | ✅ Implemented |
-| SPM Slice Timing | Slice timing correction | ✅ Implemented |
-| SPM Normalize | Spatial normalization | ✅ Implemented |
-| SPM Smooth | Spatial smoothing | ✅ Implemented |
-| SPM Coregister | Coregistration | ✅ Implemented |
-| SPM Segment | Segmentation | ✅ Implemented |
-| GPU Acceleration | CuPy-accelerated matrix operations (5 modules) | ✅ Implemented |
-
-### 4. QC & Reporting
-
-- **Automated QC**: Motion QC, dataset integrity checks, outlier detection
-- **Report Generation**: Markdown + HTML dual format with ECharts visualizations
-- **Report Validation**: Schema validation, data consistency checks
-- **Reproducibility Bundle**: Environment snapshot + file checksum + git state
-
-### 5. Data Management
-
-- **BIDS Support**: Compliant with Brain Imaging Data Structure specification
-- **Synthetic Data**: synthetic_bids.py generates test data for development and validation without real patient data
-- **Dataset Evaluation**: Automatic checks for completeness, scan parameter consistency, and outliers
+Expected skips: `pydicom`, `cupy`, `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
 
 ---
 
-## Security Mechanisms
+## Safety Architecture
 
-MedImage Agent adopts a multi-layer security design to ensure research data is not accidentally modified:
-
-### 1. Path Safety
-- All paths are forcibly normalized, directory traversal attacks are prohibited
-- Operations are forcibly restricted within work_dir, system-sensitive paths are inaccessible
-- Rawdata directory is marked read-only, any write operation is rejected
-
-### 2. Tool Permission Grading (Tool Registry)
-- **readonly**: Read-only operations (e.g., data inspection, report generation)
-- **write**: Write operations (e.g., saving intermediate results)
-- **destructive**: Destructive operations (e.g., deletion, overwriting), automatically triggers Approval Gate
-
-### 3. Approval Gate
-- **plan-level approval**: Overall pipeline execution requires confirmation
-- **step-level approval**: Destructive operations require secondary confirmation
-- Unapproved operations fail safely and will not execute
-
-### 4. Audit Logger
-- Records timestamp, user, tool, parameters, and results for all operations
-- Supports full Run History traceability
-- Audit logs themselves are immutable
-
-### 5. Raw Data Protection
-- Rawdata is accessed in read-only mode
-- All outputs are written to isolated derivatives directories
-- Synthetic data mode (synthetic_only) supports risk-free demonstrations
+| Rule | Mechanism |
+|---|---|
+| Rawdata read-only | `copy_mode: reference`, `rawdata_readonly: true` in config |
+| Approval Gate mandatory | All file writes and execution require explicit approval |
+| Path traversal prevention | `path_safety.py` resolves and validates all paths |
+| Artifact path gating | `project_id + run_id + artifact_id` — no arbitrary paths accepted |
+| Binary/NIfTI/MAT metadata-only | Preview shows metadata, not content |
+| Frontend isolation | HTTP APIs only; no direct filesystem access |
+| Desktop bridge | `window.medimage.openExternalPath` available in Electron |
+| GPU/MATLAB/SPM/DPABI gated | Requires `approved=true` and environment opt-in |
 
 ---
 
-## Current Status & Boundaries
+## Known Limitations
 
-### Implemented
-- ✅ Complete Pipeline Runtime (DAG execution, parallel scheduling, state persistence)
-- ✅ Agent Runtime (Plan-then-Execute, Approval Gate, Tool Registry)
-- ✅ Core imaging algorithms (ALFF/fALFF, ReHo, Functional Connectivity)
-- ✅ SPM integration interfaces (Contract-only design, 6 core modules)
-- ✅ DPABI integration (20 reviewed execution nodes, sandbox-gated)
-- ✅ QC automation (Motion QC, dataset evaluation)
-- ✅ Reporting system (Markdown/HTML dual format, reproducibility bundle)
-- ✅ Frontend visualization (Pipeline Canvas, QC Viewer, Run History, Insights Dashboard)
-- ✅ Security mechanisms (Path Safety, permission grading, audit logging)
-- ✅ GPU scaffold (9 preflight nodes, CuPy backend — `pip install cupy-cuda12x`)
-- ✅ **GUI Agent API Guard** — 6-layer mock-only guard (provider/session/action/stop/audit)
-- ✅ **Mock Adapter** — 45 static fixtures → `record_observation` → Mock provider
-- ✅ **M11 Safety Contracts** — 5 pure-function modules (provider/runtime/source/input/audit)
-- ✅ **M12 Release Checkpoint** — API frozen, frontend labeled, docs consistent, smoke checklist
+- NIfTI viewer not included (metadata-only)
+- No complete QC dashboard
+- No report editor
+- MATLAB/SPM/DPABI/GPU are contract-only in this release
+- Electron app is unsigned (SmartScreen warning on first run)
+- Windows-only packaging
+- No auto-update
 
-### Current Capability Boundaries
-- **Reviewed execution**: 36 nodes (SPM:7, DPABI:20, GPU:9). GUI: **0** — all GUI nodes blocked.
-- **GUI Agent**: Mock-only (`provider=mock`), `record_observation` only. PyWinAuto blocked.
-- **Model**: Fixture-only (45 static fixtures). No real model connected. No inference.
-- **GPU**: Scaffold/preflight only (CuPy unavailable in CI — 4 tests skipped).
-- **Tier 1/2/3 actions**: Blocked (40 of 41 actions). Only `record_observation` executable.
-
-### Clear Boundaries
-- **Not a clinical product**: Research engineering platform, not for clinical diagnosis
-- **GUI Agent is mock-only**: No real desktop control, no screenshots, no clipboard, no mouse/keyboard
-- **No real model**: Fixture-only baseline — no LLM/VLM connected, no inference, no weights loaded
-- **Optional MATLAB dependency**: SPM/DPABI steps require MATLAB, core algorithms do not depend on it
+See [release notes](docs/releases/v0.3.0-rc1.md) for full details.
 
 ---
 
-## Development Roadmap
+## Roadmap
 
-| Phase | Goal | Status |
-|-------|------|--------|
-| M1–M5 | Pipeline Runtime, Agent Runtime, Core Algorithms, Reviewed Execution | ✅ Complete |
-| M6 | SPM Sandbox Pipeline (7 reviewed execution nodes) | ✅ Complete |
-| M7 | DPABI Phase (20 reviewed execution nodes, sandbox/metadata-gated) | ✅ Complete |
-| M8 | GPU Phase (9 scaffold reviewed execution nodes) | ✅ Complete |
-| M9 | GUI/manual Safety Design + API Guard (6-layer, 249 tests) | ✅ Complete |
-| M10 | Adapter + Mock Integration + Stabilization (1772 tests) | ✅ Complete |
-| M11 | Model Integration Design + Safety Contracts (2328 tests) | ✅ Complete |
-| M12 | Release Readiness + API Freeze + Frontend Labeling + Smoke Checklist | ✅ Complete |
-| M13+ | Future: real model, real GUI, or new feature milestones (requires threat model) | 📋 Planned |
-
-**Current total: 2328 passed, 4 skipped. Reviewed execution allowlist: 36 (GUI: 0).**
+| Release | Focus |
+|---|---|
+| **v0.3.0-rc1** (current) | Desktop MVP: real project workflow, run history, artifact preview |
+| v0.3.x | Installer signing, auto-update, CI/CD packaging pipeline |
+| v0.4.0 | NIfTI viewer, enhanced QC dashboard, MATLAB/SPM runtime (opt-in) |
+| Future | macOS/Linux packaging, DICOM browser, plugin system |
 
 ---
 
 ## Documentation
 
-### Architecture & Design
-- [Architecture Design Document](docs/architecture.md)
+- [Release Notes v0.3.0-rc1](docs/releases/v0.3.0-rc1.md)
+- [Desktop App Packaging](docs/DESKTOP_APP_PACKAGING.md)
+- [Real Project Run Lifecycle](docs/REAL_PROJECT_RUN_LIFECYCLE.md)
+- [MVP Release Smoke Checklist](docs/MVP_RELEASE_SMOKE_CHECKLIST.md)
+- [Architecture Design](docs/architecture.md)
 - [Agent Runtime Specification](docs/agent_runtime_spec.md)
 - [Pipeline Executor Specification](docs/pipeline_executor.md)
-- [Safety Architecture Review (M6–M9)](docs/M6_M9_SAFETY_ARCHITECTURE_REVIEW.md)
-
-### GUI Agent Safety (M9–M12)
-- [GUI Threat Model](docs/GUI_MANUAL_AGENT_THREAT_MODEL.md)
-- [GUI API Guard Design](docs/GUI_AGENT_API_GUARD_DESIGN.md)
-- [Normalized GUI Action Schema](docs/NORMALIZED_GUI_ACTION_SCHEMA.md)
-
-### Model Safety Contracts (M11)
-- [Real Model Integration Threat Model](docs/REAL_MODEL_INTEGRATION_THREAT_MODEL.md)
-- [Model Provider Policy Gate](docs/MODEL_PROVIDER_POLICY_GATE_DESIGN.md)
-- [Model Runtime Isolation](docs/MODEL_RUNTIME_ISOLATION_DESIGN.md)
-- [Input Minimization & Redaction](docs/MODEL_INFERENCE_INPUT_REDACTION_DESIGN.md)
-- [Audit Metadata Persistence](docs/MODEL_OUTPUT_AUDIT_METADATA_PERSISTENCE_DESIGN.md)
-
-### Release (M12)
-- [System Release Readiness Review](docs/M12_SYSTEM_RELEASE_READINESS_REVIEW.md)
-- [Backend API Surface Freeze](docs/M12_BACKEND_API_SURFACE_FREEZE.md)
-- [Release Smoke Checklist](docs/M12_RELEASE_SMOKE_CHECKLIST.md)
-- [Project Release Checkpoint](docs/M12_PROJECT_RELEASE_CHECKPOINT.md)
 
 ---
 
@@ -505,6 +245,5 @@ MedImage Agent adopts a multi-layer security design to ensure research data is n
 
 This project is for academic research purposes.
 
----
-
-**Note**: MedImage Agent is a medical imaging research workflow platform / agentic pipeline system / rs-fMRI preprocessing and analysis engineering platform. It is not intended for clinical diagnosis or medical decision-making.
+**MedImage Agent is a research engineering platform. It is not intended for
+clinical diagnosis or medical decision-making.**

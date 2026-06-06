@@ -1,171 +1,35 @@
 # MedImage Agent
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-green)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.136%2B-green)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6)](https://www.typescriptlang.org/)
-![Tests](https://img.shields.io/badge/tests-2328%20passed-brightgreen)  ![Status](https://img.shields.io/badge/release-M12-blue)
+[![Node](https://img.shields.io/badge/Node-24%2B-339933)](https://nodejs.org/)
 
-MedImage Agent 是一个面向静息态 fMRI（rs-fMRI）研究的**确定性 Agentic Pipeline 工程平台**。它借鉴 Plan-then-Execute 架构思想，摒弃了通用 LLM Agent 的开放式对话循环，构建了一个安全、可复现、可审计的医学影像分析工作流系统。
+![Tests](https://img.shields.io/badge/tests-2426%20passed-brightgreen)  ![Release](https://img.shields.io/badge/release-v0.3.0--rc1-blue)
 
-**核心定位**：医学影像 AI workflow / agentic pipeline / research engineering platform  
-**当前版本**：M12 — Fixture-Only GUI 模型安全基线（2328 测试通过，零真实模型，零 PyWinAuto）
+[English](README.md) | **中文**
+
+MedImage Agent 是一个面向静息态 fMRI（rs-fMRI）研究的**确定性 Plan-then-Execute 桌面端平台**。
+LLM 仅负责规划和顾问，执行完全由 Pipeline Runtime 和注册节点 Runner 完成。
+这是一个研究工程平台，**不用于临床诊断或医疗决策**。
+
+**最新版本**：[v0.3.0-rc1](https://github.com/xlongwu/MedImage_Agent_WebUI_App/releases/tag/v0.3.0-rc1) — 桌面端 MVP Release Candidate（[发布说明](docs/releases/v0.3.0-rc1.md)）
 
 ---
 
 ## 目录
 
-- [项目背景与问题](#项目背景与问题)
-- [核心设计理念](#核心设计理念)
-- [系统架构](#系统架构)
-- [技术栈](#技术栈)
 - [快速开始](#快速开始)
+- [桌面应用](#桌面应用)
+- [系统架构](#系统架构)
+- [真实项目工作流](#真实项目工作流)
 - [项目结构](#项目结构)
-- [核心功能模块](#核心功能模块)
-- [安全机制](#安全机制)
-- [当前状态与边界](#当前状态与边界)
-- [开发计划](#开发计划)
+- [测试基线](#测试基线)
+- [安全架构](#安全架构)
+- [已知限制](#已知限制)
+- [开发路线图](#开发路线图)
 - [文档](#文档)
-
----
-
-## 项目背景与问题
-
-在 rs-fMRI 研究领域，预处理流程高度依赖研究者的手动操作和经验判断。典型的流程需要使用 SPM（MATLAB）、DPABI 等工具，涉及十几个步骤，每个步骤都有大量参数需要配置。这带来了三个核心问题：
-
-1. **易错性**：手动操作容易遗漏步骤或配置错误参数，导致结果不可靠
-2. **不可复现**：研究者在论文中往往无法完整记录所有参数和软件版本，他人难以复现
-3. **无审计性**：传统脚本式 pipeline 缺乏执行过程的完整记录，无法追溯"何时、何人、用何参数、生成了何结果"
-
-同时，通用 LLM Agent（如 Claude Code）虽然智能，但直接控制医学数据存在安全风险——可能误删文件、修改原始数据，且 LLM 的随机性会破坏科学可复现性。
-
----
-
-## 核心设计理念
-
-### 为什么不是普通 Pipeline？
-
-传统 pipeline 是静态脚本，缺乏智能规划能力。MedImage Agent 引入了 **Agent Runtime**，能够根据用户目标自动规划 pipeline 结构，但执行过程完全确定性。
-
-### 为什么不是普通聊天机器人？
-
-通用 LLM Agent 采用开放式对话循环，存在随机性和安全风险。MedImage Agent 采用 **Plan-then-Execute** 模式：
-- **Agent 只规划**：将用户目标分解为 pipeline plan
-- **引擎负责执行**：确定性 DAG 引擎严格执行，无随机性
-- **人工确认关键步骤**：Approval Gate 确保研究者的专业判断始终在位
-
-### 与 Hermes Agent 的关系
-
-借鉴 Hermes Agent 的"规划-执行"架构思想，但进行了领域化重构：
-- 保留 Plan-then-Execute 的核心范式
-- 替换开放式对话为确定性 pipeline 执行
-- 增加医学影像特有的安全机制（rawdata 保护、权限分级、审计日志）
-
----
-
-## 系统架构
-
-系统分为四层：
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Frontend Layer                          │
-│  React 18 + TypeScript + Vite + ECharts                     │
-│  Pipeline Canvas | QC Report Viewer | Run History Timeline  │
-│  Insights Dashboard | Approval Gate UI                      │
-├─────────────────────────────────────────────────────────────┤
-│                      API Layer                               │
-│  FastAPI + Pydantic + asyncio + SSE (Server-Sent Events)    │
-│  RESTful Endpoints | Streaming Logs | Health Checks         │
-├─────────────────────────────────────────────────────────────┤
-│                      Agent Runtime                           │
-│  Plan-then-Execute | LLM Advisor | Approval Gate            │
-│  Tool Registry (权限分级) | SessionDB | Audit Logger        │
-├─────────────────────────────────────────────────────────────┤
-│                      Pipeline Runtime                        │
-│  DAG Executor (拓扑排序) | Scheduler (subject-level 并行)   │
-│  Node Registry | State Store | Hook System                  │
-│  Error Diagnoser | Retry Runtime | Reproducibility Bundle   │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 数据流 / 控制流 / 审计流
-
-**数据流**：
-```
-Rawdata (只读) → Pipeline Executor → Derivatives → QC → Reports
-```
-
-**控制流**：
-```
-User Goal → Agent Runtime (Plan) → Approval Gate → Pipeline Executor (Execute) → Results
-```
-
-**审计流**：
-```
-Every Operation → Audit Logger → SessionDB → Run History → Reproducibility Bundle
-```
-
----
-
-## 技术栈
-
-### 前端
-- **框架**：React 18 + TypeScript
-- **构建工具**：Vite
-- **可视化**：ECharts（QC 图表、运动参数曲线、ALFF/ReHo 分布图）
-- **状态管理**：React Hooks
-- **API 通信**：Fetch API + SSE 流式推送
-
-### 后端
-- **框架**：FastAPI（Python 3.10+）
-- **异步**：asyncio + async/await
-- **数据验证**：Pydantic
-- **文件服务**：静态文件托管
-
-### Pipeline Runtime
-- **执行引擎**：自研 DAG 执行引擎（拓扑排序）
-- **调度器**：自研 Scheduler（subject-level 并行）
-- **状态管理**：文件系统 State Store（run_id 隔离）
-- **Hook 系统**：pre / post / approval 三类 Hook
-- **错误处理**：Error Diagnoser（错误分类）+ Retry Runtime（重试策略）
-
-### Agent Runtime
-- **架构模式**：Plan-then-Execute
-- **规划器**：Agent Runtime（目标分解为 pipeline plan）
-- **审批门**：Approval Gate（人工确认关键步骤）
-- **工具注册表**：Tool Registry（readonly / write / destructive 三级权限）
-- **LLM Advisor**：建议生成（非控制执行）
-- **会话数据库**：SessionDB（SQLite，记录 plan/execution/history）
-
-### 医学影像处理
-- **核心算法**（Python 原生实现）：
-  - ALFF / fALFF（基于 FFT 的功率谱计算）
-  - ReHo（Kendall's W，27 邻域）
-  - Functional Connectivity（ROI 时间序列相关）
-  - Nuisance Regression（线性回归去噪）
-  - Temporal Filtering（带通滤波）
-  - Motion QC（FD、DVARS、逐帧位移）
-- **数据格式**：BIDS（Brain Imaging Data Structure）
-
-### MATLAB / SPM / DPABI 集成
-- **集成模式**：Contract-only 设计（预留扩展）
-- **SPM 工具**：Realign、Slice Timing、Smooth、Normalize、Coregister、Segment
-- **DPABI**：插件式接入接口（预留扩展）
-
-### GPU 加速
-- **状态**：已实现（5 个模块）
-- **后端**：CuPy（主） + 自动 NumPy CPU 回退
-- **加速模块**：ALFF/fALFF、ReHo、Nuisance Regression、Temporal Filtering、Functional Connectivity
-- **设计模式**：三后端（NumPy / CuPy / 调度器） + `prefer_gpu` / `require_gpu` 参数
-- **内存安全**：大数组 z 切片分块处理、GPU 内存估算工具
-- **调度**：独立 `gpu_max_workers`（上限 4） + `gpu_mode`（prefer / require / off）
-
-### 安全与审计
-- **路径安全**：Path Safety（规范化、防目录遍历、work_dir 隔离）
-- **权限控制**：Tool Registry 权限分级
-- **审计日志**：Audit Logger（操作日志、结果日志）
-- **原始数据保护**：Rawdata 只读访问
 
 ---
 
@@ -173,67 +37,100 @@ Every Operation → Audit Logger → SessionDB → Run History → Reproducibili
 
 ### 环境要求
 
-- Python 3.10+
-- Node.js 18+
-- MATLAB + SPM12（可选，用于 SPM 预处理步骤）
-- CuPy（可选，用于 GPU 加速；`pip install cupy-cuda12x`）
+- Python 3.11+（已验证：`D:\Anaconda3\envs\mamba\python.exe`）
+- Node.js 20+（已验证：v24.16.0）
+- MATLAB + SPM12（可选，用于 SPM 预处理）
+- CuPy（可选，用于 GPU 加速）
 
-### 安装依赖
+### 安装
 
 ```bash
-# 后端依赖
 pip install -r requirements.txt
-
-# 前端依赖
-cd frontend && npm install
+cd src/frontend && npm install
 ```
 
-### 启动服务
+### 启动（开发模式）
 
 ```bash
-# 启动后端（端口 8000）
 uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000
+cd src/frontend && npm run dev
 
-# 启动前端 Web（端口 5173）
-cd src/frontend && npm run dev:renderer
-
-# 或一键启动
-./start.sh          # Linux/macOS
+# 或一键启动：
 start.bat           # Windows
+./start.sh          # Linux/macOS
 ```
 
-### Docker 演示模式
+### 运行测试
 
 ```bash
-# 启动容器化演示（不含 MATLAB）
-docker compose -f deploy/docker-compose.demo.yml up --build
+D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
 ```
 
-### 运行示例
+---
 
-```bash
-# 生成合成 BIDS 数据
-python -m backend.app.tools.synthetic_bids
+## 桌面应用
 
-# 运行数据集评估
-python -m backend.app.tools.run_dataset_evaluation_cli examples/project_config_dataset.yaml
+v0.3.0-rc1 提供自包含的 Windows 桌面应用，运行时无需安装 Python 或 Node.js。
 
-# 运行 SPM 头动校正 + Motion QC（需审批）
-python -m backend.app.tools.run_rsfmri_spm_realign_motion_qc_cli \
-  examples/project_config_dataset.yaml \
-  examples/pipeline_rsfmri_spm_realign_motion_qc.yaml \
-  --approve
+### 下载
 
-# 运行 GPU 加速 ALFF（含 CPU 对比基准测试）
-python -m backend.app.tools.gpu_benchmark_cli
+| 格式 | 文件 | 大小 |
+|---|---|---|
+| **NSIS 安装包** | `MedImage Agent Setup.exe` | 112 MB |
+| **便携版** | `MedImage Agent.exe` | 112 MB |
 
-# 运行 GPU 加速 ReHo
-python -c "
-from src.backend.app.tools.gpu_reho_runner import run_reho_subject
-result = run_reho_subject('sub-001', 'derivatives/spm_smooth/sub-001/func/sub-001_task-rest_bold_smooth.nii', './derivatives', prefer_gpu=True)
-print(f'Backend: {result[\"gpu_backend\"]}, Runtime: {result[\"runtime_seconds\"]}s')
-"
+从 [GitHub Release 页面](https://github.com/xlongwu/MedImage_Agent_WebUI_App/releases/tag/v0.3.0-rc1) 下载。
+
+### 工作原理
+
+1. Electron 壳启动 → 提取 PyInstaller 后端 sidecar
+2. 后端绑定到 `127.0.0.1` 的可用端口（默认 8765）
+3. Electron 等待 `/api/health` → 加载 React 前端
+4. 关闭应用时，后端 sidecar 被自动清理
+5. 前端仅通过 HTTP API 通信，不直接访问文件系统
+
+### 从源码构建
+
+```powershell
+npm --prefix src/frontend run build
+powershell -File desktop/packaging/build_backend.ps1 -PythonExe "D:\Anaconda3\envs\mamba\python.exe"
+powershell -File desktop/packaging/build_desktop.ps1 -DirOnly -ElectronRuntimeZip "desktop\electron\.electron-cache\manual-runtime\electron-v31.7.7-win32-x64.zip"
 ```
+
+详见[桌面应用打包文档](docs/DESKTOP_APP_PACKAGING.md)。
+
+---
+
+## 系统架构
+
+```
+Frontend (React 18 + TypeScript + Vite)
+    ↓ HTTP API
+API Layer (FastAPI + Pydantic)
+    ↓
+Agent Runtime (Plan-then-Execute + Approval Gate)
+    ↓
+Pipeline Runtime (DAG Executor + Scheduler)
+```
+
+四层架构，自上而下。状态基于文件系统（项目元数据用 SQLite，运行状态用 JSON）。
+LLM 仅提供建议；Pipeline Runtime 是唯一执行路径。
+
+---
+
+## 真实项目工作流
+
+```
+选择 BIDS/rawdata → 创建项目 → project_config.yaml + dataset_index.json
+    → Plan Review（注入项目上下文）
+    → 保存 reviewed plan（持久化到 SQLite）
+    → execute-reviewed（Approval Gate 门控，唯一 run_id）
+    → Run Summary / Artifacts
+    → Run History UI → Artifact Preview（JSON/CSV/Markdown/text/log/NIfTI/MAT）
+```
+
+每次执行生成唯一的 `run_id`、summary JSON 和运行范围 artifact。
+Rawdata 以只读方式引用，执行后验证未修改。
 
 ---
 
@@ -242,246 +139,100 @@ print(f'Backend: {result[\"gpu_backend\"]}, Runtime: {result[\"runtime_seconds\"
 ```
 MedImage_Agent/
 ├── src/
-│   ├── backend/
-│   │   └── app/
-│   │       ├── api/                    # FastAPI 路由
-│   │       │   └── routes.py
-│   │       ├── core/                   # 核心配置与模型
-│   │       │   ├── config.py
-│   │       │   └── models.py
-│   │       ├── runtime/                # Pipeline + Agent Runtime + 安全
-│   │       │   ├── agent_runtime.py    # Agent 规划与执行
-│   │       │   ├── pipeline_executor.py # DAG 执行引擎
-│   │       │   ├── scheduler.py        # 并行调度器
-│   │       │   ├── node_registry.py    # 节点注册表
-│   │       │   ├── state_store.py      # 状态持久化
-│   │       │   ├── hook_manager.py     # Hook 系统
-│   │       │   ├── error_diagnoser.py  # 错误诊断
-│   │       │   ├── retry_runtime.py    # 重试机制
-│   │       │   ├── run_inspector.py    # 运行检查器
-│   │       │   ├── gui_agent.py        # GUI Agent（仅 mock provider）
-│   │       │   ├── gui_agent_guard.py  # 6 层 GUI API guard（42 种错误码）
-│   │       │   ├── gui_agent_model_adapter.py     # 模型输出 → record_observation
-│   │       │   ├── gui_agent_mock_model_fixtures.py # 45 个 mock fixtures
-│   │       │   ├── gui_model_provider_policy.py    # 提供者准入 gate（M11 合约）
-│   │       │   ├── gui_model_runtime_isolation.py  # 运行时隔离（M11 合约）
-│   │       │   ├── gui_model_source_policy.py      # 模型来源/权重策略（M11 合约）
-│   │       │   ├── gui_model_input_redaction.py    # 输入脱敏（M11 合约）
-│   │       │   ├── gui_model_audit_contract.py     # 审计元数据合约（M11 合约）
-│   │       ├── nodes/                  # Pipeline 节点处理函数
-│   │       │   ├── gpu_alff_node.py    # GPU ALFF 节点
-│   │       │   ├── gpu_reho_node.py    # GPU ReHo 节点
-│   │       │   ├── gpu_nuisance_regression_node.py
-│   │       │   ├── gpu_temporal_filtering_node.py
-│   │       │   └── gpu_functional_connectivity_node.py
-│   │       ├── tools/                  # 工具模块
-│   │       │   ├── alff_falff.py       # ALFF/fALFF 计算
-│   │       │   ├── alff_compute.py     # ALFF GPU 后端 (NumPy/CuPy/PyTorch)
-│   │       │   ├── reho.py             # ReHo 计算
-│   │       │   ├── reho_compute.py     # ReHo GPU 后端 (NumPy/CuPy)
-│   │       │   ├── functional_connectivity.py  # 功能连接
-│   │       │   ├── functional_connectivity_compute.py  # FC GPU 后端
-│   │       │   ├── nuisance_regression.py      # 去噪回归
-│   │       │   ├── nuisance_regression_compute.py  # NR GPU 后端
-│   │       │   ├── temporal_filtering.py       # 时间滤波
-│   │       │   ├── temporal_filtering_compute.py  # TF GPU 后端
-│   │       │   ├── motion_qc.py        # 运动 QC
-│   │       │   ├── data_inspector.py   # 数据检查
-│   │       │   ├── dataset_evaluator.py        # 数据集评估
-│   │       │   ├── report_writer.py    # 报告生成
-│   │       │   ├── report_validator.py # 报告验证
-│   │       │   ├── reproducibility_bundle.py   # 可复现包
-│   │       │   ├── synthetic_bids.py   # 合成数据生成
-│   │       │   ├── gpu_memory.py       # GPU 内存监控
-│   │       │   ├── gpu_*.py            # GPU Runner 与 Contract
-│   │       │   └── spm_*.py            # SPM 集成 Runner
-│   │       ├── safety/                 # 安全模块
-│   │       │   ├── path_safety.py      # 路径安全
-│   │       │   ├── tool_registry.py    # 工具权限注册
-│   │       │   └── audit_logger.py     # 审计日志
-│   │       └── main.py                 # FastAPI 入口
+│   ├── backend/app/
+│   │   ├── api/              # FastAPI 路由
+│   │   ├── services/         # 业务逻辑（SQLite store、artifact 服务）
+│   │   ├── planner/          # 项目上下文、reviewed plan store、approval、audit
+│   │   ├── runtime/          # Pipeline executor、node registry、state store
+│   │   ├── tools/            # 处理模块、QC、CLI runners
+│   │   ├── schemas/          # Pipeline YAML schema 验证
+│   │   └── advisor/          # LLM advisor 模块
 │   └── frontend/
-│       ├── src/
-│       │   ├── App.tsx                 # 主应用组件
-│       │   ├── components/             # UI 组件
-│       │   ├── api.ts                  # API 封装
-│       │   └── types.ts                # TypeScript 类型
-│       └── package.json
-├── docs/                               # 项目文档
-│   ├── architecture.md                 # 架构设计文档
-│   ├── agent_runtime_spec.md           # Agent Runtime 规范
-│   └── pipeline_executor.md            # Pipeline Executor 规范
-├── examples/                           # 示例配置
-│   ├── project_config_dataset.yaml
-│   └── pipeline_*.yaml
-├── tests/                              # 测试
-│   └── unit/                           # 单元测试
-├── deploy/                             # 部署配置
-│   ├── docker-compose.demo.yml
-│   ├── backend.Dockerfile
-│   └── frontend.Dockerfile
-├── requirements.txt                    # Python 依赖
-└── README.md                           # 本文件
+│       ├── src/components/   # React 面板（PlanReviewConsole、ProjectRunsPanel、run-history/*）
+│       ├── electron/         # Electron main/preload/smoke-check
+│       └── scripts/          # Smoke tests
+├── desktop/
+│   ├── electron/             # Electron 打包（main、preload、builder config、smoke）
+│   └── packaging/            # PyInstaller specs、PowerShell 构建脚本
+├── docs/
+│   ├── releases/             # 发布说明和 SHA256SUMS
+│   ├── DESKTOP_APP_PACKAGING.md
+│   ├── REAL_PROJECT_RUN_LIFECYCLE.md
+│   └── MVP_RELEASE_SMOKE_CHECKLIST.md
+├── tests/
+│   ├── unit/                 # 100+ 单元测试文件
+│   └── integration/          # 安全冒烟测试、外部 BIDS 冒烟、contract 冒烟
+├── examples/                 # Pipeline YAML 和项目配置
+└── deploy/                   # Dockerfile 和 docker-compose
 ```
 
 ---
 
-## 核心功能模块
+## 测试基线
 
-### 1. Pipeline Runtime（确定性执行引擎）
+| 指标 | 值 |
+|---|---|
+| Full pytest | **2426 passed, 8 skipped, 0 failed** |
+| 前端 TypeScript | `tsc --noEmit` ✅ |
+| 前端 Vite build | Vite 8, 86 modules ✅ |
+| Electron smoke check | 51/51 ✅ |
+| GUI 桌面启动 | Windows 10/11 验证通过 ✅ |
+| 外部 BIDS 冒烟 | 1104 DICOM, rawdata 不变 ✅ |
+| 测试环境 | `D:\Anaconda3\envs\mamba\python.exe` (Python 3.11.15) |
 
-- **DAG 执行**：基于拓扑排序的依赖执行，确保步骤按正确顺序运行
-- **并行调度**：subject-level 并行处理，提升多被试数据集处理效率
-- **状态持久化**：每步完成后立即写入状态文件，支持断点续跑
-- **Hook 系统**：pre-hook（参数校验）、post-hook（结果验证）、approval-hook（人工确认）
-
-### 2. Agent Runtime（智能规划层）
-
-- **Plan-then-Execute**：Agent 生成 pipeline plan，确定性引擎执行
-- **Approval Gate**：plan 级审批（整体确认）+ step 级审批（destructive 操作确认）
-- **Tool Registry**：工具注册时声明权限级别，实现最小权限原则
-- **LLM Advisor**：自然语言描述转 pipeline 配置建议（非强制）
-
-### 3. 医学影像处理
-
-| 模块 | 功能 | 状态 |
-|------|------|------|
-| ALFF / fALFF | 低频振幅计算 | ✅ 已实现 |
-| ReHo | 局部一致性计算 | ✅ 已实现 |
-| Functional Connectivity | 功能连接矩阵 | ✅ 已实现 |
-| Motion QC | 头动指标（FD/DVARS） | ✅ 已实现 |
-| Nuisance Regression | 去噪回归 | ✅ 已实现 |
-| Temporal Filtering | 带通滤波 | ✅ 已实现 |
-| SPM Realign | 头动校正 | ✅ 已实现 |
-| SPM Slice Timing | 层时间校正 | ✅ 已实现 |
-| SPM Normalize | 空间标准化 | ✅ 已实现 |
-| SPM Smooth | 空间平滑 | ✅ 已实现 |
-| SPM Coregister | 配准 | ✅ 已实现 |
-| SPM Segment | 分割 | ✅ 已实现 |
-| GPU 加速 | CuPy 加速矩阵运算（5 个模块）| ✅ 已实现 |
-
-### 4. QC 与报告
-
-- **自动化 QC**：Motion QC、数据集完整性检查、异常值检测
-- **报告生成**：Markdown + HTML 双格式，含 ECharts 可视化
-- **报告验证**：Schema 校验、数据一致性检查
-- **可复现包**：环境快照 + 文件 checksum + git 状态
-
-### 5. 数据管理
-
-- **BIDS 支持**：符合 Brain Imaging Data Structure 规范
-- **合成数据**：synthetic_bids.py 生成测试数据，无需真实患者数据即可开发验证
-- **数据集评估**：自动检查完整性、扫描参数一致性、异常值
+预期 skip：`pydicom`、`cupy`、`MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`。
 
 ---
 
-## 安全机制
+## 安全架构
 
-MedImage Agent 采用多层安全设计，确保研究数据不被误修改：
-
-### 1. 路径安全（Path Safety）
-- 所有路径强制规范化，禁止目录遍历攻击
-- 操作强制限制在 work_dir 内，禁止访问系统敏感路径
-- rawdata 目录标记为只读，任何写入操作被拒绝
-
-### 2. 工具权限分级（Tool Registry）
-- **readonly**：只读操作（如数据检查、报告生成）
-- **write**：写入操作（如保存中间结果）
-- **destructive**：破坏性操作（如删除、覆盖），自动触发 Approval Gate
-
-### 3. 审批门（Approval Gate）
-- **plan 级审批**：整体 pipeline 执行前需确认
-- **step 级审批**：destructive 操作需二次确认
-- 未审批的操作安全失败，不会执行
-
-### 4. 审计日志（Audit Logger）
-- 记录所有操作的时间、用户、工具、参数、结果
-- 支持 Run History 全追溯
-- 审计日志本身不可修改
-
-### 5. 原始数据保护
-- rawdata 以只读方式访问
-- 所有输出写入隔离的 derivatives 目录
-- 合成数据模式（synthetic_only）支持无风险演示
+| 规则 | 机制 |
+|---|---|
+| Rawdata 只读 | `copy_mode: reference`、`rawdata_readonly: true` |
+| Approval Gate 强制执行 | 所有文件写入和执行需显式审批 |
+| 路径防遍历 | `path_safety.py` 解析和验证所有路径 |
+| Artifact 路径门控 | `project_id + run_id + artifact_id` — 不接受任意路径 |
+| 二进制/NIfTI/MAT 仅元数据 | 预览显示元数据，非内容 |
+| 前端隔离 | 仅通过 HTTP API 通信，不直接访问文件系统 |
+| 桌面桥接 | Electron 中可用 `window.medimage.openExternalPath` |
+| GPU/MATLAB/SPM/DPABI 门控 | 需要 `approved=true` 和环境变量 opt-in |
 
 ---
 
-## 当前状态与边界
+## 已知限制
 
-### 已实现
-- ✅ 完整的 Pipeline Runtime（DAG 执行、并行调度、状态持久化）
-- ✅ Agent Runtime（Plan-then-Execute、Approval Gate、Tool Registry）
-- ✅ 核心影像算法（ALFF/fALFF、ReHo、Functional Connectivity）
-- ✅ SPM 集成接口（Contract-only 设计，6 个核心模块）
-- ✅ DPABI 集成（20 个 reviewed execution 节点，沙箱门控）
-- ✅ QC 自动化（Motion QC、数据集评估）
-- ✅ 报告系统（Markdown/HTML 双格式、可复现包）
-- ✅ 前端可视化（Pipeline Canvas、QC Viewer、Run History、Insights Dashboard）
-- ✅ 安全机制（Path Safety、权限分级、审计日志）
-- ✅ GPU 脚手架（9 个预检节点，CuPy 后端 — `pip install cupy-cuda12x`）
-- ✅ **GUI Agent API Guard** — 6 层 mock-only guard（provider/session/action/stop/audit）
-- ✅ **Mock Adapter** — 45 个静态 fixtures → `record_observation` → Mock provider
-- ✅ **M11 安全合约** — 5 个纯函数模块（provider/runtime/source/input/audit）
-- ✅ **M12 发布检查点** — API 冻结、前端标注、文档一致、冒烟清单
+- 不含 NIfTI viewer（仅元数据预览）
+- 无完整 QC dashboard
+- 无报告编辑器
+- 此版本中 MATLAB/SPM/DPABI/GPU 仅为 contract-only
+- Electron 应用未签名（首次运行需放行 SmartScreen）
+- 仅支持 Windows 打包
+- 不支持自动更新
 
-### 当前能力边界
-- **Reviewed execution**：36 个节点（SPM:7、DPABI:20、GPU:9）。GUI：**0** — 所有 GUI 节点被阻断。
-- **GUI Agent**：仅 mock（`provider=mock`），仅 `record_observation`。PyWinAuto 被阻断。
-- **模型**：仅 fixture（45 个静态 fixtures）。未连接真实模型。未调用推理。
-- **GPU**：仅脚手架/预检（CI 中 CuPy 不可用 — 4 个测试跳过）。
-- **Tier 1/2/3 动作**：被阻断（41 个动作中仅 1 个可用）。仅 `record_observation` 可执行。
-
-### 明确边界
-- **非临床产品**：研究工程平台，不用于临床诊断
-- **GUI Agent 仅 mock**：无真实桌面控制，无截图，无剪贴板，无鼠标/键盘
-- **无真实模型**：仅 fixture 基线 — 未连接 LLM/VLM，未调用推理，未加载权重
-- **MATLAB 依赖可选**：SPM/DPABI 步骤需要 MATLAB，核心算法不依赖
+详见[发布说明](docs/releases/v0.3.0-rc1.md)。
 
 ---
 
-## 开发计划
+## 开发路线图
 
-| 阶段 | 目标 | 状态 |
-|------|------|------|
-| M1–M5 | Pipeline Runtime、Agent Runtime、核心算法、Reviewed Execution | ✅ 完成 |
-| M6 | SPM 沙箱 Pipeline（7 个 reviewed execution 节点） | ✅ 完成 |
-| M7 | DPABI Phase（20 个 reviewed execution 节点，沙箱/元数据门控） | ✅ 完成 |
-| M8 | GPU Phase（9 个脚手架 reviewed execution 节点） | ✅ 完成 |
-| M9 | GUI/手工安全设计 + API Guard（6 层，249 测试） | ✅ 完成 |
-| M10 | Adapter + Mock 集成 + 稳定性（1772 测试） | ✅ 完成 |
-| M11 | 模型集成设计 + 安全合约（2328 测试） | ✅ 完成 |
-| M12 | 发布准备 + API 冻结 + 前端标注 + 冒烟清单 | ✅ 完成 |
-| M13+ | 未来：真实模型、真实 GUI，或新功能里程碑（需先从威胁模型开始） | 📋 计划中 |
-
-**当前总计：2328 通过，4 跳过。Reviewed execution 允许列表：36（GUI: 0）。**
+| 版本 | 重点 |
+|---|---|
+| **v0.3.0-rc1**（当前） | 桌面端 MVP：真实项目工作流、运行历史、artifact 预览 |
+| v0.3.x | 安装包签名、自动更新、CI/CD 打包流水线 |
+| v0.4.0 | NIfTI viewer、增强 QC dashboard、MATLAB/SPM 运行时（opt-in） |
+| 未来 | macOS/Linux 打包、DICOM 浏览器、插件系统 |
 
 ---
 
 ## 文档
 
-### 架构与设计
-- [架构设计文档](docs/architecture.md)
+- [发布说明 v0.3.0-rc1](docs/releases/v0.3.0-rc1.md)
+- [桌面应用打包](docs/DESKTOP_APP_PACKAGING.md)
+- [真实项目运行生命周期](docs/REAL_PROJECT_RUN_LIFECYCLE.md)
+- [MVP Release 冒烟清单](docs/MVP_RELEASE_SMOKE_CHECKLIST.md)
+- [架构设计](docs/architecture.md)
 - [Agent Runtime 规范](docs/agent_runtime_spec.md)
 - [Pipeline Executor 规范](docs/pipeline_executor.md)
-- [安全架构审查（M6–M9）](docs/M6_M9_SAFETY_ARCHITECTURE_REVIEW.md)
-
-### GUI Agent 安全（M9–M12）
-- [GUI 威胁模型](docs/GUI_MANUAL_AGENT_THREAT_MODEL.md)
-- [GUI API Guard 设计](docs/GUI_AGENT_API_GUARD_DESIGN.md)
-- [标准化 GUI Action Schema](docs/NORMALIZED_GUI_ACTION_SCHEMA.md)
-
-### 模型安全合约（M11）
-- [真实模型集成威胁模型](docs/REAL_MODEL_INTEGRATION_THREAT_MODEL.md)
-- [模型提供者准入 Gate](docs/MODEL_PROVIDER_POLICY_GATE_DESIGN.md)
-- [模型运行时隔离](docs/MODEL_RUNTIME_ISOLATION_DESIGN.md)
-- [推理输入脱敏](docs/MODEL_INFERENCE_INPUT_REDACTION_DESIGN.md)
-- [审计元数据持久化](docs/MODEL_OUTPUT_AUDIT_METADATA_PERSISTENCE_DESIGN.md)
-
-### 发布（M12）
-- [系统发布准备审查](docs/M12_SYSTEM_RELEASE_READINESS_REVIEW.md)
-- [后端 API Surface 冻结](docs/M12_BACKEND_API_SURFACE_FREEZE.md)
-- [发布冒烟清单](docs/M12_RELEASE_SMOKE_CHECKLIST.md)
-- [项目发布检查点](docs/M12_PROJECT_RELEASE_CHECKPOINT.md)
 
 ---
 
@@ -489,6 +240,4 @@ MedImage Agent 采用多层安全设计，确保研究数据不被误修改：
 
 本项目用于学术研究目的。
 
----
-
-**注意**：MedImage Agent 是一个医学影像研究工作流平台 / agentic pipeline system / rs-fMRI preprocessing and analysis engineering platform，不用于临床诊断或医疗决策。
+**MedImage Agent 是一个研究工程平台，不用于临床诊断或医疗决策。**
