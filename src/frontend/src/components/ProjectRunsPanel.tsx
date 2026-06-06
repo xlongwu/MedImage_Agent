@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getProjectRun,
   getProjectRunArtifact,
@@ -47,6 +47,13 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const activeProjectIdRef = useRef<string | null>(projectId);
+  const activeRunIdRef = useRef<string | null>(null);
+  const activeArtifactIdRef = useRef<string | null>(null);
+  const runsRequestRef = useRef(0);
+  const detailRequestRef = useRef(0);
+  const artifactsRequestRef = useRef(0);
+  const previewRequestRef = useRef(0);
 
   const selectedFromList = useMemo(
     () => runs.find((run) => run.run_id === selectedRunId) ?? null,
@@ -55,6 +62,10 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
   const detail = selectedRun ?? selectedFromList;
 
   useEffect(() => {
+    activeProjectIdRef.current = projectId;
+    activeRunIdRef.current = null;
+    activeArtifactIdRef.current = null;
+    detailRequestRef.current += 1;
     setRuns([]);
     setSelectedRunId(null);
     setSelectedRun(null);
@@ -62,6 +73,8 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
     setSummaryWarnings([]);
     setSummaryError("");
     resetArtifacts();
+    setLoading(false);
+    setDetailLoading(false);
     setError("");
     setNotice("");
     if (projectId) {
@@ -74,13 +87,19 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
       setRuns([]);
       return;
     }
+    const requestId = runsRequestRef.current + 1;
+    runsRequestRef.current = requestId;
     setLoading(true);
     setError("");
     try {
       const payload = await listProjectRuns(baseUrl, nextProjectId);
+      if (requestId !== runsRequestRef.current || activeProjectIdRef.current !== nextProjectId) {
+        return;
+      }
       const nextRuns = payload.runs ?? [];
       setRuns(nextRuns);
       if (selectedRunId && !nextRuns.some((run) => run.run_id === selectedRunId)) {
+        activeRunIdRef.current = null;
         setSelectedRunId(null);
         setSelectedRun(null);
         setSummaryPreview(null);
@@ -90,14 +109,24 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
       }
       setNotice(nextRuns.length ? `Loaded ${nextRuns.length} project run(s).` : "");
     } catch (err) {
+      if (requestId !== runsRequestRef.current || activeProjectIdRef.current !== nextProjectId) {
+        return;
+      }
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      if (requestId === runsRequestRef.current && activeProjectIdRef.current === nextProjectId) {
+        setLoading(false);
+      }
     }
   }
 
   async function loadRunDetail(runId: string) {
     if (!projectId) return;
+    const nextProjectId = projectId;
+    const requestId = detailRequestRef.current + 1;
+    detailRequestRef.current = requestId;
+    activeRunIdRef.current = runId;
+    activeArtifactIdRef.current = null;
     setSelectedRunId(runId);
     setSelectedRun(null);
     setSummaryPreview(null);
@@ -107,7 +136,14 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
     setDetailLoading(true);
     setError("");
     try {
-      const payload = await getProjectRun(baseUrl, projectId, runId);
+      const payload = await getProjectRun(baseUrl, nextProjectId, runId);
+      if (
+        requestId !== detailRequestRef.current ||
+        activeProjectIdRef.current !== nextProjectId ||
+        activeRunIdRef.current !== runId
+      ) {
+        return;
+      }
       setSelectedRun(payload.run_link);
       setSummaryPreview(normalizeRunSummaryPreview(payload.summary_preview, payload.run_link));
       setSummaryWarnings(mergeSummaryWarnings(payload, payload.summary_preview));
@@ -115,13 +151,29 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
       setNotice(`Loaded run detail for ${runId}.`);
       void loadArtifacts(runId);
     } catch (err) {
+      if (
+        requestId !== detailRequestRef.current ||
+        activeProjectIdRef.current !== nextProjectId ||
+        activeRunIdRef.current !== runId
+      ) {
+        return;
+      }
       setError(err instanceof Error ? err.message : String(err));
     } finally {
-      setDetailLoading(false);
+      if (
+        requestId === detailRequestRef.current &&
+        activeProjectIdRef.current === nextProjectId &&
+        activeRunIdRef.current === runId
+      ) {
+        setDetailLoading(false);
+      }
     }
   }
 
   function resetArtifacts() {
+    artifactsRequestRef.current += 1;
+    previewRequestRef.current += 1;
+    activeArtifactIdRef.current = null;
     setArtifacts([]);
     setArtifactWarnings([]);
     setArtifactError("");
@@ -133,23 +185,52 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
 
   async function loadArtifacts(runId = selectedRunId) {
     if (!projectId || !runId) return;
+    const nextProjectId = projectId;
+    const requestId = artifactsRequestRef.current + 1;
+    artifactsRequestRef.current = requestId;
     setArtifactsLoading(true);
     setArtifactError("");
     setArtifactPreview(null);
     setSelectedArtifactId(null);
+    activeArtifactIdRef.current = null;
     try {
-      const payload = await listProjectRunArtifacts(baseUrl, projectId, runId);
+      const payload = await listProjectRunArtifacts(baseUrl, nextProjectId, runId);
+      if (
+        requestId !== artifactsRequestRef.current ||
+        activeProjectIdRef.current !== nextProjectId ||
+        activeRunIdRef.current !== runId
+      ) {
+        return;
+      }
       setArtifacts(payload.artifacts ?? []);
       setArtifactWarnings(payload.warnings ?? []);
     } catch (err) {
+      if (
+        requestId !== artifactsRequestRef.current ||
+        activeProjectIdRef.current !== nextProjectId ||
+        activeRunIdRef.current !== runId
+      ) {
+        return;
+      }
       setArtifactError(err instanceof Error ? err.message : String(err));
     } finally {
-      setArtifactsLoading(false);
+      if (
+        requestId === artifactsRequestRef.current &&
+        activeProjectIdRef.current === nextProjectId &&
+        activeRunIdRef.current === runId
+      ) {
+        setArtifactsLoading(false);
+      }
     }
   }
 
   async function loadArtifactPreview(artifact: RunArtifactRecord) {
-    if (!projectId || !selectedRunId) return;
+    const runId = activeRunIdRef.current ?? selectedRunId;
+    if (!projectId || !runId) return;
+    const nextProjectId = projectId;
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
+    activeArtifactIdRef.current = artifact.artifact_id;
     setSelectedArtifactId(artifact.artifact_id);
     setArtifactPreview(null);
     setArtifactPreviewLoading(true);
@@ -157,15 +238,38 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
     try {
       const payload = await getProjectRunArtifact(
         baseUrl,
-        projectId,
-        selectedRunId,
+        nextProjectId,
+        runId,
         artifact.artifact_id,
       );
+      if (
+        requestId !== previewRequestRef.current ||
+        activeProjectIdRef.current !== nextProjectId ||
+        activeRunIdRef.current !== runId ||
+        activeArtifactIdRef.current !== artifact.artifact_id
+      ) {
+        return;
+      }
       setArtifactPreview(payload);
     } catch (err) {
+      if (
+        requestId !== previewRequestRef.current ||
+        activeProjectIdRef.current !== nextProjectId ||
+        activeRunIdRef.current !== runId ||
+        activeArtifactIdRef.current !== artifact.artifact_id
+      ) {
+        return;
+      }
       setArtifactError(err instanceof Error ? err.message : String(err));
     } finally {
-      setArtifactPreviewLoading(false);
+      if (
+        requestId === previewRequestRef.current &&
+        activeProjectIdRef.current === nextProjectId &&
+        activeRunIdRef.current === runId &&
+        activeArtifactIdRef.current === artifact.artifact_id
+      ) {
+        setArtifactPreviewLoading(false);
+      }
     }
   }
 

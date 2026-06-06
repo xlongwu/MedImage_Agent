@@ -121,10 +121,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!selectedProjectId && projects.data.length) {
+    if (!projects.data.length) {
+      return;
+    }
+    const selectedProjectExists = selectedProjectId
+      ? projects.data.some((item) => item.id === selectedProjectId)
+      : false;
+    if (!selectedProjectId || (!projects.fromFallback && !selectedProjectExists)) {
       setSelectedProjectId(projects.data[0].id);
     }
-  }, [projects.data, selectedProjectId]);
+  }, [projects.data, projects.fromFallback, selectedProjectId]);
 
   useEffect(() => {
     if (project.data.sequences.length && !project.data.sequences.includes(sequence)) {

@@ -215,7 +215,7 @@ export type RunArtifactPreviewResponse = {
   kind: string;
   path: string;
   exists: boolean;
-  preview_type: "json" | "text" | "metadata_only" | string;
+  preview_type: "json" | "csv" | "markdown" | "text" | "log" | "metadata_only" | string;
   content: string | null;
   json: unknown | null;
   json_summary?: JsonPreviewSummary | null;
