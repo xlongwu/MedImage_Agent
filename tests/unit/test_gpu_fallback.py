@@ -72,7 +72,10 @@ class TestGpuMemory:
         assert mb > 0
         assert mb < 10000  # Should be reasonable
 
-    def test_get_gpu_memory_info(self):
+    def test_get_gpu_memory_info(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "cupy", None)
+        monkeypatch.setitem(sys.modules, "torch", None)
+
         from src.backend.app.tools.gpu_memory import get_gpu_memory_info
 
         result = get_gpu_memory_info()

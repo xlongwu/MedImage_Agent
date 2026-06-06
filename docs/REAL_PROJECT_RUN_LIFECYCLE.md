@@ -455,15 +455,34 @@ synthetic-node rejection for created projects, missing context errors, explicit
 example config support, execute-reviewed context acceptance, dataset index and
 rawdata mismatch rejection, and passing the real config to the executor.
 
-**`tests/unit/test_project_history.py`**
+**`tests/unit/test_project_history_plans.py`**
 
-Covers stable reviewed plan IDs, project-scoped reviewed plans, snapshot
-warnings, run link persistence before executor, run detail summary preview,
-missing/malformed/outside/rawdata summary rejection, artifact discovery from
-summary and node states, JSON/CSV/markdown preview, malformed JSON reporting,
-rawdata and outside artifact rejection, binary metadata-only behavior, preview
-truncation, wrong-project isolation, unique run IDs, run link write failure
-blocking execution, and matching persisted reviewed plan requirements.
+Covers stable reviewed plan IDs, project-scoped reviewed plans, immutable
+snapshots, snapshot warnings, and the project reviewed-plan API smoke path.
+
+**`tests/unit/test_project_history_runs.py`**
+
+Covers run link persistence before executor, run history/detail APIs, wrong
+project isolation, unique run IDs, run link write failure blocking execution,
+and matching persisted reviewed plan requirements.
+
+**`tests/unit/test_run_summary_preview.py`**
+
+Covers summary preview normalization, counts, warnings, failed nodes,
+missing/malformed summary handling, outside-project rejection, rawdata
+rejection, raw preview truncation, and the run detail API smoke path.
+
+**`tests/unit/test_run_artifact_discovery.py`**
+
+Covers artifact discovery from run links, summary JSON, and node states; QC/error
+enrichment; rawdata and outside path rejection; wrong-project isolation; and the
+artifact list API smoke path.
+
+**`tests/unit/test_run_artifact_preview.py`**
+
+Covers JSON, CSV, markdown, text, and log previews; malformed JSON reporting;
+large preview truncation; binary/NIfTI/MAT metadata-only behavior; unsupported
+metadata-only behavior; and the artifact detail API smoke path.
 
 **`tests/integration/test_real_project_safe_smoke.py`**
 
@@ -486,6 +505,13 @@ Covers the frontend Project Runs flow at component/helper level, including run
 list/detail data, summary preview rendering assumptions, artifact listing,
 artifact preview behavior, QC/Error Summary, Key Artifacts, and desktop/web path
 action behavior.
+
+**Release smoke checklist**
+
+The pre-release real-project checklist lives in
+`docs/MVP_RELEASE_SMOKE_CHECKLIST.md`. It is the manual and automated checklist
+for the desktop real-project MVP handoff and should be updated alongside this
+lifecycle document when the run, artifact, or project-review flow changes.
 
 ## Known Limitations
 

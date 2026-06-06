@@ -9,12 +9,14 @@ build/
 .eggs/
 *.egg
 .pytest_cache/
+.pytest_tmp/
 .mypy_cache/
 .ruff_cache/
 
 # Virtual environments
 venv/
 .venv/
+.venv311/
 env/
 .env
 

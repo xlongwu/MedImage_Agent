@@ -3,6 +3,9 @@
 ## Current milestone
 
 Desktop real-project execution and run artifact inspection loop completed.
+Current focus is MVP release hardening: validation, delivery-state cleanup,
+documentation sync, and smoke-check repeatability. No new features are in
+scope for this phase.
 
 ## Completed capabilities
 
@@ -21,12 +24,20 @@ Desktop real-project execution and run artifact inspection loop completed.
 - CSV / JSON / Markdown / text / log preview.
 - Key Artifacts grouping and filtering.
 - QC / Error Summary card.
+- `ProjectRunsPanel.tsx` split from run-history model helpers.
+- `project_history_routes.py` split to route wiring backed by run summary,
+  artifact discovery, and artifact preview services.
 - Safe real-project smoke test passed.
 
 ## Test baseline
 
-- `pytest --tb=short`: `2413 passed, 8 skipped, 1 warning`.
-- Skipped reasons:
+- Recommended backend interpreter: `D:\Anaconda3\envs\mamba\python.exe`.
+- Default `D:\Anaconda3\python.exe` is not the validation baseline because it
+  lacks FastAPI in this workspace.
+- Current local full backend validation on 2026-06-06:
+  `D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short` ->
+  `2426 passed, 8 skipped, 1 warning`.
+- Expected skip reasons:
   - Missing optional `pydicom`.
   - Missing optional `cupy`.
   - Missing `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
@@ -36,12 +47,15 @@ Desktop real-project execution and run artifact inspection loop completed.
 Use:
 
 ```powershell
-$env:PYTHONPATH="D:\deep_learning_code\MedImage_Agent\.venv\Lib\site-packages"
-D:\Python311\python.exe -m pytest --tb=short
+D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short
 ```
 
-Do not rely on the default `D:\Anaconda3\python.exe`; it lacks FastAPI in this
-workspace.
+If the default Windows temp directory causes `PermissionError`, redirect
+pytest temp with `--basetemp`:
+
+```powershell
+D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
+```
 
 ## Explicit non-goals
 
@@ -53,9 +67,27 @@ workspace.
 - No Advanced Agent Controls project-context integration yet.
 - No external user BIDS smoke unless `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR` is provided.
 
+## Open delivery risks
+
+- `contract_smoke` internal validation scope has been resolved: committed as
+  `fa8aada` ("test: add node contract smoke validation"). It is documented as a
+  non-user-visible internal validation node in
+  `docs/MVP_RELEASE_SMOKE_CHECKLIST.md`.
+- Windows default temp directory (`C:\Users\...\AppData\Local\Temp`) may contain
+  stale permission-locked `pytest-of-*` entries from prior sessions. When full
+  pytest fails with `PermissionError` on temp, use `--basetemp=.pytest_tmp`.
+  `.pytest_tmp/` is now in `.gitignore`.
+
 ## Next recommended work
 
-1. Resolve Git tracked/untracked state.
-2. Then mechanically split `ProjectRunsPanel.tsx`.
-3. Then split `project_history_routes.py`.
-4. Then run external BIDS smoke if user provides a small read-only BIDS path.
+1. Keep release validation repeatable with the mamba interpreter above.
+2. Keep `project_history_routes.py` as route wiring around the summary,
+   discovery, and preview services.
+3. Treat `mock_store.py` as the historical module name for the dashboard
+   SQLite desktop store until a deliberate rename/migration is scheduled.
+4. Consider a future `project_create_service` only if project creation routes
+   grow again.
+5. Consider a future execution orchestration service only if
+   `execute_reviewed_routes.py` needs more separation after MVP release.
+6. Run external BIDS smoke only when the user provides a deliberately bounded
+   read-only `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.

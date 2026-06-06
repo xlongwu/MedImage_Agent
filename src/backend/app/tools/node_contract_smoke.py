@@ -14,8 +14,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from typing import Any
-
 
 REQUIRED_CONTEXT_FIELDS: tuple[str, ...] = (
     "run_id",

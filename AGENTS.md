@@ -44,6 +44,48 @@ Current handoff state:
 - Frontend code must communicate through backend HTTP APIs and must not access
   the local filesystem directly.
 
+## Allowed Shell Operations
+
+Agents may execute the following shell commands without additional approval.
+Commands not listed here require explicit user confirmation before execution.
+
+### Git Operations
+
+The following `git` subcommands are pre-approved for source files under
+`src/`, `tests/`, and project config/documentation files:
+
+- `git status`
+- `git diff`
+- `git diff --staged`
+- `git log`
+- `git show`
+- `git add <path>` — permitted only for source files; see Runtime Artifacts for
+  the exclusion list
+- `git restore --staged <path>`
+- `git commit -m "<message>"`
+- `git push`
+- `git stash` / `git stash pop`
+
+Agents must NOT stage or commit runtime artifacts (see Runtime Artifacts below).
+Agents must NOT use `git add .` — always stage explicit paths only.
+When in doubt about whether a file is a delivery file or a runtime artifact,
+default to **not staging** and report it in the Completion Report for manual
+follow-up.
+
+### Test Execution
+
+- `D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short`
+- `D:\Anaconda3\envs\mamba\python.exe -m pytest <specific_test_path> --tb=short`
+
+Do not use `D:\Anaconda3\python.exe` or `D:\Python311\python.exe` without
+first verifying the environment has FastAPI installed.
+
+### Frontend Validation (when touching frontend code)
+
+- `npm run type-check`
+- `npm run build`
+- `npm test` (smoke checks only)
+
 ## Runtime Artifacts
 
 Do not stage or commit runtime artifacts, including:
@@ -53,7 +95,9 @@ Do not stage or commit runtime artifacts, including:
 - `logs/`
 - `reports/`
 - `.pytest_cache/`
+- `.pytest_tmp/`
 - `__pycache__/`
+- `docs/tasks/` (agent workflow metadata; not project code)
 - SQLite runtime databases
 - generated reviewed pipelines
 - generated audit/report artifacts
@@ -61,19 +105,20 @@ Do not stage or commit runtime artifacts, including:
 
 ## Python Test Environment
 
-Use the project Python interpreter explicitly:
+Use the restored mamba validation interpreter explicitly:
 
 ```powershell
-$env:PYTHONPATH="D:\deep_learning_code\MedImage_Agent\.venv\Lib\site-packages"
-D:\Python311\python.exe -m pytest --tb=short
+D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short
 ```
 
 Do not rely on the default `D:\Anaconda3\python.exe`; it lacks FastAPI in this
-workspace.
+workspace. Do not rely on `D:\Python311\python.exe` plus `.venv` unless that
+virtual environment has been recreated and verified.
 
 ## Current Validation Baseline
 
-- Full backend baseline: `pytest --tb=short` -> `2413 passed, 8 skipped, 1 warning`.
+- Full backend baseline: `D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short`
+  -> `2426 passed, 8 skipped, 1 warning`.
 - Expected skips are optional `pydicom`, optional `cupy`, and missing
   `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
 - Frontend delivery should include the ProjectRunsPanel smoke check,
