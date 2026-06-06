@@ -76,6 +76,7 @@ from src.backend.app.tools.report_exporter import export_rsfmri_report_package
 from src.backend.app.tools.report_package_validator import validate_rsfmri_report_package
 from src.backend.app.tools.release_readiness import build_release_readiness
 from src.backend.app.tools.docs_inventory import build_docs_inventory
+from src.backend.app.tools.node_contract_smoke import run_contract_smoke_node
 
 
 @dataclass
@@ -485,6 +486,7 @@ NODE_REGISTRY: dict[str, NodeRunner] = {
     "dpabi_signature_probe": run_dpabi_signature_probe_node,
     "dpabi_wrapper_contracts": run_dpabi_wrapper_contracts_node,
     "dpabi_single_function_sandbox": run_dpabi_single_function_sandbox_node,
+    "contract_smoke": run_contract_smoke_node,
 }
 
 

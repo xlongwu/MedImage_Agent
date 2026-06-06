@@ -56,6 +56,18 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "outputs": ["synthetic_bids/rawdata/"],
         "tags": ["data", "synthetic"],
     },
+    "contract_smoke": {
+        "name": "Contract Smoke",
+        "backend": "python",
+        "parallel_level": "project",
+        "description": "Minimal executor node contract smoke validator.",
+        "requires_approval": False,
+        "manual_required": False,
+        "risk_level": "low",
+        "inputs": [],
+        "outputs": ["contract_smoke_report.json", "contract_smoke.log"],
+        "tags": ["contract", "test", "validation"],
+    },
     "data_inspection": {
         "name": "Data Inspection",
         "backend": "python",
