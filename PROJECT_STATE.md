@@ -34,9 +34,9 @@ scope for this phase.
 - Recommended backend interpreter: `D:\Anaconda3\envs\mamba\python.exe`.
 - Default `D:\Anaconda3\python.exe` is not the validation baseline because it
   lacks FastAPI in this workspace.
-- Current local full backend validation on 2026-06-06:
-  `D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short` ->
-  `2426 passed, 8 skipped, 1 warning`.
+- Current local full backend validation on 2026-06-18:
+  `D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp` ->
+  `2426 passed, 8 skipped, 0 failed`.
 - Expected skip reasons:
   - Missing optional `pydicom`.
   - Missing optional `cupy`.
@@ -77,6 +77,11 @@ D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
   stale permission-locked `pytest-of-*` entries from prior sessions. When full
   pytest fails with `PermissionError` on temp, use `--basetemp=.pytest_tmp`.
   `.pytest_tmp/` is now in `.gitignore`.
+- The desktop SQLite store (`outputs/work/desktop/desktop_state.sqlite`)
+  accumulates stale import records referencing temp directories. When the store
+  contains paths to locked temp dirs, `list_image_sources()` will fail with
+  `PermissionError`. The fix is to delete the store (gitignored; regenerated on
+  next test run): `del outputs\work\desktop\desktop_state.sqlite`.
 
 ## Next recommended work
 

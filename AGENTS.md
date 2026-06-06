@@ -115,6 +115,21 @@ Do not rely on the default `D:\Anaconda3\python.exe`; it lacks FastAPI in this
 workspace. Do not rely on `D:\Python311\python.exe` plus `.venv` unless that
 virtual environment has been recreated and verified.
 
+If full pytest fails with `PermissionError` referencing
+`C:\Users\...\AppData\Local\Temp\pytest-of-*`, use `--basetemp`:
+
+```powershell
+D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
+```
+
+If `PermissionError` persists, the desktop SQLite store may contain stale
+import records pointing to locked temp directories. Delete it (it is gitignored
+and regenerated):
+
+```powershell
+del outputs\work\desktop\desktop_state.sqlite
+```
+
 ## Current Validation Baseline
 
 - Full backend baseline: `D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short`

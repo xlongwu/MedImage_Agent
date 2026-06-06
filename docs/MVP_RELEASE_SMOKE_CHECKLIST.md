@@ -62,6 +62,14 @@ stale permission-locked entries from previous runs, use `--basetemp`:
 D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
 ```
 
+If `PermissionError` persists and references `pytest-of-*` in system temp,
+the desktop SQLite store may contain stale import records. Delete it (it is
+gitignored and regenerated on next run):
+
+```powershell
+del outputs\work\desktop\desktop_state.sqlite
+```
+
 ## Frontend Automated Checks
 
 Run from `src/frontend`:
