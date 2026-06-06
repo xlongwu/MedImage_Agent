@@ -83,16 +83,28 @@ D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
   `PermissionError`. The fix is to delete the store (gitignored; regenerated on
   next test run): `del outputs\work\desktop\desktop_state.sqlite`.
 
+## Desktop packaging status (2026-06-18)
+
+- Node v24.16.0 / npm 11.13.0 verified for Vite production build.
+- PyInstaller 6.20.0 installed in mamba environment.
+- Backend sidecar (`medimage-backend.exe`, 38.9 MB) built and verified.
+- Launcher fallback (`MedImage Agent.exe`, 49.2 MB) built and verified.
+- Electron unpacked app (`win-unpacked/MedImage Agent.exe`, 180 MB) built
+  with offline Electron runtime and NSIS caches.
+- Electron smoke check: 51/51 passed.
+- `build_all_windows.ps1` supports `-PythonExe` for mamba path forwarding.
+- GUI startup verification pending (requires local Windows desktop).
+- NSIS installer / portable full build is next stage.
+- See `docs/DESKTOP_APP_PACKAGING.md` for verified build command.
+
 ## Next recommended work
 
-1. Keep release validation repeatable with the mamba interpreter above.
-2. Keep `project_history_routes.py` as route wiring around the summary,
-   discovery, and preview services.
-3. Treat `mock_store.py` as the historical module name for the dashboard
-   SQLite desktop store until a deliberate rename/migration is scheduled.
-4. Consider a future `project_create_service` only if project creation routes
-   grow again.
-5. Consider a future execution orchestration service only if
-   `execute_reviewed_routes.py` needs more separation after MVP release.
-6. Run external BIDS smoke only when the user provides a deliberately bounded
+1. Verify Electron GUI startup on a local Windows desktop.
+2. Run full NSIS + portable build with `-NsisArchive` and `-NsisResourcesArchive`.
+3. Keep release validation repeatable with the mamba interpreter.
+4. Run external BIDS smoke only when the user provides a deliberately bounded
    read-only `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
+5. Consider a future `project_create_service` only if project creation routes
+   grow again.
+6. Consider a future execution orchestration service only if
+   `execute_reviewed_routes.py` needs more separation after MVP release.

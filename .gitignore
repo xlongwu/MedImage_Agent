@@ -59,8 +59,10 @@ desktop/electron/.npm-cache/
 desktop/electron/.electron-cache/
 desktop/electron/.electron-builder-cache/
 desktop/electron/dist/
+desktop/electron/.tmp/
 desktop/packaging/build/
 desktop/packaging/dist/
+.npm-cache-desktop/
 
 # Local agent/worktree state
 .agents/

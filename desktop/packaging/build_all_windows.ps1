@@ -5,7 +5,8 @@ param(
     [string]$ElectronRuntimeZip,
     [string]$NsisArchive,
     [string]$NsisResourcesArchive,
-    [switch]$DirOnly
+    [switch]$DirOnly,
+    [string]$PythonExe
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,8 +25,13 @@ try {
     }
 
     & (Join-Path $RepoRoot "desktop\packaging\build_frontend.ps1")
-    & (Join-Path $RepoRoot "desktop\packaging\build_backend.ps1") -SkipDependencyInstall:$SkipDependencyInstall
-    & (Join-Path $RepoRoot "desktop\packaging\build_launcher.ps1") -SkipDependencyInstall:$SkipDependencyInstall
+    $BackendArgs = @{ SkipDependencyInstall = $SkipDependencyInstall }
+    if ($PythonExe) { $BackendArgs.PythonExe = $PythonExe }
+    & (Join-Path $RepoRoot "desktop\packaging\build_backend.ps1") @BackendArgs
+
+    $LauncherArgs = @{ SkipDependencyInstall = $SkipDependencyInstall }
+    if ($PythonExe) { $LauncherArgs.PythonExe = $PythonExe }
+    & (Join-Path $RepoRoot "desktop\packaging\build_launcher.ps1") @LauncherArgs
     $DesktopBuildArgs = @{
         SkipNpmInstall = $SkipNpmInstall
     }

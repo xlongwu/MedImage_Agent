@@ -163,6 +163,49 @@ Development web mode can still use `VITE_API_BASE_URL` or the default
   `-NsisResourcesArchive` with `nsis-resources-3.4.1.7z` to produce installer
   and portable artifacts offline.
 
+## Verified Build Environment (2026-06-18)
+
+The following environment has been validated for packaging:
+
+- Node v24.16.0 / npm 11.13.0
+- Python: `D:\Anaconda3\envs\mamba\python.exe` (3.11.15)
+- PyInstaller 6.20.0
+- Electron 31.7.7 (offline cached at `desktop/electron/.electron-cache/manual-runtime/`)
+- NSIS 3.0.4.1 (offline cached at `desktop/electron/.electron-builder-cache/manual-nsis/`)
+
+All build stages have passed independently:
+
+| Stage | Result |
+|---|---|
+| Frontend Vite production build | ✅ `npm --prefix src/frontend run build` |
+| Backend PyInstaller sidecar | ✅ `build_backend.ps1 -PythonExe ...` |
+| Launcher PyInstaller fallback | ✅ `build_launcher.ps1 -PythonExe ...` |
+| Electron unpacked (dir-only) | ✅ `build_desktop.ps1 -DirOnly -ElectronRuntimeZip ...` |
+| Electron smoke check | ✅ 51/51 checks passed |
+
+## Recommended Full Build Command
+
+From the repository root, with no network access and a pre-configured mamba
+Python environment:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File desktop/packaging/build_all_windows.ps1 `
+  -SkipFullPytest `
+  -SkipDependencyInstall `
+  -SkipNpmInstall `
+  -DirOnly `
+  -PythonExe "D:\Anaconda3\envs\mamba\python.exe" `
+  -ElectronRuntimeZip "desktop\electron\.electron-cache\manual-runtime\electron-v31.7.7-win32-x64.zip"
+```
+
+Remove `-DirOnly` to produce NSIS installer and portable exe artifacts. Add
+`-NsisArchive` and `-NsisResourcesArchive` when those helpers are available
+offline.
+
+GUI startup verification must be performed on a local Windows desktop
+environment; the Electron smoke check (51/51) validates configuration
+correctness but does not exercise the full GUI launch.
+
 ## Safety Boundary
 
 The desktop app is only a local packaging wrapper around the existing frontend
