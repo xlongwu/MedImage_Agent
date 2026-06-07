@@ -1,6 +1,20 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { createProjectFromDirectory, DEFAULT_API_BASE, getHealth } from "./api";
 import AdvancedModePanel from "./components/workflow/AdvancedModePanel";
+import BidsValidationPanel from "./components/BidsValidationPanel";
+import ConversionDryRunPanel from "./components/ConversionDryRunPanel";
+import DataReadinessPanel from "./components/DataReadinessPanel";
+import BoldReferenceReadinessPanel from "./components/BoldReferenceReadinessPanel";
+import EnvironmentHealthPanel from "./components/EnvironmentHealthPanel";
+import SpmRealignDryRunPanel from "./components/SpmRealignDryRunPanel";
+import SpmRealignWrapperSkeletonPanel from "./components/SpmRealignWrapperSkeletonPanel";
+import MotionMetricsDraftPanel from "./components/MotionMetricsDraftPanel";
+import NiftiQcSnapshotPanel from "./components/NiftiQcSnapshotPanel";
+import QcDashboardSummaryPanel from "./components/QcDashboardSummaryPanel";
+import MotionQcReadinessPanel from "./components/MotionQcReadinessPanel";
+import RsfmriQcPlanningReportPanel from "./components/RsfmriQcPlanningReportPanel";
+import RsfmriPresetPanel from "./components/RsfmriPresetPanel";
+import type { PresetPlanDraft } from "./types";
 import PlanReviewConsole from "./components/PlanReviewConsole";
 import ProjectRunsPanel from "./components/ProjectRunsPanel";
 import { useDatasetSummary } from "./hooks/useDatasetSummary";
@@ -74,6 +88,7 @@ export default function App() {
   const [health, setHealth] = useState<boolean | null>(null);
   const [apiError, setApiError] = useState("");
   const [notice, setNotice] = useState("");
+  const [presetPlanDraft, setPresetPlanDraft] = useState<PresetPlanDraft | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [sequence, setSequence] = useState("T1");
@@ -479,6 +494,7 @@ export default function App() {
           projectConfigPath={selectedProjectMetadata?.project_config_path}
           datasetIndexPath={selectedProjectMetadata?.dataset_index_path}
           rawdataDir={selectedProjectMetadata?.rawdata_dir}
+          initialPresetDraft={presetPlanDraft}
         />
         <ProjectRunsPanel
           baseUrl={baseUrl}
@@ -577,6 +593,41 @@ export default function App() {
           <StudyOverviewCard overview={overview.data} loading={overview.loading} error={overview.error} />
 
           <DatasetSummaryCard summary={dataset.data} loading={dataset.loading} error={dataset.error} />
+
+          <DataReadinessPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <BidsValidationPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <ConversionDryRunPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <EnvironmentHealthPanel baseUrl={baseUrl} />
+
+          <QcDashboardSummaryPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <SpmRealignDryRunPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <SpmRealignWrapperSkeletonPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <NiftiQcSnapshotPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <BoldReferenceReadinessPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <MotionQcReadinessPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <MotionMetricsDraftPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <RsfmriQcPlanningReportPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <RsfmriPresetPanel
+            baseUrl={baseUrl}
+            projectId={selectedProjectId}
+            onReviewDraft={(draft) => {
+              setPresetPlanDraft(draft);
+              setMode("planner");
+              setNotice("Preset draft loaded into Plan Review Console. Review and save before dry-run.");
+            }}
+          />
+
           <ModelCard model={model.data} loading={model.loading} error={model.error} />
           <MetricCard
             title="Recent Tasks"

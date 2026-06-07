@@ -40,7 +40,7 @@ def test_plan_has_required_fields():
 # ── 3. all node ids are in Tool Catalog ──
 
 def test_generated_nodes_in_catalog():
-    resp = generate_plan_from_goal("motion")
+    resp = generate_plan_from_goal("motion correction")
     catalog = _catalog_ids()
     for node in resp.plan["nodes"]:
         assert node["id"] in catalog, f"Node '{node['id']}' not in Tool Catalog"
@@ -57,14 +57,14 @@ def test_validation_called():
 # ── 5. motion plan has no errors ──
 
 def test_motion_plan_no_errors():
-    resp = generate_plan_from_goal("motion")
+    resp = generate_plan_from_goal("motion correction")
     assert len(resp.validation.get("errors", [])) == 0
 
 
 # ── 6. SPM node in approval_required_nodes ──
 
 def test_spm_in_approval_required():
-    resp = generate_plan_from_goal("motion")
+    resp = generate_plan_from_goal("motion correction")
     assert "spm_realign_subject" in resp.validation["approval_required_nodes"]
 
 
@@ -125,7 +125,7 @@ def test_response_to_dict_json():
 # ── 13. does not execute runners ──
 
 def test_no_runner_execution():
-    resp = generate_plan_from_goal("motion")
+    resp = generate_plan_from_goal("motion correction")
     assert resp.ok is True
     # No side effects — trivially passes
 

@@ -1,0 +1,802 @@
+# Run Retry / Resume Contract
+
+**Status:** Contract design only — NOT IMPLEMENTED.
+**Version:** v1.0-draft
+**Date:** 2026-06-18
+
+---
+
+## 1. Scope
+
+This document defines the **future** retry, resume, and rerun behaviour for
+reviewed-plan pipeline execution.  No code in the current release (`v0.3.0-rc1`)
+implements retry or resume.  All sections below describe a contract to be
+implemented in a later release.
+
+Explicit non-goals for this contract:
+
+- **Not clinical.**  Retry/resume is for research workflow recovery only.
+  This platform is not cleared for clinical diagnosis or clinical decision
+  support.
+- **Not a bypass.**  Retry/resume must never bypass the reviewed plan, Approval
+  Gate, audit requirement, project context validation, or safe allowlist.
+  Every recovery action must go through the same gates as a fresh execution,
+  plus additional provenance checks.
+- **Not silent.**  Every retry/resume action must create a new auditable event
+  and/or child run identity.  The original run must remain traceable and
+  immutable.
+
+---
+
+## 2. Terminology
+
+| Term | Definition |
+|---|---|
+| **original run** | The existing run identified by `run_id` from which recovery is requested. |
+| **child run** | A new run created as the result of a retry, resume, or explicit rerun. It has its own `run_link_id`, `run_id`, audit record, and artifact scope. |
+| **retry** | Re-execute failed or blocked nodes from a failed run, reusing successful upstream outputs only when hash/checksum-verified. Creates a child run. |
+| **resume** | Continue an interrupted or incomplete run, skipping completed nodes only when their outputs are verified. Creates a child run. Must invalidate downstream nodes if inputs, params, plan hash, or environment changed. |
+| **rerun** | Start a fresh run from the same reviewed plan. Does not assume any reusable outputs by default. Creates a child run. |
+| **checkpoint** | A node-level state JSON file (`work/states/<run_id>/...`) that records a completed node's status, outputs, metrics, errors, and log references. Written by `state_store.py:write_node_state()`. |
+| **node state** | The on-disk JSON file representing one node execution. Contains: `run_id`, `subject`, `node`, `status`, `started_at`, `ended_at`, `log_path`, `stderr_log`, `outputs`, `metrics`, `warnings`, `errors`, `result_json`, `returncode`. |
+| **reusable output** | A node output that passes all reuse checks (hash match, existence, upstream compatibility) and can be carried forward to a child run. |
+| **invalidated output** | A node output that fails one or more reuse checks and must be regenerated. All downstream nodes depending on it are also invalidated. |
+| **terminal state** | A run or node that has reached a final status: `SUCCESS`, `FAILED`, `BLOCKED`, `COMPLETED`. No further state transitions occur without user action. |
+| **non-terminal state** | A run or node that has not reached a final status: `RUNNING`, `SUBMITTED`, `PARTIAL`, `REQUESTED`. |
+| **plan hash** | A deterministic SHA-256 hash of the reviewed plan payload, computed by `reviewed_plan_store.py:stable_hash()`. Used to detect plan changes between runs. |
+| **node parameter hash** | A SHA-256 hash of a single node's `params` dict (plus `backend` and `depends_on`), used to detect parameter changes that invalidate cached outputs. |
+| **input checksum** | A SHA-256 hash of a node's input file(s), computed at execution time. Used to verify that upstream outputs have not changed. |
+| **environment fingerprint** | A hash of critical environment factors that affect reproducibility: Python version, key package versions, OS platform, MATLAB/SPM/DPABI version if enabled, and project config tool paths. |
+| **provenance bundle** | A JSON record containing all reuse/invalidation decisions for a recovery action, stored alongside the audit record for the child run. |
+
+---
+
+## 3. Current Observability Baseline
+
+The following observability foundations already exist in the codebase and can
+serve as inputs to a future retry/resume system.  References are to current
+implementation files (read-only for this contract phase).
+
+### 3.1 Run identity and linkage
+
+| Concept | Implementation |
+|---|---|
+| `reviewed_plan_id` | Stable ID keyed on `(project_id, plan_hash)`. Stored in SQLite `reviewed_plans` table and as JSON snapshot at `project_dir/plans/<id>.json`. Implemented in `src/backend/app/planner/reviewed_plan_store.py`. |
+| `run_link_id` | UUID-based identifier for one execution attempt. Unique per execution. Stored in SQLite `run_links` table. |
+| `run_id` | UUID-based execution identifier injected into the pipeline YAML before writing. Stored in `run_links.run_id` (unique constraint). |
+| `plan_hash` | SHA-256 of reviewed plan, computed by `reviewed_plan_store.py:stable_hash()`. |
+| `run_link` payload | SQLite record in `src/backend/app/services/mock_store.py` with fields: `run_link_id`, `project_id`, `reviewed_plan_id`, `run_id`, `pipeline_path`, `summary_path`, `project_config_path`, `audit_id`, `status`, `created_at`, `updated_at`, `warnings`, `payload`. |
+
+### 3.2 Run observability
+
+| Endpoint | Implementation |
+|---|---|
+| `GET /api/projects/{id}/runs` | `project_history_routes.py:list_project_run_links` — lists all run links for a project. |
+| `GET /api/projects/{id}/runs/{run_id}` | `project_history_routes.py:get_project_run_link` — returns run link + summary preview + warnings. |
+| `GET /api/projects/{id}/runs/{run_id}/events` | `project_history_routes.py:list_project_run_events` — synthesised event timeline from run link, summary, and artifacts. |
+| `GET /api/projects/{id}/runs/{run_id}/logs` | `project_history_routes.py:list_project_run_logs` — bounded log content previews. |
+| `GET /api/projects/{id}/runs/{run_id}/artifacts` | `project_history_routes.py:list_project_run_artifacts` — discovered run-scoped artifacts. |
+| `GET /api/projects/{id}/runs/{run_id}/artifacts/{artifact_id}` | `project_history_routes.py:get_project_run_artifact` — bounded artifact preview. |
+
+### 3.3 State and checkpoint data
+
+| Data | Location |
+|---|---|
+| Pipeline summary JSON | `work/pipeline_runs/<run_id>/summary.json`. Contains: `run_id`, `pipeline_id`, `status`, `started_at`, `ended_at`, `duration_seconds`, `nodes_total`, `nodes_success`, `nodes_failed`, `nodes_skipped`, `node_states` (list of paths), `errors`, `scheduler`. Written by `state_store.py:write_pipeline_summary()`. |
+| Node state JSON | `work/states/<run_id>/<node_id>.json` (project-level) or `work/states/<run_id>/<subject>/<node_id>.json` (subject-level). Contains: `run_id`, `subject`, `node`, `status`, `started_at`, `ended_at`, `log_path`, `stderr_log`, `outputs`, `metrics`, `warnings`, `errors`, `result_json`, `returncode`. Written by `state_store.py:write_node_state()`. |
+| Run inspector | `run_inspector.py:inspect_run()` reads summary + all node state JSONs and returns aggregated project_states and subject_states. |
+| Pipeline YAML | `outputs/work/reviewed_pipelines/reviewed_<pipeline>_<timestamp>_<planhash>.yaml`. The executor input. Referenced by `run_link.pipeline_path`. |
+
+### 3.4 Safety gates
+
+| Gate | Implementation |
+|---|---|
+| Approval Gate | `src/backend/app/planner/approval_gate.py:check_approval_gate()` — checks approval record against plan. |
+| Audit records | `src/backend/app/planner/audit_record.py` — immutable JSON records written to `outputs/reports/audit_records/`. |
+| Project context validation | `src/backend/app/planner/project_context.py:validate_plan_project_context()` — verifies plan matches resolved project context. |
+| Safe allowlist | `execute_reviewed_routes.py:_check_safe_allowlist()` — blocks nodes not on the safe allowlist. |
+| Rawdata read-only | Enforced by `copy_mode: reference` in project creation and path safety checks in `run_summary_preview.py` and `run_artifact_discovery.py`. |
+| Path safety | `src/backend/app/runtime/path_safety.py` — repository-root containment and allowed directory whitelisting. |
+
+---
+
+## 4. Retry vs Resume Semantics
+
+### 4.1 Retry
+
+**Trigger:** User initiates retry on a run with terminal-failure status.
+
+**Behaviour:**
+1. A new `run_link_id` and `run_id` are generated (child run).
+2. The child run is linked to the original run (`source_run_id` field in the child run link).
+3. The executor receives a plan that includes **only failed/blocked nodes** (plus any downstream nodes that depend on them).
+4. Successful upstream nodes whose outputs are hash/checksum-verified may be marked as **reused** — their outputs are symlinked or referenced from the child run, not re-computed.
+5. All reused nodes must pass every condition in Section 6.
+6. The child run goes through the full Approval Gate → audit → pipeline YAML write → execute cycle.
+7. The original run's state and artifacts are never modified.
+
+**When retry is applicable:**
+- At least one node has terminal-failure status (`FAILED`, `BLOCKED`).
+- At least one upstream node has terminal-success status (`SUCCESS`) with verifiable outputs.
+- The reviewed plan is still resolvable and matches the project context.
+- No rawdata modification has occurred.
+
+### 4.2 Resume
+
+**Trigger:** User initiates resume on a run with non-terminal status (interrupted, disconnected, partial).
+
+**Behaviour:**
+1. A new child run is created.
+2. The executor receives a plan that includes **only incomplete/failed downstream nodes**.
+3. Completed nodes are **skipped only if verified** (Section 6).
+4. If any input, param, plan hash, or environment fingerprint has changed since the original run started, the affected node and all downstream nodes are **invalidated** and must rerun.
+5. The child run goes through the full gating cycle.
+
+**When resume is applicable:**
+- The run has status `PARTIAL`, `INTERRUPTED`, `DISCONNECTED`, or was `SUBMITTED`/`RUNNING` with no recent heartbeat.
+- At least one node has terminal-success status with verifiable outputs.
+- Summary JSON and node state JSONs are readable.
+- The reviewed plan is still resolvable.
+
+### 4.3 Rerun
+
+**Trigger:** User explicitly requests a fresh execution of the same reviewed plan (or a completed run that the user wants to re-execute).
+
+**Behaviour:**
+1. A new child run is created.
+2. The executor receives the **full plan** — no nodes are assumed reusable.
+3. The full gating cycle runs.
+4. The original run is unchanged.
+
+---
+
+## 5. Allowed Source Run States
+
+### 5.1 Eligible states
+
+| Status | Recovery mode | Notes |
+|---|---|---|
+| `FAILED` | Retry | Run has failed nodes. Retry targets only failed/blocked nodes. |
+| `BLOCKED` | Retry | Run was blocked before or during execution. Retry targets blocked + unexecuted nodes. |
+| `PARTIAL` | Resume or Retry | Some nodes succeeded, some failed. Resume skips verified successes; retry targets failures. |
+| `EXECUTION_FAILED` | Retry | Executor raised an exception. Retry may re-run from the start or from a checkpoint. |
+| `INTERRUPTED` | Resume | Run was interrupted mid-execution. Resume skips completed, verified nodes. |
+| `DISCONNECTED` | Resume | Run lost heartbeat. Resume after confirming no active process owns the run. |
+| `SUBMITTED` (stale) | Resume | Run was submitted but never started or lost connection. Resume after heartbeat check. |
+| `RUNNING` (stale) | Resume | Run was running but no heartbeat for a configurable timeout. Resume after confirming the original process is dead. |
+| `COMPLETED` / `SUCCESS` | Rerun only | User may explicitly rerun, but retry/resume are not applicable (nothing to recover). |
+
+### 5.2 Ineligible states
+
+| Condition | Reason |
+|---|---|
+| `RUNNING` with active heartbeat | An active executor is still processing this run. |
+| `UNKNOWN` without summary or state | No checkpoint data exists to reason about reuse. |
+| Project context mismatch | The project's rawdata, config, or dataset index has changed since the original run. |
+| Reviewed plan cannot be resolved | The plan snapshot is missing and the plan hash doesn't match any persisted record. |
+| Rawdata read-only violation detected | Evidence that rawdata was modified after the original run. |
+| Missing summary JSON and no node state JSONs | No observability data at all. |
+
+---
+
+## 6. Reuse Rules
+
+A node output from the original run can be **reused** in a retry or resume child
+run only if **all** of the following conditions are satisfied:
+
+### 6.1 Identity match
+
+1. **Same reviewed plan identity.**  The child run's reviewed plan must have the
+   same `reviewed_plan_id` as the original run, OR the plan hashes must match
+   identically.  If the plan was revised and re-saved, a new `reviewed_plan_id`
+   exists and reuse across different plan identities is prohibited.
+
+2. **Same node identity.**  The `node.id` in the original and child plans must be
+   identical.
+
+### 6.2 Parameter match
+
+3. **Same node params hash.**  Compute `SHA-256(json.dumps(node.params, sort_keys=True))`
+   for the original and child node.  Must match exactly.
+
+4. **Same node backend and depends_on.**  The `node.backend` and sorted
+   `node.depends_on` list must match.
+
+### 6.3 Input integrity
+
+5. **Upstream output checksum match.**  For each file in the node's `outputs`
+   list, compute SHA-256 and compare against the checksum recorded in the
+   original node state.  If the original node state does not have checksums
+   (current baseline), the file must exist and have the same size and
+   modification time (within a small tolerance for filesystem timestamp
+   granularity).
+
+6. **All expected outputs exist.**  Every path listed in the original node
+   state's `outputs` field must resolve to an existing file.
+
+### 6.4 Status match
+
+7. **Node status is terminal success.**  The original node state's `status` must
+   be `SUCCESS` (not `FAILED`, `PARTIAL`, `UNKNOWN`, or absent).
+
+8. **Node had no errors.**  The original node state's `errors` list must be empty.
+
+### 6.5 No invalidation
+
+9. **No downstream invalidation marker.**  No node downstream of this node has
+   been invalidated due to plan, param, input, or environment changes.
+
+10. **No force-rerun flag.**  The user has not explicitly requested a force
+    rerun of this node or its dependents.
+
+### 6.6 Environment compatibility
+
+11. **Environment fingerprint compatible.**  The child run's environment
+    fingerprint must match the original run's fingerprint, OR the difference
+    must be in a category explicitly allowed by execution policy (e.g., a minor
+    Python patch version change may be permitted; a MATLAB version change may
+    not).
+
+If **any** condition fails, the node is marked **invalidated** and must be
+rerun.  All nodes that depend on an invalidated node are also invalidated
+(transitive closure).
+
+---
+
+## 7. Invalidation Rules
+
+### 7.1 Invalidation triggers
+
+A node is invalidated (must be rerun, outputs cannot be reused) when:
+
+| Trigger | Detection mechanism |
+|---|---|
+| Plan changed | `plan_hash` differs between original and child reviewed plan. |
+| Node params changed | SHA-256 of `node.params` differs. |
+| Node backend or deps changed | `node.backend` or sorted `node.depends_on` list differs. |
+| Upstream output changed | SHA-256 of upstream output file differs from original record. |
+| Upstream output missing | File referenced in original `outputs` no longer exists. |
+| Upstream output checksum mismatch | Stored checksum doesn't match current file. |
+| Upstream node was invalidated | Any node this node depends on was invalidated. |
+| Tool version changed (incompatible) | Environment fingerprint differs in a blocked category. |
+| Artifact schema changed | The output format/structure differs (detected via JSON schema or shape comparison). |
+| User requested force rerun | Explicit flag in recovery request. |
+| Previous node had non-reusable warnings | Some warnings (e.g., "output may be incomplete") are marked as invalidation-triggering by execution policy. |
+
+### 7.2 Downstream invalidation
+
+Invalidation is transitive: if node A is invalidated, every node that depends
+on A (directly or transitively) is also invalidated.  The recovery plan must
+show the full set of `rerun_nodes` including all transitively invalidated
+downstream nodes.
+
+---
+
+## 8. Proposed Backend API Contract
+
+All endpoints below are **proposed** — none are implemented.
+
+### 8.1 Recovery options (read-only)
+
+```
+GET /api/projects/{project_id}/runs/{run_id}/recovery-options
+```
+
+Returns available recovery modes and a summary of why each is or is not
+available.
+
+**Response (200):**
+```json
+{
+  "ok": true,
+  "project_id": "proj-abc",
+  "run_id": "run-123",
+  "source_run_status": "FAILED",
+  "options": {
+    "retry": {
+      "available": true,
+      "reason": "2 failed nodes; 3 successful upstream nodes are reusable.",
+      "failed_node_count": 2,
+      "reusable_node_count": 3,
+      "rerun_node_count": 5
+    },
+    "resume": {
+      "available": false,
+      "reason": "Run status is terminal FAILED, not PARTIAL or INTERRUPTED."
+    },
+    "rerun": {
+      "available": true,
+      "reason": "Reviewed plan is resolvable and project context matches."
+    }
+  },
+  "warnings": []
+}
+```
+
+### 8.2 Retry plan (dry-run)
+
+```
+POST /api/projects/{project_id}/runs/{run_id}/retry-plan
+```
+
+Request body: empty or `{}`.  Returns a dry-run recovery plan without executing.
+
+**Response (200):**
+```json
+{
+  "ok": true,
+  "status": "RETRY_PLAN_READY",
+  "source_run_id": "run-123",
+  "recovery_mode": "retry",
+  "reviewed_plan_id": "reviewed-abc",
+  "plan_hash": "a1b2c3...",
+  "reusable_nodes": [
+    {
+      "node_id": "data_inspection",
+      "status": "SUCCESS",
+      "reason": "All reuse conditions satisfied.",
+      "outputs": ["work/states/run-123/data_inspection.json"],
+      "params_hash": "d4e5f6...",
+      "input_checksums": {}
+    }
+  ],
+  "rerun_nodes": [
+    {
+      "node_id": "motion_qc_subject",
+      "status": "FAILED",
+      "reason": "Node status is FAILED in original run.",
+      "depends_on_reusable": ["data_inspection"]
+    }
+  ],
+  "invalidated_nodes": [],
+  "blocked_nodes": [],
+  "invalidation_reasons": [],
+  "approval_required": true,
+  "audit_required": true,
+  "would_execute": true,
+  "execution_allowed": true,
+  "errors": [],
+  "warnings": []
+}
+```
+
+### 8.3 Resume plan (dry-run)
+
+```
+POST /api/projects/{project_id}/runs/{run_id}/resume-plan
+```
+
+Similar shape to retry plan, but `recovery_mode: "resume"`.
+
+### 8.4 Rejected resume due to hash mismatch
+
+```json
+{
+  "ok": false,
+  "status": "RESUME_REJECTED_PLAN_MISMATCH",
+  "source_run_id": "run-123",
+  "recovery_mode": "resume",
+  "reviewed_plan_id": "reviewed-abc",
+  "plan_hash": "a1b2c3...",
+  "original_plan_hash": "x9y0z1...",
+  "reusable_nodes": [],
+  "rerun_nodes": [],
+  "invalidated_nodes": [
+    {
+      "node_id": "data_inspection",
+      "reason": "Plan hash mismatch: original=x9y0z1..., current=a1b2c3...",
+      "downstream_affected": ["motion_qc_subject"]
+    }
+  ],
+  "invalidation_reasons": [
+    "PLAN_HASH_MISMATCH"
+  ],
+  "approval_required": false,
+  "audit_required": false,
+  "would_execute": false,
+  "execution_allowed": false,
+  "errors": ["Reviewed plan has changed since the original run. All nodes are invalidated."],
+  "warnings": []
+}
+```
+
+### 8.5 Approved retry/resume/rerun execution
+
+```
+POST /api/projects/{project_id}/runs/{run_id}/retry
+POST /api/projects/{project_id}/runs/{run_id}/resume
+POST /api/projects/{project_id}/runs/{run_id}/rerun
+```
+
+Request body:
+```json
+{
+  "approval": {
+    "approved": true,
+    "approved_by": "researcher",
+    "reason": "Re-run after fixing input data path.",
+    "approved_nodes": ["motion_qc_subject"],
+    "rejected_nodes": []
+  },
+  "force_rerun_nodes": [],
+  "actor": "researcher"
+}
+```
+
+Response (200, on success):
+```json
+{
+  "ok": true,
+  "status": "RETRY_SUBMITTED",
+  "source_run_id": "run-123",
+  "child_run_id": "run-456",
+  "child_run_link_id": "link-run-456",
+  "recovery_mode": "retry",
+  "reviewed_plan_id": "reviewed-abc",
+  "pipeline_path": "outputs/work/reviewed_pipelines/reviewed_retry_...yaml",
+  "summary_path": null,
+  "audit_id": "audit-retry-789",
+  "errors": [],
+  "warnings": []
+}
+```
+
+### 8.6 Rerun plan (dry-run)
+
+```
+POST /api/projects/{project_id}/runs/{run_id}/rerun-plan
+```
+
+Same shape as retry plan but `recovery_mode: "rerun"` and typically
+`reusable_nodes` is empty (no reuse assumed by default).
+
+---
+
+## 9. Proposed Data Structures
+
+These schemas are proposed for future implementation.  They extend the existing
+Pydantic models in `src/backend/app/schemas/desktop.py`.
+
+### 9.1 RecoveryOption
+
+```python
+class RecoveryOption(BaseModel):
+    available: bool
+    reason: str
+    failed_node_count: int = 0
+    reusable_node_count: int = 0
+    rerun_node_count: int = 0
+```
+
+### 9.2 RunRecoveryOptions
+
+```python
+class RunRecoveryOptions(BaseModel):
+    ok: bool
+    project_id: str
+    run_id: str
+    source_run_status: str
+    options: dict[str, RecoveryOption]  # keys: "retry", "resume", "rerun"
+    warnings: list[str] = Field(default_factory=list)
+```
+
+### 9.3 NodeReuseDecision
+
+```python
+class NodeReuseDecision(BaseModel):
+    node_id: str
+    status: str                     # original node status
+    reason: str                     # human-readable reuse/invalidation reason
+    outputs: list[str] = Field(default_factory=list)
+    params_hash: str | None = None
+    input_checksums: dict[str, str] = Field(default_factory=dict)
+    depends_on_reusable: list[str] = Field(default_factory=list)
+```
+
+### 9.4 NodeInvalidationReason
+
+```python
+class NodeInvalidationReason(BaseModel):
+    node_id: str
+    reason: str
+    downstream_affected: list[str] = Field(default_factory=list)
+```
+
+### 9.5 RunRecoveryPlan
+
+```python
+class RunRecoveryPlan(BaseModel):
+    ok: bool
+    status: str                     # "RETRY_PLAN_READY", "RESUME_REJECTED_*", etc.
+    source_run_id: str
+    recovery_mode: str              # "retry", "resume", "rerun"
+    reviewed_plan_id: str
+    plan_hash: str
+    original_plan_hash: str | None = None
+    reusable_nodes: list[NodeReuseDecision] = Field(default_factory=list)
+    rerun_nodes: list[NodeReuseDecision] = Field(default_factory=list)
+    invalidated_nodes: list[NodeInvalidationReason] = Field(default_factory=list)
+    blocked_nodes: list[NodeReuseDecision] = Field(default_factory=list)
+    invalidation_reasons: list[str] = Field(default_factory=list)
+    approval_required: bool = True
+    audit_required: bool = True
+    would_execute: bool = False
+    execution_allowed: bool = False
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+```
+
+### 9.6 RecoveryExecutionRequest
+
+```python
+class RecoveryExecutionRequest(BaseModel):
+    approval: dict[str, Any] | None = None
+    force_rerun_nodes: list[str] = Field(default_factory=list)
+    actor: str | None = None
+```
+
+### 9.7 RecoveryExecutionResponse
+
+```python
+class RecoveryExecutionResponse(BaseModel):
+    ok: bool
+    status: str
+    source_run_id: str
+    child_run_id: str
+    child_run_link_id: str
+    recovery_mode: str
+    reviewed_plan_id: str
+    pipeline_path: str | None = None
+    summary_path: str | None = None
+    audit_id: str | None = None
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+```
+
+### 9.8 ChildRunLink (extension of existing RunLinkRecord)
+
+The existing `RunLinkRecord` in `desktop.py` would gain these optional fields:
+
+```python
+class RunLinkRecord(BaseModel):
+    # ... existing fields ...
+    source_run_id: str | None = None          # original run for retry/resume
+    recovery_mode: str | None = None          # "retry", "resume", "rerun"
+    parent_run_link_id: str | None = None     # original run_link_id
+    reusable_node_ids: list[str] = Field(default_factory=list)
+    rerun_node_ids: list[str] = Field(default_factory=list)
+    provenance_bundle_path: str | None = None # path to provenance JSON
+```
+
+---
+
+## 10. Audit and Provenance Requirements
+
+Every recovery action must produce an immutable audit record (extending the
+existing `audit_record.py` pattern) and a provenance bundle.
+
+### 10.1 Audit record fields (in addition to existing fields)
+
+| Field | Description |
+|---|---|
+| `event_type` | `"retry_requested"`, `"resume_requested"`, `"rerun_requested"` |
+| `source_run_id` | The original run ID. |
+| `child_run_id` | The new run ID. |
+| `recovery_mode` | `"retry"`, `"resume"`, or `"rerun"`. |
+| `reused_node_ids` | List of node IDs whose outputs were reused. |
+| `rerun_node_ids` | List of node IDs that were re-executed. |
+| `invalidated_node_ids` | List of node IDs that were invalidated and why. |
+| `plan_hash_comparison` | `{"original": "...", "current": "...", "match": true/false}` |
+| `environment_fingerprint_comparison` | `{"original": "...", "current": "...", "compatible": true/false}` |
+| `rawdata_readonly_confirmed` | `true` (assertion, verified by checksum comparison). |
+| `provenance_bundle_path` | Path to the detailed provenance JSON. |
+
+### 10.2 Provenance bundle
+
+A JSON file written alongside the audit record containing:
+
+- Full node-by-node reuse decision details
+- Hash/checksum comparisons for each input and output
+- Environment fingerprint details
+- Original and child plan hashes
+- Node parameter hashes
+- Input file checksums
+- Output file checksums
+- Invalidation chain (which nodes invalidated which downstream nodes)
+- Actor and timestamp
+
+---
+
+## 11. Frontend UX Contract
+
+> **This section describes future UI behaviour only.  No buttons or panels are
+> added in this phase.**
+
+### 11.1 Recovery options in Run Detail
+
+The `RunDetailPanel` should display a **Recovery Options** section that shows:
+
+- Whether retry, resume, and rerun are available for this run.
+- Why each mode is or is not available (from `GET .../recovery-options`).
+- A disabled button for unavailable modes with a tooltip explaining why.
+
+### 11.2 Recovery plan review
+
+When the user selects a recovery mode:
+
+- Show a **Recovery Plan** panel (dry-run response).
+- Display a node table with columns: node ID, original status, decision
+  (Reuse / Rerun / Blocked), reason.
+- Highlight invalidated nodes and their downstream effects.
+- Show a summary: "N nodes reusable, M nodes will rerun, K nodes blocked."
+- Require approval fields before execution.
+- Show the raw recovery plan JSON in a collapsible section.
+
+### 11.3 Execution gating
+
+- The **Execute** button for retry/resume/rerun must be disabled until:
+  - Recovery plan dry-run has succeeded.
+  - Approval fields are filled.
+  - Confirmation checkbox is checked.
+- After execution, display the child run link and allow navigation to it.
+
+### 11.4 Child run display
+
+- The child run appears in the project run list with its own `run_id`.
+- The child run detail shows `source_run_id` and `recovery_mode` in the
+  identity grid.
+- A link back to the source run is provided.
+
+### 11.5 Raw debugging
+
+- Always keep the raw recovery plan and recovery execution response JSON
+  visible in collapsible `<details>` sections.
+
+---
+
+## 12. Safety Rules
+
+These rules are mandatory for any future retry/resume implementation.  They
+extend the existing safety architecture (Approval Gate, audit, path safety, safe
+allowlist).
+
+| # | Rule | Enforcement |
+|---|---|---|
+| 1 | **No rawdata modification.** | Rawdata directories are never written to. Checksums of rawdata files are verified before and after recovery. |
+| 2 | **No arbitrary path input.** | Recovery endpoints accept only `project_id` + `run_id`. No user-supplied file paths. |
+| 3 | **No implicit execution.** | Recovery always requires explicit user confirmation (`confirm_execution=true`). |
+| 4 | **No reuse without verification.** | Every reused node output must pass all reuse conditions (Section 6). |
+| 5 | **No resume across project context mismatch.** | If `project_config.yaml`, rawdata, or dataset index changed, resume is blocked. |
+| 6 | **No resume if reviewed plan unresolvable.** | The reviewed plan snapshot must exist and the plan hash must match. |
+| 7 | **No bypass of audit.** | Every recovery action writes an audit record before execution (same as current `execute_reviewed_routes.py`). |
+| 8 | **No bypass of approval.** | Every recovery execution requires an approved Approval Gate result. |
+| 9 | **No hidden overwrite of derivatives.** | Child runs write to their own `run_id`-scoped work directories. Original run outputs are not modified. |
+| 10 | **No deletion of previous outputs.** | Original run artifacts are never deleted during retry/resume. |
+| 11 | **No stale heartbeat assumption.** | `RUNNING` runs must have no active heartbeat for a configurable timeout before resume is allowed. |
+| 12 | **Child run gated identically to original.** | The child run passes the same `MEDIMAGE_ENABLE_REVIEWED_EXECUTION`, Approval Gate, safe allowlist, project context, and audit checks as any new execution. |
+
+---
+
+## 13. Test Matrix
+
+This matrix defines the test cases that must pass before retry/resume is
+considered implemented.  Tests are grouped by layer.
+
+### 13.1 Backend API tests
+
+| # | Test | Expected |
+|---|---|---|
+| API-01 | `GET .../recovery-options` on non-existent project | 404 |
+| API-02 | `GET .../recovery-options` on non-existent run | 404 |
+| API-03 | `GET .../recovery-options` on completed run | Options show `rerun: available`, `retry: unavailable`, `resume: unavailable` |
+| API-04 | `GET .../recovery-options` on failed run | Options show `retry: available` with failed/reusable counts |
+| API-05 | `GET .../recovery-options` on partial run | Options show `resume: available` or `retry: available` |
+| API-06 | `POST .../retry-plan` on failed run | Returns `RETRY_PLAN_READY` with reusable + rerun nodes |
+| API-07 | `POST .../resume-plan` on completed run | Returns `RESUME_REJECTED_*` |
+| API-08 | `POST .../retry` without approval | Returns blocked (approval gate) |
+| API-09 | `POST .../retry` without audit | Returns blocked (audit required) |
+| API-10 | `POST .../retry` without confirmation | Returns blocked (confirmation required) |
+| API-11 | `POST .../retry` with approval + audit + confirmation | Returns `RETRY_SUBMITTED` with child run link |
+| API-12 | Child run appears in `GET .../runs` | Listed with own `run_id` |
+| API-13 | Child run detail shows `source_run_id` and `recovery_mode` | Fields present in run link payload |
+| API-14 | Original run is unchanged after retry | Status, summary, artifacts unchanged |
+
+### 13.2 State / provenance tests
+
+| # | Test | Expected |
+|---|---|---|
+| ST-01 | Same params → hash match → node reusable | `params_hash` matches, node marked reusable |
+| ST-02 | Changed params → hash mismatch → node invalidated | Node + downstream invalidated |
+| ST-03 | Same input file → checksum match → node reusable | Checksum match |
+| ST-04 | Changed input file → checksum mismatch → node invalidated | Node + downstream invalidated |
+| ST-05 | Same environment → fingerprint compatible | Reuse allowed |
+| ST-06 | Changed environment (Python patch) → compatible by policy | Reuse allowed (policy-dependent) |
+| ST-07 | Changed environment (MATLAB version) → incompatible | Node invalidated |
+| ST-08 | Missing output file → node invalidated | File-not-found triggers invalidation |
+| ST-09 | Downstream invalidation transitive | Changing node A invalidates B and C |
+| ST-10 | Force-rerun flag invalidates specified nodes | Explicit override |
+
+### 13.3 Frontend tests
+
+| # | Test | Expected |
+|---|---|---|
+| FE-01 | Recovery unavailable state renders | Run detail shows "Recovery not available" with reason |
+| FE-02 | Retry available state renders | "Retry" button enabled, shows failed/reusable counts |
+| FE-03 | Resume available state renders | "Resume" button enabled |
+| FE-04 | Rerun available state renders | "Rerun" button enabled |
+| FE-05 | Blocked reason displayed | Tooltip/notice explains why recovery is blocked |
+| FE-06 | Recovery plan table renders | Node table with Reuse/Rerun/Blocked decisions |
+| FE-07 | Child run link displayed after execution | Navigable link to child run |
+| FE-08 | Raw recovery JSON visible | Collapsible debug section |
+
+### 13.4 Safety tests
+
+| # | Test | Expected |
+|---|---|---|
+| SF-01 | Arbitrary path in recovery request rejected | 400 or ignored |
+| SF-02 | Rawdata write blocked during recovery | Rawdata checksums unchanged |
+| SF-03 | Missing approval → execution blocked | Approval gate error |
+| SF-04 | Missing audit → execution blocked | Audit required error |
+| SF-05 | Stale RUNNING run → resume allowed after heartbeat timeout | Heartbeat check passes |
+| SF-06 | Active RUNNING run → resume blocked | Heartbeat active, resume rejected |
+| SF-07 | Original run artifacts unmodified after child run | File checksums match |
+| SF-08 | Child run writes to scoped work directory | `work/states/<child_run_id>/` not `<original_run_id>/` |
+
+---
+
+## 14. Recommended Implementation Order
+
+This is a suggested sequence for future implementation phases.  Each phase
+should be a separate, reviewable PR or delivery batch.
+
+| Phase | Scope | Key deliverables |
+|---|---|---|
+| **P0 — Contract tests** | Write the test matrix (Section 13) as pytest + frontend smoke tests. All tests should fail initially (no implementation). | `tests/unit/test_run_recovery.py`, smoke stubs |
+| **P1 — Recovery options (read-only)** | Implement `GET /api/projects/{id}/runs/{run_id}/recovery-options`. Pure read-only — no execution. | Backend route, service, schemas, frontend display in `RunDetailPanel` |
+| **P2 — Dry-run planning** | Implement `POST .../retry-plan`, `POST .../resume-plan`, `POST .../rerun-plan`. Dry-run only — no execution. Compute reuse/invalidation/rerun decisions. | Backend routes, `run_recovery_planner.py` service, frontend recovery plan panel |
+| **P3 — Frontend read-only panel** | Build the Recovery Options + Recovery Plan review UI in `RunDetailPanel`. | New `RunRecoveryPanel.tsx` component |
+| **P4 — Audit record extension** | Add `source_run_id`, `recovery_mode`, and provenance fields to audit records. | `audit_record.py` extension |
+| **P5 — Child run link schema** | Add `source_run_id`, `recovery_mode`, `parent_run_link_id`, `reusable_node_ids`, `rerun_node_ids` to `RunLinkRecord` and SQLite schema. | `desktop.py` schemas, `mock_store.py` migration |
+| **P6 — Retry execution (safe allowlist only)** | Implement `POST .../retry` for failed safe-allowlist nodes. Full gating cycle. | Backend route, executor integration |
+| **P7 — Resume execution** | Implement `POST .../resume` with checksum verification and heartbeat checking. | Backend route, heartbeat service |
+| **P8 — Full UI action buttons** | Enable Execute buttons in the recovery panel. Full approval/audit/confirmation flow. | Frontend button wiring |
+
+---
+
+## 15. Non-Goals
+
+This contract phase explicitly does **not** include:
+
+- Actual retry, resume, or rerun execution.
+- Cancellation of running pipelines.
+- Scheduler redesign for partial re-execution.
+- Distributed or multi-machine execution recovery.
+- Arbitrary checkpoint editing or manual state manipulation.
+- Clinical interpretation of recovery results.
+- Automatic retry (all recovery is user-initiated).
+- GUI-agent based recovery (all recovery goes through the same reviewed-plan execution path).
+
+---
+
+## Appendix A: Current Code Anchors
+
+These are the files that will need modification when retry/resume is implemented:
+
+| File | Purpose |
+|---|---|
+| `src/backend/app/api/execute_reviewed_routes.py` | Add retry/resume/rerun endpoints (or a new `run_recovery_routes.py`). |
+| `src/backend/app/api/project_history_routes.py` | Add `GET .../recovery-options` endpoint. |
+| `src/backend/app/schemas/desktop.py` | Add `RunLinkRecord` fields, recovery schemas. |
+| `src/backend/app/services/mock_store.py` | Add `source_run_id` column to `run_links` table. |
+| `src/backend/app/planner/reviewed_plan_store.py` | Extend `build_run_link()` for child run creation. |
+| `src/backend/app/planner/audit_record.py` | Add recovery-specific event types and fields. |
+| `src/backend/app/runtime/state_store.py` | Add output checksum recording at node-state write time. |
+| `src/backend/app/runtime/run_inspector.py` | Add heartbeat and state-read helpers for recovery planning. |
+| `src/frontend/src/components/run-history/RunDetailPanel.tsx` | Add recovery options and plan sections. |
+| `src/frontend/src/types.ts` | Add recovery-related frontend types. |
+| `src/frontend/src/api.ts` | Add recovery API wrappers. |
+
+---
+
+*End of contract document.  This document describes future behaviour only.
+No retry, resume, or rerun execution exists in the current release.*

@@ -500,4 +500,218 @@ assert.equal(getRunStatusToneKey("RUNNING"), "active");
 assert.equal(getRunStatusToneKey("submitted"), "active");
 assert.equal(getRunStatusToneKey("unknown"), "neutral");
 
+// ── deriveRunHealth smoke ────────────────────────────────────────────────
+const runStatusSourcePath = path.join(__dirname, "..", "src", "lib", "runStatus.ts");
+const runStatusSource = fs.readFileSync(runStatusSourcePath, "utf8");
+const runStatusTranspiled = ts.transpileModule(runStatusSource, {
+  fileName: runStatusSourcePath,
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2020,
+  },
+});
+const runStatusModule = { exports: {} };
+vm.runInNewContext(
+  runStatusTranspiled.outputText,
+  { exports: runStatusModule.exports, module: runStatusModule, require },
+  { filename: runStatusSourcePath },
+);
+const { deriveRunHealth } = runStatusModule.exports;
+
+// null run
+const h0 = deriveRunHealth(null, null);
+assert.equal(h0.level, "unknown");
+
+// failed status
+const h1 = deriveRunHealth({ status: "FAILED", warnings: [] }, null);
+assert.equal(h1.level, "failed");
+
+// failed nodes in summary
+const h2 = deriveRunHealth(
+  { status: "SUCCESS", warnings: [] },
+  { nodes_failed: 2, warnings: [] },
+);
+assert.equal(h2.level, "failed");
+
+// warning from run
+const h3 = deriveRunHealth(
+  { status: "SUCCESS", warnings: ["stale pipeline"] },
+  null,
+);
+assert.equal(h3.level, "warning");
+
+// missing summary
+const h4 = deriveRunHealth(
+  { status: "RUNNING", warnings: [] },
+  null,
+);
+assert.equal(h4.level, "warning");
+assert.ok(h4.explanation.includes("No summary preview"));
+
+// ok — submitted
+const h5 = deriveRunHealth(
+  { status: "SUBMITTED", warnings: [] },
+  { nodes_total: 3, nodes_succeeded: 3, nodes_failed: 0, nodes_skipped: 0, warnings: [] },
+);
+assert.equal(h5.level, "ok");
+
+// ok — completed
+const h6 = deriveRunHealth(
+  { status: "COMPLETED", warnings: [] },
+  { nodes_total: 1, nodes_succeeded: 1, nodes_failed: 0, nodes_skipped: 0, warnings: [] },
+);
+assert.equal(h6.level, "ok");
+
+// unknown
+const h7 = deriveRunHealth(
+  { status: "QUEUED", warnings: [] },
+  { nodes_total: 0, nodes_succeeded: 0, nodes_failed: 0, nodes_skipped: 0, warnings: [] },
+);
+assert.equal(h7.level, "unknown");
+
+// ── describeExecuteReviewedStatus smoke ─────────────────────────────────
+const executedStatusSourcePath = path.join(__dirname, "..", "src", "lib", "executeReviewedStatus.ts");
+const executedStatusSource = fs.readFileSync(executedStatusSourcePath, "utf8");
+const executedStatusTranspiled = ts.transpileModule(executedStatusSource, {
+  fileName: executedStatusSourcePath,
+  compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    target: ts.ScriptTarget.ES2020,
+  },
+});
+const executedStatusModule = { exports: {} };
+vm.runInNewContext(
+  executedStatusTranspiled.outputText,
+  { exports: executedStatusModule.exports, module: executedStatusModule, require },
+  { filename: executedStatusSourcePath },
+);
+const { describeExecuteReviewedStatus } = executedStatusModule.exports;
+
+// DRY_RUN_OK
+const s0 = describeExecuteReviewedStatus("DRY_RUN_OK");
+assert.equal(s0.severity, "success");
+assert.equal(s0.canRetryDryRun, true);
+assert.equal(s0.canAttemptExecute, true);
+
+// AUDIT_REQUIRED
+const s1 = describeExecuteReviewedStatus("AUDIT_REQUIRED");
+assert.equal(s1.severity, "error");
+assert.equal(s1.canAttemptExecute, false);
+
+// APPROVAL_GATE_BLOCKED
+const s2 = describeExecuteReviewedStatus("APPROVAL_GATE_BLOCKED");
+assert.equal(s2.severity, "warning");
+assert.equal(s2.canAttemptExecute, false);
+
+// EXECUTION_POLICY_BLOCKED
+const s3 = describeExecuteReviewedStatus("EXECUTION_POLICY_BLOCKED");
+assert.equal(s3.severity, "warning");
+assert.ok(s3.title.length > 0);
+
+// EXECUTION_FAILED
+const s4 = describeExecuteReviewedStatus("EXECUTION_FAILED");
+assert.equal(s4.severity, "error");
+assert.equal(s4.canAttemptExecute, true);
+
+// Unknown status fallback
+const s5 = describeExecuteReviewedStatus("SOME_NEW_STATUS");
+assert.equal(s5.severity, "info");
+assert.ok(s5.title.includes("SOME_NEW_STATUS"));
+assert.equal(s5.canRetryDryRun, true);
+
+// Undefined / empty
+const s6 = describeExecuteReviewedStatus(undefined);
+assert.equal(s6.severity, "info");
+assert.equal(s6.status, "(empty)");
+
+// ── buildPresetPlanDraft smoke ──────────────────────────────────────────
+const handoffSourcePath = path.join(__dirname, "..", "src", "lib", "presetPlanHandoff.ts");
+const handoffSource = fs.readFileSync(handoffSourcePath, "utf8");
+const handoffTranspiled = ts.transpileModule(handoffSource, {
+  fileName: handoffSourcePath,
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+});
+const handoffModule = { exports: {} };
+vm.runInNewContext(
+  handoffTranspiled.outputText,
+  { exports: handoffModule.exports, module: handoffModule, require },
+  { filename: handoffSourcePath },
+);
+const { buildPresetPlanDraft } = handoffModule.exports;
+
+const draft = buildPresetPlanDraft("proj-123", {
+  ok: true, preset_id: "test_preset", project_id: "proj-123",
+  plan: { pipeline_id: "t", nodes: [] },
+  validation: { ok: true }, warnings: ["w1"],
+  errors: [], next_actions: ["action1"], safety_flags: {},
+});
+assert.equal(draft.preset_id, "test_preset");
+assert.equal(draft.project_id, "proj-123");
+assert.equal(draft.source, "pipeline_preset");
+assert.equal(draft.goal, "rs-fMRI preprocessing MVP preset");
+assert.deepEqual(draft.plan, { pipeline_id: "t", nodes: [] });
+assert.equal(draft.warnings.length, 1);
+assert.equal(draft.next_actions.length, 1);
+
+// defaults missing fields to empty arrays
+const draft2 = buildPresetPlanDraft("p2", {
+  ok: true, preset_id: "tp", project_id: "p2",
+  plan: {}, validation: {}, warnings: undefined,
+  errors: [], next_actions: undefined, safety_flags: {},
+});
+assert.equal(draft2.warnings.length, 0);
+assert.equal(draft2.next_actions.length, 0);
+
+// ── detectExternalToolNodes smoke ────────────────────────────────────────
+const extApprovalSourcePath = path.join(__dirname, "..", "src", "lib", "externalToolApproval.ts");
+const extApprovalSource = fs.readFileSync(extApprovalSourcePath, "utf8");
+const extApprovalTranspiled = ts.transpileModule(extApprovalSource, {
+  fileName: extApprovalSourcePath,
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+});
+const extApprovalModule = { exports: {} };
+vm.runInNewContext(
+  extApprovalTranspiled.outputText,
+  { exports: extApprovalModule.exports, module: extApprovalModule, require },
+  { filename: extApprovalSourcePath },
+);
+const { detectExternalToolNodes, isExternalToolApprovalComplete } = extApprovalModule.exports;
+
+const r1 = detectExternalToolNodes(null);
+assert.equal(r1.required, false);
+
+const r2 = detectExternalToolNodes({ nodes: [{ id: "spm_realign_subject", backend: "matlab-spm" }] });
+assert.equal(r2.required, true);
+assert.ok(r2.nodeIds.includes("spm_realign_subject"));
+
+const r3 = detectExternalToolNodes({ nodes: [{ id: "contract_smoke", backend: "python" }] });
+assert.equal(r3.required, false);
+
+const r4 = detectExternalToolNodes({ nodes: [{ id: "dpabi_smooth", backend: "dpabi" }] });
+assert.equal(r4.required, true);
+assert.ok(r4.backendIds.includes("dpabi"));
+
+const r5 = detectExternalToolNodes(undefined);
+assert.equal(r5.required, false);
+
+const r6 = detectExternalToolNodes({});
+assert.equal(r6.required, false);
+
+// ── isExternalToolApprovalComplete smoke ──────────────────────────────────
+const req = { required: true, nodeIds: ["spm_realign_subject"], backendIds: ["matlab-spm"], reasons: [] };
+const fullState = {
+  externalToolAcknowledgement: true, rawdataReadOnlyConfirmed: true,
+  outputDirectoryConfirmed: true, riskAcknowledgement: true,
+  subjectScopeConfirmed: true, overwritePolicy: "fail_if_exists",
+};
+const missingOne = { ...fullState, riskAcknowledgement: false };
+const badPolicy = { ...fullState, overwritePolicy: "silent_overwrite" };
+const noReq = { required: false, nodeIds: [], backendIds: [], reasons: [] };
+
+assert.equal(isExternalToolApprovalComplete(noReq, fullState), true);
+assert.equal(isExternalToolApprovalComplete(req, fullState), true);
+assert.equal(isExternalToolApprovalComplete(req, missingOne), false);
+assert.equal(isExternalToolApprovalComplete(req, badPolicy), false);
+assert.equal(isExternalToolApprovalComplete(noReq, missingOne), true);
+
 console.log("ProjectRunsPanel smoke passed");

@@ -205,6 +205,8 @@ MedImage_Agent/
 - 无完整 QC dashboard
 - 无报告编辑器
 - 此版本中 MATLAB/SPM/DPABI/GPU 仅为 contract-only
+- **SPM realign 仅处于准备阶段**：参数验证、环境健康检查、dry-run 输出清单和批处理模板预览可用，但真正的 MATLAB/SPM 执行尚未实现
+- **QC Dashboard 缓存为单模块原型**：支持 `cache=off|prefer|refresh`，但当前缓存仅覆盖 NIfTI QC Snapshot 一个模块。`cache=refresh` 会刷新该模块缓存，`cache=prefer` 会在 rawdata fingerprint 匹配时复用该模块缓存。其他 Dashboard 模块仍会正常运行。缓存不会修改 rawdata。
 - Electron 应用未签名（首次运行需放行 SmartScreen）
 - 仅支持 Windows 打包
 - 不支持自动更新
@@ -218,7 +220,7 @@ MedImage_Agent/
 | 版本 | 重点 |
 |---|---|
 | **v0.3.0-rc1**（当前） | 桌面端 MVP：真实项目工作流、运行历史、artifact 预览 |
-| v0.3.x | 安装包签名、自动更新、CI/CD 打包流水线 |
+| v0.3.x | 安装包签名、自动更新、CI/CD 打包流水线；SPM realign 准备阶段（参数、环境、dry-run、批处理模板预览） |
 | v0.4.0 | NIfTI viewer、增强 QC dashboard、MATLAB/SPM 运行时（opt-in） |
 | 未来 | macOS/Linux 打包、DICOM 浏览器、插件系统 |
 

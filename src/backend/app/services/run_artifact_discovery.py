@@ -18,12 +18,13 @@ SUMMARY_WARNING_LIMIT = 50
 ARTIFACT_PREVIEW_MAX_BYTES = 80_000
 ARTIFACT_ERROR_EXCERPT_MAX_CHARS = 1_200
 ARTIFACT_QC_METRIC_LIMIT = 12
-PREVIEWABLE_SUFFIXES = {".json", ".txt", ".md", ".csv", ".log"}
+PREVIEWABLE_SUFFIXES = {".json", ".txt", ".md", ".csv", ".tsv", ".log"}
 PATH_SUFFIXES = {
     ".json",
     ".txt",
     ".md",
     ".csv",
+    ".tsv",
     ".log",
     ".yaml",
     ".yml",

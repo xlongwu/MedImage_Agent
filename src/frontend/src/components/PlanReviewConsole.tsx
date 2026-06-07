@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, executeReviewedPlan, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, listProjectReviewedPlans, saveReviewedPlan, validatePlan } from "../api";
+import { describeExecuteReviewedStatus } from "../lib/executeReviewedStatus";
+import { detectExternalToolNodes, isExternalToolApprovalComplete } from "../lib/externalToolApproval";
+import type { ExecuteReviewedSeverity } from "../lib/executeReviewedStatus";
 import type { ProjectDetail } from "../lib/types/project";
-import type { ReviewedPlanRecord } from "../types";
+import type { ExecuteReviewedResponse, PresetPlanDraft, ReviewedPlanRecord } from "../types";
 
 type PlanData = Record<string, unknown> | null;
 
@@ -11,6 +14,7 @@ type Props = {
   projectConfigPath?: string;
   datasetIndexPath?: string | null;
   rawdataDir?: string;
+  initialPresetDraft?: PresetPlanDraft | null;
 };
 
 type CatalogItem = {
@@ -19,30 +23,7 @@ type CatalogItem = {
   risk_level: string; inputs: string[]; outputs: string[]; tags: string[];
 };
 
-type DryRunExecutionMeta = {
-  executor_called?: boolean;
-  submitted?: boolean;
-  run_id?: string | null;
-};
 
-type DryRunResult = {
-  ok?: boolean;
-  status?: string;
-  dry_run?: boolean;
-  would_execute?: boolean;
-  execution_allowed?: boolean;
-  validation?: Record<string, unknown>;
-  approval_gate?: Record<string, unknown> | null;
-  execution?: DryRunExecutionMeta;
-  audit?: {
-    persisted?: boolean;
-    audit_id?: string;
-    audit_path?: string;
-    event_type?: string;
-  };
-  errors?: unknown[];
-  warnings?: unknown[];
-};
 
 export default function PlanReviewConsole({
   selectedProjectId,
@@ -50,10 +31,12 @@ export default function PlanReviewConsole({
   projectConfigPath: selectedProjectConfigPath,
   datasetIndexPath,
   rawdataDir,
+  initialPresetDraft,
 }: Props) {
   const baseUrl = DEFAULT_API_BASE;
   const [goal, setGoal] = useState("");
   const [provider, setProvider] = useState("mock");
+  const [loadedPresetBanner, setLoadedPresetBanner] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PlanData>(null);
   const [error, setError] = useState("");
@@ -79,8 +62,16 @@ export default function PlanReviewConsole({
   const [approvalLoading, setApprovalLoading] = useState(false);
   const [approvalError, setApprovalError] = useState("");
 
+  // ── External-tool safety acknowledgements ──
+  const [externalToolAcknowledgement, setExternalToolAcknowledgement] = useState(false);
+  const [rawdataReadOnlyConfirmed, setRawdataReadOnlyConfirmed] = useState(false);
+  const [outputDirectoryConfirmed, setOutputDirectoryConfirmed] = useState(false);
+  const [riskAcknowledgement, setRiskAcknowledgement] = useState(false);
+  const [subjectScopeConfirmed, setSubjectScopeConfirmed] = useState(false);
+  const [overwritePolicy, setOverwritePolicy] = useState<"fail_if_exists" | "require_explicit_overwrite_approval">("fail_if_exists");
+
   // ── Dry-run Execution Check ──
-  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null);
+  const [dryRunResult, setDryRunResult] = useState<ExecuteReviewedResponse | null>(null);
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [dryRunError, setDryRunError] = useState("");
   const [persistAudit, setPersistAudit] = useState(false);
@@ -92,7 +83,7 @@ export default function PlanReviewConsole({
 
   // ── Reviewed Execution ──
   const [executionLoading, setExecutionLoading] = useState(false);
-  const [executionResult, setExecutionResult] = useState<Record<string, unknown> | null>(null);
+  const [executionResult, setExecutionResult] = useState<ExecuteReviewedResponse | null>(null);
   const [executionError, setExecutionError] = useState("");
   const [confirmExecution, setConfirmExecution] = useState(false);
   const [explicitDemoMode, setExplicitDemoMode] = useState(false);
@@ -114,6 +105,35 @@ export default function PlanReviewConsole({
   const effectiveProjectConfigPath = explicitDemoMode
     ? demoProjectConfigPath.trim()
     : selectedProjectConfigPath?.trim() ?? "";
+
+  // ── Detect high-risk external-tool nodes ──
+  const externalToolReq = useMemo(() => {
+    const plan = result?.plan ?? null;
+    return detectExternalToolNodes(plan as Record<string, unknown> | null);
+  }, [result]);
+
+  // Helper: build the external-tool approval fields to merge into the approval payload
+  function externalToolApprovalFields() {
+    if (!externalToolReq.required) return {};
+    return {
+      external_tool_acknowledgement: externalToolAcknowledgement,
+      rawdata_read_only_confirmed: rawdataReadOnlyConfirmed,
+      output_directory_confirmed: outputDirectoryConfirmed,
+      risk_acknowledgement: riskAcknowledgement,
+      subject_scope_confirmed: subjectScopeConfirmed,
+      overwrite_policy: overwritePolicy,
+    };
+  }
+
+  const externalToolApprovalComplete = isExternalToolApprovalComplete(externalToolReq, {
+    externalToolAcknowledgement,
+    rawdataReadOnlyConfirmed,
+    outputDirectoryConfirmed,
+    riskAcknowledgement,
+    subjectScopeConfirmed,
+    overwritePolicy,
+  });
+
   const effectiveProjectId = explicitDemoMode
     ? undefined
     : selectedProjectId ?? undefined;
@@ -129,6 +149,8 @@ export default function PlanReviewConsole({
           ? "Selected project is missing metadata.project_config_path."
           : "";
 
+  const lastDraftKeyRef = useRef<string | null>(null);
+
   React.useEffect(() => {
     setResult(null);
     setPlanJson("");
@@ -140,12 +162,51 @@ export default function PlanReviewConsole({
     setRecentPlans([]);
     setPlanHistoryError("");
     setPlanSaveStatus("");
+    setLoadedPresetBanner(null);
+    setExternalToolAcknowledgement(false);
+    setRawdataReadOnlyConfirmed(false);
+    setOutputDirectoryConfirmed(false);
+    setRiskAcknowledgement(false);
+    setSubjectScopeConfirmed(false);
   }, [
     selectedProjectId,
     selectedProjectConfigPath,
     explicitDemoMode,
     demoProjectConfigPath,
   ]);
+
+  // ── Load preset draft ──
+  React.useEffect(() => {
+    if (!initialPresetDraft) return;
+    const plan = initialPresetDraft.plan;
+    if (!plan || typeof plan !== "object") return;
+    const draftKey = `${initialPresetDraft.project_id}:${initialPresetDraft.preset_id}:${JSON.stringify(plan).length}`;
+    if (draftKey === lastDraftKeyRef.current) return;
+    lastDraftKeyRef.current = draftKey;
+
+    const planStr = JSON.stringify(plan, null, 2);
+    setGoal(initialPresetDraft.goal);
+    setProvider("pipeline_preset");
+    setResult({
+      ok: true,
+      plan: plan,
+      validation: initialPresetDraft.validation ?? {},
+      provider: "pipeline_preset",
+      warnings: initialPresetDraft.warnings ?? [],
+      errors: [],
+      messages: [`Loaded from pipeline preset: ${initialPresetDraft.preset_id}`],
+    });
+    setPlanJson(planStr);
+    setReValidation((initialPresetDraft.validation ?? null) as Record<string, unknown> | null);
+    setDryRunResult(null);
+    setExecutionResult(null);
+    setConfirmExecution(false);
+    setReviewedPlanId(null);
+    setPlanSaveStatus("");
+    setLoadedPresetBanner(
+      `Loaded preset draft: ${initialPresetDraft.preset_id}. This is a contract MVP and does not run real SPM/DPABI preprocessing yet.`
+    );
+  }, [initialPresetDraft]);
 
   async function refreshRecentPlans(projectId = selectedProjectId) {
     if (!projectId || explicitDemoMode) {
@@ -425,7 +486,7 @@ export default function PlanReviewConsole({
     }
     const nodes = approvalNodesInput.split(",").map(s => s.trim()).filter(Boolean);
     const rejected = rejectedNodesInput.split(",").map(s => s.trim()).filter(Boolean);
-    const approval = approvalApproved ? {
+    const baseApproval = approvalApproved ? {
       approved: true,
       approved_by: approvalBy || "reviewer",
       reason: approvalReason || undefined,
@@ -433,6 +494,7 @@ export default function PlanReviewConsole({
       rejected_nodes: rejected,
       review_draft_schema_version: "review-draft-v1",
     } : { approved: false };
+    const approval = { ...baseApproval, ...externalToolApprovalFields() };
     setApprovalLoading(true);
     try {
       const data = await checkApprovalGate(baseUrl, { plan, validation, approval });
@@ -450,7 +512,7 @@ export default function PlanReviewConsole({
     catch { setDryRunError("Cannot parse current plan JSON."); return; }
     const nodes = approvalNodesInput.split(",").map(s => s.trim()).filter(Boolean);
     const rejected = rejectedNodesInput.split(",").map(s => s.trim()).filter(Boolean);
-    const approval = approvalApproved ? {
+    const baseApproval = approvalApproved ? {
       approved: true,
       approved_by: approvalBy || "reviewer",
       reason: approvalReason || undefined,
@@ -458,6 +520,7 @@ export default function PlanReviewConsole({
       rejected_nodes: rejected,
       review_draft_schema_version: "review-draft-v1",
     } : { approved: false };
+    const approval = { ...baseApproval, ...externalToolApprovalFields() };
     setDryRunLoading(true);
     try {
       const data = await executeReviewedDryRun(baseUrl, {
@@ -469,7 +532,7 @@ export default function PlanReviewConsole({
         persist_audit: persistAudit,
         actor: approvalBy || undefined,
       });
-      setDryRunResult(data as Record<string, unknown>);
+      setDryRunResult(data);
     } catch (e) {
       setDryRunError(e instanceof Error ? e.message : String(e));
     } finally { setDryRunLoading(false); }
@@ -488,7 +551,7 @@ export default function PlanReviewConsole({
     }
     const nodes = approvalNodesInput.split(",").map(s => s.trim()).filter(Boolean);
     const rejected = rejectedNodesInput.split(",").map(s => s.trim()).filter(Boolean);
-    const approval = approvalApproved ? {
+    const baseApproval = approvalApproved ? {
       approved: true,
       approved_by: approvalBy || "reviewer",
       reason: approvalReason || undefined,
@@ -496,6 +559,7 @@ export default function PlanReviewConsole({
       rejected_nodes: rejected,
       review_draft_schema_version: "review-draft-v1",
     } : { approved: false };
+    const approval = { ...baseApproval, ...externalToolApprovalFields() };
     setExecutionLoading(true);
     try {
       const data = await executeReviewedPlan(baseUrl, {
@@ -506,7 +570,7 @@ export default function PlanReviewConsole({
         project_config_path: effectiveProjectConfigPath,
         actor: actorName.trim() || "frontend-user",
       });
-      setExecutionResult(data as Record<string, unknown>);
+      setExecutionResult(data);
     } catch (e) {
       setExecutionError(e instanceof Error ? e.message : String(e));
     } finally { setExecutionLoading(false); }
@@ -526,6 +590,12 @@ export default function PlanReviewConsole({
   return (
     <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
       <h2>Plan Review Console</h2>
+
+      {loadedPresetBanner ? (
+        <div style={{ marginBottom: 16, padding: 12, background: "rgba(106, 27, 154, 0.08)", border: "1px solid rgba(106, 27, 154, 0.24)", borderRadius: 4, fontSize: 12, color: "#6a1b9a" }}>
+          {loadedPresetBanner}
+        </div>
+      ) : null}
 
       <div style={{ marginBottom: 16, padding: 12, background: "#eef4fb", border: "1px solid #b7c9dd", borderRadius: 4, fontSize: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Project Context</div>
@@ -728,6 +798,52 @@ export default function PlanReviewConsole({
         </div>
       )}
 
+      {/* ── External Tool Safety Acknowledgement ── */}
+      {result && externalToolReq.required && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#fff3e0", borderRadius: 4, border: "1px solid rgba(235, 87, 87, 0.26)" }}>
+          <h4 style={{ margin: "0 0 4px 0", fontSize: 14, color: "#c62828" }}>External Tool Safety Acknowledgement</h4>
+          <p style={{ fontSize: 12, color: "#b53b3b", margin: "0 0 8px 0" }}>
+            This plan contains high-risk external-tool nodes: {externalToolReq.nodeIds.join(", ")}.
+            These acknowledgements are required before future execution.
+          </p>
+          <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
+            <label>
+              <input type="checkbox" checked={externalToolAcknowledgement} onChange={(e) => setExternalToolAcknowledgement(e.target.checked)} />
+              {" "}I understand this may call external MATLAB/SPM/DPABI tools in future execution.
+            </label>
+            <label>
+              <input type="checkbox" checked={rawdataReadOnlyConfirmed} onChange={(e) => setRawdataReadOnlyConfirmed(e.target.checked)} />
+              {" "}I confirm rawdata must remain read-only.
+            </label>
+            <label>
+              <input type="checkbox" checked={outputDirectoryConfirmed} onChange={(e) => setOutputDirectoryConfirmed(e.target.checked)} />
+              {" "}I confirm outputs must be written only to approved project/derivatives directories.
+            </label>
+            <label>
+              <input type="checkbox" checked={riskAcknowledgement} onChange={(e) => setRiskAcknowledgement(e.target.checked)} />
+              {" "}I acknowledge the risk of external-tool execution and environment-dependent results.
+            </label>
+            <label>
+              <input type="checkbox" checked={subjectScopeConfirmed} onChange={(e) => setSubjectScopeConfirmed(e.target.checked)} />
+              {" "}I confirm the subject/session scope has been reviewed.
+            </label>
+            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <span>Overwrite policy:</span>
+              <select value={overwritePolicy} onChange={(e) => setOverwritePolicy(e.target.value as "fail_if_exists" | "require_explicit_overwrite_approval")}
+                style={{ padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }}>
+                <option value="fail_if_exists">fail_if_exists</option>
+                <option value="require_explicit_overwrite_approval">require_explicit_overwrite_approval</option>
+              </select>
+            </label>
+          </div>
+          {(!externalToolAcknowledgement || !rawdataReadOnlyConfirmed || !outputDirectoryConfirmed || !riskAcknowledgement || !subjectScopeConfirmed) && (
+            <div style={{ marginTop: 8, padding: 6, background: "#ffebee", borderRadius: 4, color: "#c62828", fontSize: 12 }}>
+              All checkboxes must be checked for the approval gate to pass.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Dry-run Execution Readiness ── */}
       {result && (
         <div style={{ marginBottom: 16, padding: 12, background: "#f3e5f5", borderRadius: 4, border: "1px solid #ce93d8" }}>
@@ -735,7 +851,12 @@ export default function PlanReviewConsole({
           <p style={{ fontSize: 12, color: "#777", margin: "0 0 8px 0" }}>
             Backend re-runs Plan Validator + Approval Gate. No pipeline is executed.
           </p>
-          <button onClick={handleDryRunCheck} disabled={dryRunLoading || Boolean(projectContextError)}
+          <button onClick={handleDryRunCheck} disabled={dryRunLoading || Boolean(projectContextError) || (externalToolReq.required && !externalToolApprovalComplete)}
+            title={
+              externalToolReq.required && !externalToolApprovalComplete
+                ? "Complete the External Tool Safety Acknowledgement before dry-run."
+                : ""
+            }
             style={{ padding: "6px 14px", background: "#7b1fa2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
             {dryRunLoading ? "Checking..." : "Dry-run Execution Check"}
           </button>
@@ -745,17 +866,9 @@ export default function PlanReviewConsole({
           </label>
           {dryRunError && <div style={{ color: "#c62828", fontSize: 13, marginBottom: 6 }}>❌ {dryRunError}</div>}
           {dryRunResult && (
-            <div style={{ padding: 8, background: dryRunResult.status === "DRY_RUN_OK" ? "#e8f5e9" : dryRunResult.status === "VALIDATION_FAILED" ? "#ffebee" : "#fff3e0", borderRadius: 4, fontSize: 13 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                {dryRunResult.status === "DRY_RUN_OK" && "✅ Dry-run OK: backend would allow execution"}
-                {dryRunResult.status === "VALIDATION_FAILED" && "❌ Validation failed during backend re-check"}
-                {dryRunResult.status === "APPROVAL_GATE_BLOCKED" && "🚫 Approval gate blocked execution"}
-                {dryRunResult.status === "DRY_RUN_ONLY" && "ℹ️ Only dry-run is supported in this phase"}
-              </div>
-              <div>Status: <b>{String(dryRunResult.status)}</b></div>
-              <div>Would execute: <b>{String(dryRunResult.would_execute)}</b></div>
-              <div>Execution allowed: <b>{String(dryRunResult.execution_allowed)}</b></div>
-              <div style={{ marginTop: 4, fontSize: 11, color: "#777" }}>
+            <div style={{ padding: 8, background: severityBg(dryRunResult.status), borderRadius: 4, fontSize: 13 }}>
+              <ExecuteReviewedStatusCard status={dryRunResult.status} />
+              <div style={{ marginTop: 6, fontSize: 11, color: "#777" }}>
                 executor_called: {String(dryRunResult.execution?.executor_called ?? "false")}
                 {" | "}submitted: {String(dryRunResult.execution?.submitted ?? "false")}
                 {" | "}run_id: {String(dryRunResult.execution?.run_id ?? "null")}
@@ -854,20 +967,23 @@ export default function PlanReviewConsole({
               !confirmExecution ||
               !effectiveProjectConfigPath ||
               (!explicitDemoMode && !reviewedPlanId) ||
-              Boolean(projectContextError)
+              Boolean(projectContextError) ||
+              (externalToolReq.required && !externalToolApprovalComplete)
             }
             title={
-              dryRunResult?.status !== "DRY_RUN_OK"
-                ? "Run Dry-run Execution Check first"
-                : !confirmExecution
-                  ? "Check the confirmation box"
-                  : !effectiveProjectConfigPath
-                    ? "Enter a project config path"
-                    : !explicitDemoMode && !reviewedPlanId
-                      ? "Save or re-validate this plan before execution"
-                      : projectContextError
-                        ? projectContextError
-                        : ""
+              externalToolReq.required && !externalToolApprovalComplete
+                ? "Complete the External Tool Safety Acknowledgement before execute."
+                : dryRunResult?.status !== "DRY_RUN_OK"
+                  ? "Run Dry-run Execution Check first"
+                  : !confirmExecution
+                    ? "Check the confirmation box"
+                    : !effectiveProjectConfigPath
+                      ? "Enter a project config path"
+                      : !explicitDemoMode && !reviewedPlanId
+                        ? "Save or re-validate this plan before execution"
+                        : projectContextError
+                          ? projectContextError
+                          : ""
             }
             style={{
               padding: "8px 20px",
@@ -886,37 +1002,39 @@ export default function PlanReviewConsole({
           {executionError && <div style={{ color: "#c62828", fontSize: 13, marginTop: 8 }}>❌ {executionError}</div>}
 
           {executionResult && (
-            <div style={{ marginTop: 8, padding: 8, background: executionStatusBg(String(executionResult.status)), borderRadius: 4, fontSize: 13 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>{executionStatusLabel(String(executionResult.status))}</div>
-              <div>Status: <b>{String(executionResult.status)}</b></div>
-              <div>OK: <b>{String(executionResult.ok)}</b></div>
-              <div>Reviewed plan: <b>{String(executionResult.reviewed_plan_id ?? "null")}</b></div>
-              <div>Run link: <b>{String(executionResult.run_link_id ?? "null")}</b></div>
-              <div>Pipeline path: <b>{String(executionResult.pipeline_path ?? "null")}</b></div>
-              <div>Summary path: <b>{String(executionResult.summary_path ?? "null")}</b></div>
-              <div style={{ marginTop: 4, fontSize: 11, color: "#555" }}>
-                executor_called: <b>{String((executionResult.execution as Record<string,unknown>|null)?.executor_called ?? "false")}</b>
-                {" | "}submitted: <b>{String((executionResult.execution as Record<string,unknown>|null)?.submitted ?? "false")}</b>
-                {" | "}run_id: <b>{String((executionResult.execution as Record<string,unknown>|null)?.run_id ?? "null")}</b>
+            <div style={{ marginTop: 8, padding: 8, background: severityBg(executionResult.status), borderRadius: 4, fontSize: 13 }}>
+              <ExecuteReviewedStatusCard status={executionResult.status} />
+              <div style={{ marginTop: 6, fontSize: 12 }}>
+                <div>Reviewed plan: <b>{String(executionResult.reviewed_plan_id ?? "null")}</b></div>
+                <div>Run link: <b>{String(executionResult.run_link_id ?? "null")}</b></div>
+                <div>Pipeline path: <b>{String(executionResult.pipeline_path ?? "null")}</b></div>
+                <div>Summary path: <b>{String(executionResult.summary_path ?? "null")}</b></div>
               </div>
-              {(executionResult.audit as Record<string,unknown>|null)?.audit_id ? (
+              <div style={{ marginTop: 4, fontSize: 11, color: "#555" }}>
+                executor_called: <b>{String(executionResult.execution?.executor_called ?? "false")}</b>
+                {" | "}submitted: <b>{String(executionResult.execution?.submitted ?? "false")}</b>
+                {" | "}run_id: <b>{String(executionResult.execution?.run_id ?? "null")}</b>
+              </div>
+              {executionResult.audit?.audit_id ? (
                 <div style={{ marginTop: 4, fontSize: 11 }}>
-                  <span style={{ color: "#2e7d32" }}>📝 Audit: {String((executionResult.audit as Record<string,unknown>).audit_id)}</span>
+                  <span style={{ color: "#2e7d32" }}>📝 Audit: {executionResult.audit.audit_id}</span>
                 </div>
               ) : null}
-              {(executionResult.pipeline_yaml as Record<string,unknown>|null)?.path ? (
+              {executionResult.pipeline_yaml &&
+               typeof executionResult.pipeline_yaml === "object" &&
+               "path" in executionResult.pipeline_yaml ? (
                 <div style={{ marginTop: 2, fontSize: 11 }}>
-                  <span>📄 Pipeline YAML: {String((executionResult.pipeline_yaml as Record<string,unknown>).path)}</span>
+                  <span>📄 Pipeline YAML: {String(executionResult.pipeline_yaml.path)}</span>
                 </div>
               ) : null}
-              {((executionResult.errors as unknown[]) || []).length > 0 && (
+              {(executionResult.errors ?? []).length > 0 && (
                 <div style={{ marginTop: 4, color: "#c62828", fontSize: 12 }}>
-                  Errors: {String(JSON.stringify(executionResult.errors))}
+                  Errors: {JSON.stringify(executionResult.errors)}
                 </div>
               )}
-              {((executionResult.warnings as unknown[]) || []).length > 0 && (
+              {(executionResult.warnings ?? []).length > 0 && (
                 <div style={{ marginTop: 4, color: "#e65100", fontSize: 12 }}>
-                  Warnings: {String(JSON.stringify(executionResult.warnings))}
+                  Warnings: {JSON.stringify(executionResult.warnings)}
                 </div>
               )}
             </div>
@@ -1058,51 +1176,62 @@ export default function PlanReviewConsole({
   );
 }
 
-function executionStatusBg(status: string): string {
-  switch (status) {
-    case "EXECUTION_SUBMITTED":
-    case "EXECUTION_PREFLIGHT_READY":
-    case "DRY_RUN_OK": return "#e8f5e9";
-    case "REVIEWED_EXECUTION_DISABLED":
-    case "CONFIRMATION_REQUIRED":
-    case "APPROVAL_GATE_BLOCKED":
-    case "EXECUTION_POLICY_BLOCKED":
-    case "SAFE_EXECUTION_POLICY_BLOCKED": return "#fff3e0";
-    case "AUDIT_REQUIRED":
-    case "VALIDATION_FAILED":
-    case "PLAN_ADAPTER_FAILED":
-    case "PROJECT_CONFIG_REQUIRED":
-    case "PROJECT_CONFIG_INVALID":
-    case "PIPELINE_WRITE_FAILED":
-    case "AUDIT_WRITE_FAILED":
-    case "PIPELINE_YAML_REQUIRED":
-    case "EXECUTION_FAILED": return "#ffebee";
+// ── Execute-Reviewed Status Helpers ─────────────────────────────────────────
+
+function severityBg(status: string | undefined): string {
+  const view = describeExecuteReviewedStatus(status);
+  switch (view.severity) {
+    case "success": return "#e8f5e9";
+    case "info": return "#e3f2fd";
+    case "warning": return "#fff3e0";
+    case "error": return "#ffebee";
     default: return "#f5f5f5";
   }
 }
 
-function executionStatusLabel(status: string): string {
-  switch (status) {
-    case "EXECUTION_SUBMITTED": return "✅ Execution submitted — backend gated execution completed.";
-    case "EXECUTION_PREFLIGHT_READY": return "✅ Preflight ready — all gates passed.";
-    case "DRY_RUN_OK": return "✅ Dry-run OK: backend would allow execution.";
-    case "REVIEWED_EXECUTION_DISABLED": return "🟠 Reviewed execution disabled — env var not set.";
-    case "CONFIRMATION_REQUIRED": return "🟠 Confirmation required — check the confirm checkbox.";
-    case "AUDIT_REQUIRED": return "🔴 Audit required — persist_audit must be true.";
-    case "APPROVAL_GATE_BLOCKED": return "🟠 Approval gate blocked.";
-    case "EXECUTION_POLICY_BLOCKED": return "🟠 Execution policy blocked (SPM/DPABI/GUI/unknown).";
-    case "SAFE_EXECUTION_POLICY_BLOCKED": return "🟠 Safe allowlist blocked (GPU/contract nodes).";
-    case "VALIDATION_FAILED": return "🔴 Validation failed — fix the plan and re-validate.";
-    case "PLAN_ADAPTER_FAILED": return "🔴 Plan adapter failed — plan cannot be converted.";
-    case "PROJECT_CONFIG_REQUIRED": return "🔴 Project config path is required.";
-    case "PROJECT_CONFIG_INVALID": return "🔴 Project config is invalid.";
-    case "PIPELINE_WRITE_FAILED": return "🔴 Pipeline YAML write failed.";
-    case "PIPELINE_WRITE_REQUIRES_AUDIT": return "🟠 Pipeline write requires audit.";
-    case "PIPELINE_YAML_REQUIRED": return "🔴 Pipeline YAML is required for execution.";
-    case "AUDIT_WRITE_FAILED": return "🔴 Audit record write failed.";
-    case "EXECUTION_FAILED": return "🔴 Execution failed — see executor result.";
-    default: return `ℹ️ ${status}`;
+function severityColor(severity: ExecuteReviewedSeverity): string {
+  switch (severity) {
+    case "success": return "#2e7d32";
+    case "info": return "#1565c0";
+    case "warning": return "#e65100";
+    case "error": return "#c62828";
+    default: return "#555";
   }
+}
+
+function severityEmoji(severity: ExecuteReviewedSeverity): string {
+  switch (severity) {
+    case "success": return "✅";
+    case "info": return "ℹ️";
+    case "warning": return "🟠";
+    case "error": return "🔴";
+    default: return "ℹ️";
+  }
+}
+
+/** Compact status card for dry-run and execution results. */
+function ExecuteReviewedStatusCard({ status }: { status: string | undefined }) {
+  const view = describeExecuteReviewedStatus(status);
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <div style={{ fontWeight: 700, marginBottom: 4, color: severityColor(view.severity) }}>
+        {severityEmoji(view.severity)} {view.title}
+      </div>
+      <div style={{ fontSize: 12, color: "#555", lineHeight: 1.5, marginBottom: 4 }}>
+        {view.explanation}
+      </div>
+      {view.nextAction && (
+        <div style={{ fontSize: 12, fontWeight: 600, color: severityColor(view.severity), marginBottom: 4 }}>
+          Next: {view.nextAction}
+        </div>
+      )}
+      {view.safetyNote && (
+        <div style={{ fontSize: 11, color: "#888", fontStyle: "italic" }}>
+          ⓘ {view.safetyNote}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function chipStyle(bg: string, color: string): React.CSSProperties {

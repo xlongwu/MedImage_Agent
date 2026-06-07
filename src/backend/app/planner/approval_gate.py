@@ -286,7 +286,91 @@ def check_approval_gate(
             errors=errors,
         )
 
-    # ── 13. high risk approved → warning ──
+    # ── 13. External-tool safety acknowledgements (M6-T004) ──
+    external_tool_nodes = high_risk_backend_nodes or high_risk_nodes
+    if external_tool_nodes:
+        external_tool_ack = appr_dict.get("external_tool_acknowledgement")
+        if external_tool_ack is not True:
+            errors.append(ApprovalGateIssue(
+                "EXTERNAL_TOOL_ACKNOWLEDGEMENT_REQUIRED",
+                "High-risk external-tool nodes require explicit external_tool_acknowledgement=true. "
+                "This confirms awareness that MATLAB/SPM/DPABI will be invoked.",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        rawdata_confirm = appr_dict.get("rawdata_read_only_confirmed")
+        if rawdata_confirm is not True:
+            errors.append(ApprovalGateIssue(
+                "RAWDATA_READ_ONLY_CONFIRMATION_REQUIRED",
+                "High-risk external-tool nodes require rawdata_read_only_confirmed=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        output_confirm = appr_dict.get("output_directory_confirmed")
+        if output_confirm is not True:
+            errors.append(ApprovalGateIssue(
+                "OUTPUT_DIRECTORY_CONFIRMATION_REQUIRED",
+                "High-risk external-tool nodes require output_directory_confirmed=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        risk_ack = appr_dict.get("risk_acknowledgement")
+        if risk_ack is not True:
+            errors.append(ApprovalGateIssue(
+                "RISK_ACKNOWLEDGEMENT_REQUIRED",
+                "High-risk external-tool nodes require risk_acknowledgement=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        overwrite_policy = appr_dict.get("overwrite_policy")
+        ALLOWED_OVERWRITE = {"fail_if_exists", "require_explicit_overwrite_approval"}
+        if overwrite_policy not in ALLOWED_OVERWRITE:
+            errors.append(ApprovalGateIssue(
+                "OVERWRITE_POLICY_REQUIRED",
+                f"High-risk external-tool nodes require overwrite_policy in {ALLOWED_OVERWRITE}. "
+                f"Got: {overwrite_policy!r}",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        subject_scope = appr_dict.get("subject_scope_confirmed")
+        if subject_scope is not True:
+            errors.append(ApprovalGateIssue(
+                "SUBJECT_SCOPE_CONFIRMATION_REQUIRED",
+                "High-risk external-tool nodes require subject_scope_confirmed=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False, execution_allowed=False,
+                approval_required=True, approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+    # ── 14. high risk approved → warning ──
     if high_risk_nodes:
         warnings.append(ApprovalGateIssue(
             "HIGH_RISK_APPROVED",

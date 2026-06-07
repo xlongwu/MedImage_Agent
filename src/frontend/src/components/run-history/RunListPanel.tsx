@@ -12,20 +12,28 @@ import {
 export function RunListPanel({
   runs,
   loading,
+  error,
   selectedRunId,
   onSelect,
 }: {
   runs: RunLinkRecord[];
   loading: boolean;
+  error?: string;
   selectedRunId: string | null;
   onSelect: (runId: string) => void;
 }) {
+  if (error) {
+    return <div className="errorBox">{error}</div>;
+  }
+
+  if (loading && !runs.length) {
+    return <div className="empty">Loading project runs...</div>;
+  }
+
   if (!runs.length) {
     return (
       <div className="empty">
-        {loading
-          ? "Loading project runs..."
-          : "No reviewed execution runs have been recorded for this project yet."}
+        No reviewed execution runs have been recorded for this project yet.
       </div>
     );
   }

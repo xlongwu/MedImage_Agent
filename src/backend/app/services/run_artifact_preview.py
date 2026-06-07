@@ -14,6 +14,7 @@ OUTPUT_ITEM_LIMIT = 50
 ARTIFACT_PREVIEW_MAX_BYTES = 80_000
 ARTIFACT_CSV_MAX_LINES = 100
 ARTIFACT_CSV_MAX_COLUMNS = 50
+ARTIFACT_CSV_MAX_RAW_BYTES = 5 * 1024 * 1024  # 5 MB memory guard for CSV parsing
 
 
 def _dedupe(messages: list[str]) -> list[str]:
@@ -126,12 +127,23 @@ def _normalize_csv_row(row: list[str], width: int) -> list[str]:
     return [row[index] if index < len(row) else "" for index in range(width)]
 
 
-def _csv_preview_from_text(text: str, truncated: bool) -> dict[str, Any]:
-    parsed_rows = [
-        row
-        for row in csv.reader(io.StringIO(text))
-        if any(cell != "" for cell in row)
-    ]
+def _csv_preview_from_text(text: str, truncated: bool, raw_bytes: int = 0) -> dict[str, Any]:
+    # Memory guard: refuse to parse very large CSV in memory
+    if raw_bytes > ARTIFACT_CSV_MAX_RAW_BYTES:
+        lines = text.splitlines()
+        head_lines = lines[:ARTIFACT_CSV_MAX_LINES]
+        head_text = "\n".join(head_lines)
+        parsed_rows = [
+            row
+            for row in csv.reader(io.StringIO(head_text))
+            if any(cell != "" for cell in row)
+        ]
+    else:
+        parsed_rows = [
+            row
+            for row in csv.reader(io.StringIO(text))
+            if any(cell != "" for cell in row)
+        ]
     if not parsed_rows:
         return {
             "columns": [],
@@ -168,6 +180,7 @@ def _preview_text_artifact(
     errors: list[str] = []
     raw, truncated = _read_preview_bytes(path)
     text = raw.decode("utf-8", errors="replace")
+    raw_bytes = len(raw)
     parsed_json = None
     csv_preview = None
 
@@ -178,17 +191,21 @@ def _preview_text_artifact(
         try:
             parsed_json = json.loads(text)
         except JSONDecodeError as exc:
+            # Malformed JSON: return raw text so the frontend can still show
+            # a bounded preview rather than nothing.
             errors.append(f"ARTIFACT_JSON_INVALID: {path}: {exc.msg}")
-            return "", None, None, False, warnings, errors
+            return text, None, None, False, warnings, errors
     elif kind == "csv":
         lines = text.splitlines()
         if len(lines) > ARTIFACT_CSV_MAX_LINES:
             text = "\n".join(lines[:ARTIFACT_CSV_MAX_LINES])
             truncated = True
         try:
-            csv_preview = _csv_preview_from_text(text, truncated)
+            csv_preview = _csv_preview_from_text(text, truncated, raw_bytes)
         except csv.Error as exc:
             errors.append(f"ARTIFACT_CSV_INVALID: {path}: {exc}")
+            # Return raw text as fallback
+            return text, None, None, truncated, warnings, errors
         if csv_preview and csv_preview.get("columns_truncated"):
             warnings.append(f"ARTIFACT_CSV_COLUMNS_TRUNCATED: {path}")
 
@@ -216,7 +233,7 @@ def _artifact_preview_payload(artifact: dict[str, Any]) -> dict[str, Any]:
             "kind": artifact["kind"],
             "path": artifact["path"],
             "exists": False,
-            "preview_type": preview_type,
+            "preview_type": "missing",
             "content": None,
             "json": None,
             "json_summary": None,
@@ -230,12 +247,14 @@ def _artifact_preview_payload(artifact: dict[str, Any]) -> dict[str, Any]:
         warnings.append(f"ARTIFACT_NOT_PREVIEWABLE: {path}")
     else:
         kind = str(artifact.get("kind") or "text")
+        # Map TSV to CSV preview; all others fall through.
+        effective_kind = "csv" if kind == "tsv" else kind
         preview_type = {
             "json": "json",
             "csv": "csv",
             "markdown": "markdown",
             "log": "log",
-        }.get(kind, "text")
+        }.get(effective_kind, "text")
         content, parsed_json, csv_preview, truncated, preview_warnings, preview_errors = _preview_text_artifact(
             path,
             kind,

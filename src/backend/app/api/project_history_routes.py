@@ -20,6 +20,10 @@ from src.backend.app.services.run_artifact_discovery import (
     find_run_artifact,
 )
 from src.backend.app.services.run_artifact_preview import artifact_preview_payload
+from src.backend.app.services.run_event_log_reader import (
+    discover_run_events,
+    discover_run_logs,
+)
 from src.backend.app.services.run_summary_preview import load_run_summary_preview
 from src.backend.app.tools.artifact_utils import is_safe_artifact_id
 
@@ -190,3 +194,47 @@ def get_project_run_artifact(
     payload["run_id"] = run_id
     payload["warnings"] = _dedupe([*warnings, *payload.get("warnings", [])])
     return payload
+
+
+@router.get("/api/projects/{project_id}/runs/{run_id}/events")
+def list_project_run_events(project_id: str, run_id: str) -> dict[str, Any]:
+    project = _get_project(project_id)
+    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run link not found")
+    events, warnings = discover_run_events(project, record)
+    return {
+        "ok": True,
+        "project_id": project_id,
+        "run_id": run_id,
+        "events": events,
+        "warnings": warnings,
+        "errors": [],
+    }
+
+
+@router.get("/api/projects/{project_id}/runs/{run_id}/logs")
+def list_project_run_logs(
+    project_id: str,
+    run_id: str,
+    max_bytes: int = Query(default=20000, ge=1000, le=200000),
+    include_content: bool = Query(default=True),
+) -> dict[str, Any]:
+    project = _get_project(project_id)
+    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run link not found")
+    logs, warnings, errors = discover_run_logs(
+        project,
+        record,
+        max_bytes=max_bytes,
+        include_content=include_content,
+    )
+    return {
+        "ok": True,
+        "project_id": project_id,
+        "run_id": run_id,
+        "logs": logs,
+        "warnings": warnings,
+        "errors": errors,
+    }

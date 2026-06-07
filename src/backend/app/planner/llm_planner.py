@@ -60,7 +60,7 @@ class PlannerResponse:
 # Each entry: set of trigger keywords → (pipeline_id, list of node ids)
 _RULES: list[tuple[set[str], str, list[str]]] = [
     (
-        {"motion", "realign", "头动", "运动校正", "motion correction"},
+        {"realign", "头动", "运动校正", "motion correction"},
         "planned_motion_qc",
         [
             "data_inspection",
@@ -96,6 +96,18 @@ _RULES: list[tuple[set[str], str, list[str]]] = [
             "data_inspection",
             "spm_smooth_subject",
             "smoothing_qc_dataset_report",
+        ],
+    ),
+    (
+        {"rs-fmri preprocessing", "resting-state preprocessing", "fMRI preprocessing", "motion QC", "静息态预处理"},
+        "rsfmri_preproc_mvp",
+        [
+            "data_readiness_check",
+            "bids_validation_check",
+            "rsfmri_bold_reference_check",
+            "rsfmri_motion_qc_plan",
+            "rsfmri_preprocessing_plan_stub",
+            "rsfmri_report_plan_stub",
         ],
     ),
     (

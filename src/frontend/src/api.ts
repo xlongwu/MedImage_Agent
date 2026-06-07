@@ -2,11 +2,30 @@ import type {
   AgentExecuteRequest,
   AgentPlanRequest,
   AgentRun,
+  BidsValidationResponse,
+  ConversionDryRunRequest,
+  ConversionDryRunResponse,
+  BoldReferenceReadinessResponse,
+  DataReadinessResponse,
+  MotionMetricsDraftResponse,
+  MotionQcReadinessResponse,
+  SpmRealignDryRunResponse,
+  SpmRealignWrapperSkeletonResponse,
+  NiftiQcSnapshotResponse,
+  NiftiThumbnailResponse,
+  QcDashboardReportResponse,
+  QcDashboardFingerprintResponse,
+  RsfmriQcPlanningReportResponse,
+  PipelinePreset,
+  PipelinePresetInstantiateResponse,
   DatasetEvaluationReport,
+  ExecuteReviewedResponse,
   ProjectCreateRequest,
   ProjectCreateResponse,
   ProjectRunArtifactsResponse,
   ProjectRunDetailResponse,
+  ProjectRunEventsResponse,
+  ProjectRunLogsResponse,
   ReviewedPlanRecord,
   RunArtifactPreviewResponse,
   RunLinkRecord,
@@ -90,6 +109,197 @@ export async function getHealth(baseUrl: string) {
 
 export async function getProjectConfig(baseUrl: string) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/project-config");
+}
+
+export async function getProjectDataReadiness(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<DataReadinessResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/data-readiness`
+  );
+}
+
+export async function getProjectBidsValidation(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<BidsValidationResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/bids-validation`
+  );
+}
+
+export async function runSpmRealignDryRun(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<SpmRealignDryRunResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/spm-realign/dry-run`,
+    { method: "POST" },
+  );
+}
+
+export async function generateSpmRealignWrapperSkeleton(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<SpmRealignWrapperSkeletonResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/spm-realign/wrapper-skeleton`,
+    { method: "POST" },
+  );
+}
+
+export async function getProjectNiftiQcSnapshot(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<NiftiQcSnapshotResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/nifti-qc/snapshot`,
+  );
+}
+
+export async function generateQcDashboardReport(
+  baseUrl: string,
+  projectId: string,
+  options?: { cacheMode?: "off" | "prefer" | "refresh" },
+) {
+  const params = new URLSearchParams();
+  if (options?.cacheMode && options.cacheMode !== "off") {
+    params.set("cache", options.cacheMode);
+  }
+  const qs = params.toString();
+  return requestJson<QcDashboardReportResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/qc-dashboard/report${qs ? "?" + qs : ""}`,
+    { method: "POST" },
+  );
+}
+
+export async function getLatestQcDashboardReport(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<QcDashboardReportResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/qc-dashboard/report/latest`,
+  );
+}
+
+export async function getQcDashboardFingerprint(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<QcDashboardFingerprintResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/qc-dashboard/fingerprint`,
+  );
+}
+
+export async function getProjectNiftiThumbnail(
+  baseUrl: string,
+  projectId: string,
+  imageId: string,
+  options?: {
+    view?: "axial" | "coronal" | "sagittal" | "all";
+    volumeIndex?: number;
+    size?: number;
+  },
+) {
+  const params = new URLSearchParams();
+  if (options?.view) params.set("view", options.view);
+  if (options?.volumeIndex !== undefined) params.set("volume_index", String(options.volumeIndex));
+  if (options?.size !== undefined) params.set("size", String(options.size));
+  const qs = params.toString();
+  return requestJson<NiftiThumbnailResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/nifti-qc/images/${encodeURIComponent(imageId)}/thumbnail${qs ? "?" + qs : ""}`,
+  );
+}
+
+export async function generateMotionMetricsDraft(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<MotionMetricsDraftResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/motion-qc/metrics-draft`,
+    { method: "POST" },
+  );
+}
+
+export async function generateRsfmriQcPlanningReport(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<RsfmriQcPlanningReportResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/rsfmri-qc/planning-report`,
+    { method: "POST" },
+  );
+}
+
+export async function getProjectBoldReferenceReadiness(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<BoldReferenceReadinessResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/bold-reference/readiness`
+  );
+}
+
+export async function getProjectMotionQcReadiness(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<MotionQcReadinessResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/motion-qc/readiness`
+  );
+}
+
+export async function runConversionDryRun(
+  baseUrl: string,
+  projectId: string,
+  payload?: ConversionDryRunRequest,
+) {
+  return requestJson<ConversionDryRunResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/conversion/dry-run`,
+    { method: "POST", body: JSON.stringify(payload ?? {}) },
+  );
+}
+
+export async function listPipelinePresets(baseUrl: string) {
+  return requestJson<{ ok: boolean; presets: PipelinePreset[] }>(
+    baseUrl,
+    "/api/pipeline-presets",
+  );
+}
+
+export async function getPipelinePreset(baseUrl: string, presetId: string) {
+  return requestJson<{ ok: boolean; preset: PipelinePreset }>(
+    baseUrl,
+    `/api/pipeline-presets/${encodeURIComponent(presetId)}`,
+  );
+}
+
+export async function instantiatePipelinePreset(
+  baseUrl: string,
+  projectId: string,
+  presetId: string,
+  payload?: Record<string, unknown>,
+) {
+  return requestJson<PipelinePresetInstantiateResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/pipeline-presets/${encodeURIComponent(presetId)}/instantiate`,
+    { method: "POST", body: JSON.stringify(payload ?? {}) },
+  );
 }
 
 export async function createProjectFromDirectory(
@@ -194,6 +404,37 @@ export async function getProjectRunArtifact(
   return requestJson<RunArtifactPreviewResponse>(
     baseUrl,
     `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`
+  );
+}
+
+export async function listProjectRunEvents(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+) {
+  return requestJson<ProjectRunEventsResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/events`
+  );
+}
+
+export async function listProjectRunLogs(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+  options?: { maxBytes?: number; includeContent?: boolean },
+) {
+  const params = new URLSearchParams();
+  if (options?.maxBytes !== undefined) {
+    params.set("max_bytes", String(options.maxBytes));
+  }
+  if (options?.includeContent !== undefined) {
+    params.set("include_content", String(options.includeContent));
+  }
+  const query = params.size ? `?${params.toString()}` : "";
+  return requestJson<ProjectRunLogsResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/logs${query}`
   );
 }
 
@@ -1229,7 +1470,7 @@ export async function executeReviewedDryRun(
     actor?: string;
   }
 ) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/plans/execute-reviewed", {
+  return requestJson<ExecuteReviewedResponse>(baseUrl, "/api/plans/execute-reviewed", {
     method: "POST",
     body: JSON.stringify({ ...payload, dry_run: true }),
   });
@@ -1246,7 +1487,7 @@ export async function executeReviewedPlan(
     actor?: string;
   }
 ) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/plans/execute-reviewed", {
+  return requestJson<ExecuteReviewedResponse>(baseUrl, "/api/plans/execute-reviewed", {
     method: "POST",
     body: JSON.stringify({
       plan: payload.plan,

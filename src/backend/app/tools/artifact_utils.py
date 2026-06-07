@@ -49,4 +49,8 @@ def is_safe_artifact_id(artifact_id: str) -> bool:
         return False
     if "/" in artifact_id or "\\" in artifact_id:
         return False
+    # Reject URL-encoded traversal sequences
+    lowered = artifact_id.lower()
+    if "%2f" in lowered or "%5c" in lowered or "%2e%2e" in lowered:
+        return False
     return all(ch.isalnum() or ch in "_-." for ch in artifact_id)

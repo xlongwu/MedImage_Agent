@@ -103,6 +103,9 @@ def _command_check(name: str, command: str) -> dict[str, Any]:
 
 def get_desktop_health() -> dict[str, Any]:
     config = get_desktop_config()
+    from src.backend.app.services.environment_health import build_matlab_spm_health  # noqa: E402
+
+    matlab_spm = build_matlab_spm_health()
     checks = [
         _path_check("project_dir", config.get("project_dir", ".")),
         _path_check("python_path", config.get("python_path", sys.executable)),
@@ -140,6 +143,7 @@ def get_desktop_health() -> dict[str, Any]:
         "checks": checks,
         "all_required_ok": all(item.get("ok", False) for item in checks if item["name"] in {"project_dir", "python_path"}),
         "gpu": gpu,
+        "matlab_spm": matlab_spm,
     }
 
 

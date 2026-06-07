@@ -15,6 +15,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from src.backend.app.services.spm_realign_params import validate_spm_realign_params
+
 
 # ── Output dataclasses ────────────────────────────────────────────────────────
 
@@ -252,7 +254,46 @@ def validate_plan(plan: dict[str, Any]) -> PlanValidationResult:
                 severity="warning",
             ))
 
-    # ── 7. Build result ──
+        # SPM realign specific: warn about non-executable status
+        if nid == "spm_realign_subject":
+            warnings.append(PlanValidationIssue(
+                code="SPM_REALIGN_NODE_NOT_EXECUTABLE",
+                message=(
+                    "Node 'spm_realign_subject' is metadata-only and not currently "
+                    "executable.  Real SPM/MATLAB execution requires approval gate, "
+                    "persisted audit, environment checks, and safe-allowlist opt-in."
+                ),
+                node_id=nid,
+                severity="warning",
+            ))
+
+    # ── 7. Per-node parameter validation ──
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        nid = node.get("id")
+        if not nid or nid in unknown_nodes:
+            continue
+        params = node.get("params") or {}
+
+        if nid == "spm_realign_subject" and params:
+            _, param_warnings, param_errors = validate_spm_realign_params(params)
+            for err_msg in param_errors:
+                errors.append(PlanValidationIssue(
+                    code="SPM_REALIGN_PARAM_INVALID",
+                    message=err_msg,
+                    node_id=nid,
+                    severity="error",
+                ))
+            for warn_msg in param_warnings:
+                warnings.append(PlanValidationIssue(
+                    code="SPM_REALIGN_PARAM_WARNING",
+                    message=warn_msg,
+                    node_id=nid,
+                    severity="warning",
+                ))
+
+    # ── 8. Build result ──
     risk_summary = {
         "nodes_total": len(node_ids),
         "requires_approval": len(approval_required) > 0,

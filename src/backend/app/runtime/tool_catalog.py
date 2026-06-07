@@ -107,16 +107,36 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "tags": ["spm", "matlab", "rsfmri", "preprocessing"],
     },
     "spm_realign_subject": {
-        "name": "SPM Realign",
+        "name": "SPM Realign (future — not executable)",
         "backend": "matlab-spm",
         "parallel_level": "subject",
-        "description": "Motion correction via rigid-body realignment.",
+        "description": (
+            "Future SPM realignment wrapper.  NOT CURRENTLY EXECUTABLE — "
+            "no MATLAB/SPM execution is available in this release.  "
+            "Requires MATLAB, SPM, explicit approval gate, persisted audit, "
+            "environment checks, and safe-allowlist opt-in before real "
+            "execution is enabled.  Currently preparation-only: MedImage "
+            "Agent can inspect data, validate parameters, check environment "
+            "readiness, generate dry-run output manifests, and preview "
+            "MATLAB batch templates, but does not perform realignment, "
+            "does not write derivatives, and does not modify rawdata."
+        ),
         "requires_approval": True,
-        "manual_required": False,
+        "manual_required": True,
         "risk_level": "high",
-        "inputs": ["BOLD NIfTI"],
-        "outputs": ["r<subject>_bold.nii", "rp_*.txt"],
-        "tags": ["spm", "matlab", "rsfmri", "motion"],
+        "inputs": [
+            "BOLD NIfTI (discovered from project metadata)",
+            "BOLD sidecar JSON (optional)",
+        ],
+        "outputs": [
+            "r<subject>_bold.nii (realigned BOLD)",
+            "mean<subject>_bold.nii (mean/reference BOLD)",
+            "rp_*.txt (motion parameters)",
+            "stdout.log / stderr.log",
+            "provenance.json",
+            "node_state.json",
+        ],
+        "tags": ["spm", "matlab", "rsfmri", "realign", "motion", "high-risk", "not-executable"],
     },
     "spm_coregister_subject": {
         "name": "SPM Coregister",
@@ -420,6 +440,63 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "outputs": ["validation_report"],
         "tags": ["report", "validation"],
     },
+
+    # ── Preset contract nodes (rs-fMRI preprocessing MVP) ──
+    "data_readiness_check": {
+        "name": "Data Readiness Check",
+        "backend": "contract", "parallel_level": "project",
+        "description": "Validate project data readiness before preprocessing.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["project_config_path"],
+        "outputs": ["readiness_summary"],
+        "tags": ["contract", "readiness", "rsfmri"],
+    },
+    "bids_validation_check": {
+        "name": "BIDS Validation Check",
+        "backend": "contract", "parallel_level": "project",
+        "description": "Validate BIDS-like structure of rawdata.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["rawdata_dir"],
+        "outputs": ["bids_validation_summary"],
+        "tags": ["contract", "bids", "rsfmri"],
+    },
+    "rsfmri_bold_reference_check": {
+        "name": "BOLD Reference Check",
+        "backend": "contract", "parallel_level": "project",
+        "description": "Verify BOLD NIfTI availability and sidecar metadata.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["dataset_index_path"],
+        "outputs": ["bold_reference_summary"],
+        "tags": ["contract", "bold", "rsfmri"],
+    },
+    "rsfmri_motion_qc_plan": {
+        "name": "Motion QC Plan",
+        "backend": "contract", "parallel_level": "project",
+        "description": "Plan motion QC steps (realign parameters, FD, DVARS).",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["bold_reference_summary"],
+        "outputs": ["motion_qc_plan"],
+        "tags": ["contract", "motion", "rsfmri"],
+    },
+    "rsfmri_preprocessing_plan_stub": {
+        "name": "Preprocessing Plan Stub",
+        "backend": "contract", "parallel_level": "project",
+        "description": "Stub for future SPM slice-timing, realign, normalize, smooth.",
+        "requires_approval": False, "manual_required": False, "risk_level": "medium",
+        "inputs": ["motion_qc_plan"],
+        "outputs": ["preprocessing_plan_stub"],
+        "tags": ["contract", "stub", "rsfmri", "preprocessing"],
+    },
+    "rsfmri_report_plan_stub": {
+        "name": "Report Plan Stub",
+        "backend": "contract", "parallel_level": "project",
+        "description": "Stub for future QC report generation.",
+        "requires_approval": False, "manual_required": False, "risk_level": "low",
+        "inputs": ["preprocessing_plan_stub"],
+        "outputs": ["report_plan_stub"],
+        "tags": ["contract", "stub", "report", "rsfmri"],
+        "tags": ["report", "validation"],
+    },
     "project_release_readiness": {
         "name": "Project Release Readiness",
         "backend": "python", "parallel_level": "project",
@@ -536,11 +613,12 @@ def _fallback(node_id: str) -> dict[str, Any]:
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def build_tool_catalog() -> list[ToolCatalogItem]:
-    """Build a ToolCatalogItem for every registered node.
+    """Build a ToolCatalogItem for every registered node and contract node.
 
-    Returns one item per NODE_REGISTRY key.  Nodes with metadata in
-    TOOL_METADATA use explicit values; all others receive fallback metadata
-    derived from their node id prefix.
+    Returns one item per NODE_REGISTRY key plus any TOOL_METADATA entries
+    with backend='contract' that are not in NODE_REGISTRY.  Nodes with
+    metadata in TOOL_METADATA use explicit values; all others receive
+    fallback metadata derived from their node id prefix.
     """
     from src.backend.app.runtime.node_registry import NODE_REGISTRY  # noqa: E402
 
@@ -556,21 +634,35 @@ def build_tool_catalog() -> list[ToolCatalogItem]:
             meta = _fallback(node_id)
         items.append(ToolCatalogItem(id=node_id, **meta))
 
+    # Include contract-only nodes from TOOL_METADATA that aren't in NODE_REGISTRY
+    for node_id, meta in sorted(TOOL_METADATA.items()):
+        if node_id in seen:
+            continue
+        if meta.get("backend") != "contract":
+            continue
+        seen.add(node_id)
+        items.append(ToolCatalogItem(id=node_id, **meta))
+
     return items
 
 
 def get_tool_catalog_item(node_id: str) -> ToolCatalogItem:
     """Look up a single node's metadata by id.
 
-    Raises KeyError if the node is not registered.
+    Checks TOOL_METADATA first, then NODE_REGISTRY.  Raises KeyError if
+    the node is neither in TOOL_METADATA (with backend='contract') nor
+    in NODE_REGISTRY.
     """
     from src.backend.app.runtime.node_registry import NODE_REGISTRY  # noqa: E402
 
+    # Contract nodes may only exist in TOOL_METADATA
+    meta = TOOL_METADATA.get(node_id)
+    if meta is not None:
+        return ToolCatalogItem(id=node_id, **meta)
+
     if node_id not in NODE_REGISTRY:
         raise KeyError(f"Unknown node id: {node_id}")
-    meta = TOOL_METADATA.get(node_id)
-    if meta is None:
-        meta = _fallback(node_id)
+    meta = _fallback(node_id)
     return ToolCatalogItem(id=node_id, **meta)
 
 

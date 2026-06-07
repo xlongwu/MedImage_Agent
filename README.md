@@ -210,6 +210,8 @@ Expected skips: `pydicom`, `cupy`, `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
 - No complete QC dashboard
 - No report editor
 - MATLAB/SPM/DPABI/GPU are contract-only in this release
+- **SPM realign is preparation-only**: parameter validation, environment health checks, dry-run manif ests, and batch previews are available, but real MATLAB/SPM execution is not implemented
+- **QC Dashboard cache is single-module prototype**: `cache=off|prefer|refresh` is supported, but caching currently applies only to the NIfTI QC Snapshot module. Other dashboard modules still run normally. Cache never modifies rawdata.
 - Electron app is unsigned (SmartScreen warning on first run)
 - Windows-only packaging
 - No auto-update
@@ -223,7 +225,7 @@ See [release notes](docs/releases/v0.3.0-rc1.md) for full details.
 | Release | Focus |
 |---|---|
 | **v0.3.0-rc1** (current) | Desktop MVP: real project workflow, run history, artifact preview |
-| v0.3.x | Installer signing, auto-update, CI/CD packaging pipeline |
+| v0.3.x | Installer signing, auto-update, CI/CD packaging pipeline; SPM realign preparation (params, health, dry-run, batch preview) |
 | v0.4.0 | NIfTI viewer, enhanced QC dashboard, MATLAB/SPM runtime (opt-in) |
 | Future | macOS/Linux packaging, DICOM browser, plugin system |
 

@@ -311,6 +311,7 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
           <RunListPanel
             runs={runs}
             loading={loading}
+            error={error || undefined}
             selectedRunId={selectedRunId}
             onSelect={(runId) => void loadRunDetail(runId)}
           />
@@ -319,6 +320,8 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
         <RunDetailPanel
           detail={detail}
           detailLoading={detailLoading}
+          baseUrl={baseUrl}
+          projectId={projectId}
           projectDir={projectDir}
           summaryPreview={summaryPreview}
           summaryWarnings={summaryWarnings}

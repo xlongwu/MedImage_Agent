@@ -64,7 +64,38 @@ def build_review_audit_record(
     actor: str | None = None,
     source: str = "backend",
 ) -> ReviewAuditRecord:
-    """Build a ReviewAuditRecord with stable hashes of plan/validation/approval."""
+    """Build a ReviewAuditRecord with stable hashes of plan/validation/approval.
+
+    For high-risk external-tool approvals, the approval_context is
+    automatically populated from the approval dict fields.
+    """
+    approval_context: dict[str, Any] | None = None
+    if approval:
+        has_hr_fields = any(
+            approval.get(k) is not None
+            for k in (
+                "external_tool_acknowledgement",
+                "rawdata_read_only_confirmed",
+                "output_directory_confirmed",
+                "risk_acknowledgement",
+                "overwrite_policy",
+                "subject_scope_confirmed",
+            )
+        )
+        if has_hr_fields:
+            approval_context = {
+                "approved_nodes": approval.get("approved_nodes"),
+                "rejected_nodes": approval.get("rejected_nodes"),
+                "approved_backends": approval.get("approved_backends"),
+                "external_tool_acknowledgement": approval.get("external_tool_acknowledgement"),
+                "rawdata_read_only_confirmed": approval.get("rawdata_read_only_confirmed"),
+                "output_directory_confirmed": approval.get("output_directory_confirmed"),
+                "risk_acknowledgement": approval.get("risk_acknowledgement"),
+                "overwrite_policy": approval.get("overwrite_policy"),
+                "subject_scope_confirmed": approval.get("subject_scope_confirmed"),
+                "approval_schema_version": approval.get("review_draft_schema_version") or "review-draft-v1",
+            }
+
     return ReviewAuditRecord(
         audit_id=f"audit_{uuid.uuid4().hex[:16]}",
         created_at=datetime.now(timezone.utc).isoformat(),
@@ -79,6 +110,13 @@ def build_review_audit_record(
         dry_run_result=dry_run_result,
         actor=actor,
         source=source,
+        safety={
+            "review_only": True,
+            "executes_pipeline": False,
+            "rawdata_readonly": True,
+            "executor_called": False,
+            "approval_context": approval_context,
+        },
     )
 
 

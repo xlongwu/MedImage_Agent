@@ -14,6 +14,20 @@ from src.backend.app.core.config import get_backend_settings
 from src.backend.app.schemas.desktop import (
     AssistantChatRequest,
     AssistantChatResponse,
+    BidsValidationResponse,
+    ConversionDryRunRequest,
+    ConversionDryRunResponse,
+    DataReadinessResponse,
+    BoldReferenceReadinessResponse,
+    MotionMetricsDraftResponse,
+    MotionQcReadinessResponse,
+    RsfmriQcPlanningReportResponse,
+    SpmRealignDryRunResponse,
+    SpmRealignWrapperSkeletonResponse,
+    NiftiQcSnapshotResponse,
+    NiftiThumbnailResponse,
+    QcDashboardReportResponse,
+    QcDashboardFingerprintResponse,
     DatasetDiagnosticsPackageResponse,
     DatasetDiagnosticsPackageStatusResponse,
     DatasetDiagnosticsPackageVerifyResponse,
@@ -43,6 +57,23 @@ from src.backend.app.schemas.desktop import (
     TaskEvent,
     TaskLogEntry,
 )
+from src.backend.app.services.bids_validation import validate_bids
+from src.backend.app.services.conversion_planner import plan_conversion
+from src.backend.app.services.bold_reference_readiness import build_bold_reference_readiness
+from src.backend.app.services.motion_metrics_draft import build_motion_metrics_draft
+from src.backend.app.services.spm_realign_dry_run import build_spm_realign_dry_run
+from src.backend.app.services.spm_realign_wrapper_skeleton import build_spm_realign_wrapper_skeleton
+from src.backend.app.services.motion_qc_readiness import build_motion_qc_readiness
+from src.backend.app.services.nifti_qc_snapshot import build_nifti_qc_snapshot
+from src.backend.app.services.nifti_thumbnail import build_nifti_thumbnail
+from src.backend.app.services.qc_dashboard_report import (
+    build_qc_dashboard_report,
+    load_latest_qc_dashboard_report,
+)
+from src.backend.app.services.rawdata_fingerprint import build_rawdata_fingerprint
+from src.backend.app.services.qc_dashboard_fingerprint import collect_qc_dashboard_fingerprint_roots
+from src.backend.app.services.rsfmri_qc_planning_report import build_rsfmri_qc_planning_report
+from src.backend.app.services.data_readiness import build_data_readiness
 from src.backend.app.services.dicom_preflight import build_dicom_preflight
 from src.backend.app.services.image_preview import build_image_preview, build_image_validation_report, list_image_sources
 from src.backend.app.services.mock_store import mock_store
@@ -695,6 +726,159 @@ def image_validation(project_id: str = Query(...)) -> ImageValidationReport:
         expected_sequences=project.sequences,
         search_roots=mock_store.list_import_paths(project_id),
     )
+
+
+@router.post("/api/projects/{project_id}/qc-dashboard/report", response_model=QcDashboardReportResponse)
+def post_qc_dashboard_report(
+    project_id: str,
+    cache: str = "off",
+) -> QcDashboardReportResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    if cache not in ("off", "prefer", "refresh"):
+        raise HTTPException(status_code=400, detail=f"Invalid cache mode: {cache}. Use off, prefer, or refresh.")
+    return build_qc_dashboard_report(project_id, cache_mode=cache)
+
+
+@router.get("/api/projects/{project_id}/qc-dashboard/report/latest", response_model=QcDashboardReportResponse)
+def get_latest_qc_dashboard_report(project_id: str) -> QcDashboardReportResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    result = load_latest_qc_dashboard_report(project_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No QC dashboard report has been generated yet.")
+    return result
+
+
+@router.get("/api/projects/{project_id}/qc-dashboard/fingerprint", response_model=QcDashboardFingerprintResponse)
+def get_qc_dashboard_fingerprint(project_id: str) -> QcDashboardFingerprintResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    project = mock_store.get_project(project_id)
+    metadata = (project.metadata if isinstance(project.metadata, dict) else {}) if project else {}
+    roots = collect_qc_dashboard_fingerprint_roots(metadata)
+    fp = build_rawdata_fingerprint(roots)
+    return QcDashboardFingerprintResponse(
+        ok=fp.ok,
+        project_id=project_id,
+        fingerprint=fp,
+        roots=fp.roots,
+        warnings=fp.warnings,
+        errors=fp.errors,
+        safety_flags={
+            "read_only": True, "rawdata_not_modified": True,
+            "metadata_only": True, "no_cache_files_created": True,
+            "no_preprocessing_executed": True, "no_external_tools_executed": True,
+        },
+    )
+
+
+@router.get("/api/projects/{project_id}/data-readiness", response_model=DataReadinessResponse)
+def get_project_data_readiness(project_id: str) -> DataReadinessResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_data_readiness(project_id)
+
+
+@router.get("/api/projects/{project_id}/bids-validation", response_model=BidsValidationResponse)
+def get_project_bids_validation(project_id: str) -> BidsValidationResponse:
+    project = mock_store.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    metadata = project.metadata if isinstance(project.metadata, dict) else {}
+    roots: list[str] = []
+    rawdata = metadata.get("rawdata_dir")
+    if rawdata and isinstance(rawdata, str):
+        roots.append(rawdata)
+    try:
+        import_roots = mock_store.list_import_paths(project_id)
+        for r in import_roots:
+            if r not in roots:
+                roots.append(r)
+    except Exception:
+        pass
+    result = validate_bids(roots)
+    result.project_id = project_id
+    return result
+
+
+@router.get("/api/projects/{project_id}/bold-reference/readiness", response_model=BoldReferenceReadinessResponse)
+def get_project_bold_reference_readiness(project_id: str) -> BoldReferenceReadinessResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_bold_reference_readiness(project_id)
+
+
+@router.post("/api/projects/{project_id}/rsfmri-qc/planning-report", response_model=RsfmriQcPlanningReportResponse)
+def post_rsfmri_qc_planning_report(project_id: str) -> RsfmriQcPlanningReportResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_rsfmri_qc_planning_report(project_id)
+
+
+@router.post("/api/projects/{project_id}/motion-qc/metrics-draft", response_model=MotionMetricsDraftResponse)
+def post_motion_metrics_draft(project_id: str) -> MotionMetricsDraftResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_motion_metrics_draft(project_id)
+
+
+@router.post("/api/projects/{project_id}/spm-realign/dry-run", response_model=SpmRealignDryRunResponse)
+def post_spm_realign_dry_run(project_id: str) -> SpmRealignDryRunResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_spm_realign_dry_run(project_id)
+
+
+@router.post("/api/projects/{project_id}/spm-realign/wrapper-skeleton", response_model=SpmRealignWrapperSkeletonResponse)
+def post_spm_realign_wrapper_skeleton(project_id: str) -> SpmRealignWrapperSkeletonResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_spm_realign_wrapper_skeleton(project_id)
+
+
+@router.get("/api/projects/{project_id}/nifti-qc/snapshot", response_model=NiftiQcSnapshotResponse)
+def get_project_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_nifti_qc_snapshot(project_id)
+
+
+@router.get("/api/projects/{project_id}/nifti-qc/images/{image_id}/thumbnail", response_model=NiftiThumbnailResponse)
+def get_project_nifti_thumbnail(
+    project_id: str, image_id: str,
+    view: str = "all", volume_index: int | None = None, size: int | None = None,
+) -> NiftiThumbnailResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    if view not in ("axial", "coronal", "sagittal", "all"):
+        raise HTTPException(status_code=400, detail=f"Invalid view: {view}")
+    if volume_index is not None and volume_index < 0:
+        raise HTTPException(status_code=400, detail=f"volume_index must be >= 0, got {volume_index}")
+    try:
+        return build_nifti_thumbnail(project_id, image_id, view, volume_index, size)
+    except ValueError as exc:
+        msg = str(exc)
+        if "volume_index" in msg or "out of range" in msg:
+            raise HTTPException(status_code=400, detail=msg) from exc
+        raise
+
+
+@router.get("/api/projects/{project_id}/motion-qc/readiness", response_model=MotionQcReadinessResponse)
+def get_project_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return build_motion_qc_readiness(project_id)
+
+
+@router.post("/api/projects/{project_id}/conversion/dry-run", response_model=ConversionDryRunResponse)
+def post_conversion_dry_run(
+    project_id: str,
+    request: ConversionDryRunRequest = ConversionDryRunRequest(),
+) -> ConversionDryRunResponse:
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    return plan_conversion(project_id, request)
 
 
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:

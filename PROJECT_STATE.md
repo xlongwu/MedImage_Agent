@@ -97,6 +97,92 @@ D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
 - NSIS installer / portable full build is next stage.
 - See `docs/DESKTOP_APP_PACKAGING.md` for verified build command.
 
+## Run Retry / Resume Contract
+
+A retry/resume contract has been designed and documented in
+`docs/RUN_RETRY_RESUME_CONTRACT.md`. This document defines API contracts, state
+semantics, safety rules, provenance requirements, and a test matrix for future
+retry/resume support. **No retry or resume execution has been implemented.**
+The contract is a design reference for a future implementation phase.
+
+## SPM Realign Wrapper Safety Contract
+
+An SPM realign wrapper safety contract has been designed and documented in
+`docs/SPM_REALIGN_WRAPPER_SAFETY_CONTRACT.md`. It defines node identity,
+preconditions, inputs/outputs, dry-run/execution contracts, approval gate
+requirements, audit requirements, environment detection, path safety rules,
+failure modes, provenance requirements, frontend UX contract, test matrix,
+recommended implementation order, and completion criteria.
+**No real MATLAB/SPM execution has been implemented.**
+The contract is a design reference for a future implementation phase.
+
+## SPM Realign Pre-execution Regression Matrix
+
+A focused regression matrix has been added in
+`tests/unit/test_spm_realign_preexecution_matrix.py`. It covers the full
+non-executing SPM realign preparation chain with 9 tests: Tool Catalog metadata,
+params validation, plan validation, environment health, dry-run manifest,
+approval/audit gate, wrapper skeleton, and retry/resume not available.
+**Real MATLAB/SPM execution remains not implemented.**
+`spm_realign_subject` remains outside the safe execution allowlist.
+
+## SPM Realign Real Execution Design Review
+
+A formal design-review document has been created at
+`docs/SPM_REALIGN_REAL_EXECUTION_DESIGN_REVIEW.md`. It evaluates readiness
+for enabling real MATLAB/SPM execution, identifies gaps across 16 areas,
+proposes execution architecture, defines safety gates, and recommends a
+**NO-GO** decision for real execution in the current phase.  Immediate
+next tasks are command-template unit tests, execution contract schema,
+synthetic smoke design, and output/provenance schema alignment.
+
+## QC Dashboard Performance and Cache Strategy
+
+A performance and cache strategy has been designed in
+`docs/QC_DASHBOARD_PERFORMANCE_CACHE_STRATEGY.md`. It defines cache key
+design, invalidation rules, storage options (recommended: project-local JSON),
+API contract, frontend UX contract, test strategy, and implementation order.
+**Single-module cache prototype implemented for NIfTI QC Snapshot.**
+Full dashboard caching is not yet implemented. Other modules still run normally.
+Cache remains read-only with respect to rawdata.
+
+## Phase 2 Feature Regression Matrix
+
+A focused Phase 2 feature regression matrix has been added in
+`tests/unit/test_phase2_feature_regression_matrix.py`. It covers:
+
+- Read-only data readiness and validation endpoints
+- NIfTI QC snapshot and thumbnail preview
+- QC Dashboard report, latest reload, fingerprint, and NIfTI QC module cache
+- SPM realign non-executing guards
+
+Real preprocessing execution remains not implemented. SPM/MATLAB/DPABI
+execution remains disabled and outside the safe allowlist.
+
+## Phase 1 Execution Observability Regression Matrix
+
+A focused regression test matrix has been added in
+`tests/unit/test_phase1_execution_observability_matrix.py`. It covers the
+complete Phase 1 observability loop:
+
+- **Dry-run blocked states** — REVIEWED_EXECUTION_DISABLED,
+  CONFIRMATION_REQUIRED, AUDIT_REQUIRED, PROJECT_CONFIG_REQUIRED,
+  PIPELINE_YAML_REQUIRED all remain non-executing with structured status
+- **Execution traceability** — reviewed_plan_id, run_link_id, run_id,
+  pipeline_path, summary_path are present after successful execution
+- **Run list + detail resolution** — run appears in project list, run detail
+  returns summary_preview or controlled error, warnings as list
+- **Events/logs safety scoping** — events/logs return ok, max_bytes respected,
+  irrelevant path params ignored
+- **Artifacts safety** — stable required fields, missing artifacts have
+  exists=false, invalid artifact_ids rejected, discovered preview succeeds
+- **Retry/resume not implemented** — POST to /retry, /resume, /rerun returns 404
+
+The frontend smoke script (`project-runs-panel-smoke.cjs`) was strengthened
+with `describeExecuteReviewedStatus` tests for DRY_RUN_OK, AUDIT_REQUIRED,
+APPROVAL_GATE_BLOCKED, EXECUTION_POLICY_BLOCKED, EXECUTION_FAILED, unknown
+status, and undefined input.
+
 ## Next recommended work
 
 1. Verify Electron GUI startup on a local Windows desktop.

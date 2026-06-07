@@ -107,8 +107,33 @@ export function RunArtifactsPanel({
       {error ? <div className="errorBox">{error}</div> : null}
       <WarningList warnings={warnings} />
 
-      {artifacts.length ? (
+      {loading && !artifacts.length ? (
+        <div className="empty" style={{ marginBottom: 8 }}>Loading artifacts...</div>
+      ) : !artifacts.length ? (
+        <div className="empty" style={{ marginBottom: 8 }}>
+          No artifacts were discovered for this run. The run may not have produced any output files.
+        </div>
+      ) : (() => {
+        const existsCount = artifacts.filter((a) => a.exists).length;
+        const missingCount = artifacts.length - existsCount;
+        const previewableCount = artifacts.filter((a) => isPreviewableArtifact(a)).length;
+        return (
         <>
+          {warnings.length > 0 && (
+            <div style={{ marginBottom: 8, padding: 8, background: "rgba(255, 251, 242, 0.94)", border: "1px solid rgba(242, 153, 74, 0.28)", borderRadius: 6, fontSize: 12, color: "#9a5a15" }}>
+              Artifact discovery returned {warnings.length} warning(s). Some artifacts may be missing or inaccessible.
+            </div>
+          )}
+          {missingCount > 0 && (
+            <div style={{ marginBottom: 8, padding: 8, background: "rgba(255, 245, 245, 0.92)", border: "1px solid rgba(235, 87, 87, 0.24)", borderRadius: 6, fontSize: 12, color: "#b53b3b" }}>
+              {missingCount} artifact(s) are missing from disk. {existsCount > 0 ? `${existsCount} file(s) are present.` : ""}
+            </div>
+          )}
+          {existsCount > 0 && !previewableCount && (
+            <div className="empty" style={{ marginBottom: 8 }}>
+              {existsCount} artifact(s) exist but none are previewable (binary/metadata-only).
+            </div>
+          )}
           <div style={filterGridStyle}>
             <label style={filterLabelStyle}>
               Category
@@ -225,10 +250,30 @@ export function RunArtifactsPanel({
             <div className="empty">No artifacts match the current filters.</div>
           )}
         </>
-      ) : (
-        <div className="empty">
-          {loading ? "Loading artifacts..." : "No artifacts were discovered for this run."}
-        </div>
+      );
+      })()}
+
+      {artifacts.length > 0 && (
+        <details style={{ marginTop: 12 }}>
+          <summary style={{ cursor: "pointer", fontWeight: 900 }}>Raw artifacts JSON</summary>
+          <div style={{ marginTop: 8 }}>
+            <pre style={{
+              maxHeight: 260,
+              overflow: "auto",
+              padding: 10,
+              border: "1px solid rgba(137, 150, 171, 0.24)",
+              borderRadius: 6,
+              background: "#0f172a",
+              color: "#e5e7eb",
+              fontFamily: '"Cascadia Mono", "Consolas", monospace',
+              fontSize: 11,
+              whiteSpace: "pre-wrap",
+              overflowWrap: "anywhere",
+            }}>
+              {JSON.stringify({ artifacts, warnings }, null, 2)}
+            </pre>
+          </div>
+        </details>
       )}
 
       <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(137, 150, 171, 0.24)" }}>
