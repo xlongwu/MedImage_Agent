@@ -183,14 +183,52 @@ with `describeExecuteReviewedStatus` tests for DRY_RUN_OK, AUDIT_REQUIRED,
 APPROVAL_GATE_BLOCKED, EXECUTION_POLICY_BLOCKED, EXECUTION_FAILED, unknown
 status, and undefined input.
 
+## Phase 3 Executor Productization Contract
+
+A formal design contract for Phase 3 executor productization has been created
+at `docs/PIPELINE_EXECUTOR_PRODUCTIZATION_CONTRACT.md`. It defines the
+productized execution lifecycle (14 run states, 12 node states), dry-run/execute
+consistency contract, execution request/response schemas, output manifest and
+artifact contracts, provenance contract, approval/audit requirements, safe
+allowlist policy, Python-only MVP recommendation, failure handling, retry/resume
+alignment, frontend UX contract, test strategy, implementation order, and
+go/no-go decisions.
+
+**No new execution capability is enabled by this contract.** SPM/DPABI/MATLAB
+execution remains disabled and outside the safe allowlist. Rawdata remains
+read-only. Research-use only.
+
+## Phase 3 — Pipeline Execution State Schema
+
+Pipeline execution state schema has been implemented:
+
+- `src/backend/app/schemas/execution_state.py` — defines 15 run states
+  (`RunState` Literal), 13 node states (`NodeState` Literal), terminal/
+  non-terminal/success/failure sets, retry/resume/reuse eligibility sets,
+  full transition tables (`RUN_ALLOWED_TRANSITIONS`, `NODE_ALLOWED_TRANSITIONS`),
+  pure helper functions (`is_run_terminal`, `is_node_terminal`,
+  `is_run_retry_eligible`, `is_run_resume_eligible`, `is_node_retry_eligible`,
+  `is_node_reuse_eligible`, `can_transition_run`, `can_transition_node`),
+  and optional Pydantic models (`RunStateTransition`, `NodeStateTransition`).
+- `tests/unit/test_execution_state_schema.py` — 39 tests covering all states,
+  terminal/non-terminal sets, retry/resume/reuse eligibility, allowed and
+  disallowed transitions, unknown-string safety, terminal no-outgoing
+  invariants, and purity (no file I/O, no runtime executor imports).
+- **39 passed in 0.37s.**
+- **No runtime executor behavior changed.** SPM/DPABI/MATLAB remain disabled.
+  Rawdata remains read-only.
+
 ## Next recommended work
 
-1. Verify Electron GUI startup on a local Windows desktop.
-2. Run full NSIS + portable build with `-NsisArchive` and `-NsisResourcesArchive`.
-3. Keep release validation repeatable with the mamba interpreter.
-4. Run external BIDS smoke only when the user provides a deliberately bounded
+1. **Phase 3: Output Manifest and Provenance Helpers** — define Pydantic models
+   for `OutputManifest`, `OutputManifestItem`, `ExecutionProvenance`, and
+   verification helpers (schema-only, no runtime).
+2. Verify Electron GUI startup on a local Windows desktop.
+3. Run full NSIS + portable build with `-NsisArchive` and `-NsisResourcesArchive`.
+4. Keep release validation repeatable with the mamba interpreter.
+5. Run external BIDS smoke only when the user provides a deliberately bounded
    read-only `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
-5. Consider a future `project_create_service` only if project creation routes
+6. Consider a future `project_create_service` only if project creation routes
    grow again.
-6. Consider a future execution orchestration service only if
+7. Consider a future execution orchestration service only if
    `execute_reviewed_routes.py` needs more separation after MVP release.

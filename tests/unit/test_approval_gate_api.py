@@ -111,7 +111,10 @@ def test_manual_required():
 def test_high_risk_warning():
     resp = client.post("/api/approval/check", json=_body(
         {"approval_required_nodes": ["spm_realign_subject"], "high_risk_nodes": ["spm_realign_subject"]},
-        {"approved": True, "approved_nodes": ["spm_realign_subject"], "rejected_nodes": []},
+        {"approved": True, "approved_nodes": ["spm_realign_subject"], "rejected_nodes": [],
+         "external_tool_acknowledgement": True, "rawdata_read_only_confirmed": True,
+         "output_directory_confirmed": True, "risk_acknowledgement": True,
+         "overwrite_policy": "fail_if_exists", "subject_scope_confirmed": True},
     ))
     data = resp.json()
     assert data["execution_allowed"] is True
@@ -175,6 +178,12 @@ def test_api_accepts_approved_backends():
             "approved_nodes": ["spm_realign_subject"],
             "approved_backends": ["matlab-spm"],
             "rejected_nodes": [],
+            "external_tool_acknowledgement": True,
+            "rawdata_read_only_confirmed": True,
+            "output_directory_confirmed": True,
+            "risk_acknowledgement": True,
+            "overwrite_policy": "fail_if_exists",
+            "subject_scope_confirmed": True,
         },
     })
     assert resp.status_code == 200

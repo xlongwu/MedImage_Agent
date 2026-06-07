@@ -30,7 +30,7 @@ def test_returns_200():
 # ── 2. ok == true ──
 
 def test_ok_true():
-    resp = _post_plan({"goal": "motion"})
+    resp = _post_plan({"goal": "motion correction"})
     data = resp.json()
     assert data["ok"] is True
 
@@ -38,7 +38,7 @@ def test_ok_true():
 # ── 3. contains plan ──
 
 def test_contains_plan():
-    resp = _post_plan({"goal": "motion"})
+    resp = _post_plan({"goal": "motion correction"})
     data = resp.json()
     assert "plan" in data
     assert data["plan"]["pipeline_id"] == "planned_motion_qc"
@@ -47,7 +47,7 @@ def test_contains_plan():
 # ── 4. contains validation ──
 
 def test_contains_validation():
-    resp = _post_plan({"goal": "motion"})
+    resp = _post_plan({"goal": "motion correction"})
     data = resp.json()
     assert "validation" in data
     assert data["validation"]["ok"] is True
@@ -56,7 +56,7 @@ def test_contains_validation():
 # ── 5. spm_realign in plan ──
 
 def test_spm_realign_in_plan():
-    resp = _post_plan({"goal": "motion"})
+    resp = _post_plan({"goal": "motion correction"})
     data = resp.json()
     nids = [n["id"] for n in data["plan"]["nodes"]]
     assert "spm_realign_subject" in nids
@@ -65,7 +65,7 @@ def test_spm_realign_in_plan():
 # ── 6. approval_required in validation ──
 
 def test_approval_required_in_validation():
-    resp = _post_plan({"goal": "motion"})
+    resp = _post_plan({"goal": "motion correction"})
     data = resp.json()
     assert "spm_realign_subject" in data["validation"]["approval_required_nodes"]
 
@@ -124,7 +124,7 @@ def test_no_runner_execution():
 # ── 13. JSON serializable ──
 
 def test_json_serializable():
-    resp = _post_plan({"goal": "motion"})
+    resp = _post_plan({"goal": "motion correction"})
     raw = resp.text
     back = json.loads(raw)
     assert back["ok"] is True

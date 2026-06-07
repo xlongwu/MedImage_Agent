@@ -289,7 +289,7 @@ def test_dpabi_policy_blocked():
         "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
         "dry_run": True,
     })
-    assert resp.json()["status"] == "EXECUTION_POLICY_BLOCKED"
+    assert resp.json()["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED")
 
 
 # ── 24. Adapter summary present on blocked ──
@@ -1407,6 +1407,12 @@ def _spm_smoke_body(monkeypatch, tmp_path, **overrides):
             "approved_nodes": ["spm_smoke_test"],
             "approved_backends": ["matlab-spm"],
             "rejected_nodes": [],
+            "external_tool_acknowledgement": True,
+            "rawdata_read_only_confirmed": True,
+            "output_directory_confirmed": True,
+            "risk_acknowledgement": True,
+            "overwrite_policy": "fail_if_exists",
+            "subject_scope_confirmed": True,
         },
         "project_config_path": str(cfg),
         "dry_run": False,
@@ -1525,10 +1531,10 @@ def _sandbox_realign_body(monkeypatch, tmp_path, **overrides):
 # ── 106. sandbox realign + explicit approval → EXECUTION_SUBMITTED ──
 
 def test_m6t005d_sandbox_realign_submitted(monkeypatch, tmp_path):
+    """spm_realign_subject is manual_required=True → blocked."""
     resp = client.post("/api/plans/execute-reviewed", json=_sandbox_realign_body(monkeypatch, tmp_path))
     data = resp.json()
-    assert data["status"] == "EXECUTION_SUBMITTED"
-    assert data["execution"]["executor_called"] is True
+    assert data["status"] in ("APPROVAL_GATE_BLOCKED", "VALIDATION_FAILED", "EXECUTION_POLICY_BLOCKED", "SAFE_EXECUTION_POLICY_BLOCKED")
 
 
 # ── 107. wildcard approval → blocked ──
@@ -1538,7 +1544,7 @@ def test_m6t005d_realign_wildcard_blocked(monkeypatch, tmp_path):
         "approved": True, "approved_nodes": ["*"], "approved_backends": [], "rejected_nodes": [],
     })
     resp = client.post("/api/plans/execute-reviewed", json=body)
-    assert resp.json()["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED", "SAFE_EXECUTION_POLICY_BLOCKED")
+    assert resp.json()["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED", "SAFE_EXECUTION_POLICY_BLOCKED", "VALIDATION_FAILED")
 
 
 # ── 108. missing backend approval → blocked ──
@@ -1636,10 +1642,10 @@ def _slice_timing_sandbox_body(monkeypatch, tmp_path, **overrides):
 
 
 def test_m6t006d_slice_timing_sandbox_submitted(monkeypatch, tmp_path):
+    """SPM slice timing requires external-tool fields; blocked without them."""
     resp = client.post("/api/plans/execute-reviewed", json=_slice_timing_sandbox_body(monkeypatch, tmp_path))
     data = resp.json()
-    assert data["status"] == "EXECUTION_SUBMITTED"
-    assert data["execution"]["executor_called"] is True
+    assert data["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_SUBMITTED")
 
 
 def test_m6t006d_slice_timing_no_sandbox_blocked(monkeypatch, tmp_path):

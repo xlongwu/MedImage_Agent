@@ -112,11 +112,13 @@ def test_unknown_dependency_error():
 # ── 10. SPM node blocked ──
 
 def test_spm_blocked():
+    """spm_realign_subject has manual_required=True → blocked_manual_required_nodes."""
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_realign_subject", "depends_on": []},
     ]}
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" in policy["blocked_spm_nodes"]
+    # With manual_required=True, node goes to blocked_manual_required_nodes instead of blocked_spm_nodes
+    assert "spm_realign_subject" in policy["blocked_manual_required_nodes"]
 
 
 # ── 11. DPABI execution blocked ──
@@ -225,12 +227,14 @@ def test_spm_smoke_test_allowed():
 # ── 22. spm_realign_subject still blocked ──
 
 def test_spm_realign_still_blocked():
+    """spm_realign_subject has manual_required=True → blocked_manual_required_nodes."""
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_realign_subject", "depends_on": [], "params": {}},
     ]}
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" in policy["blocked_spm_nodes"]
+    assert "spm_realign_subject" in policy["blocked_manual_required_nodes"]
     assert "spm_realign_subject" not in policy["allowed_spm_smoke_nodes"]
+    assert "spm_realign_subject" not in policy["allowed_spm_realign_sandbox_nodes"]
 
 
 # ── 23. spm_slice_timing_subject still blocked ──
@@ -250,25 +254,27 @@ def test_spm_slice_timing_still_blocked():
 # ── 24. spm_realign_subject + sandbox → allowed_spm_realign_sandbox_nodes ──
 
 def test_spm_realign_sandbox_allowed():
+    """spm_realign_subject has manual_required=True → blocked_manual_required_nodes."""
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_realign_subject", "depends_on": [],
          "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
     ]}
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" in policy["allowed_spm_realign_sandbox_nodes"]
+    assert "spm_realign_subject" not in policy["allowed_spm_realign_sandbox_nodes"]
+    assert "spm_realign_subject" in policy["blocked_manual_required_nodes"]
 
 
-# ── 25. spm_realign_subject without sandbox_mode → blocked ──
+# ── 25. spm_realign_subject without sandbox_mode → blocked (manual_required) ──
 
 def test_spm_realign_no_sandbox_blocked():
     plan = {"pipeline_id": "test", "nodes": [
         {"id": "spm_realign_subject", "depends_on": [], "params": {}},
     ]}
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" in policy["blocked_spm_nodes"]
+    assert "spm_realign_subject" in policy["blocked_manual_required_nodes"]
 
 
-# ── 26. spm_realign_subject without input_bold → blocked ──
+# ── 26. spm_realign_subject without input_bold → blocked (manual_required) ──
 
 def test_spm_realign_no_input_bold_blocked():
     plan = {"pipeline_id": "test", "nodes": [
@@ -276,7 +282,7 @@ def test_spm_realign_no_input_bold_blocked():
          "params": {"sandbox_mode": True}},
     ]}
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" in policy["blocked_spm_nodes"]
+    assert "spm_realign_subject" in policy["blocked_manual_required_nodes"]
 
 
 # ── 27. spm_normalize_subject still blocked ──

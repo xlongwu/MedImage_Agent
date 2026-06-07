@@ -146,9 +146,15 @@ def plan_conversion(
     project_dir = str(metadata.get("project_dir") or "")
     config_path = str(metadata.get("project_config_path") or "")
 
+    # Sanitize output_root_name to prevent path traversal
+    safe_name = request.output_root_name or "conversion_output"
+    safe_name = safe_name.replace("\\", "/")
+    # Remove traversal patterns
+    parts = [p for p in safe_name.split("/") if p and p not in (".", "..")]
+    safe_name = "/".join(parts) if parts else "conversion_output"
     output_root = (
         Path(project_dir or Path(config_path).parent).expanduser().resolve()
-        / request.output_root_name
+        / safe_name
     ) if (project_dir or config_path) else None
 
     # ── Collect source roots ──

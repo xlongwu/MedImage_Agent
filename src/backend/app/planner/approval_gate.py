@@ -52,6 +52,13 @@ class ApprovalRecord:
     rejected_nodes: list[str] | None = None
     review_draft_schema_version: str | None = None
     approved_backends: list[str] | None = None  # M6-T003
+    # M6-T004: external-tool safety acknowledgement fields
+    external_tool_acknowledgement: bool | None = None
+    rawdata_read_only_confirmed: bool | None = None
+    output_directory_confirmed: bool | None = None
+    risk_acknowledgement: bool | None = None
+    overwrite_policy: str | None = None
+    subject_scope_confirmed: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -168,6 +175,12 @@ def check_approval_gate(
             "approved_nodes": approval.approved_nodes,
             "rejected_nodes": approval.rejected_nodes,
             "approved_backends": approval.approved_backends,
+            "external_tool_acknowledgement": approval.external_tool_acknowledgement,
+            "rawdata_read_only_confirmed": approval.rawdata_read_only_confirmed,
+            "output_directory_confirmed": approval.output_directory_confirmed,
+            "risk_acknowledgement": approval.risk_acknowledgement,
+            "overwrite_policy": approval.overwrite_policy,
+            "subject_scope_confirmed": approval.subject_scope_confirmed,
         }
     else:
         appr_dict = approval

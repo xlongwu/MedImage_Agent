@@ -31,6 +31,12 @@ def _approval(approved=True, approved_nodes=None, rejected_nodes=None):
         approved_by="test-user",
         approved_nodes=approved_nodes or [],
         rejected_nodes=rejected_nodes or [],
+        external_tool_acknowledgement=True,
+        rawdata_read_only_confirmed=True,
+        output_directory_confirmed=True,
+        risk_acknowledgement=True,
+        overwrite_policy="fail_if_exists",
+        subject_scope_confirmed=True,
     )
 
 
@@ -207,13 +213,21 @@ def _hr_plan(nodes=None):
     }
 
 
-def _hr_approval(approved_nodes=None, approved_backends=None, rejected_nodes=None):
+def _hr_approval(approved_nodes=None, approved_backends=None, rejected_nodes=None,
+                 ext_ack=True, rawdata_ok=True, output_ok=True,
+                 risk_ok=True, overwrite="fail_if_exists", subj_ok=True):
     return ApprovalRecord(
         approved=True,
         approved_by="test-user",
         approved_nodes=approved_nodes or [],
         rejected_nodes=rejected_nodes or [],
         approved_backends=approved_backends or [],
+        external_tool_acknowledgement=ext_ack,
+        rawdata_read_only_confirmed=rawdata_ok,
+        output_directory_confirmed=output_ok,
+        risk_acknowledgement=risk_ok,
+        overwrite_policy=overwrite,
+        subject_scope_confirmed=subj_ok,
     )
 
 
