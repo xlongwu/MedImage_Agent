@@ -956,3 +956,38 @@ export type QcDashboardFingerprintResponse = {
   errors: string[];
   safety_flags: Record<string, boolean>;
 };
+
+/** Phase 3 run-state timeline types */
+export type RunStateTimelineEvent = {
+  timestamp?: string | null;
+  state: string;
+  source: string;
+  message?: string | null;
+  node_id?: string | null;
+  metadata: Record<string, unknown>;
+};
+
+export type NodeStateTimelineRecord = {
+  node_id: string;
+  state: string;
+  terminal: boolean;
+  retry_eligible: boolean;
+  reuse_eligible: boolean;
+  warnings: string[];
+  errors: string[];
+  metadata: Record<string, unknown>;
+};
+
+export type ProjectRunStateTimelineResponse = {
+  ok: boolean;
+  project_id: string;
+  run_id: string;
+  current_run_state: string;
+  terminal: boolean;
+  retry_eligible: boolean;
+  resume_eligible: boolean;
+  events: RunStateTimelineEvent[];
+  nodes: NodeStateTimelineRecord[];
+  warnings: string[];
+  errors: string[];
+};

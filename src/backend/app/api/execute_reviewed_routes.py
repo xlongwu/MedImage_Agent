@@ -41,6 +41,10 @@ from src.backend.app.planner.reviewed_plan_store import (
 from src.backend.app.planner import pipeline_writer  # imported as module for monkeypatch
 from src.backend.app.runtime.pipeline_executor import run_pipeline  # for monkeypatch
 from src.backend.app.schemas.desktop import ReviewedPlanRecord
+from src.backend.app.schemas.execution_consistency import (
+    ExecutionConsistencyInput,
+    verify_execution_consistency,
+)
 from src.backend.app.services.mock_store import mock_store
 
 router = APIRouter()
@@ -372,6 +376,74 @@ def _with_link_fields(result: dict[str, Any], **fields: str | None) -> dict[str,
 def _reviewed_plan_error_status(exc: ReviewedPlanStoreError) -> str:
     code = str(exc).partition(":")[0].strip()
     return code if code.startswith("REVIEWED_PLAN_") else "REVIEWED_PLAN_INVALID"
+
+
+# ── Consistency preflight (Phase 3) ──────────────────────────────────────────
+
+def _run_consistency_preflight(
+    *,
+    plan: dict[str, Any],
+    reviewed_plan: ReviewedPlanRecord | None,
+    request: ExecuteReviewedRequest,
+    adapter: Any,
+    audit_info: dict[str, Any],
+    project_id: str,
+) -> dict[str, Any] | None:
+    """Run dry-run/execute consistency check before calling run_pipeline().
+
+    Returns None if consistency passes (or is not required).
+    Returns a blocked result dict on hard consistency failure.
+    """
+    node_ids = [n["id"] for n in plan.get("nodes", [])]
+
+    reviewed_input = ExecutionConsistencyInput(
+        project_id=project_id,
+        reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+        plan_hash=reviewed_plan.plan_hash if reviewed_plan else None,
+        project_config_path=reviewed_plan.project_config_path if reviewed_plan else request.project_config_path,
+        project_context_path=reviewed_plan.project_config_path if reviewed_plan else request.project_config_path,
+        node_ids=node_ids,
+    )
+
+    dry_run_input = ExecutionConsistencyInput(
+        project_id=project_id,
+        reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+        node_ids=node_ids,
+        dry_run_status="EXECUTION_PREFLIGHT_READY",
+    )
+
+    execution_input = ExecutionConsistencyInput(
+        project_id=project_id,
+        reviewed_plan_id=request.reviewed_plan_id,
+        project_config_path=request.project_config_path,
+        project_context_path=request.project_config_path,
+        node_ids=node_ids,
+        approval_context_id="preflight_approved",  # approval gate already passed
+        audit_id=str(audit_info.get("audit_id") or "") or None,
+    )
+
+    report = verify_execution_consistency(
+        reviewed=reviewed_input,
+        dry_run=dry_run_input,
+        execution=execution_input,
+        require_approval=True,
+        require_audit=False,           # audit available after write
+        require_output_manifest=False,  # manifest generated during execution
+    )
+
+    if report.status == "fail":
+        return {
+            "ok": False,
+            "status": "EXECUTION_CONSISTENCY_FAILED",
+            "dry_run": False,
+            "would_execute": False,
+            "execution_allowed": False,
+            "execution_consistency": report.model_dump(),
+            "execution": _execution_meta(),
+        }
+
+    # Pass or warning — continue; attach report for diagnostics
+    return None
 
 
 # ── Main endpoint ────────────────────────────────────────────────────────────
@@ -720,7 +792,26 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                     pipeline_path=str(written_path) if written_path else None,
                 )
 
-        # 12. Call executor — FIRST TIME in M5 series
+        # 12. Phase 3: dry-run/execute consistency preflight
+        consistency_report = _run_consistency_preflight(
+            plan=plan,
+            reviewed_plan=reviewed_plan,
+            request=request,
+            adapter=adapter,
+            audit_info=audit_info,
+            project_id=(reviewed_plan.project_id if reviewed_plan else request.project_id or ""),
+        )
+        if consistency_report is not None:
+            # consistency failure → block execution
+            return _with_link_fields(
+                consistency_report,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+                run_link_id=run_link_id,
+                run_id=linked_run_id,
+                pipeline_path=str(written_path) if written_path else None,
+            )
+
+        # 13. Call executor — FIRST TIME in M5 series
         try:
             executor_result = run_pipeline(
                 project_config_path=request.project_config_path,

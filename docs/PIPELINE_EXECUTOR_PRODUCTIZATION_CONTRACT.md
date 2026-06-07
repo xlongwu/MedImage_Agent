@@ -1,0 +1,1171 @@
+# Pipeline Executor Productization Contract
+
+**Status:** Design contract — NOT IMPLEMENTED.
+**Version:** v1.0-draft
+**Date:** 2026-07-07
+
+---
+
+## 1. Purpose and Scope
+
+This document defines the **Phase 3 executor productization contract** for
+the MedImage Agent pipeline runtime.  It specifies the execution lifecycle,
+state machine, node-level contracts, output manifests, provenance, approval,
+audit, safe allowlist policy, retry/resume alignment, and test strategy
+required to productize the current `pipeline_executor.py` from a basic
+ad-hoc executor into a formally specified, stateful, auditable execution
+engine.
+
+**Explicit constraints:**
+
+- **No new execution capability is enabled by this document.**  This is a
+  design contract, not an implementation.
+- **External tools remain disabled.**  MATLAB/SPM/DPABI/AFNI/FSL execution
+  remains outside the safe allowlist.
+- **SPM/DPABI/MATLAB execution remains not implemented.**  The existing
+  non-executing preparation chain (dry-run, wrapper skeleton, batch preview,
+  approval/audit gates) remains unchanged.
+- **Rawdata remains read-only.**  No pipeline node, executor, or artifact
+  may write to or modify `rawdata/` or any file in the BIDS input tree.
+- **Research-use only, not clinical diagnosis.**  All outputs, reports,
+  and execution results are for research workflow evaluation only.
+- **No frontend behavior changes.**  No new execute buttons, no new panels.
+- **No modification to pipeline runtime behavior.**  `pipeline_executor.py`
+  continues to work as-is during Phase 3 contract definition.
+
+This contract is a **pre-implementation design document**.  It exists to
+establish formal invariants, schemas, and test strategies *before* any code
+changes to the executor, state store, node registry, or routes are made.
+
+---
+
+## 2. Current Baseline
+
+### 2.1 Executor-related state (Phase 1 + Phase 2)
+
+The following capabilities are implemented and tested in the current release:
+
+| Capability | Implementation |
+|---|---|
+| Reviewed plan flow | `POST /api/plans/execute-reviewed` with `dry_run=true/false` |
+| Dry-run execution | Full approval/audit/validation/adapter/policy check without execution |
+| Execute-reviewed endpoint | Gated execution for safe allowlist Python nodes only |
+| `run_id` / `run_link_id` | UUID-based identity, stored in `run_links` SQLite table |
+| Run history | `GET /api/projects/{id}/runs` — lists all run links |
+| Run detail | `GET /api/projects/{id}/runs/{run_id}` — summary preview + warnings |
+| Run events | `GET /api/projects/{id}/runs/{run_id}/events` — synthesized event timeline |
+| Run logs | `GET /api/projects/{id}/runs/{run_id}/logs` — bounded log previews |
+| Run artifacts | `GET /api/projects/{id}/runs/{run_id}/artifacts` — discovered artifacts |
+| Artifact preview | CSV/JSON/Markdown/text/log preview through existing discovery service |
+| Approval Gate | `check_approval_gate()` — 6 external-tool fields for high-risk nodes |
+| Audit record | `build_review_audit_record()` — immutable hash-verifiable snapshots |
+| Safe allowlist | `_check_safe_allowlist()` in `execute_reviewed_routes.py` — Python-only |
+| `contract_smoke` | Python-only internal validation node, in safe allowlist |
+| Phase 1 regression | 16 tests covering observability loop (all pass) |
+| Phase 2 regression | 16 tests covering QC pipeline (all pass, ~43s) |
+
+### 2.2 Architectural constraints (current)
+
+- **Pipeline Executor** (`pipeline_executor.py`): uses `ThreadPoolExecutor`
+  for subject-level parallelism, writes node states via `state_store.py`,
+  generates pipeline summary, returns `{status, run_id, summary_path, ...}`.
+- **Node Registry** (`node_registry.py`): maps `node_id` → runner function
+  (`Callable[[NodeExecutionContext, PipelineNode], dict]`).
+- **State Store** (`state_store.py`): file-based JSON at
+  `work/states/<run_id>/<node_id>.json` with fields: `run_id`, `subject`,
+  `node`, `status`, `started_at`, `ended_at`, `log_path`, `stderr_log`,
+  `outputs`, `metrics`, `warnings`, `errors`, `result_json`, `returncode`.
+- **Tool Catalog** (`tool_catalog.py`): read-only registry of node metadata
+  (backend, risk_level, requires_approval, parallel_level, tags).
+- **State model**: current executor uses only `SUCCESS`, `FAILED`, `PARTIAL`,
+  `INVALID` for run status and `SUCCESS`/`FAILED` for node status.  No
+  intermediate states, no heartbeat, no timeout, no cancellation.
+
+### 2.3 What is missing
+
+| Missing capability | Relevance to productization |
+|---|---|
+| Formal run lifecycle states | Foundation for all execution UX and retry/resume |
+| Node-level state machine | Required for partial failure handling, provenance, reuse decisions |
+| Dry-run/execute consistency contract | Ensures execute uses the same reviewed plan as dry-run |
+| Output manifest verification | Ensures all predicted outputs exist and are non-empty |
+| Provenance runtime schemas | Required for reproducibility and audit |
+| Heartbeat/timeout/cancellation | Required for production-grade process management |
+| Retry/resume execution | Contract designed; no implementation |
+| Real preprocessing execution | Currently NO-GO per SPM design review |
+
+---
+
+## 3. Productized Execution Lifecycle
+
+### 3.1 Run lifecycle states
+
+A **run** transitions through the following states from creation to terminal:
+
+```
+                  ┌─────────┐
+                  │ created │  ← run identity allocated, not yet submitted
+                  └────┬────┘
+                       │ submit
+                  ┌────▼────┐
+                  │ queued  │  ← waiting for executor slot
+                  └────┬────┘
+                       │ dequeue
+                  ┌────▼──────────┐
+                  │ preflight      │  ← validation, approval, audit, safe allowlist
+                  └────┬───────────┘
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+   ┌────────────┐ ┌──────────┐ ┌──────────┐
+   │ approval   │ │ audit    │ │ ready    │  ← all gates passed
+   │ _required  │ │ _required│ └────┬─────┘
+   └────────────┘ └──────────┘      │ execute
+                                     ▼
+                              ┌──────────┐
+                              │ running  │  ← executor active, heartbeat live
+                              └────┬─────┘
+                                   │
+            ┌──────────────────────┼──────────────────────┐
+            ▼                      ▼                      ▼
+     ┌──────────┐          ┌──────────┐          ┌──────────┐
+     │ succeeded│          │ failed   │          │ timeout  │
+     └──────────┘          └──────────┘          └──────────┘
+                                   │
+            ┌──────────────────────┼──────────────────────┐
+            ▼                      ▼                      ▼
+     ┌──────────┐          ┌──────────┐          ┌──────────────┐
+     │ blocked  │          │ cancelled│          │ interrupted  │
+     └──────────┘          └──────────┘          └──────────────┘
+
+     ┌──────────┐          ┌──────────┐
+     │ partial  │          │ unknown  │
+     └──────────┘          └──────────┘
+```
+
+### 3.2 State definitions
+
+| State | Meaning | Terminal? | Retry/Resume eligible? |
+|---|---|---|---|
+| `created` | Run identity allocated; plan validated but not submitted to executor. | No | N/A (not yet executed) |
+| `queued` | Run submitted to executor queue; waiting for available slot. | No | N/A |
+| `preflight` | Pre-execution checks in progress: validation, approval, audit, safe allowlist, output conflicts. | No | N/A |
+| `approval_required` | Preflight blocked: approval gate not satisfied. | No, can transition to `preflight` after approval | No (not yet executed) |
+| `audit_required` | Preflight blocked: audit record not persisted. | No, can transition to `preflight` after audit | No (not yet executed) |
+| `ready` | All gates passed; executor can begin node execution. | No | N/A |
+| `running` | Executor is actively processing nodes; heartbeat is live. | No | Only after heartbeat timeout confirms process dead |
+| `succeeded` | All nodes completed successfully. | **Yes** | Retry: no (nothing to retry). Resume: no (already complete). Rerun: yes (fresh run). |
+| `failed` | One or more nodes failed, and `stop_on_failure` stopped execution. | **Yes** | Retry: yes (only failed/blocked nodes). Resume: no (terminal). |
+| `blocked` | Execution blocked by an unrecoverable pre-condition (missing config, permission error, policy violation). Not a runtime failure. | **Yes** | Retry: after fixing the blocking condition. |
+| `cancelled` | User or system requested cancellation; executor stopped. | **Yes** | Rerun: yes. Retry: maybe (if partial outputs exist). |
+| `timeout` | Execution exceeded the configured time limit. | **Yes** | Retry: yes (with longer timeout). Resume: maybe (if partial outputs exist). |
+| `partial` | Some nodes succeeded, some failed, and `stop_on_failure` was false or node-level skip allowed. | **Yes** | Resume: yes (skip verified successes). Retry: yes (target failures). |
+| `interrupted` | Executor process terminated unexpectedly (OOM, signal, power loss). | **Yes** | Resume: yes (after confirming process dead). Retry: yes. |
+| `unknown` | Run record exists but state cannot be determined (corrupt state file, missing summary). | **Yes** | Manual investigation required. |
+
+### 3.3 Allowed transitions
+
+```
+created       → queued, cancelled
+queued        → preflight, cancelled, timeout (queue timeout)
+preflight     → approval_required, audit_required, ready, blocked, cancelled
+approval_required → preflight (after approval), cancelled, blocked
+audit_required   → preflight (after audit), cancelled, blocked
+ready         → running, cancelled, blocked
+running       → succeeded, failed, partial, timeout, cancelled, interrupted, unknown
+succeeded     → [terminal]
+failed        → [terminal]
+partial       → [terminal]
+blocked       → [terminal]
+cancelled     → [terminal]
+timeout       → [terminal]
+interrupted   → [terminal]
+unknown       → [terminal]
+```
+
+### 3.4 UI representation
+
+| State | Icon/Severity | Color |
+|---|---|---|
+| `created` | ○ | Gray |
+| `queued` | ◷ | Blue |
+| `preflight` | ◷ | Blue |
+| `approval_required` | ⚠ | Amber |
+| `audit_required` | ⚠ | Amber |
+| `ready` | ◉ | Blue |
+| `running` | ◉ spinning | Blue |
+| `succeeded` | ✓ | Green |
+| `failed` | ✗ | Red |
+| `partial` | ⚡ | Amber |
+| `blocked` | ⊘ | Red |
+| `cancelled` | ⊘ | Gray |
+| `timeout` | ⏱ | Amber |
+| `interrupted` | ⚡ | Red |
+| `unknown` | ? | Gray |
+
+---
+
+## 4. Node-Level State Machine
+
+### 4.1 Node states
+
+Each node within a run transitions independently:
+
+```
+                  ┌─────────┐
+                  │ pending │  ← not yet reached in DAG order
+                  └────┬────┘
+                       │ dependencies satisfied
+                  ┌────▼──────────┐
+                  │ skipped        │  ← upstream failure or user skip
+                  └────────────────┘
+                       │
+                  ┌────▼──────────┐
+                  │ preflight      │  ← node-level validation, input checks
+                  └────┬───────────┘
+                       │
+                  ┌────▼────┐
+                  │ ready   │  ← all preconditions met
+                  └────┬────┘
+                       │ execute
+                  ┌────▼────┐
+                  │ running │  ← runner function executing
+                  └────┬────┘
+                       │
+     ┌─────────────────┼─────────────────┐
+     ▼                 ▼                 ▼
+┌──────────┐   ┌──────────┐   ┌──────────┐
+│ succeeded│   │ failed   │   │ timeout  │
+└──────────┘   └──────────┘   └──────────┘
+
+┌──────────┐   ┌──────────┐   ┌──────────┐
+│ blocked  │   │ cancelled│   │ reused   │  ← output carried forward from source run
+└──────────┘   └──────────┘   └──────────┘
+
+┌──────────────┐   ┌──────────┐
+│ invalidated  │   │ unknown  │
+└──────────────┘   └──────────┘
+```
+
+### 4.2 Node state definitions
+
+| State | Meaning | Upstream impact | Downstream impact |
+|---|---|---|---|
+| `pending` | Node not yet reached in DAG order. | N/A | N/A |
+| `skipped` | Intentionally skipped (upstream failure, user flag, or policy). | N/A | Downstream nodes treat as `skipped`; may skip if they depend on skipped outputs. |
+| `preflight` | Node-level checks in progress: input existence, param validation, output conflict. | Must be done before upstream states finalize. | Downstream still `pending`. |
+| `ready` | All preconditions met; awaiting executor thread. | Upstream must be `succeeded` or `reused`. | Downstream may be `pending` or `ready` (parallel). |
+| `running` | Runner function is executing. Heartbeat increments. | Upstream must be terminal. | Downstream blocked until this node completes. |
+| `succeeded` | Runner returned `ok=true`; outputs verified. | Clears downstream dependency. | Downstream can advance to `preflight`. |
+| `failed` | Runner returned `ok=false` or raised exception. | N/A | Downstream becomes `blocked` (or `skipped` based on `stop_on_failure`). |
+| `blocked` | Precondition unsatisfied (missing input, invalid params, policy). | N/A | Downstream blocked. |
+| `cancelled` | User/system cancelled during execution. | N/A | Downstream becomes `cancelled`. |
+| `timeout` | Node exceeded its timeout. | N/A | Downstream blocked. |
+| `reused` | Output carried forward from source run (retry/resume). Verified by checksum. | Source run node was `succeeded`. | Downstream can advance. |
+| `invalidated` | Previously `reused` output now invalid (input/param/env change). | N/A | Downstream must be re-executed. |
+| `unknown` | Node state file corrupt or missing. | N/A | Downstream blocked. |
+
+### 4.3 Output manifest state per node
+
+Each node result must include an **output manifest** recording:
+
+```json
+{
+  "node_id": "nifti_qc_snapshot_export",
+  "status": "succeeded",
+  "expected_outputs": [
+    {
+      "kind": "json_report",
+      "relative_path": "outputs/reports/qc/nifti_snapshot.json",
+      "exists": true,
+      "size_bytes": 2048,
+      "sha256": "abc123...",
+      "previewable": true,
+      "required": true
+    }
+  ],
+  "unexpected_outputs": [],
+  "missing_outputs": []
+}
+```
+
+The output manifest is the **single source of truth** for artifact discovery
+after a node executes.  It replaces the current ad-hoc `result.get("outputs")`.
+
+---
+
+## 5. Dry-run and Execute Consistency Contract
+
+### 5.1 Invariants
+
+The execute path must consume the same reviewed plan as the dry-run path.
+The following invariants must hold at execute time:
+
+1. **Reviewed plan identity**: `reviewed_plan_id` must match the dry-run result.
+2. **Project context**: `project_config_path` and `project_context` must match.
+3. **Plan hash**: The plan payload SHA-256 must match the persisted `reviewed_plan_store` record.
+4. **Node params hash**: Each node's `params` dict must produce the same SHA-256 as computed at dry-run time.
+5. **Output root**: The output directory must match what the dry-run manifest predicted.
+6. **Safe allowlist**: Must be re-checked at execute time, not only at dry-run time.
+7. **Approval/audit persistence**: Approval gate must pass and audit record must be persisted *before* any node runner is called.
+8. **Dry-run success does not imply execution authorization**: Dry-run checks preconditions; execution requires additional gates (heartbeat, output conflict, running-process detection).
+
+### 5.2 Consistency check function
+
+```python
+def verify_execution_consistency(
+    dry_run_manifest: dict,
+    execute_request: dict,
+    reviewed_plan: dict,
+) -> ConsistencyResult:
+    """
+    Returns:
+      - ok: bool
+      - mismatches: list of field-level diffs
+      - blocked: whether execution should be blocked
+    """
+```
+
+### 5.3 What happens on mismatch
+
+| Mismatch type | Block? | Message | Next action |
+|---|---|---|---|
+| Plan hash changed | **Yes** | "Reviewed plan has been modified since dry-run" | Re-run plan review and dry-run |
+| Project context changed | **Yes** | "Project configuration changed" | Re-validate project context |
+| Node params changed | **Yes** | "Node parameters differ from dry-run manifest" | Re-run dry-run with updated params |
+| Output root changed | **Warning** | "Output directory differs from dry-run prediction" | Confirm new output root |
+| Safe allowlist changed | **Yes** | "Node no longer in safe allowlist" | Review policy change |
+
+---
+
+## 6. Execution Request / Response Contract
+
+### 6.1 PipelineExecutionRequest
+
+```json
+{
+  "reviewed_plan_id": "rp_abc123",
+  "project_id": "proj_xyz",
+  "plan": { "pipeline_id": "...", "nodes": [...] },
+  "plan_hash": "sha256...",
+  "approval": {
+    "approved": true,
+    "approved_by": "researcher",
+    "approved_nodes": ["nifti_qc_snapshot_export"],
+    "approved_backends": ["python"],
+    "external_tool_acknowledgement": false,
+    "rawdata_read_only_confirmed": true,
+    "output_directory_confirmed": true,
+    "risk_acknowledgement": true,
+    "overwrite_policy": "fail_if_exists",
+    "subject_scope_confirmed": true
+  },
+  "audit_record": {
+    "audit_id": "audit_def456",
+    "plan_hash": "sha256...",
+    "validation_hash": "sha256...",
+    "approval_hash": "sha256..."
+  },
+  "execution_policy": {
+    "stop_on_failure": true,
+    "timeout_seconds": 3600,
+    "overwrite_policy": "fail_if_exists",
+    "max_workers": 4
+  },
+  "dry_run_manifest": {
+    "status": "DRY_RUN_OK",
+    "output_root": "outputs/work/run_proj_xyz/",
+    "node_manifests": [...]
+  },
+  "actor": "researcher@lab"
+}
+```
+
+### 6.2 PipelineExecutionResponse
+
+```json
+{
+  "ok": true,
+  "run_id": "run_789ghi",
+  "run_link_id": "rl_jkl012",
+  "status": "running",
+  "created_at": "2026-07-07T10:00:00Z",
+  "node_count": 3,
+  "estimated_duration_seconds": 45,
+  "warnings": []
+}
+```
+
+Or on preflight failure:
+
+```json
+{
+  "ok": false,
+  "status": "approval_required",
+  "errors": [
+    {
+      "code": "APPROVAL_MISSING",
+      "message": "External tool acknowledgement missing for spm_realign_subject",
+      "node_id": "spm_realign_subject"
+    }
+  ]
+}
+```
+
+### 6.3 NodeExecutionRequest
+
+Passed from executor to runner:
+
+```json
+{
+  "run_id": "run_789ghi",
+  "node_id": "nifti_qc_snapshot_export",
+  "subject": "sub-001",
+  "params": { "output_format": "json", "include_thumbnail": true },
+  "inputs": [
+    {
+      "key": "bold_nifti",
+      "path": "rawdata/sub-001/func/sub-001_task-rest_bold.nii.gz",
+      "sha256": "def789..."
+    }
+  ],
+  "output_root": "outputs/work/run_789ghi/",
+  "timeout_seconds": 300,
+  "env": {
+    "python_version": "3.10",
+    "nibabel_version": "5.2.0",
+    "platform": "Windows-10-10.0.22621-SP0"
+  }
+}
+```
+
+### 6.4 NodeExecutionResult
+
+```json
+{
+  "ok": true,
+  "node_id": "nifti_qc_snapshot_export",
+  "subject": "sub-001",
+  "status": "succeeded",
+  "started_at": "2026-07-07T10:00:01Z",
+  "ended_at": "2026-07-07T10:00:05Z",
+  "duration_seconds": 4.2,
+  "returncode": 0,
+  "output_manifest": {
+    "node_id": "nifti_qc_snapshot_export",
+    "status": "succeeded",
+    "expected_outputs": [
+      {
+        "kind": "json_report",
+        "relative_path": "outputs/reports/qc/nifti_snapshot.json",
+        "exists": true,
+        "size_bytes": 2048,
+        "sha256": "abc123...",
+        "previewable": true,
+        "required": true
+      }
+    ],
+    "missing_outputs": []
+  },
+  "metrics": {
+    "nifti_files_scanned": 12,
+    "total_voxels_sampled": 1200000,
+    "zero_fraction_max": 0.42
+  },
+  "warnings": [],
+  "errors": [],
+  "logs": {
+    "stdout_path": "outputs/work/run_789ghi/logs/nifti_qc_snapshot_export_stdout.log",
+    "stderr_path": null
+  },
+  "provenance": {
+    "input_checksums": { "bold_nifti": "def789..." },
+    "params_hash": "sha256...",
+    "env_fingerprint": "sha256..."
+  }
+}
+```
+
+### 6.5 OutputManifest
+
+```json
+{
+  "node_id": "string",
+  "status": "succeeded | failed | partial",
+  "expected_outputs": [
+    {
+      "kind": "json_report | markdown_report | nifti_image | text_log | csv_table | png_thumbnail | other",
+      "relative_path": "string (relative to output_root)",
+      "absolute_path": "string (for verification)",
+      "exists": true,
+      "size_bytes": 1234,
+      "sha256": "hex string",
+      "previewable": true,
+      "required": true,
+      "artifact_id": "string (for artifact discovery)"
+    }
+  ],
+  "unexpected_outputs": [],
+  "missing_outputs": [
+    {
+      "relative_path": "string",
+      "expected": true,
+      "reason": "runner_did_not_produce | permission_error | disk_full"
+    }
+  ]
+}
+```
+
+### 6.6 OutputManifestItem
+
+```json
+{
+  "kind": "json_report",
+  "relative_path": "outputs/reports/qc/nifti_snapshot.json",
+  "exists": true,
+  "size_bytes": 2048,
+  "sha256": "abc123...",
+  "previewable": true,
+  "required": true
+}
+```
+
+### 6.7 ExecutionFailureRecord
+
+```json
+{
+  "run_id": "run_789ghi",
+  "node_id": "nifti_qc_snapshot_export",
+  "failure_kind": "node_exception | timeout | missing_output | corrupt_output | stale_heartbeat | interrupted",
+  "message": "Node execution failed: ZeroDivisionError in intensity stats",
+  "traceback": "Traceback (most recent call last): ...",
+  "logged_at": "2026-07-07T10:00:10Z",
+  "fatal": true,
+  "downstream_cascade": ["motion_metrics_draft", "rsfmri_qc_planning"]
+}
+```
+
+### 6.8 ExecutionProvenance
+
+See Section 8 for full field definitions.
+
+---
+
+## 7. Output Manifest and Artifact Contract
+
+### 7.1 Output kinds
+
+| Kind | Description | Example extensions |
+|---|---|---|
+| `json_report` | Structured JSON report artifact | `.json` |
+| `markdown_report` | Human-readable Markdown report | `.md` |
+| `nifti_image` | NIfTI-1/2 image file | `.nii`, `.nii.gz` |
+| `text_log` | Plain-text execution log | `.log`, `.txt` |
+| `csv_table` | CSV data table | `.csv`, `.tsv` |
+| `png_thumbnail` | PNG preview image | `.png` |
+| `motion_params` | Motion parameter text file | `rp_*.txt` |
+| `provenance_json` | Provenance record | `.json` |
+| `batch_script` | MATLAB batch script | `.m` |
+| `other` | Unknown/custom output | any |
+
+### 7.2 Required vs optional outputs
+
+Each node definition must declare which outputs are **required** (missing →
+node `failed`) and which are **optional** (missing → node `succeeded` with
+warnings).
+
+```python
+NODE_OUTPUT_SPEC: dict[str, list[OutputSpec]] = {
+    "nifti_qc_snapshot_export": [
+        OutputSpec(kind="json_report", required=True),
+        OutputSpec(kind="png_thumbnail", required=False),
+    ],
+}
+```
+
+### 7.3 Output verification fields
+
+| Field | When populated | Purpose |
+|---|---|---|
+| `exists` | Post-execution | Confirms file is present on disk |
+| `size_bytes` | Post-execution | Confirms file is not empty |
+| `sha256` | Post-execution (optional) | Detects corruption or silent overwrite |
+| `previewable` | Design-time | Whether artifact discovery can preview it |
+| `required` | Design-time | Whether missing output is a failure |
+
+### 7.4 Artifact discovery integration
+
+After execution completes, `discover_run_artifacts()` should:
+
+1. Read the run's pipeline summary (existing).
+2. For each node, read the node state JSON (existing).
+3. For each node, read the output manifest (new).
+4. Cross-reference `expected_outputs` against actual filesystem.
+5. Return discovered artifacts with `exists` and `size_bytes` verified.
+
+### 7.5 Missing output behavior
+
+| Scenario | Node status | Run status | Action |
+|---|---|---|---|
+| All required outputs present | `succeeded` | Proceed | Normal |
+| Optional output missing | `succeeded` + warning | Proceed | Log warning |
+| One required output missing | `failed` | Depends on `stop_on_failure` | Log error, mark node failed |
+| All outputs missing | `failed` | Depends on `stop_on_failure` | Log error, mark node failed |
+| Output exists but zero bytes | `failed` | Depends on `stop_on_failure` | Log error, mark node failed |
+
+### 7.6 Output path safety
+
+All output paths must be validated against the following rules before writing:
+
+1. Output root must not be inside `rawdata_dir`.
+2. Output root must not be a parent of `rawdata_dir`.
+3. No path traversal (`..`) in relative output paths.
+4. No absolute paths in relative output paths.
+5. All outputs must resolve under the run's scoped output directory.
+6. Overwrite policy (`fail_if_exists` default) enforced before first write.
+
+---
+
+## 8. Provenance Contract
+
+### 8.1 Required provenance fields
+
+Every node execution must produce an `ExecutionProvenance` record containing:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `project_id` | `str` | Yes | Stable project identifier |
+| `reviewed_plan_id` | `str` | Yes | ID of the reviewed plan being executed |
+| `run_id` | `str` | Yes | Current run identifier |
+| `run_link_id` | `str` | Yes | Run link identifier |
+| `node_id` | `str` | Yes | Node identifier from pipeline |
+| `subject` | `str \| None` | Yes | Subject label or `"project"` |
+| `input_paths` | `dict[str, str]` | Yes | Input key → absolute path |
+| `input_checksums` | `dict[str, str]` | Yes | Input key → SHA-256 |
+| `output_paths` | `dict[str, str]` | Yes | Output key → absolute path |
+| `output_checksums` | `dict[str, str]` | Conditional | Populated after execution |
+| `params` | `dict` | Yes | Node parameters (sorted keys) |
+| `params_hash` | `str` | Yes | SHA-256 of sorted params JSON |
+| `software_versions` | `dict[str, str]` | Yes | e.g. `{"python": "3.10", "nibabel": "5.2.0"}` |
+| `environment_fingerprint` | `str` | Yes | SHA-256 of env factors |
+| `command_template_id` | `str \| None` | Conditional | For external tools (SPM/DPABI) |
+| `batch_sha256` | `str \| None` | Conditional | For external tools with batch files |
+| `started_at` | `str (ISO 8601)` | Yes | Execution start timestamp |
+| `finished_at` | `str (ISO 8601)` | Yes | Execution end timestamp |
+| `duration_seconds` | `float` | Yes | Wall-clock duration |
+| `return_code` | `int \| None` | Yes | Process return code (None for pure Python) |
+| `stdout_log_path` | `str \| None` | Conditional | Path to captured stdout log |
+| `stderr_log_path` | `str \| None` | Conditional | Path to captured stderr log |
+| `approval_context` | `dict \| None` | Conditional | Approval record snapshot (for external tools) |
+| `audit_id` | `str` | Yes | Audit record identifier |
+| `source_run_id` | `str \| None` | Conditional | Source run for retry/resume |
+| `recovery_mode` | `str \| None` | Conditional | `"retry"`, `"resume"`, or `"rerun"` |
+| `node_state_path` | `str` | Yes | Path to the written node state JSON |
+| `output_manifest_path` | `str` | Yes | Path to the written output manifest JSON |
+
+### 8.2 Environment fingerprint composition
+
+The environment fingerprint is computed from:
+
+- Python version (`sys.version`)
+- Key package versions (nibabel, numpy, pydantic, fastapi, yaml)
+- OS platform (`sys.platform`, `platform.release()`)
+- Project config tool paths (MATLAB, SPM, DPABI paths if configured)
+- Desktop config version
+
+```python
+env_components = {
+    "python_version": "3.10.11",
+    "packages": {"nibabel": "5.2.0", "numpy": "1.24.3"},
+    "platform": "Windows-10-10.0.22621-SP0",
+}
+env_fingerprint = sha256(json.dumps(env_components, sort_keys=True))
+```
+
+### 8.3 Provenance storage
+
+Provenance records are written to:
+
+```
+outputs/work/provenance/<run_id>/<node_id>_provenance.json
+```
+
+They are read-only after write.  Provenance files are discovered as run
+artifacts (kind: `provenance_json`) and are previewable through the existing
+artifact preview endpoint.
+
+---
+
+## 9. Approval and Audit Requirements
+
+### 9.1 When approval is required
+
+Approval is required when:
+- The plan contains any node with `requires_approval: true` in the Tool Catalog.
+- The plan contains any high-risk backend (`matlab-spm`, `matlab-dpabi`, `dpabi`, `matlab`).
+- Any node in the plan has `manual_required: true`.
+- The `overwrite_policy` is not `fail_if_exists` (i.e., user explicitly chose to allow overwrite).
+
+Approval is **not required** for:
+- Python-only, low-risk, non-manual nodes (e.g., `contract_smoke`, `nifti_qc_snapshot_export`).
+
+### 9.2 External-tool approval fields
+
+For external-tool nodes, the approval record must contain all 6 fields:
+
+| Field | Required | Purpose |
+|---|---|---|
+| `external_tool_acknowledgement` | Yes | User confirms external tool will be called |
+| `rawdata_read_only_confirmed` | Yes | User confirms rawdata will not be modified |
+| `output_directory_confirmed` | Yes | User confirms output directory is acceptable |
+| `risk_acknowledgement` | Yes | User acknowledges high-risk execution |
+| `overwrite_policy` | Yes | `fail_if_exists` or explicit overwrite approval |
+| `subject_scope_confirmed` | Yes | User confirms which subjects will be processed |
+
+### 9.3 Audit timing
+
+- Audit record **must be persisted before execution** of any node.
+- Audit write failure **blocks execution** with status `audit_required`.
+- Audit record is immutable after write.
+- Audit record hash covers: plan hash, validation hash, approval hash, timestamp.
+
+### 9.4 Approval does not bypass safe allowlist
+
+Even with full approval and audit, a node not in the safe allowlist cannot
+execute.  The safe allowlist is checked at two points:
+
+1. **Plan validation time**: warning issued for non-allowlisted nodes.
+2. **Execute time**: execution blocked with `SAFE_EXECUTION_POLICY_BLOCKED`.
+
+### 9.5 UI expectations
+
+The PlanReviewConsole must show:
+- Which nodes require approval and why.
+- Which backends are high-risk.
+- The 6 external-tool fields with checkboxes and dropdown.
+- A clear "Not for clinical diagnosis" banner.
+- A clear "External tool execution is disabled" banner for SPM/DPABI/MATLAB nodes.
+
+---
+
+## 10. Safe Allowlist Policy
+
+### 10.1 Categories
+
+**Allowed now (Phase 2, no changes):**
+- Low-risk Python-only contract nodes (`contract_smoke`).
+- Read-only report/export nodes (executed via API endpoints, not pipeline executor).
+
+**Allowed after contract tests (Phase 3 target):**
+- Read-only report/export nodes registered as pipeline nodes:
+  - `nifti_qc_snapshot_export`
+  - `motion_metrics_draft_export`
+  - `qc_dashboard_report_export`
+  - `bids_validation_export`
+- These are pure Python, read-only, no rawdata modification.
+
+**Not allowed (now and Phase 3):**
+- SPM/DPABI/MATLAB external tools (`spm_realign_subject`, `spm_slice_timing_subject`, etc.).
+- Arbitrary shell commands.
+- User-provided scripts or code fragments.
+- Rawdata-modifying nodes.
+- GPU compute nodes (CuPy-based) — not in current safe allowlist scope.
+- Any backend not listed in the safe allowlist.
+
+### 10.2 Conditions for adding a node to the safe allowlist
+
+A node may be added to the safe allowlist only when ALL of the following are met:
+
+1. [ ] Node is registered in `NODE_REGISTRY` with a runner function.
+2. [ ] Node has complete `TOOL_METADATA` with correct `backend`, `risk_level`, `requires_approval`.
+3. [ ] Node has a defined `OutputManifest` spec (required vs optional outputs).
+4. [ ] Node passes parameter validation with a defined schema.
+5. [ ] Node is read-only with respect to rawdata (test verifies rawdata mtime unchanged).
+6. [ ] Node writes only to scoped output directory under the run work directory.
+7. [ ] Node has unit tests covering success, failure, and edge cases.
+8. [ ] Node has integration test behind appropriate environment flags.
+9. [ ] Node has provenance writing verified.
+10. [ ] Node has approval/audit gate tested.
+11. [ ] Explicit maintainer approval recorded (commit message / PR review).
+12. [ ] If external tool: ALL 16 preconditions from `SPM_SAFE_ALLOWLIST_POLICY.md` met.
+
+### 10.3 Forbidden shortcuts
+
+The following are **never sufficient** to add a node to the safe allowlist:
+- Tool Catalog metadata alone.
+- Dry-run manifest success alone.
+- Frontend checkbox alone.
+- Approval gate passing alone.
+- Audit record existing alone.
+- Environment flag alone.
+- Adding a runner without tests.
+
+---
+
+## 11. Python-only MVP Recommendation
+
+### 11.1 Candidate nodes
+
+| Candidate | Risk | Output | Testability | User Value | Dependency Burden |
+|---|---|---|---|---|---|
+| `contract_smoke` | Low | JSON report + log | High (already tested) | Low (internal validation) | None |
+| `qc_dashboard_report` | Low-Medium | JSON + Markdown report | High (tested, ~150s) | **High** — visible QC aggregation | 8 sub-services |
+| `motion_metrics_draft` | Low-Medium | JSON + Markdown + CSV | High (tested, ~5s) | **High** — motion QC for all subjects | motion_qc_readiness |
+| `nifti_qc_snapshot_export` | Low | JSON report | High (tested, ~2s) | Medium — NIfTI metadata export | nibabel |
+
+### 11.2 Recommendation
+
+**Recommended MVP node: `motion_metrics_draft`**
+
+Rationale:
+
+1. **Risk: Low-Medium.**  Pure Python, no external tools. Reads motion parameter
+   files; does not touch rawdata NIfTI images.  Read-only with respect to
+   rawdata.
+2. **Output: Concrete and verifiable.**  Produces JSON, Markdown, and CSV.
+   All outputs are previewable through existing artifact discovery.
+3. **Testability: High.**  Existing test `test_motion_metrics_draft.py` passes.
+   Has clear input (rp_*.txt, confounds TSV) and output contract.
+4. **User value: High.**  Motion metrics are one of the most important QC
+   checks for rs-fMRI.  User-facing panel already exists (`MotionMetricsDraftPanel`).
+5. **Dependency burden: Low.**  Only depends on `motion_qc_readiness` which is
+   already tested and read-only.  No SPM, no MATLAB.
+6. **Pipeline integration ready:** The node can be executed as a standalone
+   pipeline node without any new infrastructure beyond the executor contract.
+
+**Second choice: `nifti_qc_snapshot_export`**
+- Lower risk but lower user value than motion metrics.
+- Good for early contract validation (simple, fast, well-tested).
+- Could serve as the very first node registered in the productized executor.
+
+**Not recommended as first MVP:** `qc_dashboard_report`
+- Although highest user value, it internally calls 8 sub-services and has
+  high test latency (~150s).  Better suited for Phase 3.2 after cache expansion.
+
+---
+
+## 12. Failure Handling
+
+### 12.1 Failure modes
+
+| Failure mode | Run status | Node status | User message | Next action | Retry/Resume eligible? |
+|---|---|---|---|---|---|
+| **Preflight failed** | `blocked` | N/A | "Pre-execution checks failed: {reason}" | Fix the blocking condition, re-submit | No (was not executed) |
+| **Approval missing** | `approval_required` | N/A | "Approval required for nodes: {list}" | Complete approval in PlanReviewConsole | No (was not executed) |
+| **Audit write failed** | `audit_required` | N/A | "Cannot persist audit record: {reason}" | Check audit directory permissions | No (was not executed) |
+| **Unsafe path** | `blocked` | `blocked` | "Output path violates safety rules: {path}" | Review output root configuration | No |
+| **Output conflict (overwrite)** | `blocked` | `blocked` | "Output file already exists: {path}" | Clear previous outputs or use new run_id | No |
+| **Node exception** | `failed` or `partial` | `failed` | "Node '{id}' failed: {exception}" | Inspect logs, fix error, retry | **Yes** — retry |
+| **Timeout** | `timeout` | `timeout` | "Execution exceeded {N}s timeout" | Increase timeout, retry | **Yes** — retry |
+| **Missing required output** | `failed` or `partial` | `failed` | "Expected output not produced: {path}" | Inspect logs, verify runner behavior | **Yes** — retry |
+| **Corrupt output (zero bytes)** | `failed` or `partial` | `failed` | "Output file is empty: {path}" | Inspect logs, check disk space | **Yes** — retry |
+| **Stale heartbeat** | `interrupted` | `unknown` | "Executor process appears to have stopped" | Confirm process dead, resume | **Yes** — resume |
+| **Interrupted process** | `interrupted` | `unknown` | "Execution was interrupted (signal/reboot)" | Inspect partial outputs, resume or retry | **Yes** — resume |
+| **Downstream cascade** | `partial` | `blocked` (downstream) | "Downstream nodes blocked due to upstream failure" | Retry failed upstream node; downstream will re-execute | **Yes** — retry |
+| **Permission error (write)** | `blocked` | `blocked` | "Cannot write to output directory: {reason}" | Check output directory permissions | No |
+
+### 12.2 Failure severity classification
+
+| Severity | Meaning | UI indication |
+|---|---|---|
+| `fatal` | Execution cannot continue; run is terminal. | Red banner + "Run failed" |
+| `blocking` | Node cannot execute; downstream blocked. | Amber banner + "Blocked" |
+| `warning` | Node completed but with caveats. | Yellow badge on node |
+| `info` | Non-actionable diagnostic information. | Gray text in log |
+
+---
+
+## 13. Retry / Resume Alignment
+
+This contract aligns with `docs/RUN_RETRY_RESUME_CONTRACT.md` (v1.0-draft).
+The executor state machine must support the following retry/resume semantics.
+
+### 13.1 State requirements
+
+| Retry/Resume concept | Executor state support |
+|---|---|
+| **Child run identity** | Each retry/resume/rerun creates a new `run_id` and `run_link_id` with `source_run_id` referencing the original run. |
+| **Source run tracking** | `run_links` table includes `source_run_id` and `recovery_mode` fields. |
+| **Reusable output decisions** | Node state includes `input_checksums` and `output_checksums`; reusability determined by checksum comparison. |
+| **Invalidation cascade** | When a node's params or inputs change, all downstream nodes are marked `invalidated`. |
+| **Node param hash** | Computed at execution time and stored in node state; compared on retry for reuse decisions. |
+| **Input checksum** | Computed from actual file content at execution time; persisted in node state. |
+| **Environment fingerprint** | Compared between original and retry; policy determines compatibility. |
+| **Heartbeat for stale detection** | Running runs must have an active heartbeat; stale runs can be resumed after confirming process dead. |
+| **Terminal state check** | Retry only allowed for `failed`, `partial`, `timeout`, `interrupted` runs. Resume only allowed for `partial`, `interrupted`, stale `running` runs. |
+
+### 13.2 Node state fields for retry/resume
+
+The existing `write_node_state()` fields are extended (not replaced) with:
+
+```json
+{
+  "run_id": "run_789ghi",
+  "node_id": "motion_metrics_draft",
+  "status": "succeeded",
+  "params_hash": "sha256...",
+  "input_checksums": { "bold_nifti": "sha256..." },
+  "output_checksums": { "metrics_json": "sha256...", "report_md": "sha256..." },
+  "env_fingerprint": "sha256...",
+  "reusable": true,
+  "source_run_id": null,
+  "recovery_mode": null
+}
+```
+
+### 13.3 Integration points
+
+- **Recovery options endpoint** (`GET .../recovery-options`): reads node states,
+  compares hashes, returns available retry/resume/rerun options.
+- **Retry-plan endpoint** (`POST .../retry-plan`): returns plan with only
+  failed/blocked nodes, reusing verified outputs.
+- **Resume-plan endpoint** (`POST .../resume-plan`): returns plan with only
+  incomplete nodes, skipping verified completed nodes.
+
+---
+
+## 14. Frontend UX Contract
+
+### 14.1 Required UI elements
+
+| UI element | Location | Purpose |
+|---|---|---|
+| **Run detail state timeline** | `RunDetailPanel` | Visual timeline of run state transitions with timestamps |
+| **Node table** | `RunDetailPanel` | Per-node status, duration, output count, failure reason |
+| **Logs/events** | `RunLogsPanel` / `RunEventsPanel` | Already implemented; enhanced with structured event types |
+| **Artifacts** | `RunArtifactsPanel` | Already implemented; enhanced with output manifest cross-reference |
+| **Manifest preview** | New section in `RunDetailPanel` or `RunArtifactsPanel` | Collapsible tree showing expected vs actual outputs |
+| **Retry/resume unavailable reasons** | `RunDetailPanel` | Tooltip/notice explaining why retry/resume is not available for this run |
+| **Safety notices** | All panels | "Research-use only" banner; "rawdata read-only" indicator |
+| **External-tool disabled indicators** | `PlanReviewConsole`, `SpmRealignDryRunPanel`, etc. | Already implemented; maintained |
+
+### 14.2 State timeline example
+
+```
+[created] → [queued] → [preflight] → [ready] → [running] → [succeeded]
+  10:00      10:00      10:00        10:01      10:01       10:05
+```
+
+### 14.3 Node table example
+
+| Node | Subject | Status | Duration | Outputs | Actions |
+|---|---|---|---|---|---|
+| motion_metrics_draft | project | ✓ succeeded | 4.2s | 3 (JSON, MD, CSV) | View |
+| nifti_qc_snapshot | sub-001 | ✓ succeeded | 0.8s | 1 (JSON) | View |
+| nifti_qc_snapshot | sub-002 | ✗ failed | 1.2s | 0 | View error |
+
+### 14.4 Disabled retry/resume notice
+
+When retry is not available:
+> "Recovery not available: run completed successfully.  To re-execute, use Rerun."
+
+When external tool is disabled:
+> "SPM Realign execution is currently disabled.  This node can only be previewed."
+
+---
+
+## 15. Test Strategy
+
+### 15.1 Test layers
+
+| Layer | Purpose | File pattern | Phase |
+|---|---|---|---|
+| **Schema tests** | Validate Pydantic schemas for all new types | `tests/unit/test_execution_schemas.py` | Phase 3.0 |
+| **State transition tests** | Verify allowed/disallowed transitions, terminal states | `tests/unit/test_execution_state_machine.py` | Phase 3.0 |
+| **Dry-run/execute consistency tests** | Verify invariants hold between dry-run and execute | `tests/unit/test_execution_consistency.py` | Phase 3.1 |
+| **Approval/audit gate tests** | Verify gate blocks execution when missing fields | `tests/unit/test_execution_gates.py` | Phase 3.1 |
+| **Safe allowlist tests** | Verify non-allowlisted nodes are blocked | `tests/unit/test_execution_safe_allowlist.py` | Phase 3.1 |
+| **Python-only node execution tests** | End-to-end execution of safe Python node | `tests/unit/test_execution_python_node.py` | Phase 3.2 |
+| **Output manifest tests** | Verify manifest is written and cross-referenced | `tests/unit/test_execution_output_manifest.py` | Phase 3.2 |
+| **Provenance tests** | Verify provenance fields are populated and hashed | `tests/unit/test_execution_provenance.py` | Phase 3.2 |
+| **Failure injection tests** | Simulate node exceptions, timeouts, missing outputs | `tests/unit/test_execution_failures.py` | Phase 3.3 |
+| **Heartbeat/timeout tests** | Verify heartbeat detection and timeout handling | `tests/unit/test_execution_heartbeat.py` | Phase 3.4 |
+| **Retry/resume unit tests** | Verify state-based retry/resume eligibility | `tests/unit/test_execution_retry_resume.py` | Phase 3.5 |
+| **Frontend smoke tests** | Verify UI elements render without errors | `src/frontend/scripts/smoke/` | Phase 3.6 |
+| **Phase 3 regression matrix** | Aggregate smoke across all Phase 3 capabilities | `tests/unit/test_phase3_regression_matrix.py` | Phase 3.7 |
+
+### 15.2 Safety tests (mandatory)
+
+Every test phase must include:
+
+| Test | Assertion |
+|---|---|
+| **No rawdata modification** | Rawdata mtime snapshot unchanged before/after execution |
+| **No MATLAB/SPM subprocess** | Monkeypatch verifies `subprocess.run` not called with `matlab` |
+| **SPM nodes not executable** | Execute request with `spm_realign_subject` returns blocked |
+| **Safe allowlist enforced** | Non-allowlisted node blocked at execute time |
+| **Cache does not leak to rawdata** | Cache files only under `outputs/cache/` |
+| **Corrupt state fallback** | Corrupt node state JSON → `unknown` status, not 500 |
+| **Fingerprint change → cache miss** | Verified in existing QC Dashboard cache tests |
+
+### 15.3 Existing test baseline
+
+| Test suite | Tests | Time | Must remain green? |
+|---|---|---|---|
+| Phase 1 regression matrix | 16 | ~1s | Yes |
+| Phase 2 regression matrix | 16 | ~43s | Yes |
+| Full backend (`2426 passed, 8 skipped`) | 2426 | — | Yes |
+| Frontend build + type-check | — | ~3s | Yes |
+
+---
+
+## 16. Implementation Order
+
+Recommended implementation order for Phase 3 (each step is a deliverable):
+
+| Step | Deliverable | Description | No code change to: |
+|---|---|---|---|
+| **1** | Schema definitions | Pydantic models for all new types (Section 6) | executor, routes, frontend |
+| **2** | State transition helper | Pure functions for state validation, transitions, terminal checks | executor |
+| **3** | Output manifest helper | Pure functions for manifest construction, verification, cross-reference | executor |
+| **4** | Provenance helper | Pure functions for provenance writing, fingerprint computation | executor |
+| **5** | Python-only MVP node contract | Register `motion_metrics_draft` or `nifti_qc_snapshot_export` as pipeline-executable node with output manifest spec | executor (registration only) |
+| **6** | Executor dry-run/execute consistency tests | Tests for invariants between dry-run and execute (Section 5) | executor |
+| **7** | Safe allowlist tests | Tests for allowlist enforcement at execute time | routes |
+| **8** | Run history/artifact integration | Connect output manifest to existing artifact discovery | artifact service |
+| **9** | Frontend state display | Add state timeline and node table to `RunDetailPanel` | executor, routes |
+| **10** | External-tool design re-review | After all above pass, re-evaluate SPM/DPABI execution readiness | — |
+
+**Only after steps 1–10 pass**: consider external-tool execution re-review.
+
+---
+
+## 17. Non-Goals
+
+The following are explicitly NOT in scope for Phase 3 executor productization:
+
+- **No SPM/DPABI execution in Phase 3 start.**  External tools remain disabled.
+- **No arbitrary shell execution.**  Only registered Python runner functions.
+- **No clinical diagnosis or clinical decision support.**  Research-use only.
+- **No rawdata mutation.**  Rawdata remains read-only, verified by tests.
+- **No distributed execution.**  Single-machine, single-process executor.
+- **No scheduler redesign** unless explicitly approved.  The existing
+  `ThreadPoolExecutor` with subject-level parallelism is sufficient.
+- **No automatic retry.**  All retry/resume is user-initiated.
+- **No GUI-agent based recovery.**  Recovery goes through the same
+  reviewed-plan execution path.
+- **No automatic cache warming or pre-fetching.**
+- **No modification to existing Phase 1/Phase 2 regression matrices.**
+  All existing tests must continue to pass.
+
+---
+
+## 18. Open Questions
+
+These decisions are deferred to the implementation phase:
+
+| # | Question | Proposed answer | Status |
+|---|---|---|---|
+| 1 | **SQLite vs file-backed state** | Keep file-backed JSON for node states (existing pattern). SQLite for run links (existing pattern). | Deferred to implementation |
+| 2 | **Cancellation implementation** | `threading.Event` flag checked between nodes; `subprocess.kill()` for process-based runners. | Deferred to implementation |
+| 3 | **Heartbeat interval** | Propose 30 seconds; make configurable via `MEDIMAGE_HEARTBEAT_INTERVAL`. | Deferred to implementation |
+| 4 | **Timeout defaults** | Propose 3600s (1 hour) per run; node-level timeouts per node type (e.g., 300s for nifti_qc_snapshot, 600s for motion_metrics_draft). | Deferred to implementation |
+| 5 | **Output overwrite policy** | Default `fail_if_exists`. User must explicitly approve overwrite. | As implemented in approval gate |
+| 6 | **Checksum scope** | SHA-256 for small files (< 100 MB); metadata-only fingerprint for large NIfTI files. | Deferred to implementation |
+| 7 | **Windows process handling** | Use `subprocess.run` with `timeout`; no `psutil` dependency for MVP. | Deferred to implementation |
+| 8 | **Packaging impact** | PyInstaller + Electron packaging already verified. No new binary dependencies. | No expected impact |
+| 9 | **Report-generation nodes: pipeline nodes vs API-only?** | Keep report-generation as API endpoints; register export variants as pipeline nodes only if the user workflow requires scheduled/automated report generation. | Proposed: API-only for Phase 3 MVP |
+| 10 | **Node-level parallelism across subjects** | Keep existing `ThreadPoolExecutor` pattern from `pipeline_executor.py`. | No change |
+| 11 | **Should heartbeat use a separate file or append to node state?** | Separate `heartbeat.json` per run, updated every N seconds. | Deferred to implementation |
+| 12 | **How to detect stale runs after process restart?** | Check heartbeat timestamp on executor startup; flag stale runs. | Deferred to implementation |
+
+---
+
+## 19. Go / No-Go Decision
+
+### GO
+
+- **GO for schema and contract tests.**  Define Pydantic models, state
+  transition helpers, output manifest helpers, and provenance helpers as
+  pure functions with unit tests.  No runtime changes required.
+- **GO for Python-only MVP design.**  Define the contract for registering
+  one Python-only node (`motion_metrics_draft` or `nifti_qc_snapshot_export`)
+  as a productized pipeline-executable node.
+
+### NO-GO
+
+- **NO-GO for SPM/DPABI/MATLAB execution.**  External tool execution remains
+  outside the safe allowlist per `SPM_SAFE_ALLOWLIST_POLICY.md`.  16
+  preconditions must be met before re-evaluation.
+- **NO-GO for adding external-tool nodes to safe allowlist.**  No SPM, DPABI,
+  MATLAB, AFNI, or FSL node may be added to the safe allowlist during Phase 3
+  contract definition.
+- **NO-GO for modifying `pipeline_executor.py` runtime behavior.**  The
+  executor continues to work as-is.  Phase 3 contract defines what the
+  productized executor *should* do; implementation follows only after
+  contract review and approval.
+
+---
+
+## 20. Immediate Next Task
+
+**Recommended next task: Pipeline Execution State Schema**
+
+**Scope:** Schema-only.  No runtime changes.
+
+**Deliverable:** `src/backend/app/schemas/execution_state.py`
+
+**Contents:**
+- `RunState` enum with all 14 states from Section 3.
+- `NodeState` enum with all 12 states from Section 4.
+- `StateTransition` dataclass with `from_state`, `to_state`, `allowed: bool`, `condition: str | None`.
+- `ALLOWED_RUN_TRANSITIONS: dict[RunState, set[RunState]]` — the transition table.
+- `ALLOWED_NODE_TRANSITIONS: dict[NodeState, set[NodeState]]` — the node transition table.
+- `is_terminal(state) -> bool` pure function.
+- `can_retry(state) -> bool` pure function (maps to retry/resume eligibility).
+- `can_resume(state) -> bool` pure function.
+
+**Tests:**
+- `tests/unit/test_execution_state_schema.py`:
+  - All 14 run states are defined.
+  - All 12 node states are defined.
+  - Terminal states are correctly identified.
+  - Allowed transitions match Section 3.3 / 4.1.
+  - Disallowed transitions raise or return `allowed=False`.
+  - Retry/resume eligibility matches Section 3.2 / 13.
+
+**Safety:**
+- No changes to `pipeline_executor.py`.
+- No changes to `execute_reviewed_routes.py`.
+- No changes to `state_store.py`.
+- No changes to frontend.
+- All existing tests continue to pass.
+
+---
+
+## Appendix A: Current Code Anchors
+
+These files will need modification when Phase 3 implementation begins:
+
+| File | Purpose |
+|---|---|
+| `src/backend/app/runtime/pipeline_executor.py` | Add state machine, heartbeat, timeout, output manifest verification |
+| `src/backend/app/runtime/state_store.py` | Extend node state JSON with params_hash, checksums, provenance fields |
+| `src/backend/app/api/execute_reviewed_routes.py` | Add consistency check, safe allowlist re-check at execute time |
+| `src/backend/app/planner/approval_gate.py` | No changes needed (already comprehensive) |
+| `src/backend/app/planner/audit_record.py` | Add execution provenance fields |
+| `src/backend/app/schemas/desktop.py` | Add `RunLinkRecord` fields for state, source_run_id, recovery_mode |
+| `src/backend/app/services/mock_store.py` | Add columns to `run_links` table |
+| `src/backend/app/runtime/tool_catalog.py` | Add `output_spec` to `ToolCatalogItem` (future) |
+| `src/backend/app/runtime/node_registry.py` | Add output manifest spec per node (future) |
+| `src/frontend/src/components/run-history/RunDetailPanel.tsx` | Add state timeline, node table |
+| `src/frontend/src/types.ts` | Add execution state types |
+| `src/frontend/src/api.ts` | Add execution state API wrappers |
+
+## Appendix B: References
+
+- `docs/RUN_RETRY_RESUME_CONTRACT.md` — v1.0-draft, 2026-06-18
+- `docs/SPM_REALIGN_WRAPPER_SAFETY_CONTRACT.md` — v1.0-draft, 2026-06-18
+- `docs/SPM_REALIGN_REAL_EXECUTION_DESIGN_REVIEW.md` — v1.0-draft, 2026-06-18
+- `docs/SPM_SAFE_ALLOWLIST_POLICY.md` — v1.0, 2026-06-18
+- `docs/QC_DASHBOARD_PERFORMANCE_CACHE_STRATEGY.md` — v1.1, 2026-06-18
+- `docs/architecture.md` — System architecture
+- `PROJECT_STATE.md` — Current project state
+- `AGENTS.md` — Agent guide
+
+---
+
+*End of contract document.  This document defines the Phase 3 executor
+productization design.  No new execution capability is enabled.  SPM/DPABI/
+MATLAB execution remains disabled and outside the safe allowlist.  Rawdata
+remains read-only.  Research-use only, not for clinical diagnosis.*

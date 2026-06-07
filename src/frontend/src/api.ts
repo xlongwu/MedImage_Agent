@@ -29,7 +29,8 @@ import type {
   ReviewedPlanRecord,
   RunArtifactPreviewResponse,
   RunLinkRecord,
-  RunInspection
+  RunInspection,
+  ProjectRunStateTimelineResponse,
 } from "./types";
 
 declare global {
@@ -1502,4 +1503,15 @@ export async function executeReviewedPlan(
       actor: payload.actor ?? "frontend-user",
     }),
   });
+}
+
+export async function getProjectRunStateTimeline(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+) {
+  return requestJson<ProjectRunStateTimelineResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/state-timeline`,
+  );
 }

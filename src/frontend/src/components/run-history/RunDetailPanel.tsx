@@ -11,6 +11,7 @@ import { KeyArtifactsPanel } from "./KeyArtifactsPanel";
 import { RunArtifactsPanel } from "./RunArtifactsPanel";
 import { RunEventsPanel } from "./RunEventsPanel";
 import { RunLogsPanel } from "./RunLogsPanel";
+import { RunStateTimelinePanel } from "./RunStateTimelinePanel";
 import { RunQcErrorSummaryCard } from "./RunQcErrorSummaryCard";
 import { RunSummaryPreviewCard } from "./RunSummaryPreviewCard";
 import {
@@ -207,6 +208,12 @@ export function RunDetailPanel({
           />
 
           <RunLogsPanel
+            baseUrl={baseUrl}
+            projectId={projectId ?? null}
+            runId={detail.run_id}
+          />
+
+          <RunStateTimelinePanel
             baseUrl={baseUrl}
             projectId={projectId ?? null}
             runId={detail.run_id}

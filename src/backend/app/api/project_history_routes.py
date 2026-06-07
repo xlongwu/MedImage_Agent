@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -24,6 +26,7 @@ from src.backend.app.services.run_event_log_reader import (
     discover_run_events,
     discover_run_logs,
 )
+from src.backend.app.services.run_state_timeline import build_run_state_timeline
 from src.backend.app.services.run_summary_preview import load_run_summary_preview
 from src.backend.app.tools.artifact_utils import is_safe_artifact_id
 
@@ -238,3 +241,62 @@ def list_project_run_logs(
         "warnings": warnings,
         "errors": errors,
     }
+
+
+@router.get("/api/projects/{project_id}/runs/{run_id}/state-timeline")
+def get_project_run_state_timeline(
+    project_id: str,
+    run_id: str,
+) -> dict[str, Any]:
+    """Return a standardized run-state timeline using Phase 3 state model.
+
+    Read-only — never modifies executor state, writes files, or calls
+    external tools.
+    """
+    project = _get_project(project_id)
+    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Run link not found")
+
+    # Gather existing metadata
+    summary_preview, _, _ = load_run_summary_preview(project, record)
+
+    events: list[dict[str, Any]] = []
+    try:
+        from src.backend.app.services.run_event_log_reader import discover_run_events
+        events, _ = discover_run_events(project, record)
+    except Exception:
+        pass
+
+    # Discover normalized node-state artifacts
+    node_states: list[dict[str, Any]] = []
+    try:
+        from src.backend.app.services.run_artifact_discovery import discover_run_artifacts
+        artifacts, _ = discover_run_artifacts(project, record)
+        for art in artifacts:
+            name = str(art.get("name") or "")
+            if "node_state" not in name.lower():
+                continue
+            if not art.get("exists"):
+                continue
+            try:
+                raw = json.loads(
+                    Path(str(art["path"])).read_text(encoding="utf-8")
+                )
+                if isinstance(raw, dict):
+                    node_states.append(raw)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    timeline = build_run_state_timeline(
+        project_id=project_id,
+        run_id=run_id,
+        run_link_status=record.status,
+        created_at=record.created_at,
+        summary_preview=summary_preview,
+        run_events=list(events) if events else None,
+        node_states_raw=node_states if node_states else None,
+    )
+    return timeline.model_dump()
