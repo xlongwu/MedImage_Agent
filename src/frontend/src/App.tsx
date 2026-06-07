@@ -372,7 +372,7 @@ export default function App() {
         rawdata_dir: selectedPath.trim(),
         copy_mode: "reference",
         run_inspection: true,
-        overwrite: false,
+        overwrite: true,
       });
 
       const refreshedProjects = await projects.reload();
