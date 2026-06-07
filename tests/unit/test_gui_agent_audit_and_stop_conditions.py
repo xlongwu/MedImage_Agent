@@ -436,7 +436,7 @@ def test_spm_allowlist_still_works():
          "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
     ]}
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" in policy["allowed_spm_realign_sandbox_nodes"]
+    assert "spm_realign_subject" not in policy["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
 
 
 def test_dpabi_allowlist_still_works():

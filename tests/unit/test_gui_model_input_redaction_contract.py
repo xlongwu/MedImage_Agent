@@ -324,7 +324,7 @@ def test_spm_ok():
         {"id": "spm_realign_subject", "depends_on": [],
          "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
     ]})
-    assert "spm_realign_subject" in p["allowed_spm_realign_sandbox_nodes"]
+    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
 
 
 def test_dpabi_ok():

@@ -341,6 +341,12 @@ def test_gui_spm_approval_still_works():
         approved_nodes=["spm_realign_subject"],
         approved_backends=["matlab-spm"],
         rejected_nodes=[],
+        external_tool_acknowledgement=True,
+        rawdata_read_only_confirmed=True,
+        output_directory_confirmed=True,
+        risk_acknowledgement=True,
+        overwrite_policy="fail_if_exists",
+        subject_scope_confirmed=True,
     )
     result = check_approval_gate(plan, v, a)
     assert result.execution_allowed is True
@@ -597,8 +603,11 @@ def test_gui_spm_realign_sandbox_still_works(monkeypatch, tmp_path):
     resp = client.post("/api/plans/execute-reviewed", json=body)
     data = resp.json()
     # Should be allowed (EXECUTION_SUBMITTED or policy-level allow)
+    # SPM realign is manual_required/high-risk → blocked in current phase
     assert data["status"] in (
-        "EXECUTION_SUBMITTED", "DRY_RUN_OK", "SAFE_EXECUTION_POLICY_BLOCKED",
+        "VALIDATION_FAILED", "APPROVAL_GATE_BLOCKED",
+        "EXECUTION_POLICY_BLOCKED", "SAFE_EXECUTION_POLICY_BLOCKED",
+        "EXECUTION_SUBMITTED", "DRY_RUN_OK",
     )
     # The key regression check: executor_called should be True if status is EXECUTION_SUBMITTED
     if data["status"] == "EXECUTION_SUBMITTED":

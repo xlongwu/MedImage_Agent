@@ -191,7 +191,7 @@ def test_plan_api_requires_explicit_project_context(monkeypatch):
     )
     response = client.post(
         "/api/planner/plan-from-goal",
-        json={"goal": "motion"},
+        json={"goal": "motion correction"},
     )
     payload = response.json()
     assert payload["ok"] is False
@@ -203,7 +203,7 @@ def test_explicit_example_project_config_remains_available():
     response = client.post(
         "/api/planner/plan-from-goal",
         json={
-            "goal": "motion",
+            "goal": "motion correction",
             "project_config_path": str(
                 Path("examples/project_config_dataset.yaml").resolve()
             ),
