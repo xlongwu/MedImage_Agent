@@ -18,6 +18,7 @@ from src.backend.app.schemas.desktop import (
 )
 from src.backend.app.services.bids_validation import bids_summary_check
 from src.backend.app.services.dicom_preflight import build_dicom_preflight
+from src.backend.app.services.funraw_t1raw_detector import detect_funraw_t1raw_layout
 from src.backend.app.services.image_preview import (
     build_image_validation_report,
     list_image_sources,
@@ -277,7 +278,25 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     # ── 8. DICOM preflight ──
     dicom_file_count = 0
     dicom_series_count = 0
-    if has_dicom:
+
+    # FunRaw/T1Raw path-based detection (does not require pydicom)
+    funraw_detected = False
+    if rawdata_dir:
+        ft = detect_funraw_t1raw_layout(rawdata_dir)
+        if ft["layout_type"] == "funraw_t1raw":
+            if ft["dicom_file_count"] > 0:
+                funraw_detected = True
+                has_dicom = True
+                dicom_file_count = ft["dicom_file_count"]
+                dicom_series_count = ft["series_count"]
+                if not subject_count:
+                    subject_count = ft["subject_count"]
+                warnings.append(
+                    "FunRaw/T1Raw DICOM layout detected. "
+                    "Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion."
+                )
+
+    if has_dicom and not funraw_detected:
         try:
             dicom_roots = [imp.path for imp in imports if imp.dataset_type == "dicom"]
             preflight = build_dicom_preflight(
@@ -310,6 +329,20 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
                     {},
                 )
             )
+    elif funraw_detected:
+        checks.append(
+            _build_check(
+                "dicom_preflight",
+                "pass" if dicom_file_count > 0 else "warning",
+                f"FunRaw/T1Raw DICOM layout: {dicom_file_count} file(s), "
+                f"{dicom_series_count} subject-modality group(s).",
+                {
+                    "dicom_file_count": dicom_file_count,
+                    "dicom_series_count": dicom_series_count,
+                    "detection_method": "path-based",
+                },
+            )
+        )
     else:
         checks.append(
             _build_check(
@@ -332,7 +365,9 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
 
     # ── 9. Determine overall readiness ──
     check_statuses = [c["status"] for c in checks]
-    if "fail" in check_statuses or not rawdata_exists or not image_source_count:
+    if "fail" in check_statuses or not rawdata_exists:
+        overall = "blocked"
+    elif not image_source_count and not (has_dicom and dicom_file_count > 0):
         overall = "blocked"
     elif "warning" in check_statuses or validation_status == "warning" or not dataset_index_exists:
         overall = "warning"

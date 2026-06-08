@@ -20,6 +20,7 @@ from src.backend.app.schemas.desktop import (
 )
 from src.backend.app.services.bids_validation import validate_bids
 from src.backend.app.services.dicom_preflight import build_dicom_preflight
+from src.backend.app.services.funraw_t1raw_detector import detect_funraw_t1raw_layout
 from src.backend.app.services.image_preview import list_image_sources
 from src.backend.app.services.mock_store import mock_store
 
@@ -288,6 +289,52 @@ def plan_conversion(
             "series_count": series_count,
             "warnings": source_warnings,
         })
+
+    # ── FunRaw/T1Raw path-based fallback ──
+    if not mappings and rawdata_dir:
+        ft = detect_funraw_t1raw_layout(rawdata_dir)
+        if ft["layout_type"] == "funraw_t1raw":
+            # Update source summaries with detected counts
+            for s in sources:
+                if s["source_type"] == "dicom":
+                    s["file_count"] = ft["dicom_file_count"]
+                    s["series_count"] = ft["series_count"]
+                    s["subject_candidates"] = ft["subject_ids"]
+                    if ft["dicom_file_count"] > 0:
+                        s["source_type"] = "dicom"
+
+            # Add mapping candidates from path structure
+            for entry in ft["per_subject_modality"]:
+                subj = entry["subject_id"]
+                root_name = entry["root_name"]
+                suffix = entry["suggested_suffix"]
+                mod_dir = entry["suggested_modality_dir"]
+                task = "rest" if suffix == "bold" else None
+
+                suggested_path = _relative_bids_path(
+                    subj, None, mod_dir, suffix or "unknown",
+                    task,
+                )
+                mappings.append({
+                    "source_path": str(Path(rawdata_dir) / root_name / entry["raw_subject_name"]),
+                    "source_series_uid": None,
+                    "source_type": "dicom_series",
+                    "subject_id": subj,
+                    "session_id": None,
+                    "modality": mod_dir,
+                    "suffix": suffix,
+                    "task": task,
+                    "suggested_relative_path": suggested_path,
+                    "confidence": "high",
+                    "warnings": [],
+                })
+
+            if ft["nifti_file_count"] == 0:
+                warnings.append(
+                    "FunRaw/T1Raw DICOM layout detected. "
+                    "No NIfTI files found — conversion to NIfTI is required "
+                    "before NIfTI QC or preprocessing."
+                )
 
     # ── Determine status ──
     if not sources or all(s["source_type"] == "unknown" for s in sources):
