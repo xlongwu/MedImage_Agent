@@ -618,18 +618,70 @@ Directory build (`win-unpacked`) validated with:
 - Conversion execution is future work and must go through safety contract /
   approval / audit design first.
 
+## Phase 4A — Real Preprocessing Execution Contract
+
+A formal design contract for the complete DPARSFA-style rs-fMRI preprocessing
+pipeline has been created at `docs/REAL_PREPROCESSING_EXECUTION_CONTRACT.md`.
+
+### Contract scope
+
+The contract defines:
+
+- 17 preprocessing stages from DICOM conversion to derivative summary
+- External-tool classification (dcm2niix / SPM12 / DPABI / Python)
+- Approval and audit requirements per stage
+- Output directory policy (converted_bids / derivatives / outputs)
+- Rawdata read-only invariant (universal)
+- External tool policy (command-template wrapper, stdout/stderr capture)
+- Safe allowlist expansion requirements (16 conditions)
+- Failure handling and rollback policy
+- Retry/resume alignment
+- Output manifest and provenance contracts
+- QC report contract (subject-level + group-level)
+- Subject-level execution model
+- Frontend UX contract
+- Testing strategy
+- Staged implementation plan (Phases 4A–4F)
+- Go/No-Go criteria for each phase
+
+### Schema module
+
+`src/backend/app/schemas/preprocessing_execution.py` — pure schema/helper
+module defining `PreprocessingStage` (17 Literal values), stage metadata maps
+(external-tool, approval, subject/project-level), plan models
+(`PreprocessingPlan`, `PreprocessingStageConfig`, `PreprocessingSubjectPlan`),
+execution models (`PreprocessingExecutionRequest`, `PreprocessingExecutionPreview`),
+safety flags model, and 9 pure helper functions.
+
+### Tests
+
+`tests/unit/test_preprocessing_execution_schema.py` — 32 tests across 10 groups:
+stage literals, external-tool classification, approval requirements,
+rawdata read-only invariant, subject/project-level classification,
+stage ordering validation (6 cases), default plan builder (5 cases),
+environment flag validation (4 cases), Pydantic model smoke (5 cases),
+and purity invariants (4 cases).
+
+### Explicit non-goals
+
+- No real DICOM conversion is implemented.
+- No dcm2niix execution is enabled.
+- No SPM/DPABI/MATLAB/FSL/AFNI execution is enabled.
+- The safe allowlist is NOT expanded.
+- No preprocessing node runner is implemented.
+- No frontend panels are added.
+- Rawdata remains read-only.
+
 ## Next recommended work
 
-1. **Phase 4 planning** — review Phase 3 deliverables, decide on next
-   productization priority (Python-only executor state machine wiring,
-   retry/resume implementation, or external-tool re-review per
-   `docs/SPM_REALIGN_REAL_EXECUTION_DESIGN_REVIEW.md`).
-2. Verify Electron GUI startup on a local Windows desktop.
-3. Run full NSIS + portable build with `-NsisArchive` and `-NsisResourcesArchive`.
-4. Keep release validation repeatable with the mamba interpreter.
-5. Run external BIDS smoke only when the user provides a deliberately bounded
-   read-only `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
+1. **Phase 4B planning** — DICOM conversion execution safety wrapper.
+   Design the dcm2niix command-template contract, conversion execution
+   request/response schemas, and synthetic smoke test.  dcm2niix execution
+   must remain disabled by default (requires env flag).
+2. Review the Phase 4A contract with the project maintainer and decide
+   on Phase 4B scope.
+3. Verify Electron GUI startup on a local Windows desktop.
+4. Run full NSIS + portable build when a compatible environment is available.
+5. Keep release validation repeatable with the mamba interpreter.
 6. Consider a future `project_create_service` only if project creation routes
    grow again.
-7. Consider a future execution orchestration service only if
-   `execute_reviewed_routes.py` needs more separation after MVP release.
