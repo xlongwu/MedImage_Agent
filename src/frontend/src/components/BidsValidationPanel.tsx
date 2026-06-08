@@ -72,6 +72,14 @@ export default function BidsValidationPanel({ baseUrl, projectId }: Props) {
         All suggestions are non-destructive. Rawdata will not be modified. Auto-apply is not available in this version.
       </div>
 
+      {data.status === "fail" && data.nifti_file_count === 0 && (
+        <div style={{ padding: 8, border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6, background: "rgba(239, 246, 255, 0.88)", fontSize: 11, color: "#2450a6", marginBottom: 12, lineHeight: 1.5 }}>
+          <strong>Note:</strong> This is a raw DICOM dataset, not yet converted to BIDS.
+          BIDS validation failure is expected before DICOM-to-NIfTI conversion.
+          Run <strong>Conversion Dry-Run</strong> to review the BIDS mapping plan.
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8, marginBottom: 12 }}>
         <Metric label="roots" value={data.roots.length} />
         <Metric label="subjects" value={data.subject_count} />

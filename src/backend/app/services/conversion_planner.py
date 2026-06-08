@@ -332,7 +332,7 @@ def plan_conversion(
             if ft["nifti_file_count"] == 0:
                 warnings.append(
                     "FunRaw/T1Raw DICOM layout detected. "
-                    "No NIfTI files found — conversion to NIfTI is required "
+                    "No NIfTI files found; conversion to NIfTI is required "
                     "before NIfTI QC or preprocessing."
                 )
 
@@ -345,7 +345,7 @@ def plan_conversion(
         blocking.append("No mapping candidates could be generated from the available sources.")
     elif all(m["confidence"] == "manual_required" for m in mappings):
         status = "blocked"
-        blocking.append("Every mapping requires manual review — no automated conversion is possible.")
+        blocking.append("Every mapping requires manual review; no automated conversion is possible.")
     elif any(m["confidence"] == "manual_required" for m in mappings):
         status = "warning"
     else:

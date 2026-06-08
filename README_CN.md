@@ -172,15 +172,17 @@ MedImage_Agent/
 
 | 指标 | 值 |
 |---|---|
-| Full pytest | **2426 passed, 8 skipped, 0 failed** |
+| Full pytest（历史 Phase 3 freeze） | **2915 passed, 1 skipped, 0 failed** |
+| 最近聚焦验证 | **43 passed + 41 regression passed** |
 | 前端 TypeScript | `tsc --noEmit` ✅ |
-| 前端 Vite build | Vite 8, 86 modules ✅ |
+| 前端 Vite build | 106 modules, Vite production build ✅ |
 | Electron smoke check | 51/51 ✅ |
 | GUI 桌面启动 | Windows 10/11 验证通过 ✅ |
-| 外部 BIDS 冒烟 | 1104 DICOM, rawdata 不变 ✅ |
+| FunRaw/T1Raw DICOM 冒烟 | 1104 DICOM, rawdata 不变 ✅ |
 | 测试环境 | `D:\Anaconda3\envs\mamba\python.exe` (Python 3.11.15) |
 
 预期 skip：`pydicom`、`cupy`、`MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`。
+历史基线已标注；引用具体数字前请用最新 pytest 运行确认。
 
 ---
 
@@ -199,6 +201,18 @@ MedImage_Agent/
 
 ---
 
+## FunRaw/T1Raw DICOM 支持
+
+v0.3.0-rc1 包含对 DPABI/SPM 风格 FunRaw/T1Raw DICOM rawdata 的只读检测，
+通过纯路径检测器实现（`src/backend/app/services/funraw_t1raw_detector.py`），
+无需 pydicom。已用 1104 个 DICOM 文件（3 个被试，6 个 subject-modality 分组）验证。
+
+- **Data Readiness** 将 DICOM raw layout 报告为 `warning`（非 `blocked`）。
+- **NIfTI QC** 正确报告无 NIfTI 文件（无合成 fallback）。
+- **Conversion Dry-Run** 生成 6 条 BIDS/NIfTI 映射预览。
+- 不执行 DICOM 转换。不调用 dcm2niix。不修改 rawdata。
+- DICOM-to-NIfTI 转换执行属于未来工作，必须先通过安全合同 / approval / audit 设计。
+
 ## 已知限制
 
 - 不含 NIfTI viewer（仅元数据预览）
@@ -206,7 +220,10 @@ MedImage_Agent/
 - 无报告编辑器
 - 此版本中 MATLAB/SPM/DPABI/GPU 仅为 contract-only
 - **SPM realign 仅处于准备阶段**：参数验证、环境健康检查、dry-run 输出清单和批处理模板预览可用，但真正的 MATLAB/SPM 执行尚未实现
+- **DICOM 转换为 dry-run only**：生成映射预览但不写文件。真正的 dcm2niix 执行尚未实现，必须先通过安全合同设计。
 - **QC Dashboard 缓存为单模块原型**：支持 `cache=off|prefer|refresh`，但当前缓存仅覆盖 NIfTI QC Snapshot 一个模块。`cache=refresh` 会刷新该模块缓存，`cache=prefer` 会在 rawdata fingerprint 匹配时复用该模块缓存。其他 Dashboard 模块仍会正常运行。缓存不会修改 rawdata。
+- **BIDS Validation fail 对原始 DICOM 是预期结果**：UI 已增加说明。
+- Dataset Summary 可能尚未完全接入 DICOM counts。
 - Electron 应用未签名（首次运行需放行 SmartScreen）
 - 仅支持 Windows 打包
 - 不支持自动更新

@@ -177,15 +177,17 @@ MedImage_Agent/
 
 | Metric | Value |
 |---|---|
-| Full pytest | **2426 passed, 8 skipped, 0 failed** |
+| Full pytest (historical Phase 3 freeze) | **2915 passed, 1 skipped, 0 failed** |
+| Recent focused validation | **43 passed + 41 regression passed** |
 | Frontend TypeScript | `tsc --noEmit` ✅ |
-| Frontend Vite build | Vite 8, 86 modules ✅ |
+| Frontend Vite build | 106 modules, Vite production build ✅ |
 | Electron smoke check | 51/51 ✅ |
 | GUI desktop startup | Verified on Windows 10/11 ✅ |
-| External BIDS smoke | 1104 DICOM, rawdata unchanged ✅ |
+| FunRaw/T1Raw DICOM smoke | 1104 DICOM, rawdata unchanged ✅ |
 | Test environment | `D:\Anaconda3\envs\mamba\python.exe` (Python 3.11.15) |
 
 Expected skips: `pydicom`, `cupy`, `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
+Historical baselines are labelled; confirm current pass count with a fresh pytest run before relying on exact numbers.
 
 ---
 
@@ -204,14 +206,33 @@ Expected skips: `pydicom`, `cupy`, `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
 
 ---
 
+## FunRaw/T1Raw DICOM Support
+
+v0.3.0-rc1 includes read-only detection of DPABI/SPM-style FunRaw/T1Raw DICOM
+rawdata via a path-based detector (`src/backend/app/services/funraw_t1raw_detector.py`).
+No pydicom is required.  Validated with 1104 DICOM files across 3 subjects and
+6 subject-modality groups.
+
+- **Data Readiness** reports DICOM raw layout as `warning` (not `blocked`).
+- **NIfTI QC** correctly reports no NIfTI files (no synthetic fallback).
+- **Conversion Dry-Run** produces 6 BIDS/NIfTI mapping previews.
+- No DICOM conversion is executed.  No dcm2niix is called.  Rawdata is not modified.
+- DICOM-to-NIfTI conversion execution is future work and must go through safety
+  contract / approval / audit design first.
+
 ## Known Limitations
 
 - NIfTI viewer not included (metadata-only)
 - No complete QC dashboard
 - No report editor
 - MATLAB/SPM/DPABI/GPU are contract-only in this release
-- **SPM realign is preparation-only**: parameter validation, environment health checks, dry-run manif ests, and batch previews are available, but real MATLAB/SPM execution is not implemented
+- **SPM realign is preparation-only**: parameter validation, environment health checks, dry-run manifests, and batch previews are available, but real MATLAB/SPM execution is not implemented
+- **DICOM conversion is dry-run only**: mapping previews are generated but no files are written.
+  Real dcm2niix execution is not implemented and must go through safety contract design first.
 - **QC Dashboard cache is single-module prototype**: `cache=off|prefer|refresh` is supported, but caching currently applies only to the NIfTI QC Snapshot module. Other dashboard modules still run normally. Cache never modifies rawdata.
+- **BIDS Validation fail is expected** for raw DICOM datasets before conversion.
+  The UI now explains this.
+- Dataset Summary may not yet fully integrate DICOM counts.
 - Electron app is unsigned (SmartScreen warning on first run)
 - Windows-only packaging
 - No auto-update

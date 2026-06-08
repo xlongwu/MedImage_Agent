@@ -233,7 +233,7 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
             check_status,
             f"Image validation status: {validation_status}, {validation_issues} issue(s)."
             if image_source_count > 0
-            else "Image validation not applicable — no image sources.",
+            else "Image validation not applicable; no image sources.",
             {
                 "status": validation_status,
                 "issue_count": validation_issues,
@@ -243,14 +243,14 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
 
     if validation_status == "fail":
         if not has_dicom_fallback:
-            errors.append("Image validation failed — review image validation issues.")
+            errors.append("Image validation failed; review image validation issues.")
         else:
             warnings.append(
                 "No NIfTI image sources found, but DICOM files were detected. "
                 "Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion."
             )
     elif validation_status == "warning":
-        warnings.append("Image validation returned warnings — review image validation details.")
+        warnings.append("Image validation returned warnings; review image validation details.")
 
     # ── 6. Dataset index ──
     checks.append(
@@ -368,7 +368,7 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
             _build_check(
                 "dicom_preflight",
                 "unknown",
-                "No DICOM imports recorded — DICOM preflight not applicable.",
+                "No DICOM imports recorded; DICOM preflight not applicable.",
                 {},
             )
         )
@@ -415,7 +415,7 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     elif validation_status == "fail" and has_dicom_data:
         next_actions.append("Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion.")
     if validation_status == "warning":
-        next_actions.append("Review image validation warnings — expected sequences may be incomplete.")
+        next_actions.append("Review image validation warnings; expected sequences may be incomplete.")
     if has_dicom and dicom_file_count > 0:
         next_actions.append("Run DICOM-to-BIDS conversion to produce a BIDS-compatible rawdata tree.")
     if not dataset_index_exists and image_source_count > 0:

@@ -536,6 +536,88 @@ Phase 3 delivers:
 No external-tool execution is enabled. SPM/DPABI/MATLAB remain disabled.
 Rawdata remains read-only. Research-use only.
 
+## FunRaw/T1Raw DICOM Support
+
+Real FunRaw/T1Raw DICOM rawdata is now detected and validated in the packaged
+Windows desktop app.  No conversion is executed.  No rawdata is modified.
+
+### Test data
+
+```
+DemoData/
+├── FunRaw/
+│   ├── Sub_001/*.dcm
+│   ├── Sub_002/*.dcm
+│   └── Sub_003/*.dcm
+└── T1Raw/
+    ├── Sub_001/*.dcm
+    ├── Sub_002/*.dcm
+    └── Sub_003/*.dcm
+```
+
+### Verified counts
+
+| Metric | Value |
+|---|---|
+| Total DICOM files | **1104** |
+| Subjects | **3** |
+| Subject-modality groups | **6** |
+| NIfTI files (.nii/.nii.gz) | **0** |
+
+### Detection mechanism
+
+`src/backend/app/services/funraw_t1raw_detector.py` — pure path-based detector,
+no pydicom required.  Detects `FunRaw/` and `T1Raw/` directories, counts `.dcm`
+files per subject, normalises `Sub_001` → `sub-001` (BIDS-style).
+
+### Current behaviour
+
+| Service | Status | Notes |
+|---|---|---|
+| Data Readiness | `warning` | Detects DICOM raw layout, displays DICOM counts; downgrades `image_validation` fail to warning |
+| NIfTI QC | `warning` | `image_count=0`, `warning_count=1`; recommends Conversion Dry-Run; no synthetic fallback |
+| Conversion Dry-Run | `ready` | Produces 6 BIDS/NIfTI mapping previews (3 FunRaw → bold, 3 T1Raw → T1w); `blocking_issues=[]` |
+| BOLD Reference Readiness | `blocked` | No BOLD NIfTI files (expected before conversion) |
+| Motion QC Readiness | `blocked` | No BOLD NIfTI files (expected before conversion) |
+| BIDS Validation | `fail` | Expected for raw DICOM before BIDS conversion |
+
+### Conversion mapping preview
+
+1. `FunRaw/Sub_001` → `sub-001/func/sub-001_task-rest_bold.nii.gz`
+2. `FunRaw/Sub_002` → `sub-002/func/sub-002_task-rest_bold.nii.gz`
+3. `FunRaw/Sub_003` → `sub-003/func/sub-003_task-rest_bold.nii.gz`
+4. `T1Raw/Sub_001` → `sub-001/anat/sub-001_T1w.nii.gz`
+5. `T1Raw/Sub_002` → `sub-002/anat/sub-002_T1w.nii.gz`
+6. `T1Raw/Sub_003` → `sub-003/anat/sub-003_T1w.nii.gz`
+
+### Explicit non-goals
+
+- No real DICOM conversion is executed.
+- No dcm2niix or any external converter is called.
+- No SPM/DPABI/MATLAB/FSL/AFNI execution.
+- No rawdata modification.
+- No clinical diagnosis.
+
+### Packaged-app validation
+
+Directory build (`win-unpacked`) validated with:
+
+- `Data Readiness` — correctly reports DICOM raw layout as `warning`
+- `NIfTI QC` — correctly reports no NIfTI, no synthetic fallback
+- `Conversion Dry-Run` — produces 6 mapping previews, no blocking issues
+- Backend sidecar includes latest FunRaw/T1Raw DICOM support
+- GUI polish applied: DICOM callout banner, `image_validation` downgrade,
+  `import_records.has_dicom` hidden, `image_source_discovery` NIfTI-only note,
+  BIDS fail explanation, ASCII-only API messages
+
+### Known UI limitations
+
+- Dataset Summary card may not yet fully integrate DICOM counts from Data
+  Readiness response.
+- BIDS Validation fail is expected for raw DICOM; UI now explains this.
+- Conversion execution is future work and must go through safety contract /
+  approval / audit design first.
+
 ## Next recommended work
 
 1. **Phase 4 planning** — review Phase 3 deliverables, decide on next

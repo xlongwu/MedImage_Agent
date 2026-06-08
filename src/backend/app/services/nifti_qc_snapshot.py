@@ -196,9 +196,9 @@ def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
 
             # Dimension warnings
             if ndim and ndim < 3:
-                record_warnings.append(f"Image is only {ndim}D — expected at least 3D.")
+                record_warnings.append(f"Image is only {ndim}D; expected at least 3D.")
             if vol_count is not None and vol_count < 3 and ndim and ndim >= 4:
-                record_warnings.append(f"4D BOLD has only {vol_count} volumes — at least 3 expected.")
+                record_warnings.append(f"4D BOLD has only {vol_count} volumes; at least 3 expected.")
             if voxel_spacing:
                 if any(z <= 0 for z in voxel_spacing[:3]):
                     record_warnings.append("Non-positive voxel spacing detected.")
@@ -214,7 +214,7 @@ def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
                 if stats["nan_count"] and stats["nan_count"] > 0:
                     record_warnings.append(f"NaN values detected: {stats['nan_count']}.")
                 if stats["intensity_min"] == stats["intensity_max"] and stats["intensity_max"] is not None:
-                    record_warnings.append("Constant intensity — image may be empty or masked.")
+                    record_warnings.append("Constant intensity; image may be empty or masked.")
             except Exception as exc:
                 record_warnings.append(f"Intensity statistics unavailable: {exc}")
 
@@ -267,7 +267,7 @@ def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
         next_actions.append("Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion if your dataset contains DICOM files.")
         next_actions.append("Import or configure a project with NIfTI data if direct NIfTI analysis is required.")
     if unreadable_count > 0:
-        next_actions.append("Review unreadable images — they may be corrupted or not NIfTI.")
+        next_actions.append("Review unreadable images; they may be corrupted or not NIfTI.")
     if warning_count > 0:
         next_actions.append("Review QC warnings for image quality issues.")
 

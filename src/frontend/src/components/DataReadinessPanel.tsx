@@ -38,7 +38,26 @@ const mono: React.CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-function CheckRow({ check }: { check: DataReadinessCheck }) {
+function CheckRow({ check, hasDicom }: { check: DataReadinessCheck; hasDicom?: boolean }) {
+  const isImageValidationDowngrade =
+    check.name === "image_validation" &&
+    check.status === "warning" &&
+    check.details.status === "fail" &&
+    hasDicom;
+
+  const displayDetails = { ...check.details };
+
+  // For image_validation downgraded by DICOM detection, override inner status
+  if (isImageValidationDowngrade) {
+    displayDetails.status = "not_applicable";
+  }
+
+  // Hide has_dicom from import_records — it conflicts with dicom_preflight
+  const isImportRecords = check.name === "import_records";
+  if (isImportRecords && "has_dicom" in displayDetails) {
+    delete (displayDetails as Record<string, unknown>).has_dicom;
+  }
+
   return (
     <div style={{
       display: "grid", gap: 5, padding: 10,
@@ -49,11 +68,45 @@ function CheckRow({ check }: { check: DataReadinessCheck }) {
         <strong style={{ fontSize: 13 }}>{check.name}</strong>
       </div>
       <div style={{ fontSize: 12, color: "#344054", lineHeight: 1.5 }}>{check.message}</div>
-      {Object.keys(check.details).length > 0 && (
+
+      {/* DICOM downgrade explanation */}
+      {isImageValidationDowngrade && (
+        <div style={{
+          padding: "6px 8px", border: "1px solid rgba(56, 103, 214, 0.22)",
+          borderRadius: 4, background: "rgba(239, 246, 255, 0.82)",
+          color: "#2450a6", fontSize: 11,
+        }}>
+          NIfTI validation is deferred because this project contains raw DICOM data (FunRaw/T1Raw).
+          Run Conversion Dry-Run first to plan DICOM-to-NIfTI conversion.
+        </div>
+      )}
+
+      {/* image_source_discovery note for DICOM-only projects */}
+      {check.name === "image_source_discovery" && hasDicom && (
+        <div style={{
+          padding: "6px 8px", border: "1px solid rgba(56, 103, 214, 0.22)",
+          borderRadius: 4, background: "rgba(239, 246, 255, 0.82)",
+          color: "#2450a6", fontSize: 11,
+        }}>
+          Subject/sequence counts above refer to direct NIfTI image sources only.
+          DICOM raw sources were detected separately by DICOM preflight.
+        </div>
+      )}
+
+      {Object.keys(displayDetails).length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "2px 8px", fontSize: 11, color: "#667085" }}>
-          {Object.entries(check.details).map(([key, value]) => (
-            <div key={key}><span>{key}: </span><b>{value === null ? "—" : String(value)}</b></div>
-          ))}
+          {Object.entries(displayDetails).map(([key, value]) => {
+            const isNotApplicable =
+              isImageValidationDowngrade && key === "status" && value === "not_applicable";
+            return (
+              <div key={key}>
+                <span>{key}: </span>
+                <b style={isNotApplicable ? { color: "#2450a6" } : undefined}>
+                  {value === null ? "-" : String(value)}
+                </b>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -120,6 +173,23 @@ export default function DataReadinessPanel({ baseUrl, projectId }: Props) {
 
   if (!data) return null;
 
+  const hasDicomRawLayout =
+    data.dicom_file_count > 0 && data.image_source_count === 0;
+
+  // Reorder next_actions: prioritise Conversion Dry-Run for DICOM projects
+  const sortedActions = hasDicomRawLayout
+    ? [
+        ...data.next_actions.filter((a) =>
+          a.toLowerCase().includes("conversion dry-run")
+        ),
+        ...data.next_actions.filter(
+          (a) =>
+            !a.toLowerCase().includes("conversion dry-run") &&
+            !a.toLowerCase().includes("verify the imported directory contains nifti or dicom files")
+        ),
+      ]
+    : data.next_actions;
+
   return (
     <section style={{ padding: 16, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(255, 255, 255, 0.88)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -129,6 +199,21 @@ export default function DataReadinessPanel({ baseUrl, projectId }: Props) {
         </div>
         <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
       </div>
+
+      {/* DICOM raw layout callout */}
+      {hasDicomRawLayout && (
+        <div style={{
+          marginBottom: 12, padding: 10,
+          border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6,
+          background: "rgba(239, 246, 255, 0.88)", color: "#2450a6", fontSize: 12,
+          lineHeight: 1.6,
+        }}>
+          <strong>FunRaw / T1Raw DICOM rawdata detected.</strong>{" "}
+          This is valid raw input. No NIfTI files exist yet.
+          Run <strong>Conversion Dry-Run</strong> before NIfTI QC or preprocessing.
+          Sub-001 through Sub-003 detected across FunRaw (func) and T1Raw (anat) groups.
+        </div>
+      )}
 
       {data.errors.length > 0 && (
         <div className="errorBox" style={{ marginBottom: 10 }}>{data.errors.join("\n")}</div>
@@ -145,11 +230,11 @@ export default function DataReadinessPanel({ baseUrl, projectId }: Props) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 12 }}>
-        <div style={metricBox}><span>rawdata</span><b style={mono}>{data.rawdata_dir || "—"}</b></div>
-        <div style={metricBox}><span>config path</span><b style={mono}>{data.project_config_path || "—"}</b></div>
-        <div style={metricBox}><span>dataset index</span><b style={mono}>{data.dataset_index_path || "—"}</b></div>
+        <div style={metricBox}><span>rawdata</span><b style={mono}>{data.rawdata_dir || "-"}</b></div>
+        <div style={metricBox}><span>config path</span><b style={mono}>{data.project_config_path || "-"}</b></div>
+        <div style={metricBox}><span>dataset index</span><b style={mono}>{data.dataset_index_path || "-"}</b></div>
         <div style={metricBox}><span>imports</span><strong>{data.import_count}</strong></div>
-        <div style={metricBox}><span>image sources</span><strong>{data.image_source_count}</strong></div>
+        <div style={metricBox}><span>{hasDicomRawLayout ? "NIfTI sources" : "image sources"}</span><strong>{data.image_source_count}</strong></div>
         <div style={metricBox}><span>subjects</span><strong>{data.subject_count}</strong></div>
         <div style={metricBox}><span>sequences</span><strong>{data.sequence_count}</strong></div>
         <div style={metricBox}><span>DICOM files</span><strong>{data.dicom_file_count}</strong></div>
@@ -159,15 +244,15 @@ export default function DataReadinessPanel({ baseUrl, projectId }: Props) {
       <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Checks</h4>
       <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
         {data.checks.map((check) => (
-          <CheckRow key={check.name} check={check} />
+          <CheckRow key={check.name} check={check} hasDicom={hasDicomRawLayout} />
         ))}
       </div>
 
-      {data.next_actions.length > 0 && (
+      {sortedActions.length > 0 && (
         <div>
           <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
           <div style={{ display: "grid", gap: 5 }}>
-            {data.next_actions.map((action, i) => (
+            {sortedActions.map((action, i) => (
               <div key={i} style={{
                 padding: "6px 10px",
                 border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6,
