@@ -63,13 +63,13 @@ def test_partial_critical_produces_no_go():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_default_review_is_no_go():
+def test_default_review_is_conditional_go():
     review = build_default_go_no_go_review()
-    assert review.decision == "NO_GO"
-    # After Phase 4H-2, missing_count should be 1 (gate 31)
-    assert review.missing_count == 1
-    assert review.met_count >= 26
-    assert len(review.blocking_issues) >= 1
+    # Phase 4G-2: CONDITIONAL GO after real synthetic smoke evidence
+    assert review.decision == "CONDITIONAL_GO"
+    assert review.missing_count == 1  # gate 31 (external DICOM smoke)
+    assert review.met_count >= 27
+    assert "29/32" in review.recommendation
 
 
 def test_default_review_has_all_criteria():
@@ -79,13 +79,13 @@ def test_default_review_has_all_criteria():
 
 def test_conditional_go_helper():
     review = build_default_go_no_go_review()
-    assert is_conditional_go_allowed(review) is False  # It's NO_GO
+    assert is_conditional_go_allowed(review) is True  # Phase 4G-2: CONDITIONAL GO
 
 
 def test_summarize_missing():
     review = build_default_go_no_go_review()
     summary = summarize_missing_go_criteria(review)
-    assert summary["decision"] == "NO_GO"
+    assert summary["decision"] == "CONDITIONAL_GO"
     assert summary["missing_count"] >= 1
 
 

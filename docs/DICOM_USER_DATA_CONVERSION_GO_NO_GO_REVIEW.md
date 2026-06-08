@@ -309,7 +309,77 @@ and Phase 4H-2 (checksum/rollback integration into approval/audit persistence).
 
 ---
 
-*End of GO/NO-GO review.  User-data DICOM conversion remains NO-GO.
-28 of 32 gates are now met.  Real dcm2niix synthetic smoke validation
-is the primary remaining blocker before CONDITIONAL GO can be
-considered.  Research-use only, not for clinical diagnosis.*
+---
+
+## 12. Phase 4G-2 — Re-review After Real Synthetic dcm2niix Smoke Evidence (Phase 4H-3d)
+
+### 12.1 Purpose
+
+Re-evaluate after Phase 4H-3d successfully validated real `dcm2niix` execution
+on synthetic DICOM.  Integration test `test_dicom_conversion_real_synthetic_smoke.py`
+passed all 3 tests with real `dcm2niix.exe`.
+
+### 12.2 Real Synthetic Smoke Evidence
+
+| Item | Value |
+|---|---|
+| dcm2niix path | `D:\Anaconda3\envs\mamba\Scripts\dcm2niix.exe` |
+| Test | `test_real_smoke_on_synthetic_dicom` — PASSED |
+| Input | Synthetic DICOM created by `create_minimal_dicom_series` under tmp_path |
+| Output | Output manifest, provenance, stdout/stderr logs written |
+| Path safety | Both input and output paths validated |
+| Rawdata | No real user rawdata touched |
+
+### 12.3 Gate Status Changes
+
+| # | Gate | Phase 4G-1 | Phase 4G-2 | Change |
+|---|---|---|---|---|
+| 29 | Rawdata checksum | met | met | — |
+| 30 | Real dcm2niix on synthetic DICOM | partial | **met** | ↑ |
+| 31 | External DICOM smoke | missing | missing | — |
+| 32 | Rollback tested | partial | partial | — |
+
+### 12.4 Updated Summary
+
+| Status | Count |
+|---|---|
+| Met | **29 of 32** (was 28) |
+| Partial | 2 (rollback, approval/audit wiring) |
+| Missing | 1 (external DICOM smoke) |
+
+### 12.5 Final Phase 4G-2 Decision
+
+**Decision: CONDITIONAL GO — internal-only prototype behind env flags, no frontend execute button.**
+
+**Rationale:**
+- 29 of 32 gates met.  Only 1 gate missing (external DICOM smoke).
+- Real dcm2niix synthetic smoke validated — the primary NO-GO blocker is resolved.
+- Critical safety gates all met: rawdata read-only, no shell, env flags, frontend safety.
+- Approval/audit schema complete; checksum/rollback evidence persisted.
+- Remaining gaps are productization: external DICOM smoke, approval/audit execution wiring, rollback.
+
+**Conditions for this CONDITIONAL GO:**
+1. User-data conversion remains disabled by default.
+2. No frontend "Run conversion" button.
+3. No `/conversion/execute` endpoint for general use.
+4. All real execution behind `MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE=1` + 8 other flags.
+5. Internal-only prototype scope: single-subject, synthetic-only or explicitly gated.
+6. SPM/DPABI/MATLAB remain disabled.
+7. Full GO requires: external DICOM smoke, approval/audit execution integration, rollback implementation.
+
+### 12.6 Required Next Task
+
+**Phase 4I-0: Internal-only user-data conversion prototype behind env flags, no frontend execute button.**
+
+- Wire `run_real_dcm2niix_synthetic_smoke()` into an internal-only path
+- Keep `run_conversion_execute()` returning blocked for all normal users
+- No new UI button or public endpoint
+- All execution behind 9 env flags
+- Only synthetic/test paths accepted
+
+---
+
+*End of GO/NO-GO review.  User-data DICOM conversion is CONDITIONAL GO
+for internal-only prototype only.  29 of 32 gates met.  Full GO still
+requires external DICOM smoke, approval/audit execution integration,
+and rollback implementation.  Research-use only, not for clinical diagnosis.*

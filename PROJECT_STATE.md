@@ -1230,9 +1230,33 @@ green when env flags + PATH are set.  dcm2niix was successfully called via
 
 This closes the primary GO/NO-GO blocker (gate 30: real dcm2niix synthetic smoke).
 
+### Phase 4G-2 — GO/NO-GO Re-review After Real Synthetic Smoke Evidence
+
+GO/NO-GO review rerun.  **Decision: CONDITIONAL GO.**
+
+### Key changes
+
+- Gate 30 (real dcm2niix synthetic smoke): partial → **met** (Phase 4H-3d evidence)
+- 29 of 32 gates now **met** (up from 28)
+- 1 gate **missing** (external DICOM smoke on real layout)
+- 2 gates **partial** (rollback, approval/audit wiring)
+
+### Conditions
+
+- User-data conversion remains disabled by default
+- No frontend "Run conversion" button
+- No `/conversion/execute` endpoint
+- All execution behind 9 env flags
+- Internal-only prototype scope
+- SPM/DPABI/MATLAB remain disabled
+
+### Tests
+
+`test_dicom_conversion_go_no_go_schema.py` — 12 passed (updated to CONDITIONAL GO)
+
 ### Next step
 
-**Phase 4H-3 complete.**  Evidence capture infrastructure added.
+**Phase 4I-0: Internal-only user-data conversion prototype behind env flags, no frontend execute button.**
 `src/backend/app/services/dicom_conversion_smoke_evidence.py` provides
 `capture_synthetic_smoke_evidence()` which runs real dcm2niix on synthetic
 DICOM when all 9 env flags + dcm2niix + pydicom are available, and returns

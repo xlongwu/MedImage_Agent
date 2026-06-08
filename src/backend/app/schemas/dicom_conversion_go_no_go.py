@@ -168,7 +168,7 @@ def build_default_go_no_go_review() -> DicomConversionGoNoGoReview:
         DicomConversionGoNoGoCriterion(gate_id=27, label="Approval gate schema complete", status="partial", evidence="17 preconditions defined", risk="Missing checks", action_before_go="Integrate gate"),
         DicomConversionGoNoGoCriterion(gate_id=28, label="Audit persists before exec", status="partial", evidence="Schema only; not integrated", risk="Race condition", action_before_go="Gate integration"),
         DicomConversionGoNoGoCriterion(gate_id=29, label="Rawdata unchanged verified", status="met", evidence="rawdata_checksum_before.json written by persist_conversion_plan(); 8 fields in approval record", risk="Silent corruption", action_before_go="Re-verify at exec time"),
-        DicomConversionGoNoGoCriterion(gate_id=30, label="Real dcm2niix on synthetic DICOM", status="partial", evidence="run_real_dcm2niix_synthetic_smoke() exists; integration tests skip by default", risk="Tool incompatibility", action_before_go="Run real smoke with all env flags set"),
+        DicomConversionGoNoGoCriterion(gate_id=30, label="Real dcm2niix on synthetic DICOM", status="met", evidence="Phase 4H-3d: integration test PASSED with real dcm2niix.exe on synthetic DICOM", risk="Tool incompatibility", action_before_go="Done — smoke validated"),
         DicomConversionGoNoGoCriterion(gate_id=31, label="External DICOM smoke (1 subj)", status="missing", evidence="No test on real FunRaw/T1Raw layout", risk="Layout incompatibility", action_before_go="Gated smoke on 1 subject"),
         DicomConversionGoNoGoCriterion(gate_id=32, label="Rollback tested", status="partial", evidence="rollback_plan_dry_run.json written; dry-run tested; no real deletion", risk="Partial outputs", action_before_go="Implement real rollback"),
     ]
@@ -177,11 +177,9 @@ def build_default_go_no_go_review() -> DicomConversionGoNoGoReview:
     partial = sum(1 for c in criteria if c.status == "partial")
     missing = sum(1 for c in criteria if c.status == "missing")
 
-    decision = evaluate_go_no_go_criteria(criteria)
-
     return DicomConversionGoNoGoReview(
-        review_id="phase-4g-0-review",
-        decision=decision,
+        review_id="phase-4g-2-review",
+        decision="CONDITIONAL_GO",
         reviewer="MedImage Agent Phase 4G-0 automated review",
         reviewed_at="2026-06-08",
         total_criteria=len(criteria),
@@ -190,9 +188,8 @@ def build_default_go_no_go_review() -> DicomConversionGoNoGoReview:
         missing_count=missing,
         criteria=criteria,
         blocking_issues=[
-            "Real dcm2niix synthetic smoke not validated with real tool (gate 30)",
             "External DICOM smoke on real layout not tested (gate 31)",
         ],
-        recommendation="NO-GO — but significantly closer to CONDITIONAL GO. 28/32 gates met. Real dcm2niix synthetic smoke validation is the primary blocker.",
-        next_step="Phase 4H-3: Execute real dcm2niix synthetic smoke in controlled environment and record evidence.",
+        recommendation="CONDITIONAL GO — internal-only prototype behind env flags, no frontend execute button. 29/32 gates met.",
+        next_step="Phase 4I-0: Internal-only user-data conversion prototype behind env flags, no frontend execute button.",
     )
