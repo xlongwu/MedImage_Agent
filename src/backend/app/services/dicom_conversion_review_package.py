@@ -192,6 +192,8 @@ def read_conversion_review_package(
         ("preflight_snapshot", "preflight_snapshot.json"),
         ("mapping_snapshot", "mapping_snapshot.json"),
         ("command_templates", "command_templates.json"),
+        ("rawdata_checksum_before", "rawdata_checksum_before.json"),
+        ("rollback_plan_dry_run", "rollback_plan_dry_run.json"),
         ("planned_manifest", "planned_output_manifest.json"),
         ("planned_provenance", "planned_execution_provenance.json"),
         ("stdout_log", "logs/stdout.log"),
@@ -243,6 +245,13 @@ def read_conversion_review_package(
             try:
                 data = json.loads(Path(full_path).read_text())
                 template_count = len(data.get("templates", []))
+            except Exception:
+                pass
+        if kind == "rawdata_checksum_before" and exists:
+            try:
+                data = json.loads(Path(full_path).read_text())
+                approval_summary["rawdata_fingerprint"] = data.get("fingerprint", "")
+                approval_summary["rawdata_file_count"] = data.get("file_count", 0)
             except Exception:
                 pass
 

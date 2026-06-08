@@ -158,6 +158,45 @@ def persist_conversion_plan(
             "note": "Planned provenance — no conversion executed.",
         }))
 
+        # ── Phase 4H-2: Rawdata checksum snapshot ──
+        rawdata_checksum_path = str(run_dir / "rawdata_checksum_before.json")
+        from src.backend.app.services.rawdata_fingerprint import build_rawdata_fingerprint
+        from src.backend.app.schemas.dicom_conversion_safety import build_rawdata_checksum_snapshot
+        try:
+            if rawdata_dir:
+                fp = build_rawdata_fingerprint([rawdata_dir])
+                checksum = build_rawdata_checksum_snapshot(fp)
+                checksum.generated_at = _now_iso()
+                _write_json(rawdata_checksum_path, checksum.model_dump())
+                written.append(rawdata_checksum_path)
+            else:
+                _write_json(rawdata_checksum_path, {
+                    "note": "No rawdata_dir configured — checksum snapshot not generated.",
+                })
+                written.append(rawdata_checksum_path)
+        except Exception as exc:
+            warnings.append(f"Rawdata checksum snapshot failed: {exc}")
+
+        # ── Phase 4H-2: Rollback dry-run plan ──
+        rollback_plan_path = str(run_dir / "rollback_plan_dry_run.json")
+        from src.backend.app.schemas.dicom_conversion_safety import (
+            build_conversion_rollback_plan,
+            run_conversion_rollback_dry_run,
+        )
+        try:
+            rawdata_roots = [rawdata_dir] if rawdata_dir else []
+            plan = build_conversion_rollback_plan(
+                output_root=str(run_dir),
+                conversion_run_id=conversion_run_id,
+                project_dir=project_dir,
+                rawdata_roots=rawdata_roots,
+            )
+            dry_run = run_conversion_rollback_dry_run(plan)
+            _write_json(rollback_plan_path, dry_run.model_dump())
+            written.append(rollback_plan_path)
+        except Exception as exc:
+            warnings.append(f"Rollback plan generation failed: {exc}")
+
         # Logs dir
         Path(paths["stdout_log_path"]).parent.mkdir(parents=True, exist_ok=True)
         Path(paths["stdout_log_path"]).write_text(

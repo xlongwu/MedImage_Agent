@@ -1148,11 +1148,41 @@ purity/safety (5).
 - User-data conversion remains disabled
 - SPM/DPABI/MATLAB remain disabled
 
+## Phase 4H-2 — Approval/Audit Integration for Checksum Snapshots
+
+Rawdata checksum snapshots and rollback plans are now integrated into
+persisted approval packages, review package reader, and audit export.
+No conversion enabled.  No rawdata modified.
+
+### Integration
+
+- `persist_conversion_plan()` now writes `rawdata_checksum_before.json`
+  (using `build_rawdata_fingerprint()` + `RawdataChecksumSnapshot`) and
+  `rollback_plan_dry_run.json`
+- `read_conversion_review_package()` now lists 12 files (up from 10),
+  extracts rawdata fingerprint/file_count into approval_summary
+- `DicomConversionApprovalRecord` extended with 8 checksum/rollback fields
+- Audit export includes checksum and rollback metadata; still excludes .dcm/.nii
+
+### Tests
+
+`tests/unit/test_dicom_conversion_checksum_integration.py` — 14 tests:
+persisted writes (2), review package (2), export safety (3), rollback (2),
+approval schema (2), existing safety (3).
+
+### Key invariants
+
+- Checksum snapshot is metadata-only (fingerprint + file count + size)
+- Rollback dry-run never deletes files
+- Rawdata paths protected in rollback plan
+- Export still excludes .dcm, .nii, .nii.gz
+- User-data conversion remains disabled
+
 ## Next recommended work
 
-1. **Phase 4H-2** — Approval/audit integration for checksum snapshots.
-   Wire checksum verification into the conversion execution path.
-2. Review Phase 4H-1 deliverables with the project maintainer.
+1. **Phase 4G-1** — Rerun GO/NO-GO review after checksum/rollback
+   integration.  Update criteria, re-evaluate decision.
+2. Review Phase 4H-2 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.

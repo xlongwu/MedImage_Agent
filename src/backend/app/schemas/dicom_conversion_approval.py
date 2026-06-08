@@ -110,6 +110,16 @@ class DicomConversionApprovalRecord(BaseModel):
     dcm2niix_availability_confirmed: bool = False
     dcm2niix_version: str | None = None
     env_flags_confirmed: bool = False
+
+    # Phase 4H-2: Rawdata checksum
+    rawdata_checksum_snapshot_path: str | None = None
+    rawdata_checksum_fingerprint: str | None = None
+    rawdata_checksum_confirmed: bool = False
+    pre_conversion_checksum_required: bool = True
+    post_conversion_checksum_required: bool = True
+    checksum_mismatch_policy: str = "block"
+    rollback_plan_path: str | None = None
+    rollback_plan_confirmed: bool = False
     missing_env_flags: list[str] = Field(default_factory=list)
 
     # Risk and policy
