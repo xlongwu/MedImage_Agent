@@ -280,7 +280,7 @@ def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
         readable_count=readable_count,
         unreadable_count=unreadable_count,
         four_d_count=four_d_count,
-        warning_count=warning_count,
+        warning_count=warning_count + len(all_warnings),
         images=images,
         warnings=all_warnings[:30],
         errors=errors[:20],

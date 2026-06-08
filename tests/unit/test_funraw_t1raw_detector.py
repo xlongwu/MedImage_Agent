@@ -275,7 +275,8 @@ def test_data_readiness_reports_subject_count(tmp_path, monkeypatch):
 
 
 def test_data_readiness_detects_dicom_layout(tmp_path, monkeypatch):
-    """Data readiness detects FunRaw/T1Raw and reports dicom counts."""
+    """Data readiness detects FunRaw/T1Raw and reports dicom counts
+    with status=warning, not blocked."""
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     root = _make_funraw_t1raw_fixture(tmp_path)
@@ -285,9 +286,17 @@ def test_data_readiness_detects_dicom_layout(tmp_path, monkeypatch):
         f"/api/projects/{created['project_id']}/data-readiness"
     )
     data = resp.json()
-    # Status may be blocked (no NIfTI sources) but DICOM detection should work
     assert data["dicom_file_count"] > 0
     assert data["subject_count"] > 0
+    # DICOM-only project with FunRaw/T1Raw layout should be warning, not blocked
+    assert data["status"] == "warning", \
+        f"Expected warning, got {data['status']}"
+    # Should NOT have image validation error
+    errors_text = " ".join(data.get("errors", []))
+    assert "image validation failed" not in errors_text.lower()
+    # Should recommend Conversion Dry-Run
+    next_actions_text = " ".join(data.get("next_actions", []))
+    assert "conversion" in next_actions_text.lower()
     # Check that the FunRaw warning is present
     warnings_text = " ".join(data.get("warnings", []))
     assert "funraw" in warnings_text.lower() or "dicom" in warnings_text.lower()
@@ -315,6 +324,9 @@ def test_nifti_qc_still_zero_for_dicom_only(tmp_path, monkeypatch):
     # Should have a warning about no NIfTI
     warnings_text = " ".join(data.get("warnings", []))
     assert "no nifti" in warnings_text.lower() or "conversion" in warnings_text.lower()
+    # Warning count should reflect the top-level warning
+    assert data["warning_count"] >= 1, \
+        f"Expected warning_count >= 1, got {data['warning_count']}"
 
 
 def test_rawdata_mtime_unchanged(tmp_path, monkeypatch):

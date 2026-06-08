@@ -228,7 +228,20 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     )
 
     if validation_status == "fail":
-        errors.append("Image validation failed — review image validation issues.")
+        # Check if we have DICOM data (FunRaw/T1Raw detection runs in section 8
+        # but we can do a quick path check here)
+        has_dicom_fallback = False
+        if rawdata_dir:
+            ft_check = detect_funraw_t1raw_layout(rawdata_dir)
+            if ft_check.get("dicom_file_count", 0) > 0:
+                has_dicom_fallback = True
+        if not has_dicom_fallback:
+            errors.append("Image validation failed — review image validation issues.")
+        else:
+            warnings.append(
+                "No NIfTI image sources found, but DICOM files were detected. "
+                "Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion."
+            )
     elif validation_status == "warning":
         warnings.append("Image validation returned warnings — review image validation details.")
 
@@ -365,9 +378,15 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
 
     # ── 9. Determine overall readiness ──
     check_statuses = [c["status"] for c in checks]
+    # FunRaw/T1Raw with DICOM files: valid dataset, just needs conversion
+    has_dicom_data = has_dicom and dicom_file_count > 0
     if "fail" in check_statuses or not rawdata_exists:
-        overall = "blocked"
-    elif not image_source_count and not (has_dicom and dicom_file_count > 0):
+        # Downgrade image_validation fail to warning when DICOM data exists
+        if has_dicom_data and not image_source_count:
+            overall = "warning"
+        else:
+            overall = "blocked"
+    elif not image_source_count and not has_dicom_data:
         overall = "blocked"
     elif "warning" in check_statuses or validation_status == "warning" or not dataset_index_exists:
         overall = "warning"
@@ -384,8 +403,10 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
         next_actions.append("Import a dataset root directory to enable image source discovery.")
     if not image_source_count and has_imports:
         next_actions.append("Verify the imported directory contains NIfTI or DICOM files.")
-    if validation_status == "fail":
+    if validation_status == "fail" and not has_dicom_data:
         next_actions.append("Review and resolve image validation errors.")
+    elif validation_status == "fail" and has_dicom_data:
+        next_actions.append("Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion.")
     if validation_status == "warning":
         next_actions.append("Review image validation warnings — expected sequences may be incomplete.")
     if has_dicom and dicom_file_count > 0:
