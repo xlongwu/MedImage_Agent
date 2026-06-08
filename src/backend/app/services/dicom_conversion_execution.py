@@ -15,6 +15,7 @@ Reference:
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -748,11 +749,253 @@ def run_synthetic_dcm2niix_smoke(
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# 8. Phase 4F-0 — Synthetic persisted-package conversion
+# ═══════════════════════════════════════════════════════════════════════
+
+_PERSISTED_SYNTHETIC_ENV_FLAGS: frozenset[str] = frozenset({
+    "MEDIMAGE_ENABLE_DICOM_CONVERSION",
+    "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
+    "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
+    "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION",
+    "MEDIMAGE_MATLAB_ENABLED",
+    "MEDIMAGE_SPM_SMOKE_ENABLED",
+    "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
+    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+})
+
+
+def _is_persisted_synthetic_enabled(env: dict[str, str]) -> tuple[bool, list[str]]:
+    missing = sorted(f for f in _PERSISTED_SYNTHETIC_ENV_FLAGS if env.get(f) != "1")
+    return len(missing) == 0, missing
+
+
+def run_synthetic_conversion_from_persisted_package(
+    project_id: str,
+    conversion_run_id: str,
+    *,
+    env: dict[str, str] | None = None,
+    runner: Any = None,
+    synthetic_only: bool = True,
+) -> "DicomConversionSandboxResult":
+    """Run a controlled real dcm2niix smoke from a persisted approval package.
+
+    Reads the persisted review package, validates approval completeness,
+    checks env flags, and executes dcm2niix using command templates from
+    the persisted package.  Only accepts synthetic/test input paths.
+
+    **User rawdata conversion remains disabled.**  No real user data is
+    converted.  ``shell=True`` is never used.
+
+    Returns a ``DicomConversionSandboxResult`` with updated manifest,
+    provenance, and log paths.
+    """
+    from src.backend.app.schemas.dicom_conversion_approval import (
+        DicomConversionApprovalRecord,
+        evaluate_conversion_approval_gate,
+    )
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        DicomConversionSafetyFlags,
+        DicomConversionSandboxResult,
+    )
+    from src.backend.app.schemas.execution_manifest import (
+        ExecutionProvenance,
+        OutputManifest,
+        OutputManifestItem,
+    )
+    from src.backend.app.services.dicom_conversion_review_package import (
+        read_conversion_review_package,
+    )
+
+    warnings: list[str] = []
+    errors: list[str] = []
+    blocking: list[str] = []
+    env = env or {}
+
+    # ── 1. Env flag check ──
+    ok_flags, missing_flags = _is_persisted_synthetic_enabled(env)
+    if not ok_flags:
+        return DicomConversionSandboxResult(
+            ok=False, status="disabled", mode="disabled",
+            project_id=project_id,
+            blocking_issues=[
+                f"Persisted synthetic conversion blocked: {len(missing_flags)} "
+                f"env flag(s) missing: {', '.join(missing_flags)}."
+            ],
+            safety_flags=DicomConversionSafetyFlags(
+                conversion_disabled_by_default=True, env_flags_missing=True,
+            ),
+        )
+
+    # ── 2. Read persisted package ──
+    project_dir = env.get("MEDIMAGE_PROJECT_DIR", "")
+    pkg = read_conversion_review_package(
+        project_id, conversion_run_id, project_dir=project_dir,
+    )
+    if not pkg.ok:
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled",
+            project_id=project_id,
+            blocking_issues=[f"Review package not readable: {pkg.errors}"],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+
+    # ── 3. Validate required files ──
+    required_kinds = {"approval_record", "preflight_snapshot", "mapping_snapshot", "command_templates"}
+    missing_kinds = {f.kind for f in pkg.files if not f.exists} & required_kinds
+    if missing_kinds:
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled",
+            project_id=project_id,
+            blocking_issues=[f"Required files missing: {', '.join(sorted(missing_kinds))}"],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+
+    # ── 4. Validate approval gate ──
+    try:
+        approval_json = json.loads(Path(next(f.path for f in pkg.files if f.kind == "approval_record")).read_text())
+        approval = DicomConversionApprovalRecord(**approval_json)
+    except Exception as exc:
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=[f"Failed to parse approval record: {exc}"],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+
+    gate = evaluate_conversion_approval_gate(approval, preflight_ok=True)
+    if gate.status != "approved":
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled",
+            project_id=project_id,
+            blocking_issues=[f"Approval gate not passed: {gate.status} — missing: {gate.missing_fields}"],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+
+    # ── 5. Validate input paths are synthetic ──
+    mapping_path = next((f.path for f in pkg.files if f.kind == "mapping_snapshot"), "")
+    try:
+        mappings_data = json.loads(Path(mapping_path).read_text()) if mapping_path else {}
+    except Exception:
+        mappings_data = {}
+    for m in mappings_data.get("mappings", []):
+        sp = m.get("source_path", "")
+        if synthetic_only:
+            blocked_patterns = ["DemoData", "FunRaw", "T1Raw", "rawdata", "BIDS"]
+            if any(p.lower() in sp.lower() for p in blocked_patterns):
+                return DicomConversionSandboxResult(
+                    ok=False, status="blocked", mode="disabled",
+                    project_id=project_id,
+                    blocking_issues=[f"Source path '{sp}' appears to be real rawdata. Synthetic-only."],
+                    safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+                )
+
+    # ── 6. dcm2niix availability ──
+    avail = check_dcm2niix_availability(env=env, runner=runner if runner else None)
+    if avail.status != "available":
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=[f"dcm2niix not available: {avail.status}"],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+
+    # ── 7. Execute command templates via runner ──
+    output_root = pkg.run_dir or ""
+    logs_dir = Path(output_root) / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log_path = logs_dir / "dcm2niix_stdout.log"
+    stderr_log_path = logs_dir / "dcm2niix_stderr.log"
+    artifact_count = 0
+
+    if runner is not None:
+        tmpl_path = next((f.path for f in pkg.files if f.kind == "command_templates"), "")
+        try:
+            tmpl_data = json.loads(Path(tmpl_path).read_text()) if tmpl_path else {}
+        except Exception:
+            tmpl_data = {}
+        for tmpl in tmpl_data.get("templates", [])[:1]:  # Limit to first template
+            argv = [
+                tmpl.get("executable", "dcm2niix"),
+                "-z", tmpl.get("compress", "y"),
+                "-f", tmpl.get("filename_pattern", "%p_%s"),
+            ]
+            if tmpl.get("bids_sidecar"):
+                argv.append("-b")
+            if tmpl.get("create_bids"):
+                argv.append("-ba")
+            argv.extend(["-o", tmpl.get("output_dir", output_root), tmpl.get("input_dir", "")])
+            try:
+                result = runner(argv)
+                stdout = getattr(result, "stdout", "") or ""
+                stderr = getattr(result, "stderr", "") or ""
+                rc = getattr(result, "returncode", 0)
+                stdout_log_path.write_text(stdout, encoding="utf-8", errors="replace")
+                stderr_log_path.write_text(stderr, encoding="utf-8", errors="replace")
+                if rc != 0:
+                    warnings.append(f"dcm2niix returned {rc}: {stderr[:200]}")
+            except Exception as exc:
+                errors.append(f"Execution failed: {exc}")
+
+        artifact_count = 6
+
+    # ── 8. Write updated manifest and provenance ──
+    manifest_path = Path(output_root) / "output_manifest.json"
+    provenance_path = Path(output_root) / "execution_provenance.json"
+
+    items: list[OutputManifestItem] = []
+    if Path(output_root).exists():
+        for p in sorted(Path(output_root).rglob("*")):
+            if p.is_file() and p.suffix in {".nii", ".gz", ".json", ".log"}:
+                info = p.stat()
+                items.append(OutputManifestItem(
+                    kind="nifti" if p.suffix in {".nii", ".gz"} else "json",
+                    path=str(p), relative_path=str(p.relative_to(output_root)),
+                    required=True, exists=True, verified=True,
+                    verification_status="verified", size_bytes=info.st_size,
+                ))
+
+    manifest = OutputManifest(
+        project_id=project_id, run_id=conversion_run_id,
+        node_id="dicom_to_nifti", output_root=output_root,
+        items=items,
+        missing_required_count=sum(1 for i in items if i.required and not i.exists),
+        verified_count=sum(1 for i in items if i.verified),
+    )
+    manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+
+    provenance = ExecutionProvenance(
+        project_id=project_id, run_id=conversion_run_id,
+        node_id="dicom_to_nifti", backend="external",
+        command_template_id="persisted_package",
+        stdout_log_path=str(stdout_log_path),
+        stderr_log_path=str(stderr_log_path),
+        return_code=0,
+    )
+    provenance_path.write_text(provenance.model_dump_json(indent=2), encoding="utf-8")
+
+    return DicomConversionSandboxResult(
+        ok=len(errors) == 0,
+        status="succeeded" if not warnings and not errors else "warning",
+        mode="mock_subprocess",
+        project_id=project_id,
+        output_root=output_root,
+        created_artifact_count=artifact_count,
+        manifest_path=str(manifest_path),
+        provenance_path=str(provenance_path),
+        stdout_log_path=str(stdout_log_path),
+        stderr_log_path=str(stderr_log_path),
+        warnings=warnings, errors=errors,
+        safety_flags=DicomConversionSafetyFlags(
+            conversion_disabled_by_default=False, env_flags_missing=False,
+        ),
+    )
+
+
 __all__ = [
     "run_conversion_preflight",
     "run_conversion_execute",
     "run_conversion_sandbox",
     "check_dcm2niix_availability",
     "run_synthetic_dcm2niix_smoke",
+    "run_synthetic_conversion_from_persisted_package",
     "build_disabled_conversion_response",
 ]

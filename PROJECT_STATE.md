@@ -984,12 +984,45 @@ No dcm2niix is executed.  Export contains metadata only — no image data.
 - Export uses relative paths, includes SHA256SUMS.txt
 - No dcm2niix called, no image data included, no rawdata modified
 
+## Phase 4F-0 — Controlled Synthetic-Only Real Conversion from Persisted Package
+
+Synthetic-only real dcm2niix conversion using persisted approval packages
+has been implemented.  User rawdata conversion remains disabled.
+
+### Service
+
+`src/backend/app/services/dicom_conversion_execution.py` extended with:
+- `run_synthetic_conversion_from_persisted_package(project_id, conversion_run_id, env, runner, synthetic_only)` —
+  8-step pipeline: env flag check → read persisted package → validate required
+  files → validate approval gate → validate input paths are synthetic → dcm2niix
+  availability → execute via runner → write manifest + provenance
+- Refuses paths containing DemoData, FunRaw, T1Raw, rawdata, BIDS
+- 8 env flags required including `MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION`
+- Uses argv list, never shell=True
+
+### Contract
+
+`docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md` Section 19 added.
+
+### Tests
+
+`tests/unit/test_dicom_conversion_persisted_synthetic_execution.py` — 12 tests
+across 5 groups: env flag gating (2), missing approval (2), rawdata refusal (1),
+fake runner execution (6), safety invariants (1).
+
+### Key invariants
+
+- User-data conversion remains disabled (`run_conversion_execute()` returns blocked)
+- Real rawdata paths refused
+- All tests use monkeypatched shutil.which + fake runners
+- No real dcm2niix called
+- SPM/DPABI/MATLAB remain disabled
+
 ## Next recommended work
 
-1. **Phase 4F-0** — controlled real dcm2niix conversion on synthetic-only
-   project using persisted approval package.  Verify manifest + provenance
-   + logs.  Still no user rawdata conversion.
-2. Review Phase 4E-1 deliverables with the project maintainer.
+1. **Phase 4F-1** — Internal synthetic smoke result viewer and release
+   validation.  Display conversion results in UI.  Still no user conversion.
+2. Review Phase 4F-0 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.

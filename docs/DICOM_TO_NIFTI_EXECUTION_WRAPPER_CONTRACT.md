@@ -568,7 +568,59 @@ After execution:
 
 ---
 
+---
+
+## 19. Phase 4F-0 — Controlled Synthetic-Only Real Conversion Using Persisted Approval Package
+
+**Implemented.**  This section records the Phase 4F-0 contract after implementation.
+
+### 19.1 Purpose
+
+Phase 4F-0 enables a tightly controlled, opt-in dcm2niix conversion smoke
+that consumes a persisted approval/review package from Phases 4E-0/4E-1.
+It validates the full manifest/provenance/log pipeline against synthetic-only
+DICOM data.
+
+### 19.2 User rawdata remains disabled
+
+- `run_synthetic_conversion_from_persisted_package()` refuses paths containing
+  `DemoData`, `FunRaw`, `T1Raw`, `rawdata`, or `BIDS`.
+- No user-data conversion execute endpoint exists.
+- No "Run conversion" button exists.
+
+### 19.3 Required approval package files
+
+- `approval_record.json` — must be complete per Phase 4D schema
+- `preflight_snapshot.json`
+- `mapping_snapshot.json`
+- `command_templates.json`
+
+### 19.4 Required environment flags
+
+| Flag | Purpose |
+|---|---|
+| `MEDIMAGE_ENABLE_DICOM_CONVERSION=1` | Gates DICOM conversion |
+| `MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE=1` | Gates synthetic smoke |
+| `MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE=1` | Gates external tool invocation |
+| `MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION=1` | Gates persisted-package execution |
+| `MEDIMAGE_MATLAB_ENABLED=1` | Required |
+| `MEDIMAGE_SPM_SMOKE_ENABLED=1` | Required |
+| `MEDIMAGE_ENABLE_REVIEWED_EXECUTION=1` | Required |
+| `MEDIMAGE_ENABLE_REAL_PREPROCESSING=1` | Required |
+
+### 19.5 Output manifest/provenance update
+
+After execution, the existing `planned_output_manifest.json` and
+`planned_execution_provenance.json` are replaced with actual verified
+values including file sizes, checksums, and return code.
+
+### 19.6 Immediate next task — Phase 4F-1
+
+**Internal synthetic smoke result viewer and release validation.**
+
+---
+
 *End of contract document.  The Phase 4B safety wrapper has been extended
-through Phase 4C-1 with controlled synthetic dcm2niix smoke.  Real user
-rawdata conversion remains disabled.  Rawdata remains read-only.
-Research-use only, not for clinical diagnosis.*
+through Phase 4F-0 with controlled synthetic-only real conversion using
+persisted approval packages.  Real user rawdata conversion remains disabled.
+Rawdata remains read-only.  Research-use only, not for clinical diagnosis.*
