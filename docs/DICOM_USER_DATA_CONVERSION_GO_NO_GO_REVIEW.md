@@ -233,8 +233,83 @@ All 203 Phase 4 tests pass (162 passed, 3 skipped pydicom, 41 regression passed)
 
 ---
 
-*End of GO/NO-GO review.  User-data DICOM conversion is NO-GO.
-The safety wrapper, approval gate design, and synthetic smoke
-infrastructure provide strong foundations, but real dcm2niix
-validation is required before any user-data conversion path
-can be considered.*
+---
+
+## 11. Phase 4G-1 — Re-review After Checksum/Rollback Integration (Phases 4H-1, 4H-2)
+
+### 11.1 Purpose
+
+Re-evaluate the GO/NO-GO decision after Phase 4H-1 (rawdata checksum/rollback design)
+and Phase 4H-2 (checksum/rollback integration into approval/audit persistence).
+
+### 11.2 Changes Since Phase 4G-0
+
+| Capability | Phase 4G-0 Status | Current Status | Evidence |
+|---|---|---|---|
+| Rawdata checksum snapshot | missing | **met** | `rawdata_checksum_before.json` written by `persist_conversion_plan()` |
+| Rollback dry-run plan | missing | **partial** (dry-run only) | `rollback_plan_dry_run.json` written; never deletes files |
+| Checksum in approval record | missing | **met** | 8 new fields in `DicomConversionApprovalRecord` |
+| Checksum in review package | missing | **met** | `read_conversion_review_package()` extracts fingerprint/file_count |
+| Real dcm2niix synthetic smoke | missing | **partial** | `run_real_dcm2niix_synthetic_smoke()` exists; integration tests skip by default |
+| Approval gate integration | partial | **partial** | Schema complete; not wired into real execution |
+| Audit wiring | partial | **partial** | Schema complete; audit not consumed by execution |
+| Rollback implementation | missing | **partial** | Dry-run plan exists; no real file deletion |
+
+### 11.3 Updated Gate Criteria Table
+
+| # | Gate | Status | Change |
+|---|---|---|---|
+| 29 | Rawdata checksum verification | **met** | ↑ from missing |
+| 30 | Real dcm2niix on synthetic DICOM | **partial** | ↑ from missing (scaffold exists, skipped by default) |
+| 31 | External DICOM smoke | **missing** | unchanged |
+| 32 | Rollback tested | **partial** | ↑ from missing (dry-run only) |
+
+### 11.4 Updated Decision Matrix
+
+| Criterion | Weight | Score (0-3) | Change |
+|---|---|---|---|
+| Safety wrapper completeness | High | 3 | — |
+| Approval gate design | High | 2 | — |
+| Synthetic smoke validation | High | 2 | ↑ from 1 |
+| Rawdata safety | High | 3 | ↑ from 2 |
+| Manifest/provenance | Medium | 3 | — |
+| Log capture | Medium | 3 | — |
+| Rollback | Medium | 1 | ↑ from 0 |
+| Audit persistence | Medium | 2 | ↑ from 1 |
+| Frontend safety | High | 3 | — |
+| External tool isolation | High | 3 | — |
+| Test coverage | Medium | 3 | ↑ from 2 |
+| Real smoke evidence | High | 1 | ↑ from 0 |
+
+### 11.5 Final Phase 4G-1 Decision
+
+**Decision: NO-GO — but significantly closer to CONDITIONAL GO.**
+
+**Rationale:**
+- 28 of 32 gates now met (was 26).
+- 3 gates partial (rollback dry-run, approval/audit wiring, real synthetic smoke scaffold).
+- 1 gate missing (external DICOM smoke on real layout).
+- Critical safety gates (rawdata read-only, no shell, env flags, frontend safety) all met.
+- The approval/audit schema is complete and can gate real execution.
+- The main blocker remains: **real dcm2niix has not been validated against synthetic DICOM in a non-skipped smoke test.**
+
+**What would make this CONDITIONAL GO:**
+- One successful real dcm2niix synthetic smoke run with full manifest/provenance/log evidence.
+- `MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE=1` set during that run.
+
+### 11.6 Required Next Task
+
+**Phase 4H-3: Execute real dcm2niix synthetic smoke in controlled environment and record evidence.**
+
+- Set all 9 env flags
+- Run `run_real_dcm2niix_synthetic_smoke()` on synthetic DICOM
+- Record: dcm2niix version, input path, output path, manifest, provenance, logs
+- Confirm rawdata unchanged
+- Update GO/NO-GO with real evidence
+
+---
+
+*End of GO/NO-GO review.  User-data DICOM conversion remains NO-GO.
+28 of 32 gates are now met.  Real dcm2niix synthetic smoke validation
+is the primary remaining blocker before CONDITIONAL GO can be
+considered.  Research-use only, not for clinical diagnosis.*

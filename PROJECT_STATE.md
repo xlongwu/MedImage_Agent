@@ -1178,11 +1178,34 @@ approval schema (2), existing safety (3).
 - Export still excludes .dcm, .nii, .nii.gz
 - User-data conversion remains disabled
 
-## Next recommended work
+## Phase 4G-1 — GO/NO-GO Re-review After Checksum/Rollback Integration
 
-1. **Phase 4G-1** — Rerun GO/NO-GO review after checksum/rollback
-   integration.  Update criteria, re-evaluate decision.
-2. Review Phase 4H-2 deliverables with the project maintainer.
+GO/NO-GO review rerun.  **Decision: NO-GO — but closer to CONDITIONAL GO.**
+
+### Gate changes
+
+- 28 of 32 gates now **met** (up from 26)
+- 3 gates **partial** (rollback dry-run, approval/audit wiring, real synthetic smoke scaffold)
+- 1 gate **missing** (external DICOM smoke on real layout)
+
+### Key movements
+
+- Rawdata checksum: missing → **met** (persisted, in approval/review/export)
+- Rollback: missing → **partial** (dry-run only, never deletes)
+- Real dcm2niix smoke: missing → **partial** (scaffold exists; skipped by default)
+
+### Primary blocker
+
+Real dcm2niix has not been validated against synthetic DICOM in a non-skipped smoke test.
+
+### Tests
+
+`test_dicom_conversion_go_no_go_schema.py` — 12 passed (updated expectations)
+
+### Next step
+
+**Phase 4H-3: Execute real dcm2niix synthetic smoke in controlled environment.**
+Set all 9 env flags, run on synthetic DICOM, record evidence.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
