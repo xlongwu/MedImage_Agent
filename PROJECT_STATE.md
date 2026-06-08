@@ -1082,12 +1082,41 @@ decision logic (5), default review (4), purity (3).
 checksum verification, and rollback are required before any user-data
 conversion path can be considered.
 
+## Phase 4H-0 — Real dcm2niix Smoke on Synthetic DICOM Only
+
+Real `subprocess.run([dcm2niix, ...])` path added for synthetic DICOM only.
+User rawdata conversion remains disabled.
+
+### Service
+
+`src/backend/app/services/dicom_conversion_execution.py` extended with:
+- `run_real_dcm2niix_synthetic_smoke(input_dir, output_root, executable, env)` —
+  first function that calls `subprocess.run([dcm2niix, ...])` behind 9 env flags,
+  synthetic-only input validation, dcm2niix availability check, and argv list
+  construction.  Writes manifest, provenance, stdout/stderr logs.
+- New env flag: `MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE=1` required
+- Path safety: blocks DemoData/FunRaw/T1Raw/rawdata/BIDS unless under tmp/pytest
+
+### Tests
+
+- `tests/unit/test_dicom_conversion_real_synthetic_smoke_guards.py` — 8 tests:
+  env flag gating (2), path safety (2), no shell=True (2), existing safety (2)
+- `tests/integration/test_dicom_conversion_real_synthetic_smoke.py` — 3 tests,
+  all skipped by default (require 9 env flags + dcm2niix + pydicom)
+
+### Key invariants
+
+- All integration tests skip by default
+- Real subprocess only after 9 env flags + path safety + availability
+- Never `shell=True`
+- User-data conversion still disabled (`run_conversion_execute()` blocked)
+- SPM/DPABI/MATLAB remain disabled
+
 ## Next recommended work
 
-1. **Phase 4H-0** — Real dcm2niix smoke on synthetic DICOM (opt-in,
-   env-gated, no execute button).  Implement actual subprocess call
-   behind all flags.  Still no user-data conversion.
-2. Review Phase 4G-0 decision with the project maintainer.
+1. **Phase 4H-1** — Rawdata checksum verification and rollback design.
+   Add pre/post checksum comparison for synthetic smoke.
+2. Review Phase 4H-0 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
