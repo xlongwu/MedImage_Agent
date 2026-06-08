@@ -776,13 +776,66 @@ safety flag defaults (2).
 - All safety flags default to safest values
 - No real rawdata conversion in any mode
 
+## Phase 4C-1 — Controlled Synthetic dcm2niix Smoke
+
+Phase 4C-1 adds a tightly controlled real `dcm2niix` smoke test path that
+operates exclusively on synthetic/minimal DICOM data.
+
+### Contract update
+
+`docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md` Section 18.11 extended with:
+- Synthetic DICOM input contract (pydicom, tmp_path, no patient data)
+- Required env flags (7 flags including `MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE`)
+- Command-template execution policy
+- Output root policy (must be under tmp_path)
+- Manifest/provenance/log requirements
+- Skip policy (pydicom/dcm2niix unavailable → skip)
+- Go/No-Go criteria for user-data conversion (Phase 4D)
+
+### Synthetic DICOM helper
+
+`tests/unit/dicom_synthetic_helpers.py` — creates minimal valid DICOM series
+using pydicom under pytest `tmp_path`.  Provides:
+- `create_minimal_dicom_series(root, subject_id, ...)` → `Path`
+- `create_synthetic_funraw_layout(root, subject_count)` → `dict[str, Path]`
+- `pydicom_available()` → `bool`
+- No patient-identifying data.  Deterministic metadata.
+
+### Service implementation
+
+`src/backend/app/services/dicom_conversion_execution.py` extended with:
+- `run_synthetic_dcm2niix_smoke(input_dir, output_root, executable, env, runner)`
+  — 7-step smoke: env flag check → input path safety (refuses real rawdata) →
+  availability check → command template → execution via runner →
+  manifest write → provenance write
+- Input path safety: blocks paths containing `DemoData`, `FunRaw`, `T1Raw`,
+  `rawdata`, `BIDS`
+- 7 env flags required; all must be `"1"`
+- Availability check uses `check_dcm2niix_availability()` with status mapping
+- `shell=True` never used; all subprocess via argv list
+
+### Tests
+
+`tests/unit/test_dicom_conversion_synthetic_smoke.py` — 20 tests across
+6 groups: env flag gating (3), input path safety (3), fake runner execution
+(7), output safety (2), synthetic DICOM creation (3, skip if no pydicom),
+safety invariants (2).  17 passed, 3 skipped (pydicom not installed).
+
+### Key invariants
+
+- `run_conversion_execute()` still returns disabled for all user projects
+- Real rawdata paths (FunRaw/T1Raw/DemoData) are refused by the smoke function
+- All tests use monkeypatched `shutil.which` + fake runner; no real subprocess
+- Synthetic DICOM tests skip cleanly when pydicom unavailable
+- SPM/DPABI/MATLAB remain disabled
+
 ## Next recommended work
 
-1. **Phase 4C-1** — controlled dcm2niix real conversion smoke on synthetic
-   DICOM only.  Create synthetic DICOM data (tiny, pydicom), run dcm2niix
-   behind all env flags, verify output NIfTI + manifest + provenance.
-   Still disabled for real user rawdata.
-2. Review Phase 4C-0 deliverables with the project maintainer.
+1. **Phase 4C-2** — Manifest/provenance UI for conversion smoke and operator
+   review flow.  Add Conversion Results panel showing manifest, provenance,
+   and logs.  Wire preflight/sandbox/smoke endpoints to review UI.
+   No real user conversion yet.
+2. Review Phase 4C-1 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.

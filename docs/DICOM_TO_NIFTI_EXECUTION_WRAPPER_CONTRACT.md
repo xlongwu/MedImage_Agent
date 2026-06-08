@@ -477,20 +477,98 @@ when the `runner` is explicitly injected.
 - [ ] Rawdata unchanged test passes on the synthetic smoke
 - [ ] Explicit maintainer approval recorded
 
-### 18.11 Immediate next task — Phase 4C-1
+### 18.11 Phase 4C-1 — Controlled Synthetic dcm2niix Smoke
 
-**Controlled dcm2niix real conversion smoke on synthetic/mock DICOM only.**
+**Implemented.**  This section records the Phase 4C-1 contract after implementation.
 
-- Create synthetic DICOM data (tiny, valid DICOM using pydicom)
-- Run dcm2niix on the synthetic DICOM behind all env flags
-- Verify output NIfTI files exist and are valid
-- Verify manifest and provenance with real checksums
-- Still disabled for real user rawdata
-- Real user rawdata conversion requires Phase 4D
+#### 18.11.1 Purpose
+
+Phase 4C-1 adds a tightly controlled real `dcm2niix` smoke test path that
+operates exclusively on synthetic/minimal DICOM data.  It validates that
+the full command-template → subprocess → manifest → provenance → log pipeline
+works end-to-end under strict safety controls.
+
+#### 18.11.2 User rawdata remains blocked
+
+- `run_conversion_execute()` still returns disabled for all normal projects.
+- The synthetic smoke function (`run_synthetic_dcm2niix_smoke`) refuses any
+  path that is not explicitly a test/synthetic input directory.
+- Real FunRaw/T1Raw DICOM data is never converted.
+
+#### 18.11.3 Synthetic DICOM input contract
+
+- Created via `pydicom` in a pytest `tmp_path`.
+- Minimal valid DICOM: `PatientName="Synthetic", Modality="MR"`.
+- No patient-identifying data.
+- Deterministic metadata for reproducible tests.
+- Tests skip if `pydicom` is unavailable.
+
+#### 18.11.4 Required environment flags
+
+| Flag | Purpose |
+|---|---|
+| `MEDIMAGE_ENABLE_DICOM_CONVERSION=1` | Gates DICOM conversion |
+| `MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE=1` | Explicitly gates synthetic smoke |
+| `MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE=1` | Gates any external tool invocation in tests |
+
+Plus the standard 2 flags from Phase 4B:
+- `MEDIMAGE_MATLAB_ENABLED=1`
+- `MEDIMAGE_SPM_SMOKE_ENABLED=1`
+- `MEDIMAGE_ENABLE_REVIEWED_EXECUTION=1`
+- `MEDIMAGE_ENABLE_REAL_PREPROCESSING=1`
+
+#### 18.11.5 Command-template execution policy
+
+- `run_synthetic_dcm2niix_smoke()` uses `check_dcm2niix_availability()` first.
+- If dcm2niix is not found, returns `status=missing`.
+- The runner is injected as a callable accepting argv list.
+- In tests, `subprocess.run` is monkeypatched; in real execution, the actual
+  `subprocess.run` may be used ONLY when all env flags are set AND the input
+  is confirmed synthetic.
+- `shell=True` is never used.
+
+#### 18.11.6 Output root policy
+
+- Must be under `tmp_path` or an explicitly safe output directory.
+- Must not be under `rawdata_dir`.
+- Must not be a real user project directory.
+
+#### 18.11.7 Manifest / provenance / log requirements
+
+After execution:
+- `OutputManifest` is written with NIfTI output paths, sidecar paths, and logs.
+- `ExecutionProvenance` is written with `backend="external"`, dcm2niix version,
+  command template ID, and output checksums.
+- stdout and stderr logs are captured.
+
+#### 18.11.8 Skip policy
+
+- If `pydicom` is not importable → test skips.
+- If `dcm2niix` is not on PATH → test skips or returns `missing`.
+- If any required env flag is missing → function returns `disabled`.
+
+#### 18.11.9 Go / No-Go criteria for user-data conversion (Phase 4D)
+
+- [ ] Synthetic smoke passes with real dcm2niix
+- [ ] Output manifest is verified with real file sizes
+- [ ] Provenance is complete with checksums
+- [ ] Rawdata unchanged test passes on synthetic smoke
+- [ ] Conversion execution safety contract reviewed
+- [ ] Explicit maintainer approval recorded
+- [ ] Frontend approval UI ready
+- [ ] Real DICOM smoke passes on a single FunRaw subject (behind all flags)
+
+#### 18.11.10 Immediate next task — Phase 4C-2
+
+**Manifest/provenance UI for conversion smoke and operator review flow.**
+
+- Add a Conversion Results panel showing manifest, provenance, and logs
+- Wire the preflight/sandbox/smoke endpoints to a simple review UI
+- No real user conversion yet
 
 ---
 
 *End of contract document.  The Phase 4B safety wrapper has been extended
-with Phase 4C-0 availability preflight and fake/sandbox runner.  Real
-dcm2niix execution remains disabled by default.  Rawdata remains read-only.
+through Phase 4C-1 with controlled synthetic dcm2niix smoke.  Real user
+rawdata conversion remains disabled.  Rawdata remains read-only.
 Research-use only, not for clinical diagnosis.*

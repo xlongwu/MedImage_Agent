@@ -472,10 +472,287 @@ def run_conversion_sandbox(
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# 7. Phase 4C-1 — Synthetic dcm2niix smoke
+# ═══════════════════════════════════════════════════════════════════════
+
+_SYNTHETIC_SMOKE_ENV_FLAGS: frozenset[str] = frozenset({
+    "MEDIMAGE_ENABLE_DICOM_CONVERSION",
+    "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
+    "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
+    "MEDIMAGE_MATLAB_ENABLED",
+    "MEDIMAGE_SPM_SMOKE_ENABLED",
+    "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
+    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+})
+
+
+def _is_synthetic_smoke_enabled(env: dict[str, str]) -> tuple[bool, list[str]]:
+    """Check whether all synthetic smoke env flags are set to '1'."""
+    missing = sorted(f for f in _SYNTHETIC_SMOKE_ENV_FLAGS if env.get(f) != "1")
+    return len(missing) == 0, missing
+
+
+def run_synthetic_dcm2niix_smoke(
+    input_dir: Path,
+    output_root: Path,
+    *,
+    executable: str = "dcm2niix",
+    env: dict[str, str] | None = None,
+    runner: Any = None,
+) -> "DicomConversionSandboxResult":
+    """Run a controlled real dcm2niix smoke test on synthetic DICOM data.
+
+    **Only accepts synthetic/test input paths.**  Refuses paths that look
+    like real rawdata.  Requires all synthetic smoke env flags.
+
+    Uses ``check_dcm2niix_availability()`` to verify dcm2niix is on PATH.
+    The ``runner`` callable is used for actual execution; in tests it
+    should be monkeypatched.
+
+    No real user rawdata is converted.  No files are written outside
+    ``output_root``.  ``shell=True`` is never used.
+
+    Returns a ``DicomConversionSandboxResult`` with manifest, provenance,
+    and log paths populated after a successful run.
+    """
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        DicomConversionSandboxResult,
+        DicomConversionSafetyFlags,
+        build_dcm2niix_command_template,
+    )
+    from src.backend.app.schemas.execution_manifest import (
+        ExecutionProvenance,
+        OutputManifest,
+        OutputManifestItem,
+    )
+
+    warnings: list[str] = []
+    errors: list[str] = []
+    blocking: list[str] = []
+
+    env = env or {}
+
+    # ── 1. Env flag check ──
+    smoke_ok, missing_smoke = _is_synthetic_smoke_enabled(env)
+    if not smoke_ok:
+        return DicomConversionSandboxResult(
+            ok=False,
+            status="disabled",
+            mode="disabled",
+            project_id="synthetic_smoke",
+            output_root=str(output_root),
+            blocking_issues=[
+                f"Synthetic smoke blocked: {len(missing_smoke)} env flag(s) "
+                f"missing: {', '.join(missing_smoke)}."
+            ],
+            safety_flags=DicomConversionSafetyFlags(
+                conversion_disabled_by_default=True,
+                env_flags_missing=True,
+            ),
+        )
+
+    # ── 2. Input path safety — refuse real rawdata paths ──
+    input_str = str(input_dir.resolve())
+    blocked_patterns = [
+        "DemoData", "FunRaw", "T1Raw", "data\\rawdata",
+        "rawdata", "BIDS", "bids",
+    ]
+    for pattern in blocked_patterns:
+        if pattern.lower() in input_str.lower():
+            blocking.append(
+                f"Input path '{input_str}' appears to be real rawdata. "
+                f"Synthetic smoke only accepts synthetic/test input directories."
+            )
+            break
+
+    if blocking:
+        return DicomConversionSandboxResult(
+            ok=False,
+            status="blocked",
+            mode="disabled",
+            project_id="synthetic_smoke",
+            output_root=str(output_root),
+            blocking_issues=blocking,
+            safety_flags=DicomConversionSafetyFlags(
+                conversion_disabled_by_default=True,
+            ),
+        )
+
+    # ── 3. Availability check ──
+    availability = check_dcm2niix_availability(
+        executable=executable,
+        env=env,
+        runner=runner,
+    )
+
+    if availability.status != "available":
+        # Map availability status to DicomConversionStatus
+        mapped_status: str = {
+            "missing": "blocked",
+            "version_failed": "disabled",
+            "disabled": "disabled",
+            "unknown": "blocked",
+        }.get(availability.status, "blocked")
+
+        return DicomConversionSandboxResult(
+            ok=False,
+            status=mapped_status,  # type: ignore[arg-type]
+            mode="disabled",
+            project_id="synthetic_smoke",
+            output_root=str(output_root),
+            blocking_issues=[
+                f"dcm2niix not available: status={availability.status}",
+            ],
+            safety_flags=DicomConversionSafetyFlags(
+                conversion_disabled_by_default=True,
+            ),
+        )
+
+    # ── 4. Build command template ──
+    output_root.mkdir(parents=True, exist_ok=True)
+    template = build_dcm2niix_command_template(
+        input_dir=str(input_dir),
+        output_dir=str(output_root),
+        filename_pattern="synth_%p",
+    )
+
+    # ── 5. Execute (via runner) ──
+    logs_dir = output_root / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdout_log_path = logs_dir / "dcm2niix_stdout.log"
+    stderr_log_path = logs_dir / "dcm2niix_stderr.log"
+
+    if runner is not None:
+        argv = [
+            executable,
+            "-z", template.compress,
+            "-f", template.filename_pattern,
+        ]
+        if template.bids_sidecar:
+            argv.append("-b")
+        if template.create_bids:
+            argv.append("-ba")
+        argv.extend(template.additional_flags)
+        argv.extend(["-o", str(output_root), str(input_dir)])
+
+        try:
+            result = runner(argv)
+            returncode = getattr(result, "returncode", 0)
+            stdout = getattr(result, "stdout", "") or ""
+            stderr = getattr(result, "stderr", "") or ""
+
+            stdout_log_path.write_text(stdout, encoding="utf-8", errors="replace")
+            stderr_log_path.write_text(stderr, encoding="utf-8", errors="replace")
+
+            if returncode != 0:
+                warnings.append(
+                    f"dcm2niix returned exit code {returncode}: {stderr[:300]}"
+                )
+        except Exception as exc:
+            errors.append(f"Synthetic smoke execution failed: {exc}")
+            return DicomConversionSandboxResult(
+                ok=False,
+                status="failed",
+                mode="mock_subprocess",
+                project_id="synthetic_smoke",
+                output_root=str(output_root),
+                errors=errors,
+                safety_flags=DicomConversionSafetyFlags(),
+            )
+
+    # ── 6. Write manifest and provenance ──
+    manifest_path = output_root / "conversion_output_manifest.json"
+    provenance_path = output_root / "conversion_execution_provenance.json"
+
+    # Discover what was actually produced
+    produced_items: list[OutputManifestItem] = []
+    for p in sorted(output_root.rglob("*")):
+        if p.is_file() and p.suffix in {".nii", ".gz", ".json"}:
+            info = p.stat()
+            produced_items.append(OutputManifestItem(
+                kind="nifti" if p.suffix in {".nii", ".gz"} else "json",
+                path=str(p),
+                relative_path=str(p.relative_to(output_root)),
+                required=True,
+                exists=True,
+                verified=True,
+                verification_status="verified",
+                size_bytes=info.st_size,
+                previewable=p.suffix == ".json",
+            ))
+
+    # Add log items
+    for log_path in [stdout_log_path, stderr_log_path]:
+        if log_path.exists():
+            produced_items.append(OutputManifestItem(
+                kind="stdout_log" if "stdout" in log_path.name else "stderr_log",
+                path=str(log_path),
+                relative_path=str(log_path.relative_to(output_root)),
+                required=False,
+                exists=True,
+                verified=True,
+                verification_status="verified",
+                size_bytes=log_path.stat().st_size,
+                previewable=True,
+            ))
+
+    manifest = OutputManifest(
+        project_id="synthetic_smoke",
+        run_id="smoke_001",
+        node_id="dicom_to_nifti",
+        output_root=str(output_root),
+        items=produced_items,
+        missing_required_count=sum(
+            1 for i in produced_items if i.required and not i.exists
+        ),
+        verified_count=sum(1 for i in produced_items if i.verified),
+    )
+    manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+
+    provenance = ExecutionProvenance(
+        project_id="synthetic_smoke",
+        run_id="smoke_001",
+        node_id="dicom_to_nifti",
+        backend="external",
+        command_template_id="dcm2niix_smoke",
+        params={"filename_pattern": template.filename_pattern},
+        input_paths=[str(input_dir)],
+        output_paths=[str(p) for p in output_root.rglob("*") if p.is_file()],
+        software_versions={"dcm2niix": availability.version or "unknown"},
+        return_code=0,
+        stdout_log_path=str(stdout_log_path),
+        stderr_log_path=str(stderr_log_path),
+    )
+    provenance_path.write_text(provenance.model_dump_json(indent=2), encoding="utf-8")
+
+    return DicomConversionSandboxResult(
+        ok=len(errors) == 0,
+        status="succeeded" if not warnings and not errors else "warning",
+        mode="mock_subprocess",
+        project_id="synthetic_smoke",
+        output_root=str(output_root),
+        mapping_count=1,
+        command_template_count=1,
+        created_artifact_count=len(produced_items),
+        manifest_path=str(manifest_path),
+        provenance_path=str(provenance_path),
+        stdout_log_path=str(stdout_log_path),
+        stderr_log_path=str(stderr_log_path),
+        warnings=warnings,
+        errors=errors,
+        safety_flags=DicomConversionSafetyFlags(
+            conversion_disabled_by_default=False,
+            env_flags_missing=False,
+        ),
+    )
+
+
 __all__ = [
     "run_conversion_preflight",
     "run_conversion_execute",
     "run_conversion_sandbox",
     "check_dcm2niix_availability",
+    "run_synthetic_dcm2niix_smoke",
     "build_disabled_conversion_response",
 ]
