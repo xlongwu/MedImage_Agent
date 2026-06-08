@@ -964,6 +964,79 @@ def post_conversion_preflight(
     }
 
 
+@router.post("/api/projects/{project_id}/conversion/approval/persist-plan")
+def post_conversion_persist_plan(
+    project_id: str,
+    body: dict[str, Any],
+) -> dict[str, Any]:
+    """Persist a conversion approval plan and reserve a run directory.
+
+    Evaluates the approval gate, writes metadata snapshots, and reserves
+    a safe run directory.  Does NOT call dcm2niix.  Does NOT create NIfTI
+    files.  Does NOT modify rawdata.
+
+    Request body must include approval record fields and optional preflight
+    snapshot.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.schemas.dicom_conversion_approval import (
+        DicomConversionApprovalRecord,
+        evaluate_conversion_approval_gate,
+    )
+    from src.backend.app.services.dicom_conversion_plan_persistence import (
+        persist_conversion_plan,
+    )
+
+    # Build approval record from request body
+    approval = DicomConversionApprovalRecord(
+        approval_id=body.get("approval_id", ""),
+        project_id=project_id,
+        status=body.get("status", "ready_for_review"),
+        approved=body.get("approved", False),
+        approved_by=body.get("approved_by", ""),
+        approved_at=body.get("approved_at", ""),
+        mapping_ids=body.get("mapping_ids", []),
+        mappings_reviewed=body.get("mappings_reviewed", False),
+        output_root=body.get("output_root", ""),
+        output_root_confirmed=body.get("output_root_confirmed", False),
+        output_root_under_project=body.get("output_root_under_project", False),
+        output_root_not_rawdata=body.get("output_root_not_rawdata", False),
+        overwrite_policy=body.get("overwrite_policy", "fail_if_exists"),
+        rawdata_read_only_confirmed=body.get("rawdata_read_only_confirmed", False),
+        command_templates_reviewed=body.get("command_templates_reviewed", False),
+        no_shell_string_confirmed=body.get("no_shell_string_confirmed", False),
+        dcm2niix_availability_confirmed=body.get("dcm2niix_availability_confirmed", False),
+        env_flags_confirmed=body.get("env_flags_confirmed", False),
+        rollback_policy_acknowledged=body.get("rollback_policy_acknowledged", False),
+        clinical_use_prohibited_acknowledged=body.get("clinical_use_prohibited_acknowledged", False),
+        external_tool_acknowledgement=body.get("external_tool_acknowledgement", False),
+        risk_acknowledgement=body.get("risk_acknowledgement", False),
+        confirm_execution=body.get("confirm_execution", False),
+    )
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+    rawdata_dir = str(metadata.get("rawdata_dir") or "")
+
+    result = persist_conversion_plan(
+        project_id=project_id,
+        approval_record=approval,
+        preflight_snapshot=body.get("preflight_snapshot"),
+        mappings=body.get("mappings"),
+        command_templates=body.get("command_templates"),
+        safety_flags=body.get("safety_flags", {}),
+        project_dir=project_dir,
+        rawdata_dir=rawdata_dir,
+        overwrite_policy=body.get("overwrite_policy", "fail_if_exists"),
+        preflight_ok=body.get("preflight_ok", True),
+    )
+
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})

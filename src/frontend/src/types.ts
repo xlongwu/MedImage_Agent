@@ -1053,3 +1053,35 @@ export type DicomConversionPreflightResponse = {
   blocking_issues: string[];
   safety_flags: DicomConversionSafetyFlags;
 };
+
+/** Phase 4E-0 — Plan persistence types */
+
+export type DicomConversionRunReservation = {
+  project_id: string;
+  conversion_run_id: string;
+  run_dir?: string | null;
+  output_root?: string | null;
+  approval_record_path?: string | null;
+  audit_preview_path?: string | null;
+  preflight_snapshot_path?: string | null;
+  mapping_snapshot_path?: string | null;
+  command_templates_path?: string | null;
+  planned_manifest_path?: string | null;
+  planned_provenance_path?: string | null;
+  stdout_log_path?: string | null;
+  stderr_log_path?: string | null;
+  created_at?: string | null;
+};
+
+export type DicomConversionPlanPersistenceResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  conversion_run_id?: string | null;
+  reservation?: DicomConversionRunReservation | null;
+  gate_decision?: Record<string, unknown>;
+  written_files: string[];
+  warnings: string[];
+  errors: string[];
+  safety_flags: Record<string, boolean>;
+};

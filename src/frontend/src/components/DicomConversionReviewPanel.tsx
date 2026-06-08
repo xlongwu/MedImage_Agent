@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, runProjectDicomConversionPreflight } from "../api";
+import { DEFAULT_API_BASE, persistProjectDicomConversionPlan, runProjectDicomConversionPreflight } from "../api";
 import type {
   Dcm2niixCommandTemplate,
   DicomConversionMapping,
+  DicomConversionPlanPersistenceResponse,
   DicomConversionPreflightResponse,
   DicomConversionSafetyFlags,
 } from "../types";
@@ -32,6 +33,9 @@ const subH: React.CSSProperties = { margin: "0 0 6px", fontSize: 13 };
 export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props) {
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<DicomConversionPreflightResponse | null>(null);
+  const [persistResult, setPersistResult] = useState<DicomConversionPlanPersistenceResponse | null>(null);
+  const [persisting, setPersisting] = useState(false);
+  const [persistError, setPersistError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const reqRef = useRef(0);
@@ -45,6 +49,26 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
       if (id === reqRef.current) setData(res as DicomConversionPreflightResponse);
     } catch (e) { if (id === reqRef.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { if (id === reqRef.current) setLoading(false); }
+  }
+
+  async function handlePersist() {
+    if (!projectId || !data) return;
+    setPersisting(true); setPersistError(""); setPersistResult(null);
+    try {
+      const body: Record<string, unknown> = {
+        approval_id: "review-" + Date.now(),
+        status: "ready_for_review",
+        approved: false,
+        overwrite_policy: "fail_if_exists",
+        preflight_snapshot: data,
+        mappings: data.mappings,
+        command_templates: data.command_templates,
+        safety_flags: data.safety_flags,
+      };
+      const res = await persistProjectDicomConversionPlan(effectiveBase, projectId, body);
+      setPersistResult(res as DicomConversionPlanPersistenceResponse);
+    } catch (e) { setPersistError(e instanceof Error ? e.message : String(e)); }
+    finally { setPersisting(false); }
   }
 
   if (!projectId) return <Sect><H3>DICOM Conversion Review</H3><div className="empty">Select a project.</div></Sect>;
@@ -64,12 +88,43 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
         No files are written. No rawdata is modified. No external tools are executed.
       </div>
 
-      <button onClick={handleRun} disabled={loading} style={{ marginBottom: 12, padding: "8px 18px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
-        {loading ? "Running preflight..." : "Run conversion preflight"}
-      </button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <button onClick={handleRun} disabled={loading} style={{ padding: "8px 18px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
+          {loading ? "Running preflight..." : "Run conversion preflight"}
+        </button>
+        {data && (
+          <button onClick={handlePersist} disabled={persisting} style={{ padding: "8px 18px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
+            {persisting ? "Saving..." : "Persist review package"}
+          </button>
+        )}
+      </div>
 
       {loading && <div className="empty" style={{ marginBottom: 12 }}>Running conversion preflight...</div>}
       {!data && !loading && <div className="empty" style={{ marginBottom: 12 }}>Click the button above to run a conversion readiness preflight.</div>}
+
+      {/* Persist result */}
+      {persistError && <div className="errorBox" style={{ marginBottom: 10, fontSize: 11 }}>{persistError}</div>}
+      {persistResult && (
+        <div style={{ marginBottom: 12, padding: 10, border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6, background: "rgba(239, 246, 255, 0.88)", fontSize: 11 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6, color: "#2450a6" }}>
+            Review package persisted · status: {persistResult.status}
+          </div>
+          <div style={{ color: "#9a5a15", marginBottom: 6 }}>
+            This saves review metadata only. It does not run conversion.
+          </div>
+          {persistResult.conversion_run_id && (
+            <div style={mono}>run: {persistResult.conversion_run_id}</div>
+          )}
+          {persistResult.reservation && (
+            <div style={{ display: "grid", gap: 2, marginTop: 4 }}>
+              {persistResult.reservation.run_dir && <div style={mono}>dir: {persistResult.reservation.run_dir}</div>}
+              {persistResult.written_files.length > 0 && (
+                <div style={{ color: "#667085" }}>{persistResult.written_files.length} file(s) written</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {data && (
         <>

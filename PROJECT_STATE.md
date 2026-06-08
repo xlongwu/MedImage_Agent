@@ -911,12 +911,53 @@ purity/safety (3), checklist (2), policy helpers (2), model defaults (3).
 
 **0/14 go/no-go conditions met.  Real user-data conversion remains NO-GO.**
 
+## Phase 4E-0 — Approval-Gated Plan Persistence and Run-Directory Reservation
+
+Approval plan persistence and run-directory reservation have been implemented.
+No dcm2niix is executed.  No NIfTI files are created.
+
+### Schema extension
+
+`src/backend/app/schemas/dicom_conversion_approval.py` extended with:
+- `DicomConversionPersistenceStatus` (6 Literal values)
+- `DicomConversionRunReservation` (16 fields)
+- `DicomConversionPersistedPlan` (8 fields)
+- `DicomConversionPlanPersistenceResponse` (9 fields)
+- 5 pure helpers: `build_conversion_run_id()`, `build_conversion_run_paths()`,
+  `validate_conversion_run_paths()`, `is_reserved_run_directory_safe()`,
+  `summarize_persisted_conversion_plan()`
+
+### Service
+
+`src/backend/app/services/dicom_conversion_plan_persistence.py`:
+- `persist_conversion_plan()` — evaluates approval gate, reserves run directory
+  under `<project>/conversion_runs/<id>/`, writes 9 files (approval, audit,
+  preflight, mappings, templates, manifest, provenance, 2 logs, README)
+- No dcm2niix call, no NIfTI creation, no rawdata modification
+
+### Endpoint
+
+`POST /api/projects/{project_id}/conversion/approval/persist-plan`
+
+### Frontend
+
+- `DicomConversionReviewPanel` — added "Persist review package" button
+  with result display showing run ID, directory, and written file count
+- `api.ts` — added `persistProjectDicomConversionPlan()`
+- `types.ts` — added `DicomConversionRunReservation` and
+  `DicomConversionPlanPersistenceResponse`
+
+### Tests
+
+`tests/unit/test_dicom_conversion_plan_persistence.py` — 20 tests across
+7 groups: blocked approval, safe reservation, path safety, file writes (7),
+no NIfTI/dcm2niix, collision handling, pure helpers (5).
+
 ## Next recommended work
 
-1. **Phase 4E-0** — Approval-gated conversion plan persistence and run-directory
-   reservation.  Persist approval records, reserve run directories, plan
-   manifest/provenance paths.  Still no dcm2niix execution.
-2. Review Phase 4D deliverables with the project maintainer.
+1. **Phase 4E-1** — Persisted conversion review package UI polish and audit
+   export.  Full display of persisted package, zip export.  Still no conversion.
+2. Review Phase 4E-0 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.

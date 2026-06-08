@@ -316,3 +316,175 @@ def is_safe_overwrite_policy(
 ) -> bool:
     """Return True if *policy* is considered safe."""
     return policy in {"fail_if_exists", "write_new_run_directory"}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 5. Phase 4E-0 — Run reservation and plan persistence
+# ═══════════════════════════════════════════════════════════════════════
+
+DicomConversionPersistenceStatus = Literal[
+    "reserved",
+    "blocked",
+    "already_exists",
+    "invalid",
+    "disabled",
+    "failed",
+]
+
+
+class DicomConversionRunReservation(BaseModel):
+    """A reserved conversion run directory with planned artifact paths."""
+
+    project_id: str = ""
+    conversion_run_id: str = ""
+    run_dir: str | None = None
+    output_root: str | None = None
+    approval_record_path: str | None = None
+    audit_preview_path: str | None = None
+    preflight_snapshot_path: str | None = None
+    mapping_snapshot_path: str | None = None
+    command_templates_path: str | None = None
+    planned_manifest_path: str | None = None
+    planned_provenance_path: str | None = None
+    stdout_log_path: str | None = None
+    stderr_log_path: str | None = None
+    created_at: str | None = None
+    overwrite_policy: DicomConversionOverwritePolicy = "fail_if_exists"
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+class DicomConversionPersistedPlan(BaseModel):
+    """A complete persisted conversion plan with all snapshots."""
+
+    project_id: str = ""
+    conversion_run_id: str = ""
+    approval_record: DicomConversionApprovalRecord = Field(
+        default_factory=DicomConversionApprovalRecord
+    )
+    gate_decision: DicomConversionGateDecision = Field(
+        default_factory=DicomConversionGateDecision
+    )
+    preflight_snapshot: dict[str, Any] = Field(default_factory=dict)
+    mappings: list[dict[str, Any]] = Field(default_factory=list)
+    command_templates: list[dict[str, Any]] = Field(default_factory=list)
+    safety_flags: dict[str, bool] = Field(default_factory=dict)
+    reservation: DicomConversionRunReservation = Field(
+        default_factory=DicomConversionRunReservation
+    )
+
+
+class DicomConversionPlanPersistenceResponse(BaseModel):
+    """Response from persisting a conversion plan."""
+
+    ok: bool = False
+    status: DicomConversionPersistenceStatus = "blocked"
+    project_id: str = ""
+    conversion_run_id: str | None = None
+    reservation: DicomConversionRunReservation | None = None
+    gate_decision: DicomConversionGateDecision = Field(
+        default_factory=DicomConversionGateDecision
+    )
+    written_files: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    safety_flags: dict[str, bool] = Field(default_factory=dict)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 6. Phase 4E-0 — Pure helpers
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def build_conversion_run_id(
+    project_id: str,
+    mapping_hash: str = "",
+    timestamp: str | None = None,
+) -> str:
+    """Build a deterministic conversion run ID.
+
+    Pure function — no file I/O, no subprocess.
+    """
+    import hashlib
+    from datetime import datetime, timezone
+
+    ts = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    seed = f"{project_id}:{mapping_hash}:{ts}"
+    short = hashlib.sha256(seed.encode()).hexdigest()[:12]
+    return f"conv-{short}"
+
+
+def build_conversion_run_paths(
+    project_dir: str,
+    conversion_run_id: str,
+) -> dict[str, str]:
+    """Build the planned file paths for a conversion run reservation.
+
+    Pure function — no file I/O, no path creation.
+    """
+    run_dir = f"{project_dir}/conversion_runs/{conversion_run_id}"
+    logs_dir = f"{run_dir}/logs"
+    return {
+        "run_dir": run_dir,
+        "output_root": run_dir,
+        "approval_record_path": f"{run_dir}/approval_record.json",
+        "audit_preview_path": f"{run_dir}/audit_preview.json",
+        "preflight_snapshot_path": f"{run_dir}/preflight_snapshot.json",
+        "mapping_snapshot_path": f"{run_dir}/mapping_snapshot.json",
+        "command_templates_path": f"{run_dir}/command_templates.json",
+        "planned_manifest_path": f"{run_dir}/planned_output_manifest.json",
+        "planned_provenance_path": f"{run_dir}/planned_execution_provenance.json",
+        "stdout_log_path": f"{logs_dir}/stdout.log",
+        "stderr_log_path": f"{logs_dir}/stderr.log",
+        "readme_path": f"{run_dir}/README.md",
+    }
+
+
+def validate_conversion_run_paths(
+    paths: dict[str, str],
+    project_dir: str,
+    rawdata_dir: str = "",
+) -> tuple[bool, list[str]]:
+    """Validate that all run paths are under project_dir and not under rawdata.
+
+    Returns ``(ok, issues)``.  Pure function — no file I/O.
+    """
+    issues: list[str] = []
+    for key, path in paths.items():
+        if key == "output_root":
+            continue
+        if path and not path.startswith(project_dir):
+            issues.append(f"{key}: {path} is not under project_dir")
+        if path and rawdata_dir and path.startswith(rawdata_dir):
+            issues.append(f"{key}: {path} is under rawdata_dir")
+    return len(issues) == 0, issues
+
+
+def is_reserved_run_directory_safe(
+    reservation: DicomConversionRunReservation,
+    project_dir: str,
+    rawdata_dir: str = "",
+) -> bool:
+    """Return True if all reserved paths are safe."""
+    paths = {
+        "run_dir": reservation.run_dir or "",
+        "approval_record_path": reservation.approval_record_path or "",
+        "output_root": reservation.output_root or "",
+    }
+    ok, _ = validate_conversion_run_paths(paths, project_dir, rawdata_dir)
+    return ok
+
+
+def summarize_persisted_conversion_plan(
+    plan: DicomConversionPersistedPlan,
+) -> dict[str, Any]:
+    """Aggregate summary of a persisted conversion plan."""
+    return {
+        "project_id": plan.project_id,
+        "conversion_run_id": plan.conversion_run_id,
+        "approval_status": plan.approval_record.status,
+        "gate_status": plan.gate_decision.status,
+        "mapping_count": len(plan.mappings),
+        "template_count": len(plan.command_templates),
+        "run_dir": plan.reservation.run_dir,
+    }

@@ -287,6 +287,18 @@ export async function runProjectDicomConversionPreflight(
   );
 }
 
+export async function persistProjectDicomConversionPlan(
+  baseUrl: string,
+  projectId: string,
+  body: Record<string, unknown>,
+) {
+  return requestJson<import("./types").DicomConversionPlanPersistenceResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/conversion/approval/persist-plan`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
 export async function listPipelinePresets(baseUrl: string) {
   return requestJson<{ ok: boolean; presets: PipelinePreset[] }>(
     baseUrl,

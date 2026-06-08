@@ -345,15 +345,68 @@ Before real user-data conversion can be enabled:
 
 ---
 
-## 21. Immediate Next Task — Phase 4E-0
+## 21. Phase 4E-0 — Approval Persistence and Run-Directory Reservation
 
-**Approval-gated conversion plan persistence and run-directory reservation.**
+**Implemented.**  This section records the Phase 4E-0 contract after implementation.
 
-- Persist the approval record to the project store
-- Reserve a run directory under `<project>/outputs/work/<run_id>/`
-- Plan manifest and provenance paths
-- Still no dcm2niix execution
-- Still no user-data conversion
+### 21.1 Purpose
+
+Phase 4E-0 adds persistence for approval records and run-directory reservation
+without executing dcm2niix.  It prepares the audit/run artifact structure
+required before future real DICOM-to-NIfTI conversion.
+
+### 21.2 What gets persisted
+
+- `approval_record.json` — full `DicomConversionApprovalRecord`
+- `audit_preview.json` — planned `DicomConversionAuditRecord`
+- `preflight_snapshot.json` — full preflight response at persist time
+- `mapping_snapshot.json` — conversion mappings at persist time
+- `command_templates.json` — dcm2niix command templates at persist time
+- `planned_output_manifest.json` — skeleton `OutputManifest`
+- `planned_execution_provenance.json` — skeleton `ExecutionProvenance`
+- `README.md` — human-readable summary explaining no conversion was executed
+
+### 21.3 What does NOT get executed
+
+- No dcm2niix invocation
+- No NIfTI file creation
+- No rawdata modification
+- No external tool execution
+
+### 21.4 Run directory layout
+
+```
+<project_dir>/conversion_runs/<conversion_run_id>/
+├── approval_record.json
+├── audit_preview.json
+├── preflight_snapshot.json
+├── mapping_snapshot.json
+├── command_templates.json
+├── planned_output_manifest.json
+├── planned_execution_provenance.json
+├── logs/
+│   ├── stdout.log  (empty placeholder)
+│   └── stderr.log  (empty placeholder)
+└── README.md
+```
+
+### 21.5 Endpoint
+
+`POST /api/projects/{project_id}/conversion/approval/persist-plan`
+
+- Evaluates approval gate before writing
+- Returns `status=blocked` for incomplete approval
+- Reserves run directory only when safe
+- Returns reservation paths and gate decision
+- No dcm2niix call, no NIfTI writes, no rawdata modification
+
+### 21.6 Immediate next task — Phase 4E-1
+
+**Persisted conversion review package UI polish and audit export.**
+
+- Full display of persisted approval/review package in the UI
+- Audit export bundle (zip of all persisted metadata)
+- Still no conversion execution
 
 ---
 
