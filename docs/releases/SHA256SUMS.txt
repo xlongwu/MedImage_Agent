@@ -1,4 +1,30 @@
-bf2ac0411a1f7467b1eaa3dbe582c298e4747d1ece36623e724c7cfeb6967e5a  MedImage Agent Setup.exe
-a1aa2ac4ffd9a5baaacd8c1808c500a2e8387d3d5b01b955121a6e49591631a7  MedImage Agent.exe
-54eae8608c18da50a49db33d7aa586c7833bd375377c7fd93cdb13c499063505  medimage-backend.exe
-293dabc75069a06e6f7b2d8b35e9a4ca734a58a3088eb46b6d9062420382732f  MedImage Agent.exe (launcher)
+# MedImage Agent v0.3.0-rc1 — SHA256SUMS
+# Build timestamp: 2026-06-08T15:53 UTC
+# Build: win-unpacked directory build (NSIS installer deferred — makensis "Can't open output file" on this environment)
+# Python: 3.11.15 (conda mamba env)
+# PyInstaller: 6.20.0
+# Electron: 31.7.7
+# electron-builder: 24.13.3
+
+# --- Backend sidecar (PyInstaller) ---
+5FCFC2EA380BA358573EE4AD1AA180B10DC8E5897C2CB4C883E77D52A7D10291  40289763  desktop/packaging/dist/backend/medimage-backend.exe
+
+# --- Backend sidecar (Electron resources copy) ---
+5FCFC2EA380BA358573EE4AD1AA180B10DC8E5897C2CB4C883E77D52A7D10291  40289763  desktop/electron/dist/win-unpacked/resources/backend/medimage-backend.bin
+
+# --- Electron win-unpacked executable ---
+1FA93C3471C11DC8128998C662C705104E4528B98901B61C8A25216ACDA424C5  180849664  desktop/electron/dist/win-unpacked/MedImage Agent.exe
+
+# --- Launcher fallback (PyInstaller, standalone) ---
+5E8DBA78D9BEA097C21064E0AAB8246C2F8876040432739B7FCE7DB0266B2D14  50141359  desktop/packaging/dist/launcher/MedImage Agent.exe
+
+# Notes:
+# - medimage-backend.exe and medimage-backend.bin are identical (same SHA256).
+# - The launcher fallback is a standalone PyInstaller build (~50 MB) that can
+#   start the backend without Electron.  It is a convenience fallback, not
+#   the primary desktop entry point.
+# - NSIS installer (MedImage Agent Setup.exe) and portable single-exe artifacts
+#   are NOT included in this build.  The NSIS build was blocked by makensis
+#   "Can't open output file" — a persistent environment-specific issue likely
+#   related to antivirus or NSIS 3.0.4.1 compatibility on this Windows build.
+# - All artifacts are unsigned (research-use only).
