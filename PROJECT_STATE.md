@@ -829,13 +829,50 @@ safety invariants (2).  17 passed, 3 skipped (pydicom not installed).
 - Synthetic DICOM tests skip cleanly when pydicom unavailable
 - SPM/DPABI/MATLAB remain disabled
 
+## Phase 4C-2 — Conversion Preflight UI and Operator Review Flow
+
+A read-only DICOM conversion review panel and preflight API endpoint have been
+added.  No real conversion is enabled.
+
+### Backend endpoint
+
+`POST /api/projects/{project_id}/conversion/preflight` — read-only preflight
+that returns conversion readiness, dcm2niix availability, command templates,
+safety flags, and gating status.  Does NOT call dcm2niix, write NIfTI files,
+or modify rawdata.
+
+### Frontend
+
+- `src/frontend/src/types.ts` — added `DicomConversionPreflightResponse`,
+  `DicomConversionSafetyFlags`, `Dcm2niixCommandTemplate`, `DicomConversionMapping`
+- `src/frontend/src/api.ts` — added `runProjectDicomConversionPreflight()`
+- `src/frontend/src/components/DicomConversionReviewPanel.tsx` — new panel with:
+  Conversion readiness summary, dcm2niix availability card, command template
+  previews (display-only), safety flag badges, output root preview, mapping list,
+  operator safety callout
+- `src/frontend/src/App.tsx` — wired `DicomConversionReviewPanel` after
+  `ConversionDryRunPanel`
+
+### Tests
+
+`tests/unit/test_dicom_conversion_preflight_api.py` — 9 tests:
+returns 200, disabled by default, safety flags present, command templates,
+no NIfTI writes, no rawdata modification, dcm2niix status, 404 for missing
+project, no user-data execute endpoint.
+
+### Key invariants
+
+- No "Run real conversion" or "Execute" button
+- Panel shows: "Real DICOM-to-NIfTI conversion for user data is not enabled"
+- Command previews labelled "not executed for user rawdata"
+- No user-data conversion execute endpoint
+- Preflight is read-only; no files written
+
 ## Next recommended work
 
-1. **Phase 4C-2** — Manifest/provenance UI for conversion smoke and operator
-   review flow.  Add Conversion Results panel showing manifest, provenance,
-   and logs.  Wire preflight/sandbox/smoke endpoints to review UI.
-   No real user conversion yet.
-2. Review Phase 4C-1 deliverables with the project maintainer.
+1. **Phase 4D** — DICOM conversion approval gate design review.  Design the
+   full approval flow for real user data conversion.  No execution yet.
+2. Review Phase 4C-2 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.

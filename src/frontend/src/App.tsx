@@ -3,6 +3,7 @@ import { createProjectFromDirectory, DEFAULT_API_BASE, getHealth } from "./api";
 import AdvancedModePanel from "./components/workflow/AdvancedModePanel";
 import BidsValidationPanel from "./components/BidsValidationPanel";
 import ConversionDryRunPanel from "./components/ConversionDryRunPanel";
+import DicomConversionReviewPanel from "./components/DicomConversionReviewPanel";
 import DataReadinessPanel from "./components/DataReadinessPanel";
 import BoldReferenceReadinessPanel from "./components/BoldReferenceReadinessPanel";
 import EnvironmentHealthPanel from "./components/EnvironmentHealthPanel";
@@ -599,6 +600,8 @@ export default function App() {
           <BidsValidationPanel baseUrl={baseUrl} projectId={selectedProjectId} />
 
           <ConversionDryRunPanel baseUrl={baseUrl} projectId={selectedProjectId} />
+
+          <DicomConversionReviewPanel baseUrl={baseUrl} projectId={selectedProjectId} />
 
           <EnvironmentHealthPanel baseUrl={baseUrl} />
 

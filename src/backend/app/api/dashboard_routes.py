@@ -881,6 +881,89 @@ def post_conversion_dry_run(
     return plan_conversion(project_id, request)
 
 
+@router.post("/api/projects/{project_id}/conversion/preflight")
+def post_conversion_preflight(
+    project_id: str,
+) -> dict[str, Any]:
+    """Read-only DICOM conversion preflight — never executes conversion.
+
+    Returns conversion readiness, dcm2niix availability, command templates,
+    safety flags, and gating status.  Does NOT call dcm2niix, write NIfTI
+    files, or modify rawdata.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.services.dicom_conversion_execution import (
+        check_dcm2niix_availability,
+        run_conversion_preflight,
+    )
+
+    preflight = run_conversion_preflight(project_id)
+
+    # Check dcm2niix availability independently
+    env_flags: dict[str, str] = {}
+    import os
+    for flag in [
+        "MEDIMAGE_ENABLE_DICOM_CONVERSION",
+        "MEDIMAGE_MATLAB_ENABLED",
+        "MEDIMAGE_SPM_SMOKE_ENABLED",
+        "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
+        "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+    ]:
+        env_flags[flag] = os.environ.get(flag, "")
+
+    availability = check_dcm2niix_availability(env=env_flags)
+
+    return {
+        "ok": preflight.ok,
+        "project_id": project_id,
+        "status": preflight.status,
+        "conversion_disabled_by_default": preflight.conversion_disabled_by_default,
+        "dcm2niix_available": availability.status == "available",
+        "dcm2niix_status": availability.status,
+        "dcm2niix_path": availability.executable_path,
+        "dcm2niix_version": availability.version,
+        "env_enabled": preflight.env_enabled,
+        "missing_env_flags": preflight.missing_env_flags,
+        "approval_required": preflight.approval_required,
+        "audit_required": preflight.audit_required,
+        "output_root_preview": preflight.output_root_preview,
+        "output_dir_safe": preflight.output_dir_safe,
+        "mapping_count": preflight.mapping_count,
+        "mappings": [
+            {
+                "subject_id": m.subject_id,
+                "modality": m.modality,
+                "suffix": m.suffix,
+                "task": m.task,
+                "source_path": m.source_path,
+                "suggested_relative_path": m.suggested_relative_path,
+                "confidence": m.confidence,
+            }
+            for m in preflight.mappings
+        ],
+        "command_templates": [
+            {
+                "tool": t.tool,
+                "executable": t.executable,
+                "input_dir": t.input_dir,
+                "output_dir": t.output_dir,
+                "filename_pattern": t.filename_pattern,
+                "compress": t.compress,
+                "bids_sidecar": t.bids_sidecar,
+                "create_bids": t.create_bids,
+                "command_preview": t.command_preview,
+            }
+            for t in preflight.command_templates
+        ],
+        "warnings": preflight.warnings,
+        "errors": preflight.errors,
+        "blocking_issues": preflight.blocking_issues,
+        "safety_flags": preflight.safety_flags.model_dump(),
+    }
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})

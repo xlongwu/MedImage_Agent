@@ -991,3 +991,65 @@ export type ProjectRunStateTimelineResponse = {
   warnings: string[];
   errors: string[];
 };
+
+/** Phase 4C — DICOM conversion preflight / review types */
+
+export type DicomConversionSafetyFlags = {
+  rawdata_read_only: boolean;
+  output_under_project: boolean;
+  no_shell_string: boolean;
+  command_template_only: boolean;
+  approval_required: boolean;
+  audit_required: boolean;
+  conversion_disabled_by_default: boolean;
+  env_flags_missing: boolean;
+  no_spm_dpabi_matlab: boolean;
+  clinical_use_prohibited: boolean;
+  research_use_only: boolean;
+};
+
+export type Dcm2niixCommandTemplate = {
+  tool: string;
+  executable: string;
+  input_dir: string;
+  output_dir: string;
+  filename_pattern: string;
+  compress: string;
+  bids_sidecar: boolean;
+  create_bids: boolean;
+  command_preview: string;
+};
+
+export type DicomConversionMapping = {
+  subject_id?: string | null;
+  modality: string;
+  suffix?: string | null;
+  task?: string | null;
+  source_path: string;
+  suggested_relative_path?: string | null;
+  confidence: string;
+};
+
+export type DicomConversionPreflightResponse = {
+  ok: boolean;
+  project_id: string;
+  status: string;
+  conversion_disabled_by_default: boolean;
+  dcm2niix_available: boolean;
+  dcm2niix_status: string;
+  dcm2niix_path?: string | null;
+  dcm2niix_version?: string | null;
+  env_enabled: boolean;
+  missing_env_flags: string[];
+  approval_required: boolean;
+  audit_required: boolean;
+  output_root_preview?: string | null;
+  output_dir_safe: boolean;
+  mapping_count: number;
+  mappings: DicomConversionMapping[];
+  command_templates: Dcm2niixCommandTemplate[];
+  warnings: string[];
+  errors: string[];
+  blocking_issues: string[];
+  safety_flags: DicomConversionSafetyFlags;
+};

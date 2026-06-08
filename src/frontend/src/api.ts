@@ -276,6 +276,17 @@ export async function runConversionDryRun(
   );
 }
 
+export async function runProjectDicomConversionPreflight(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<import("./types").DicomConversionPreflightResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/conversion/preflight`,
+    { method: "POST" },
+  );
+}
+
 export async function listPipelinePresets(baseUrl: string) {
   return requestJson<{ ok: boolean; presets: PipelinePreset[] }>(
     baseUrl,

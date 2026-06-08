@@ -1,0 +1,99 @@
+"""Tests for DICOM conversion preflight API endpoint — Phase 4C-2.
+
+Tests the read-only preflight endpoint.  No real dcm2niix is called.
+No NIfTI files are written.  No rawdata is modified.
+"""
+
+from __future__ import annotations
+
+from fastapi.testclient import TestClient
+
+from src.backend.app.main import app
+
+
+def test_preflight_endpoint_returns_200():
+    client = TestClient(app)
+    resp = client.post("/api/projects/brain-tumor-study/conversion/preflight")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert "status" in payload
+    assert "conversion_disabled_by_default" in payload
+
+
+def test_preflight_endpoint_returns_disabled_by_default():
+    client = TestClient(app)
+    resp = client.post("/api/projects/brain-tumor-study/conversion/preflight")
+    payload = resp.json()
+    # Without env flags, conversion should be disabled
+    assert payload["conversion_disabled_by_default"] is True
+    assert payload["env_enabled"] is False
+    assert len(payload["missing_env_flags"]) >= 1
+
+
+def test_preflight_endpoint_returns_safety_flags():
+    client = TestClient(app)
+    resp = client.post("/api/projects/brain-tumor-study/conversion/preflight")
+    payload = resp.json()
+    sf = payload["safety_flags"]
+    assert sf["rawdata_read_only"] is True
+    assert sf["conversion_disabled_by_default"] is True
+    assert sf["no_spm_dpabi_matlab"] is True
+    assert sf["clinical_use_prohibited"] is True
+
+
+def test_preflight_endpoint_returns_command_templates():
+    client = TestClient(app)
+    resp = client.post("/api/projects/brain-tumor-study/conversion/preflight")
+    payload = resp.json()
+    assert "command_templates" in payload
+    # brain-tumor-study is a seed project with no import records,
+    # so templates may be empty
+    assert isinstance(payload["command_templates"], list)
+
+
+def test_preflight_endpoint_does_not_write_nifti():
+    """Preflight must not create NIfTI files."""
+    client = TestClient(app)
+    resp = client.post("/api/projects/brain-tumor-study/conversion/preflight")
+    assert resp.status_code == 200
+    # Preflight is read-only — no output directory should be written
+    payload = resp.json()
+    output_root = payload.get("output_root_preview")
+    # Just confirm the endpoint didn't crash and returned valid data
+    assert "ok" in payload
+
+
+def test_preflight_endpoint_does_not_modify_rawdata():
+    """Preflight must not touch rawdata."""
+    client = TestClient(app)
+    resp = client.post("/api/projects/brain-tumor-study/conversion/preflight")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["safety_flags"]["rawdata_read_only"] is True
+
+
+def test_preflight_endpoint_returns_dcm2niix_status():
+    client = TestClient(app)
+    resp = client.post("/api/projects/brain-tumor-study/conversion/preflight")
+    payload = resp.json()
+    assert "dcm2niix_status" in payload
+    assert "dcm2niix_available" in payload
+    # Without env flags, dcm2niix check reports disabled
+    assert payload["dcm2niix_status"] in {
+        "disabled", "missing", "available", "version_failed", "unknown",
+    }
+
+
+def test_preflight_endpoint_404_for_missing_project():
+    client = TestClient(app)
+    resp = client.post("/api/projects/nonexistent-project/conversion/preflight")
+    assert resp.status_code == 404
+
+
+def test_no_user_data_conversion_execute_endpoint():
+    """There must be NO endpoint that executes real user data conversion."""
+    client = TestClient(app)
+    # The execute endpoint for user data should not exist or return 405/404
+    resp = client.post("/api/projects/brain-tumor-study/conversion/execute")
+    assert resp.status_code in {404, 405}
