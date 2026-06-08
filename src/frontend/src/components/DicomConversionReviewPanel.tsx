@@ -165,6 +165,26 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
           {data.errors.length > 0 && <div className="errorBox" style={{ marginBottom: 10, fontSize: 11 }}>{data.errors.join("\n")}</div>}
           {data.warnings.length > 0 && <Warn items={data.warnings} />}
 
+          {/* F. Approval Gate Requirements (read-only checklist) */}
+          <div style={{ marginTop: 12, marginBottom: 12 }}>
+            <h4 style={{ ...subH, display: "flex", alignItems: "center", gap: 8 }}>
+              Approval Gate Requirements
+              <span style={{ ...pill, background: "#ffebee", color: "#b53b3b", borderColor: "rgba(235, 87, 87, 0.26)" }}>NO-GO</span>
+            </h4>
+            <div style={{ padding: 8, border: "1px solid rgba(242, 153, 74, 0.28)", borderRadius: 6, background: "rgba(255, 251, 242, 0.94)", fontSize: 11, color: "#9a5a15", marginBottom: 8, lineHeight: 1.5 }}>
+              All 17 preconditions below must be satisfied before real user-data conversion can be enabled.
+              <strong> Real conversion remains disabled in this release.</strong>
+            </div>
+            <div style={{ display: "grid", gap: 3, fontSize: 11, maxHeight: 220, overflow: "auto" }}>
+              {APPROVAL_CHECKLIST.map((item, i) => (
+                <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", padding: "3px 6px", border: "1px solid rgba(137, 150, 171, 0.14)", borderRadius: 3, background: "#fff" }}>
+                  <span style={{ color: "#b53b3b", fontWeight: 700, width: 14 }}>☐</span>
+                  <span style={{ color: "#667085" }}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* No smoke results notice */}
           <div style={{ padding: 8, border: "1px solid rgba(137, 150, 171, 0.18)", borderRadius: 6, background: "#f9f9fb", fontSize: 11, color: "#667085", marginTop: 8 }}>
             No conversion smoke results have been generated. Real user-data conversion remains disabled.
@@ -194,6 +214,26 @@ function TemplateRow({ template }: { template: Dcm2niixCommandTemplate }) {
 
 function Warn({ items }: { items: string[] }) { return <div style={{ marginTop: 4, padding: 6, border: "1px solid rgba(242, 153, 74, 0.24)", borderRadius: 4, background: "rgba(255, 251, 242, 0.94)", color: "#9a5a15", fontSize: 11 }}>{items.slice(0, 3).map((w,i)=><div key={i}>{w}</div>)}</div>; }
 function M({ label, value }: { label: string; value: number | string }) { return <div style={{ padding: "8px 10px", border: "1px solid rgba(137, 150, 171, 0.24)", borderRadius: 6, background: "#fff", display: "grid", gap: 2, color: "#667085", fontSize: 11, fontWeight: 850 }}><span>{label}</span><strong>{value}</strong></div>; }
+
+const APPROVAL_CHECKLIST: string[] = [
+  "User approval record with all required fields",
+  "Audit record persisted before dcm2niix is called",
+  "confirm_execution=true",
+  "Conversion-specific approval ID",
+  "Selected mappings reviewed (operator confirms each mapping)",
+  "Output root under project output directory (validated)",
+  "Output root NOT under rawdata directory (validated)",
+  "Overwrite policy explicitly set",
+  "Rawdata read-only acknowledgement",
+  "Command templates reviewed",
+  "No shell string acknowledgement",
+  "dcm2niix availability verified (on PATH, version recorded)",
+  "All required environment flags present",
+  "Manifest and provenance paths planned",
+  "stdout/stderr log paths planned",
+  "Rollback/cleanup policy accepted",
+  "Clinical-use prohibition acknowledged",
+];
 
 const Sect: React.FC<{ children: React.ReactNode }> = ({ children }) => <section style={{ padding: 16, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(255, 255, 255, 0.88)", marginTop: 4 }}>{children}</section>;
 const H3: React.FC<{ children: React.ReactNode }> = ({ children }) => <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{children}</h3>;

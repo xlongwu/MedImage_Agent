@@ -868,11 +868,55 @@ project, no user-data execute endpoint.
 - No user-data conversion execute endpoint
 - Preflight is read-only; no files written
 
+## Phase 4D — DICOM Conversion Approval Gate Design Review
+
+A formal approval gate design review and schema have been completed.
+Real user-data conversion remains NO-GO.
+
+### Design document
+
+`docs/DICOM_CONVERSION_APPROVAL_GATE_DESIGN.md` — 21 sections covering:
+purpose, baseline, non-goals, threat model (7 threats), 17 required
+preconditions, approval record fields (21), audit record requirements,
+operator acknowledgements (8 explicit confirmations), output directory
+policy, rawdata read-only confirmation, mapping/command-template review,
+dcm2niix availability, env flags, safe allowlist (16 conditions),
+manifest/provenance, failure/rollback, frontend UX requirements,
+test strategy, go/no-go checklist (14 items, 0/14 met).
+
+### Schema module
+
+`src/backend/app/schemas/dicom_conversion_approval.py` — pure schema/helper:
+- `DicomConversionApprovalStatus` (6 values), `DicomConversionOverwritePolicy` (3),
+  `DicomConversionGateDecisionStatus` (5)
+- `DicomConversionApprovalRecord` (21 fields covering all 17 preconditions)
+- `DicomConversionAuditRecord` (14 fields)
+- `DicomConversionApprovalChecklist`, `DicomConversionGateDecision`
+- 5 pure helpers: `build_conversion_approval_checklist()`,
+  `is_conversion_approval_complete()`, `evaluate_conversion_approval_gate()`,
+  `requires_new_run_directory()`, `is_safe_overwrite_policy()`
+
+### Frontend
+
+`DicomConversionReviewPanel` — added "Approval Gate Requirements" section
+showing 17-item read-only checklist with NO-GO badge.
+
+### Tests
+
+`tests/unit/test_dicom_conversion_approval_schema.py` — 24 tests across
+7 groups: missing/incomplete (9), unsafe output root (2), approved path (3),
+purity/safety (3), checklist (2), policy helpers (2), model defaults (3).
+
+### Key decision
+
+**0/14 go/no-go conditions met.  Real user-data conversion remains NO-GO.**
+
 ## Next recommended work
 
-1. **Phase 4D** — DICOM conversion approval gate design review.  Design the
-   full approval flow for real user data conversion.  No execution yet.
-2. Review Phase 4C-2 deliverables with the project maintainer.
+1. **Phase 4E-0** — Approval-gated conversion plan persistence and run-directory
+   reservation.  Persist approval records, reserve run directories, plan
+   manifest/provenance paths.  Still no dcm2niix execution.
+2. Review Phase 4D deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
