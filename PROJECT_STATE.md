@@ -1112,11 +1112,47 @@ User rawdata conversion remains disabled.
 - User-data conversion still disabled (`run_conversion_execute()` blocked)
 - SPM/DPABI/MATLAB remain disabled
 
+## Phase 4H-1 — Rawdata Checksum Verification and Rollback Design
+
+Rawdata checksum snapshot/comparison and dry-run rollback design added.
+No conversion enabled.  No rawdata modified.
+
+### Schema
+
+`src/backend/app/schemas/dicom_conversion_safety.py` — pure schema/helper:
+- `RawdataChecksumSnapshot` (10 fields), `RawdataChecksumComparison` (10 fields)
+- `DicomConversionRollbackPlan` (9 fields), `DicomConversionRollbackResult` (8 fields)
+- 6 pure helpers: `build_rawdata_checksum_snapshot()`, `compare_rawdata_checksum_snapshots()`,
+  `is_rawdata_unchanged()`, `build_conversion_rollback_plan()`,
+  `run_conversion_rollback_dry_run()`, `summarize_rollback_plan()`
+
+### Service
+
+`src/backend/app/services/dicom_conversion_safety.py`:
+- `build_pre_conversion_rawdata_snapshot()` / `build_post_conversion_rawdata_snapshot()`
+- `compare_conversion_rawdata_snapshots()`
+- `build_conversion_output_rollback_plan()` / `run_conversion_output_rollback_dry_run()`
+- Dry-run only: never deletes files, never modifies rawdata
+
+### Tests
+
+`tests/unit/test_dicom_conversion_safety.py` — 16 tests across 5 groups:
+checksum snapshot (1), comparison (4), path safety (3), rollback plan (3),
+purity/safety (5).
+
+### Key invariants
+
+- Checksum verification is metadata-only (fingerprint + file count + size)
+- Rollback plan excludes rawdata paths
+- Dry-run deletes nothing
+- User-data conversion remains disabled
+- SPM/DPABI/MATLAB remain disabled
+
 ## Next recommended work
 
-1. **Phase 4H-1** — Rawdata checksum verification and rollback design.
-   Add pre/post checksum comparison for synthetic smoke.
-2. Review Phase 4H-0 deliverables with the project maintainer.
+1. **Phase 4H-2** — Approval/audit integration for checksum snapshots.
+   Wire checksum verification into the conversion execution path.
+2. Review Phase 4H-1 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
