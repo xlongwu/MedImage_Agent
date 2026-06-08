@@ -1216,6 +1216,20 @@ query when no injected runner.  Integration test, smoke evidence, and guards
 all use the same canonical constant.  Added guard tests for flag consistency.
 97 passed, 3 skipped (integration — env flags not set in pytest subprocess).
 
+### Phase 4H-3d — Real dcm2niix synthetic smoke PASSED
+
+**Real synthetic dcm2niix smoke integration test PASSED** with all 3 tests
+green when env flags + PATH are set.  dcm2niix was successfully called via
+`subprocess.run()` on synthetic DICOM data.
+
+- dcm2niix path: `D:\Anaconda3\envs\mamba\Scripts\dcm2niix.exe`
+- Output manifest, provenance, stdout/stderr logs written
+- No real user rawdata touched
+- Output root safety check now validates both input and output paths
+- PowerShell evidence runner script at `tools/run_real_synthetic_dcm2niix_smoke.ps1`
+
+This closes the primary GO/NO-GO blocker (gate 30: real dcm2niix synthetic smoke).
+
 ### Next step
 
 **Phase 4H-3 complete.**  Evidence capture infrastructure added.

@@ -837,15 +837,28 @@ def run_real_dcm2niix_synthetic_smoke(
 
     # ── 2. Input path safety ──
     input_str = str(input_dir.resolve())
+    output_str = str(output_root.resolve())
     blocked_patterns = ["DemoData", "FunRaw", "T1Raw", "rawdata", "BIDS"]
+    
+    # Check input path
     for pattern in blocked_patterns:
         if pattern.lower() in input_str.lower():
-            # Allow if explicitly under a synthetic tmp path (pytest tmpdir)
             if "pytest" in input_str.lower() or "tmp" in input_str.lower():
                 continue
             blocking.append(
                 f"Input path '{input_str}' appears to be real rawdata. "
                 f"Real dcm2niix smoke only accepts synthetic/test input."
+            )
+            break
+
+    # Check output root path
+    for pattern in blocked_patterns:
+        if pattern.lower() in output_str.lower():
+            if "pytest" in output_str.lower() or "tmp" in output_str.lower():
+                continue
+            blocking.append(
+                f"Output root '{output_str}' appears to be under rawdata. "
+                f"Real dcm2niix smoke output must be under a safe test directory."
             )
             break
 
