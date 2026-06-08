@@ -15,21 +15,15 @@ from pathlib import Path
 import pytest
 
 
-_ALL_FLAGS = {
-    "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-    "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE": "1",
-    "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE": "1",
-    "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION": "1",
-    "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE": "1",
-    "MEDIMAGE_MATLAB_ENABLED": "1",
-    "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
-    "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
-}
+from src.backend.app.services.dicom_conversion_execution import (
+    REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
+)
+
+_ALL_FLAGS = {name: "1" for name in REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS}
 
 
 def _all_flags_present() -> bool:
-    return all(os.environ.get(k) == "1" for k in _ALL_FLAGS)
+    return all(os.environ.get(k) == "1" for k in REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)
 
 
 def _dcm2niix_available() -> bool:

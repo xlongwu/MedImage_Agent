@@ -1208,6 +1208,14 @@ Fixed `env=None` → `os.environ` default in `run_real_dcm2niix_synthetic_smoke(
 and `run_synthetic_conversion_from_persisted_package()`.  Fixed test isolation
 in smoke evidence tests (monkeypatch.delenv).  95 passed.
 
+### Phase 4H-3c — Canonical flag list and version query fix
+
+Centralized 9-flag list as `REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS`.
+Fixed `check_dcm2niix_availability()` to use real `subprocess.run` for version
+query when no injected runner.  Integration test, smoke evidence, and guards
+all use the same canonical constant.  Added guard tests for flag consistency.
+97 passed, 3 skipped (integration — env flags not set in pytest subprocess).
+
 ### Next step
 
 **Phase 4H-3 complete.**  Evidence capture infrastructure added.

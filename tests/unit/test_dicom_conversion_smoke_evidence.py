@@ -13,17 +13,11 @@ from src.backend.app.services.dicom_conversion_smoke_evidence import (
     capture_synthetic_smoke_evidence,
 )
 
-_REQUIRED_FLAGS = [
-    "MEDIMAGE_ENABLE_DICOM_CONVERSION",
-    "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
-    "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
-    "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION",
-    "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE",
-    "MEDIMAGE_MATLAB_ENABLED",
-    "MEDIMAGE_SPM_SMOKE_ENABLED",
-    "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
-]
+from src.backend.app.services.dicom_conversion_execution import (
+    REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
+)
+
+_REQUIRED_FLAGS = list(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)
 
 
 def _clear_smoke_flags(monkeypatch):

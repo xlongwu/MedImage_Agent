@@ -341,6 +341,18 @@ def check_dcm2niix_availability(
             version = parse_dcm2niix_version(stdout)
         except Exception as exc:
             warnings.append(f"Version query failed: {exc}")
+    else:
+        # No injected runner — use real subprocess since env flags confirmed
+        try:
+            import subprocess as _sp
+            result = _sp.run(
+                [executable, "--version"],
+                capture_output=True, text=True, check=False,
+            )
+            stdout = result.stdout or ""
+            version = parse_dcm2niix_version(stdout)
+        except Exception as exc:
+            warnings.append(f"Version query via subprocess failed: {exc}")
 
     status = "available" if version else "version_failed"
 
@@ -753,7 +765,7 @@ def run_synthetic_dcm2niix_smoke(
 # 7b. Phase 4H-0 — Real dcm2niix smoke on synthetic DICOM only
 # ═══════════════════════════════════════════════════════════════════════
 
-_REAL_SMOKE_ENV_FLAGS: frozenset[str] = frozenset({
+REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS = (
     "MEDIMAGE_ENABLE_DICOM_CONVERSION",
     "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
     "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
@@ -763,7 +775,9 @@ _REAL_SMOKE_ENV_FLAGS: frozenset[str] = frozenset({
     "MEDIMAGE_SPM_SMOKE_ENABLED",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
     "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
-})
+)
+
+_REAL_SMOKE_ENV_FLAGS: frozenset[str] = frozenset(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)
 
 
 def _is_real_smoke_enabled(env: dict[str, str]) -> tuple[bool, list[str]]:
@@ -807,12 +821,14 @@ def run_real_dcm2niix_synthetic_smoke(
     # ── 1. Env flag check ──
     ok_flags, missing_flags = _is_real_smoke_enabled(effective_env)
     if not ok_flags:
+        missing_list = ', '.join(missing_flags) if missing_flags else "none"
         return DicomConversionSandboxResult(
             ok=False, status="disabled", mode="disabled",
             project_id="real_smoke",
             blocking_issues=[
                 f"Real dcm2niix smoke blocked: {len(missing_flags)} env "
-                f"flag(s) missing: {', '.join(missing_flags)}."
+                f"flag(s) missing. Missing: {missing_list}. "
+                f"Required flags: {', '.join(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)}"
             ],
             safety_flags=DicomConversionSafetyFlags(
                 conversion_disabled_by_default=True, env_flags_missing=True,
@@ -844,9 +860,12 @@ def run_real_dcm2niix_synthetic_smoke(
     # ── 3. Availability check ──
     avail = check_dcm2niix_availability(env=effective_env)
     if avail.status != "available":
+        detail = f"dcm2niix not available: status={avail.status}"
+        if avail.status == "version_failed":
+            detail += " (version query failed — check dcm2niix --version)"
         return DicomConversionSandboxResult(
             ok=False, status="blocked", mode="disabled", project_id="real_smoke",
-            blocking_issues=[f"dcm2niix not available: {avail.status}"],
+            blocking_issues=[detail],
             safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
         )
 

@@ -143,3 +143,21 @@ def test_spm_dpabi_matlab_still_disabled():
     assert "import spm" not in source.lower()
     assert "import matlab" not in source.lower()
     assert "import dpabi" not in source.lower()
+
+
+def test_canonical_flag_list_has_9_flags():
+    """The canonical required-flags constant must have exactly 9 entries."""
+    from src.backend.app.services.dicom_conversion_execution import (
+        REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
+    )
+    assert len(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS) == 9
+    assert "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE" in REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS
+
+
+def test_canonical_flag_matches_env_gate():
+    """The service env gate must use the same flags as the canonical constant."""
+    from src.backend.app.services.dicom_conversion_execution import (
+        REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
+        _REAL_SMOKE_ENV_FLAGS,
+    )
+    assert frozenset(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS) == _REAL_SMOKE_ENV_FLAGS

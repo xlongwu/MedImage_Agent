@@ -28,19 +28,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+from src.backend.app.services.dicom_conversion_execution import (
+    REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
+)
+
 def _all_flags_present() -> bool:
-    required = [
-        "MEDIMAGE_ENABLE_DICOM_CONVERSION",
-        "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
-        "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
-        "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION",
-        "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE",
-        "MEDIMAGE_MATLAB_ENABLED",
-        "MEDIMAGE_SPM_SMOKE_ENABLED",
-        "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
-    ]
-    return all(os.environ.get(f) == "1" for f in required)
+    return all(os.environ.get(f) == "1" for f in REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)
 
 
 def _dcm2niix_available() -> bool:
@@ -65,17 +58,7 @@ def capture_synthetic_smoke_evidence() -> dict[str, Any]:
         return {
             "status": "skipped",
             "reason": "Required env flags not all set to '1'.",
-            "required_flags": [
-                "MEDIMAGE_ENABLE_DICOM_CONVERSION",
-                "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
-                "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
-                "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION",
-                "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE",
-                "MEDIMAGE_MATLAB_ENABLED",
-                "MEDIMAGE_SPM_SMOKE_ENABLED",
-                "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-                "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
-            ],
+            "required_flags": list(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS),
         }
 
     if not _dcm2niix_available():
