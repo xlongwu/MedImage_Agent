@@ -43,10 +43,13 @@ def _is_nifti(path: Path) -> bool:
 def _discover_nifti(project_id: str) -> list[Path]:
     """Discover NIfTI files from project metadata and image sources.
 
-    Falls back to the synthetic fixture and derivatives search roots.
+    Only uses synthetic fallback when the real project has no rawdata_dir
+    configured.  Real projects with a valid rawdata but no NIfTI return
+    an empty list (no synthetic pollution).
     """
     project = mock_store.get_project(project_id)
     paths: list[Path] = []
+    has_real_rawdata = False
 
     if project and project.metadata:
         metadata = project.metadata if isinstance(project.metadata, dict) else {}
@@ -54,18 +57,20 @@ def _discover_nifti(project_id: str) -> list[Path]:
         if rawdata_dir:
             rawdata = Path(rawdata_dir).expanduser().resolve()
             if rawdata.is_dir():
+                has_real_rawdata = True
                 paths.extend(_iter_nifti_files(rawdata))
 
-    # Fallback: existing preview search roots
-    search_roots = [
-        Path("examples/synthetic_bids/rawdata"),
-    ]
-    for root in search_roots:
-        resolved = root.expanduser().resolve()
-        if resolved.is_dir():
-            for p in _iter_nifti_files(resolved):
-                if str(p) not in {str(x) for x in paths}:
-                    paths.append(p)
+    # Only use synthetic fallback when no real rawdata is configured
+    if not has_real_rawdata:
+        search_roots = [
+            Path("examples/synthetic_bids/rawdata"),
+        ]
+        for root in search_roots:
+            resolved = root.expanduser().resolve()
+            if resolved.is_dir():
+                for p in _iter_nifti_files(resolved):
+                    if str(p) not in {str(x) for x in paths}:
+                        paths.append(p)
 
     # Deduplicate
     seen: set[str] = set()
@@ -241,8 +246,12 @@ def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
 
     # Status
     if not paths:
-        status = "blocked"
-        errors.append("No NIfTI files discovered in project or search roots.")
+        status = "warning"
+        all_warnings.append(
+            "No NIfTI (.nii / .nii.gz) files found in the project rawdata directory. "
+            "If the dataset contains DICOM (.dcm) files, run Conversion Dry-Run to "
+            "plan a DICOM-to-NIfTI conversion."
+        )
     elif readable_count == 0:
         status = "blocked"
         errors.append("No readable NIfTI images found.")
@@ -255,14 +264,15 @@ def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
 
     next_actions: list[str] = []
     if not paths:
-        next_actions.append("Import or configure a project with NIfTI data.")
+        next_actions.append("Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion if your dataset contains DICOM files.")
+        next_actions.append("Import or configure a project with NIfTI data if direct NIfTI analysis is required.")
     if unreadable_count > 0:
         next_actions.append("Review unreadable images — they may be corrupted or not NIfTI.")
     if warning_count > 0:
         next_actions.append("Review QC warnings for image quality issues.")
 
     return NiftiQcSnapshotResponse(
-        ok=status != "blocked",
+        ok=True,  # Always ok — missing NIfTI is a warning, not a failure
         project_id=project_id,
         status=status,
         checked_at=now,

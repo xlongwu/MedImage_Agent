@@ -478,9 +478,24 @@ def _utc_now() -> str:
 
 
 def _preview_search_roots(extra_roots: Iterable[str | Path] | None = None) -> list[Path]:
-    roots: list[Path] = []
-    seen: set[str] = set()
-    for raw_root in [*PREVIEW_SEARCH_ROOTS, *(extra_roots or [])]:
+    extra_list = list(extra_roots or [])
+    # When real search roots are provided, do NOT include synthetic fallback
+    if extra_list:
+        roots: list[Path] = []
+        seen: set[str] = set()
+        for raw_root in extra_list:
+            root = Path(raw_root)
+            key = str(root.resolve()) if root.exists() else str(root)
+            if key in seen:
+                continue
+            seen.add(key)
+            roots.append(root)
+        return roots
+
+    # No real roots — use synthetic fallback only
+    roots = []
+    seen = set()
+    for raw_root in PREVIEW_SEARCH_ROOTS:
         root = Path(raw_root)
         key = str(root.resolve()) if root.exists() else str(root)
         if key in seen:
