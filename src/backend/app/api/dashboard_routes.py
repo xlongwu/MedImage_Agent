@@ -1037,6 +1037,70 @@ def post_conversion_persist_plan(
     return result.model_dump()
 
 
+@router.get("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}")
+def get_conversion_review_package(
+    project_id: str,
+    conversion_run_id: str,
+) -> dict[str, Any]:
+    """Read a persisted conversion review package — metadata only.
+
+    Does NOT call dcm2niix.  Does NOT read image data.  Does NOT modify
+    rawdata.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.services.dicom_conversion_review_package import (
+        read_conversion_review_package,
+    )
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+    rawdata_dir = str(metadata.get("rawdata_dir") or "")
+
+    result = read_conversion_review_package(
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        project_dir=project_dir,
+        rawdata_dir=rawdata_dir,
+    )
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}/export")
+def post_conversion_review_package_export(
+    project_id: str,
+    conversion_run_id: str,
+) -> dict[str, Any]:
+    """Export a metadata-only audit bundle of the review package.
+
+    Creates a ZIP file containing only whitelisted metadata files.
+    Excludes .dcm, .nii, .nii.gz, .img, .hdr files.
+    Does NOT call dcm2niix.  Does NOT include image data.
+    Does NOT modify rawdata.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.services.dicom_conversion_review_package import (
+        export_conversion_review_package,
+    )
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+    rawdata_dir = str(metadata.get("rawdata_dir") or "")
+
+    result = export_conversion_review_package(
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        project_dir=project_dir,
+        rawdata_dir=rawdata_dir,
+    )
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})

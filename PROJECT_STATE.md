@@ -953,11 +953,43 @@ No dcm2niix is executed.  No NIfTI files are created.
 7 groups: blocked approval, safe reservation, path safety, file writes (7),
 no NIfTI/dcm2niix, collision handling, pure helpers (5).
 
+## Phase 4E-1 — Persisted Review Package UI and Audit Export
+
+Review package reader, audit export, and UI polish have been added.
+No dcm2niix is executed.  Export contains metadata only — no image data.
+
+### Service
+
+`src/backend/app/services/dicom_conversion_review_package.py`:
+- `read_conversion_review_package()` — reads all 10 persisted files,
+  returns structured response with approval summary, mapping/template counts
+- `export_conversion_review_package()` — creates metadata-only ZIP audit
+  bundle with SHA256SUMS.txt, excludes .dcm/.nii/.nii.gz/.img/.hdr files
+- All exports include safety flags: metadata_only, no_image_data, no_conversion
+
+### Endpoints
+
+- `GET /api/projects/{id}/conversion/approval/packages/{run_id}` — read package
+- `POST /api/projects/{id}/conversion/approval/packages/{run_id}/export` — export ZIP
+
+### Tests
+
+`tests/unit/test_dicom_conversion_review_package.py` — 15 tests across
+3 groups: read package (5), export bundle (8), missing package (2).
+
+### Key invariants
+
+- Export contains only .json, .log, .md, .txt files
+- Export excludes .dcm, .nii, .nii.gz, .img, .hdr
+- Export uses relative paths, includes SHA256SUMS.txt
+- No dcm2niix called, no image data included, no rawdata modified
+
 ## Next recommended work
 
-1. **Phase 4E-1** — Persisted conversion review package UI polish and audit
-   export.  Full display of persisted package, zip export.  Still no conversion.
-2. Review Phase 4E-0 deliverables with the project maintainer.
+1. **Phase 4F-0** — controlled real dcm2niix conversion on synthetic-only
+   project using persisted approval package.  Verify manifest + provenance
+   + logs.  Still no user rawdata conversion.
+2. Review Phase 4E-1 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
