@@ -199,6 +199,14 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     # ── 5. Image validation ──
     validation_status = "unknown"
     validation_issues = 0
+
+    # Check for DICOM fallback BEFORE computing image_validation check status
+    has_dicom_fallback = False
+    if rawdata_dir:
+        ft_early = detect_funraw_t1raw_layout(rawdata_dir)
+        if ft_early.get("dicom_file_count", 0) > 0:
+            has_dicom_fallback = True
+
     try:
         validation = build_image_validation_report(
             project_id=project_id,
@@ -210,13 +218,19 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     except Exception as exc:
         warnings.append(f"IMAGE_VALIDATION_FAILED: {exc}")
 
+    # When DICOM data exists but no NIfTI, downgrade image_validation from fail to warning
+    check_status = (
+        "pass" if validation_status == "pass"
+        else "warning" if validation_status == "warning"
+        else "warning" if validation_status == "fail" and has_dicom_fallback and not image_source_count
+        else "fail" if validation_status == "fail"
+        else "unknown"
+    )
+
     checks.append(
         _build_check(
             "image_validation",
-            "pass" if validation_status == "pass"
-            else "warning" if validation_status == "warning"
-            else "fail" if validation_status == "fail"
-            else "unknown",
+            check_status,
             f"Image validation status: {validation_status}, {validation_issues} issue(s)."
             if image_source_count > 0
             else "Image validation not applicable — no image sources.",
@@ -228,13 +242,6 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     )
 
     if validation_status == "fail":
-        # Check if we have DICOM data (FunRaw/T1Raw detection runs in section 8
-        # but we can do a quick path check here)
-        has_dicom_fallback = False
-        if rawdata_dir:
-            ft_check = detect_funraw_t1raw_layout(rawdata_dir)
-            if ft_check.get("dicom_file_count", 0) > 0:
-                has_dicom_fallback = True
         if not has_dicom_fallback:
             errors.append("Image validation failed — review image validation issues.")
         else:
