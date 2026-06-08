@@ -672,16 +672,67 @@ and purity invariants (4 cases).
 - No frontend panels are added.
 - Rawdata remains read-only.
 
+## Phase 4B — DICOM Conversion Execution Safety Wrapper
+
+A safety wrapper for DICOM-to-NIfTI conversion has been designed and
+implemented as a service skeleton.  Real dcm2niix execution is disabled
+by default.
+
+### Contract
+
+`docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md` — 18 sections covering
+command-template policy, environment flag gating (5 flags required),
+approval/audit requirements, output directory safety, rawdata read-only
+invariant, failure handling, rollback/cleanup, test strategy, and
+Go/No-Go criteria.
+
+### Schema module
+
+`src/backend/app/schemas/dicom_conversion_execution.py` — pure schema/helper
+module defining 6 Literal type aliases (`DicomConversionMode`, `DicomConversionStatus`,
+`DicomConversionTool`, etc.), 7 Pydantic models (`Dcm2niixCommandTemplate`,
+`DicomConversionMapping`, `DicomConversionPreflight`, `DicomConversionExecutionRequest`,
+`DicomConversionExecutionResponse`, `DicomConversionFailureRecord`,
+`DicomConversionSafetyFlags`), and 6 pure helper functions.
+
+### Service skeleton
+
+`src/backend/app/services/dicom_conversion_execution.py` — preflight-only
+service that:
+- Reads project metadata and conversion dry-run mappings
+- Checks 5 environment flags (all required for execution)
+- Detects dcm2niix via `shutil.which` (no subprocess call)
+- Validates output root safety (under project, not under rawdata)
+- Builds dcm2niix command templates from dry-run mappings
+- Returns `conversion_disabled_by_default=true` in all responses
+- Does NOT call dcm2niix, write NIfTI files, or modify rawdata
+
+### Tests
+
+`tests/unit/test_dicom_conversion_execution_schema.py` — 31 tests across
+8 groups: mode/status literals, command template construction (FunRaw BOLD +
+T1Raw T1w), no-shell-string enforcement, disabled-by-default response,
+environment flag validation (4 cases), output root safety (6 cases),
+mapping summary, preflight model defaults, failure record fields, and
+purity invariants (5 cases).
+
+### Key invariants
+
+- `command_preview` is display-only — not an execution mechanism
+- `extra='forbid'` on `Dcm2niixCommandTemplate` — no raw shell fields
+- All safety flags default to safest values
+- 5 environment flags must all be `"1"` for preflight readiness
+- Output root must be under project dir, not under rawdata dir
+- No subprocess, no file writes, no external tool imports
+- No SPM/DPABI/MATLAB references in schema or service
+
 ## Next recommended work
 
-1. **Phase 4B planning** — DICOM conversion execution safety wrapper.
-   Design the dcm2niix command-template contract, conversion execution
-   request/response schemas, and synthetic smoke test.  dcm2niix execution
-   must remain disabled by default (requires env flag).
-2. Review the Phase 4A contract with the project maintainer and decide
-   on Phase 4B scope.
+1. **Phase 4C-0** — dcm2niix availability preflight + fake/sandbox runner.
+   Detect dcm2niix version, run synthetic conversion on mock DICOM data,
+   verify manifest/provenance generation.  All behind env flag.  Still
+   no real DICOM conversion of actual rawdata.
+2. Review the Phase 4B deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
-6. Consider a future `project_create_service` only if project creation routes
-   grow again.
