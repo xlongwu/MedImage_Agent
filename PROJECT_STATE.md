@@ -1254,9 +1254,43 @@ GO/NO-GO review rerun.  **Decision: CONDITIONAL GO.**
 
 `test_dicom_conversion_go_no_go_schema.py` — 12 passed (updated to CONDITIONAL GO)
 
+## Phase 4I-0 — Internal-Only User-Data Conversion Prototype
+
+Internal-only user-data DICOM conversion prototype implemented.
+No public endpoint.  No frontend button.  Default disabled.
+
+### Service
+
+`src/backend/app/services/dicom_conversion_execution.py` extended with:
+- `run_internal_user_dicom_conversion_from_persisted_package()` — 10-step pipeline:
+  env flag check (10 flags including `MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE`) →
+  read persisted review package → validate required files (approval, mapping, templates,
+  checksum, rollback) → output root safety → path traversal check → pre-conversion
+  checksum → dcm2niix availability → execute via argv list → post-conversion checksum
+  comparison → manifest + provenance + checksum_after write
+- Checksum changed → status="failed"
+- Shell metacharacters rejected
+- No public endpoint, no frontend button
+
+### Guard tests
+
+`tests/unit/test_dicom_conversion_internal_user_prototype_guards.py` — 7 tests:
+env flag gating (2), missing package (1), output root safety (1), existing safety (3).
+
+### Key invariants
+
+- `run_conversion_execute()` still blocked for normal users
+- 10 env flags required including internal-only prototype flag
+- Rawdata checksum before/after comparison
+- No shell=True, no shell metacharacters
+- No frontend execute button
+- SPM/DPABI/MATLAB remain disabled
+
 ### Next step
 
-**Phase 4I-0: Internal-only user-data conversion prototype behind env flags, no frontend execute button.**
+**Phase 4I-1: Controlled internal FunRaw/T1Raw conversion smoke on the real
+DemoData project.**  Set env flags, persist approval package, run conversion.
+No public endpoint.  No frontend button.
 `src/backend/app/services/dicom_conversion_smoke_evidence.py` provides
 `capture_synthetic_smoke_evidence()` which runs real dcm2niix on synthetic
 DICOM when all 9 env flags + dcm2niix + pydicom are available, and returns
