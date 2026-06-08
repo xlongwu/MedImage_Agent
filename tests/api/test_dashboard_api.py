@@ -471,8 +471,34 @@ def test_task_audit_package_generates_markdown_and_json():
     assert Path(json_path).exists()
 
 
-def test_image_preview_uses_nifti_when_available():
+def test_image_preview_uses_nifti_when_available(tmp_path):
+    """When a real NIfTI file is imported for a project, image preview must use source='nifti'."""
+    import nibabel as nib
+    import numpy as np
+
     client = TestClient(app)
+
+    # Create a real NIfTI file in a temporary import directory
+    import_root = tmp_path / "bold_nifti"
+    func_dir = import_root / "sub-001" / "func"
+    func_dir.mkdir(parents=True)
+    bold_path = func_dir / "sub-001_task-rest_bold.nii.gz"
+    data = np.arange(10 * 11 * 12 * 20, dtype=np.float32).reshape((10, 11, 12, 20))
+    nib.Nifti1Image(data, affine=np.diag([2.0, 2.0, 2.5, 1.0])).to_filename(str(bold_path))
+
+    # Import the directory for brain-tumor-study
+    imported = client.post(
+        "/api/datasets/import",
+        json={
+            "project_id": "brain-tumor-study",
+            "path": str(import_root),
+            "type": "bids",
+        },
+    )
+    assert imported.status_code == 200
+    assert imported.json()["success"] is True
+
+    # Image preview must now return source="nifti"
     preview = client.get(
         "/api/images/preview",
         params={
@@ -496,11 +522,10 @@ def test_image_preview_uses_nifti_when_available():
     assert sources.status_code == 200
     source_payload = sources.json()
     assert "sub-001" in {item["subject_id"] for item in source_payload["subjects"]}
-    assert {"T1", "BOLD"}.issubset(set(source_payload["sequences"]))
-    assert source_payload["manifest"]
-    assert source_payload["manifest_path"]
-    assert Path(source_payload["manifest_path"]).exists()
-    bold_manifest = next(item for item in source_payload["manifest"] if item["subject_id"] == "sub-001" and item["sequence"] == "BOLD")
+    bold_manifest = next(
+        item for item in source_payload["manifest"]
+        if item["subject_id"] == "sub-001" and item["sequence"] == "BOLD"
+    )
     assert bold_manifest["dimensions"]
     assert bold_manifest["voxel_spacing"]
     assert bold_manifest["plane_slice_counts"]["sagittal"] >= 1

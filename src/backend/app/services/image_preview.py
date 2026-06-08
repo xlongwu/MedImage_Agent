@@ -490,7 +490,12 @@ def _preview_search_roots(extra_roots: Iterable[str | Path] | None = None) -> li
                 continue
             seen.add(key)
             roots.append(root)
-        return roots
+        # If all extra roots are stale/non-existent, fall back to synthetic
+        # so that stale import records (e.g. from cleaned-up tmp_path tests)
+        # don't permanently block image preview.
+        if any(r.exists() for r in roots):
+            return roots
+        # Fall through to synthetic fallback
 
     # No real roots — use synthetic fallback only
     roots = []

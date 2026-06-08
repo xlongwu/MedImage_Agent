@@ -3,19 +3,12 @@
   "version": "0.3.0-alpha",
   "private": true,
   "type": "module",
-  "main": "electron/main.cjs",
   "scripts": {
-    "dev": "node electron/dev-runner.cjs",
-    "dev:renderer": "vite --host 127.0.0.1 --port 5173",
-    "dev:electron": "electron electron/main.cjs",
-    "dev:backend": "python -m uvicorn src.backend.app.main:app --app-dir ../.. --host 127.0.0.1 --port 8000",
+    "dev": "vite --host 127.0.0.1 --port 5173",
     "typecheck": "tsc --noEmit",
     "build": "tsc && vite build",
     "test:project-runs": "node scripts/project-runs-panel-smoke.cjs",
     "preview": "vite preview --host 127.0.0.1 --port 5173",
-    "desktop:check": "node electron/smoke-check.cjs",
-    "desktop:dev": "electron electron/main.cjs",
-    "desktop:build": "npm run build && electron-builder --config electron-builder.yml",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
@@ -30,8 +23,6 @@
   },
   "devDependencies": {
     "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "electron": "^31.7.7",
-    "electron-builder": "^24.13.3"
+    "@types/react-dom": "^19.2.3"
   }
 }
