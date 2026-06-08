@@ -1204,8 +1204,20 @@ Real dcm2niix has not been validated against synthetic DICOM in a non-skipped sm
 
 ### Next step
 
-**Phase 4H-3: Execute real dcm2niix synthetic smoke in controlled environment.**
-Set all 9 env flags, run on synthetic DICOM, record evidence.
+**Phase 4H-3 complete.**  Evidence capture infrastructure added.
+`src/backend/app/services/dicom_conversion_smoke_evidence.py` provides
+`capture_synthetic_smoke_evidence()` which runs real dcm2niix on synthetic
+DICOM when all 9 env flags + dcm2niix + pydicom are available, and returns
+structured evidence.  On this build environment, dcm2niix is not installed
+— evidence capture returns `status=skipped`.  Awaiting a compatible
+environment for real smoke execution.
+
+## Next recommended work
+
+1. **Phase 4H-3 execution** — Run `capture_synthetic_smoke_evidence()` on
+   a machine with dcm2niix installed and all 9 env flags set.  Record
+   the output as GO/NO-GO evidence.
+2. Review Phase 4H-3 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
