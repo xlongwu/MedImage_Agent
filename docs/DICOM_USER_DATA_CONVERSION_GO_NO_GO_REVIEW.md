@@ -1,0 +1,240 @@
+# DICOM User-Data Conversion GO/NO-GO Review — Phase 4G-0
+
+**Status:** Formal review — NO-GO for user-data conversion.
+**Version:** v1.0
+**Date:** 2026-06-08
+
+---
+
+## 1. Purpose and Scope
+
+This document performs a formal GO/NO-GO review for enabling real
+DICOM-to-NIfTI conversion on user rawdata in MedImage Agent.  It
+systematically evaluates all gating conditions, evidence from Phase 4
+tests, and remaining risks.
+
+---
+
+## 2. Current Implementation Baseline
+
+### 2.1 Completed capabilities
+
+| Phase | Capability | Status |
+|---|---|---|
+| 4B | DICOM-to-NIfTI safety wrapper | ✅ disabled by default |
+| 4C-0 | dcm2niix availability preflight + sandbox runner | ✅ |
+| 4C-1 | Synthetic dcm2niix smoke scaffold | ✅ |
+| 4C-2 | Conversion preflight UI + operator review | ✅ |
+| 4D | Approval gate design review (17 preconditions) | ✅ schema only |
+| 4E-0 | Approval plan persistence + run-dir reservation | ✅ writes 10 metadata files |
+| 4E-1 | Review package reader + metadata-only audit export | ✅ ZIP export |
+| 4F-0 | Synthetic-only persisted-package conversion smoke | ✅ 8 env flags, argv list |
+| 4F-1 | Smoke result viewer + release validation | ✅ 203 passed |
+
+### 2.2 What remains disabled
+
+| Capability | Status |
+|---|---|
+| Real user-data dcm2niix execution | ❌ NOT IMPLEMENTED |
+| User-data conversion execute endpoint | ❌ NOT PRESENT |
+| "Run conversion" button | ❌ NOT PRESENT |
+| SPM/DPABI/MATLAB execution | ❌ NOT IMPLEMENTED |
+| Safe allowlist expansion for external tools | ❌ NOT EXPANDED |
+| Full DPARSFA preprocessing | ❌ NOT IMPLEMENTED |
+
+---
+
+## 3. Threat Model Summary
+
+| Threat | Current Mitigation | Status |
+|---|---|---|
+| Accidental rawdata modification | Output root validation + read-only confirmation | ✅ |
+| Unreviewed output paths | Mapping review in approval record | ✅ schema |
+| Shell injection | Command-template-only; `extra='forbid'`; no raw shell strings | ✅ |
+| Untracked tool invocation | Audit record persisted before dcm2niix call | ✅ schema |
+| Silent conversion failure | stdout/stderr capture; manifest verification; provenance | ✅ |
+| Operator bypass | 17 approval fields required; no wildcard | ✅ schema |
+| Clinical misuse | Clinical-use prohibition checkbox required | ✅ schema |
+
+---
+
+## 4. Required Gates for User-Data Conversion
+
+### 4.1 Gate criteria table
+
+| # | Gate | Status | Evidence | Risk if Violated | Action Before GO |
+|---|---|---|---|---|---|
+| 1 | Real rawdata remains read-only | ✅ met | All tests check `rawdata_read_only`; `_preview_search_roots` validates | Data loss | Review pre/post checksum |
+| 2 | Output root under project dir | ✅ met | `validate_output_root_under_project()` tested | Data leak | Validate in gate |
+| 3 | Output root not under rawdata | ✅ met | `validate_output_root_not_under_rawdata()` tested | Rawdata corruption | Validate in gate |
+| 4 | Conversion run directory reserved | ✅ met | `persist_conversion_plan()` creates under `<project>/conversion_runs/` | Path collision | Use `fail_if_exists` |
+| 5 | Approval record persisted | ✅ met | `approval_record.json` written by Phase 4E-0 | No audit trail | Verify file exists |
+| 6 | Audit preview persisted | ✅ met | `audit_preview.json` written | Incomplete audit | Populate before exec |
+| 7 | Preflight snapshot persisted | ✅ met | `preflight_snapshot.json` written | Approval drift | Verify at gate time |
+| 8 | Mapping snapshot persisted | ✅ met | `mapping_snapshot.json` written | Wrong targets | Verify in gate |
+| 9 | Command template snapshot persisted | ✅ met | `command_templates.json` written | Wrong commands | Verify in gate |
+| 10 | Manifest/provenance planned | ✅ met | `planned_output_manifest.json` + `planned_execution_provenance.json` | Missing artifacts | Rewrite after exec |
+| 11 | Logs planned | ✅ met | `logs/stdout.log` + `logs/stderr.log` | Missing diagnostics | Capture during exec |
+| 12 | Rollback policy defined | ✅ schema | `DicomConversionApprovalRecord.rollback_policy_acknowledged` | Partial outputs | Implement cleanup |
+| 13 | Overwrite policy explicit | ✅ met | `overwrite_policy` field defaults to `fail_if_exists` | Data loss | Validate before exec |
+| 14 | dcm2niix availability checked | ✅ met | `check_dcm2niix_availability()` with fake runner | Tool missing | Re-check at exec time |
+| 15 | Env flags required | ✅ met | 8 flags required; `_is_persisted_synthetic_enabled()` | Accidental exec | All 8 must be `"1"` |
+| 16 | Command argv list only | ✅ met | All runners accept `list[str]`; `shell=True` never used | Shell injection | Code review |
+| 17 | No raw shell string | ✅ met | `Dcm2niixCommandTemplate` uses `extra='forbid'` | Shell injection | Code review |
+| 18 | Metadata-only audit export | ✅ met | `export_conversion_review_package()` excludes `.dcm/.nii` | Data leak | Maintain whitelist |
+| 19 | Review package readable | ✅ met | `read_conversion_review_package()` returns all 10 files | Missing context | Verify before exec |
+| 20 | Synthetic smoke validated | ✅ met | 12 tests in `test_dicom_conversion_persisted_synthetic_execution.py` | Unknown behavior | Pass before GO |
+| 21 | Synthetic result viewer validated | ✅ met | `read_synthetic_smoke_results()` returns metadata-only | Missing visibility | Available in UI |
+| 22 | Frontend has no real execute button | ✅ met | `DicomConversionReviewPanel` only has "Persist review package" | Operator error | Maintain |
+| 23 | Safe allowlist remains constrained | ✅ met | SPM/DPABI nodes excluded from allowlist | Unauthorized exec | Do not expand |
+| 24 | SPM/DPABI/MATLAB disabled | ✅ met | Guard tests in `test_spm_safe_allowlist_policy.py` | Preprocessing leak | Keep disabled |
+| 25 | Full preprocessing disabled | ✅ met | No preprocessing nodes registered | Scope creep | Keep disabled |
+| 26 | `run_conversion_execute()` blocked | ✅ met | Always returns `conversion_disabled=true` | Accidental exec | Maintain |
+| 27 | Approval gate schema complete | ✅ schema | `DicomConversionApprovalRecord` (17 preconditions) | Missing checks | Implement gate code |
+| 28 | Audit record persists before exec | ❌ partial | Schema exists; not integrated into execution path | Race condition | Gate integration needed |
+| 29 | Rawdata unchanged verified | ❌ missing | No checksum verification before/after synthetic smoke | Silent corruption | Add checksum check |
+| 30 | Real dcm2niix on synthetic DICOM | ❌ missing | Only fake runners used in tests; no real subprocess tested | Tool incompatibility | Real smoke test needed |
+| 31 | External DICOM smoke (1 subject) | ❌ missing | No test on real FunRaw/T1Raw | Layout incompatibility | Gated smoke needed |
+| 32 | Rollback tested | ❌ missing | No rollback implementation | Partial outputs | Implement + test |
+
+---
+
+## 5. Evidence Summary
+
+### 5.1 Test evidence
+
+All 203 Phase 4 tests pass (162 passed, 3 skipped pydicom, 41 regression passed). Synthetic smoke, approval schema, persistence, review, export, and result reader are all validated with realistic data flows.
+
+### 5.2 Synthetic-only conversion evidence
+
+`run_synthetic_conversion_from_persisted_package()` successfully:
+- Checks 8 env flags (returns disabled if any missing)
+- Reads persisted review package
+- Validates approval gate completeness
+- Refuses real rawdata paths (DemoData, FunRaw, T1Raw, rawdata, BIDS)
+- Checks dcm2niix availability
+- Builds argv list from command templates
+- Executes via injected runner (fake in tests)
+- Writes updated manifest and provenance
+
+### 5.3 Approval gate evidence
+
+- 17 preconditions defined in `DicomConversionApprovalRecord`
+- `evaluate_conversion_approval_gate()` returns blocked/incomplete/approved
+- Checklist builder shows all 17 items
+- Gate decision model supports all statuses
+
+### 5.4 Manifest/provenance/log evidence
+
+- `OutputManifest` and `ExecutionProvenance` schemas from Phase 3 are reused
+- Logs are written to `<run_dir>/logs/`
+- NIfTI outputs are metadata-only in the result viewer
+
+---
+
+## 6. Remaining Risks
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| dcm2niix not tested with real binary | High | Real smoke on synthetic DICOM before GO |
+| No rawdata checksum verification | High | Add pre/post checksum comparison |
+| Approval gate not integrated into execution | Medium | Wire gate into `run_conversion_execute` before GO |
+| Rollback not implemented | Medium | Add cleanup on failure |
+| External DICOM layout not smoke-tested | Medium | Test with real (but gated) FunRaw/T1Raw |
+| Audit record not persisted before exec | Medium | Gate integration needed |
+
+---
+
+## 7. GO / NO-GO Criteria
+
+### GO criteria (all must be met)
+
+1. All 25 "met" gates remain valid
+2. Real dcm2niix smoke on synthetic DICOM passes
+3. Rawdata checksum verification implemented
+4. Approval gate integrated into execution path
+5. Rollback implemented and tested
+6. Audit record persisted before dcm2niix call
+7. External DICOM smoke on 1 subject passes
+8. `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` as additional env flag
+9. Explicit maintainer approval recorded
+
+### NO-GO criteria (any triggers NO-GO)
+
+1. Any critical gate (1-7, 14-17, 22-26) is violated
+2. Real rawdata is modified during synthetic smoke
+3. dcm2niix produces corrupt outputs on synthetic data
+4. Shell string or `shell=True` found in execution path
+5. Safe allowlist is expanded without review
+6. Execute button is added without gate integration
+
+---
+
+## 8. Decision Matrix
+
+| Criterion | Weight | Score (0-3) | Notes |
+|---|---|---|---|
+| Safety wrapper completeness | High | 3 | All env flags, path validation, command-template enforcement |
+| Approval gate design | High | 2 | Schema complete; not integrated into execution |
+| Synthetic smoke validation | High | 1 | Fake runners only; no real dcm2niix tested |
+| Rawdata safety | High | 2 | Path validation; no checksum verification |
+| Manifest/provenance | Medium | 3 | Full schema reuse from Phase 3 |
+| Log capture | Medium | 3 | stdout/stderr paths planned and writable |
+| Rollback | Medium | 0 | Not implemented |
+| Audit persistence | Medium | 1 | Schema exists; not wired into execution |
+| Frontend safety | High | 3 | No execute button; clear operator warnings |
+| External tool isolation | High | 3 | Env flags + argv list + no shell |
+| Test coverage | Medium | 2 | 203 tests; no real dcm2niix |
+| Real smoke evidence | High | 0 | No real dcm2niix call on any data |
+
+**Weighted assessment**: Safety wrappers are strong; execution validation is missing. User-data conversion is **not ready**.
+
+---
+
+## 9. Final Recommendation
+
+### Decision: **NO-GO**
+
+**User-data DICOM conversion remains disabled.**
+
+**Rationale:**
+- Gating conditions 29-32 are not met (rawdata checksum, real dcm2niix smoke, external smoke, rollback).
+- The approval gate is designed but not integrated into the execution path.
+- Critical risk of dcm2niix incompatibility with real binary has not been tested.
+- Medium risk of silent data corruption without checksum verification.
+
+**What would be needed for CONDITIONAL GO:**
+- Real dcm2niix smoke on synthetic DICOM (Phase 4H-0)
+- Rawdata checksum verification in synthetic smoke
+- Approval gate integration into `run_conversion_execute()`
+- Additional env flag `MEDIMAGE_ALLOW_USER_DATA_CONVERSION`
+
+**What would be needed for full GO:**
+- All CONDITIONAL GO items plus
+- Rollback implementation and test
+- External DICOM smoke on 1 FunRaw subject
+- Audit record persistence before dcm2niix call
+- Maintainer approval recorded
+
+---
+
+## 10. Immediate Next Task — Phase 4H-0
+
+**Real dcm2niix smoke on synthetic DICOM (opt-in, env-gated, no execute button).**
+
+- Implement actual `subprocess.run([dcm2niix, ...])` behind all env flags
+- Use synthetic DICOM created by `dicom_synthetic_helpers.py` under `tmp_path`
+- Verify output NIfTI files exist and are valid
+- Verify rawdata unchanged
+- Add `MEDIMAGE_ALLOW_USER_DATA_CONVERSION` as final gate flag
+- Still no user-data conversion
+- Still no execute button
+- Still no SPM/DPABI/MATLAB
+
+---
+
+*End of GO/NO-GO review.  User-data DICOM conversion is NO-GO.
+The safety wrapper, approval gate design, and synthetic smoke
+infrastructure provide strong foundations, but real dcm2niix
+validation is required before any user-data conversion path
+can be considered.*

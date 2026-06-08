@@ -1042,11 +1042,52 @@ Full Phase 4 test suite: **162 passed, 3 skipped** (pydicom).
 Safety regression (Phase 2+3+SPM): **41 passed**.
 Total: **203 passed, 3 skipped**.
 
+## Phase 4G-0 — User-Data Conversion GO/NO-GO Review
+
+Formal GO/NO-GO review completed.  **Decision: NO-GO.**
+
+### Review document
+
+`docs/DICOM_USER_DATA_CONVERSION_GO_NO_GO_REVIEW.md` — 10 sections:
+implementation baseline, threat model, 32 gate criteria table,
+evidence summary (test/synthetic/approval/manifest/provenance/log),
+6 remaining risks, GO/NO-GO criteria, weighted decision matrix,
+final recommendation (NO-GO), rationale, next task.
+
+### Gate criteria summary
+
+- 26 of 32 gates **met** (safety wrapper, approval schema, persistence,
+  export, smoke scaffold, frontend safety, env flags, no shell)
+- 3 gates **partial** (rollback schema only, approval gate not integrated,
+  audit not wired into execution)
+- 4 gates **missing** (rawdata checksum, real dcm2niix smoke, external
+  DICOM smoke, rollback implementation)
+
+### Schema
+
+`src/backend/app/schemas/dicom_conversion_go_no_go.py`:
+- `DicomConversionGoNoGoCriterion`, `DicomConversionGoNoGoReview` models
+- `evaluate_go_no_go_criteria()` — 10 critical gate IDs
+- `build_default_go_no_go_review()` — reflects current Phase 4F-1 state
+- `summarize_missing_go_criteria()`, `is_conditional_go_allowed()`
+
+### Tests
+
+`tests/unit/test_dicom_conversion_go_no_go_schema.py` — 12 tests:
+decision logic (5), default review (4), purity (3).
+
+### Key decision
+
+**NO-GO.**  Real dcm2niix validation on synthetic DICOM, rawdata
+checksum verification, and rollback are required before any user-data
+conversion path can be considered.
+
 ## Next recommended work
 
-1. **Phase 4G-0** — User-data DICOM conversion GO/NO-GO review.  Review all
-   gating conditions, decide whether to enable real user-data conversion.
-2. Review Phase 4F-1 deliverables with the project maintainer.
+1. **Phase 4H-0** — Real dcm2niix smoke on synthetic DICOM (opt-in,
+   env-gated, no execute button).  Implement actual subprocess call
+   behind all flags.  Still no user-data conversion.
+2. Review Phase 4G-0 decision with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
