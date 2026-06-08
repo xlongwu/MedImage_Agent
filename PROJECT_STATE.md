@@ -1018,11 +1018,35 @@ fake runner execution (6), safety invariants (1).
 - No real dcm2niix called
 - SPM/DPABI/MATLAB remain disabled
 
+## Phase 4F-1 — Internal Smoke Result Viewer and Release Validation
+
+Internal synthetic smoke result reader and release validation completed.
+User rawdata conversion remains disabled.
+
+### Service
+
+`src/backend/app/services/dicom_conversion_review_package.py` extended with:
+- `read_synthetic_smoke_results(project_id, conversion_run_id, project_dir)` —
+  reads output manifest, provenance, stdout/stderr logs, and discovered output
+  artifacts.  NIfTI files are metadata-only (no image parsing).
+
+### Tests
+
+`tests/unit/test_dicom_conversion_smoke_results.py` — 7 tests:
+read manifest/provenance, created artifacts, nifti metadata_only,
+missing manifest warning, missing logs warning, safety flags, no subprocess.
+
+### Release validation
+
+Full Phase 4 test suite: **162 passed, 3 skipped** (pydicom).
+Safety regression (Phase 2+3+SPM): **41 passed**.
+Total: **203 passed, 3 skipped**.
+
 ## Next recommended work
 
-1. **Phase 4F-1** — Internal synthetic smoke result viewer and release
-   validation.  Display conversion results in UI.  Still no user conversion.
-2. Review Phase 4F-0 deliverables with the project maintainer.
+1. **Phase 4G-0** — User-data DICOM conversion GO/NO-GO review.  Review all
+   gating conditions, decide whether to enable real user-data conversion.
+2. Review Phase 4F-1 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.

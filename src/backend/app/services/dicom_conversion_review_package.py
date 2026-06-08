@@ -360,3 +360,163 @@ def export_conversion_review_package(
         errors=errors,
         safety_flags=_safety_flags(),
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 5. Smoke result reader — Phase 4F-1
+# ═══════════════════════════════════════════════════════════════════════
+
+
+class DicomConversionSmokeResultFile(BaseModel):
+    kind: str = "unknown"
+    path: str = ""
+    exists: bool = False
+    size_bytes: int | None = None
+    sha256: str | None = None
+    metadata_only: bool = True
+    warnings: list[str] = Field(default_factory=list)
+
+
+class DicomConversionSmokeResultResponse(BaseModel):
+    ok: bool = False
+    project_id: str = ""
+    conversion_run_id: str = ""
+    status: str = "unknown"
+    synthetic_only: bool = True
+    manifest_path: str | None = None
+    provenance_path: str | None = None
+    stdout_log_path: str | None = None
+    stderr_log_path: str | None = None
+    files: list[DicomConversionSmokeResultFile] = Field(default_factory=list)
+    safety_flags: dict[str, bool] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+def _smoke_safety_flags() -> dict[str, bool]:
+    return {
+        "synthetic_only": True,
+        "no_user_rawdata_conversion": True,
+        "no_rawdata_modified": True,
+        "no_image_preview": True,
+        "metadata_only": True,
+        "no_spm_dpabi_matlab": True,
+        "clinical_use_prohibited": True,
+    }
+
+
+def read_synthetic_smoke_results(
+    project_id: str,
+    conversion_run_id: str,
+    *,
+    project_dir: str = "",
+) -> DicomConversionSmokeResultResponse:
+    """Read synthetic smoke result metadata — metadata only, no image data.
+
+    Reads output manifest, execution provenance, stdout/stderr logs, and
+    discovered output files.  Does NOT parse NIfTI image contents.
+    Does NOT call dcm2niix.  Does NOT modify rawdata.
+    """
+    warnings: list[str] = []
+    errors: list[str] = []
+
+    if not project_dir:
+        return DicomConversionSmokeResultResponse(
+            ok=False, project_id=project_id, conversion_run_id=conversion_run_id,
+            errors=["project_dir required."],
+            safety_flags=_smoke_safety_flags(),
+        )
+
+    run_dir = Path(project_dir) / "conversion_runs" / conversion_run_id
+    if not run_dir.exists():
+        return DicomConversionSmokeResultResponse(
+            ok=False, project_id=project_id, conversion_run_id=conversion_run_id,
+            warnings=[f"Run directory not found: {run_dir}"],
+            safety_flags=_smoke_safety_flags(),
+        )
+
+    # Look for updated manifest/provenance (from Phase 4F-0 execution)
+    manifest_path = run_dir / "output_manifest.json"
+    provenance_path = run_dir / "execution_provenance.json"
+    stdout_path = run_dir / "logs" / "dcm2niix_stdout.log"
+    stderr_path = run_dir / "logs" / "dcm2niix_stderr.log"
+
+    # Also check planned files (from Phase 4E-0)
+    if not manifest_path.exists():
+        manifest_path = run_dir / "planned_output_manifest.json"
+    if not provenance_path.exists():
+        provenance_path = run_dir / "planned_execution_provenance.json"
+
+    files: list[DicomConversionSmokeResultFile] = []
+
+    manifest_exists, manifest_size, manifest_sha = _file_info(str(manifest_path))
+    files.append(DicomConversionSmokeResultFile(
+        kind="manifest", path=str(manifest_path),
+        exists=manifest_exists, size_bytes=manifest_size, sha256=manifest_sha,
+        warnings=[] if manifest_exists else ["Manifest not found."],
+    ))
+
+    prov_exists, prov_size, prov_sha = _file_info(str(provenance_path))
+    files.append(DicomConversionSmokeResultFile(
+        kind="provenance", path=str(provenance_path),
+        exists=prov_exists, size_bytes=prov_size, sha256=prov_sha,
+        warnings=[] if prov_exists else ["Provenance not found."],
+    ))
+
+    stdout_exists, stdout_size, stdout_sha = _file_info(str(stdout_path))
+    files.append(DicomConversionSmokeResultFile(
+        kind="stdout_log", path=str(stdout_path),
+        exists=stdout_exists, size_bytes=stdout_size,
+        warnings=[] if stdout_exists else ["Stdout log not found."],
+    ))
+
+    stderr_exists, stderr_size, stderr_sha = _file_info(str(stderr_path))
+    files.append(DicomConversionSmokeResultFile(
+        kind="stderr_log", path=str(stderr_path),
+        exists=stderr_exists, size_bytes=stderr_size,
+        warnings=[] if stderr_exists else ["Stderr log not found."],
+    ))
+
+    # Discover output artifacts (metadata only, no image parsing)
+    for p in sorted(run_dir.rglob("*")):
+        if not p.is_file():
+            continue
+        if p.name in {"output_manifest.json", "execution_provenance.json",
+                       "planned_output_manifest.json", "planned_execution_provenance.json",
+                       "dcm2niix_stdout.log", "dcm2niix_stderr.log"}:
+            continue  # Already handled above
+        ext = p.suffix.lower()
+        full_ext = "".join(p.suffixes).lower()
+        if ext in {".nii", ".gz"} or full_ext == ".nii.gz":
+            # NIfTI — metadata only
+            info = p.stat()
+            files.append(DicomConversionSmokeResultFile(
+                kind="nifti_output", path=str(p),
+                exists=True, size_bytes=info.st_size,
+                metadata_only=True,
+            ))
+        elif ext in {".json", ".log", ".md", ".txt"}:
+            info = p.stat()
+            files.append(DicomConversionSmokeResultFile(
+                kind="output_file", path=str(p),
+                exists=True, size_bytes=info.st_size,
+                metadata_only=True,
+            ))
+
+    status = "results_available" if manifest_exists else "no_results"
+
+    return DicomConversionSmokeResultResponse(
+        ok=len(errors) == 0,
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        status=status,
+        synthetic_only=True,
+        manifest_path=str(manifest_path) if manifest_exists else None,
+        provenance_path=str(provenance_path) if prov_exists else None,
+        stdout_log_path=str(stdout_path) if stdout_exists else None,
+        stderr_log_path=str(stderr_path) if stderr_exists else None,
+        files=files,
+        safety_flags=_smoke_safety_flags(),
+        warnings=warnings,
+        errors=errors,
+    )
