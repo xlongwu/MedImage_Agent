@@ -1202,6 +1202,12 @@ Real dcm2niix has not been validated against synthetic DICOM in a non-skipped sm
 
 `test_dicom_conversion_go_no_go_schema.py` — 12 passed (updated expectations)
 
+### Phase 4H-3b — Env handling and test isolation fix
+
+Fixed `env=None` → `os.environ` default in `run_real_dcm2niix_synthetic_smoke()`
+and `run_synthetic_conversion_from_persisted_package()`.  Fixed test isolation
+in smoke evidence tests (monkeypatch.delenv).  95 passed.
+
 ### Next step
 
 **Phase 4H-3 complete.**  Evidence capture infrastructure added.

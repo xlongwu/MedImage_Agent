@@ -802,10 +802,10 @@ def run_real_dcm2niix_synthetic_smoke(
     warnings: list[str] = []
     errors: list[str] = []
     blocking: list[str] = []
-    env = env or {}
+    effective_env = os.environ if env is None else env
 
     # ── 1. Env flag check ──
-    ok_flags, missing_flags = _is_real_smoke_enabled(env)
+    ok_flags, missing_flags = _is_real_smoke_enabled(effective_env)
     if not ok_flags:
         return DicomConversionSandboxResult(
             ok=False, status="disabled", mode="disabled",
@@ -842,7 +842,7 @@ def run_real_dcm2niix_synthetic_smoke(
         )
 
     # ── 3. Availability check ──
-    avail = check_dcm2niix_availability(env=env)
+    avail = check_dcm2niix_availability(env=effective_env)
     if avail.status != "available":
         return DicomConversionSandboxResult(
             ok=False, status="blocked", mode="disabled", project_id="real_smoke",
@@ -1005,10 +1005,10 @@ def run_synthetic_conversion_from_persisted_package(
     warnings: list[str] = []
     errors: list[str] = []
     blocking: list[str] = []
-    env = env or {}
+    effective_env = os.environ if env is None else env
 
     # ── 1. Env flag check ──
-    ok_flags, missing_flags = _is_persisted_synthetic_enabled(env)
+    ok_flags, missing_flags = _is_persisted_synthetic_enabled(effective_env)
     if not ok_flags:
         return DicomConversionSandboxResult(
             ok=False, status="disabled", mode="disabled",
