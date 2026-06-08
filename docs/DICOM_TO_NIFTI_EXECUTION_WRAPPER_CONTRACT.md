@@ -382,26 +382,115 @@ Retry/resume is NOT implemented in the current phase.
 
 ---
 
-## 18. Immediate Next Task — Phase 4C-0
+## 18. Phase 4C-0 — Availability Preflight and Fake/Sandbox Runner
 
-The recommended next step after Phase 4B is:
+### 18.1 Purpose
 
-**dcm2niix availability preflight + fake/sandbox runner.**
+Phase 4C-0 adds two new capabilities without enabling real DICOM conversion:
 
-- Detect `dcm2niix` on system PATH
-- Record `dcm2niix --version`
-- Run a fake/sandbox conversion with mock DICOM data
-- Verify command template validity
-- Verify output manifest and provenance generation
-- All behind `MEDIMAGE_ENABLE_DICOM_CONVERSION=1`
-- Still no real DICOM conversion of actual rawdata
+1. **dcm2niix availability preflight** — detect the tool, query its version,
+   and report readiness without executing conversion.
+2. **Fake/sandbox conversion runner** — simulate the conversion pipeline
+   (command templates, manifest, provenance, logs) without calling dcm2niix
+   or writing real NIfTI outputs.
 
-This keeps the safety boundary intact while progressively verifying each
-layer of the execution wrapper.
+All real conversion remains disabled by default.
+
+### 18.2 dcm2niix availability check contract
+
+```python
+def check_dcm2niix_availability(
+    executable: str = "dcm2niix",
+    env: Mapping[str, str] | None = None,
+    runner: Callable[..., Any] | None = None,
+) -> Dcm2niixAvailabilityCheck:
+```
+
+- Uses `shutil.which` for path detection (no subprocess).
+- Version query is performed only when a `runner` callable is explicitly
+  injected (for testing with fake/mock version output).
+- The `runner` must accept `[executable, "--version"]` as argv list, never
+  a shell string.
+- If env flags are missing, status is `disabled`.
+- If the tool is not found, status is `missing`.
+- If the tool is found but version cannot be queried, status is `version_failed`.
+- If the tool is found and version is read, status is `available`.
+
+### 18.3 Version check contract
+
+- Command: `[executable, "--version"]` (argv list).
+- Never `shell=True`.
+- Output is parsed for a version string (e.g. `"Chris Rorden's dcm2niix version v1.0.20230411"`).
+- Version string is stored in `Dcm2niixAvailabilityCheck.version`.
+
+### 18.4 Fake/sandbox runner purpose
+
+The sandbox runner exists to validate the full conversion execution pipeline
+(manifest, provenance, log capture) without calling dcm2niix or touching
+real rawdata.
+
+### 18.5 Sandbox modes
+
+| Mode | Behaviour |
+|---|---|
+| `disabled` | Always the default. Returns a disabled response. |
+| `fake_outputs` | Creates placeholder artifacts under a safe output root (test tmp_path only). Writes fake NIfTI path entries, a JSON sidecar path, stdout/stderr logs, an `OutputManifest`, and an `ExecutionProvenance`. No real files are created unless explicitly opted in by tests. |
+| `mock_subprocess` | Uses a monkeypatched `runner` callable in tests to simulate dcm2niix execution. The runner returns a fake `CompletedProcess`-like object with controlled stdout/stderr/returncode. |
+
+### 18.6 Synthetic output manifest policy
+
+- Fake outputs produce an `OutputManifest` using existing `OutputManifestItem` schemas.
+- Items include: NIfTI path (fake), JSON sidecar path (fake), stdout log, stderr log, manifest JSON, provenance JSON.
+- All items are marked `exists=false`, `verified=false` in fake mode (placeholders only).
+
+### 18.7 Provenance policy
+
+- `ExecutionProvenance` is written using the existing schema (`extra='forbid'`).
+- `backend="external"`, `command_template_id` set to the mapping index.
+- No shell command field.
+- Input DICOM path is recorded.
+- Output paths are recorded.
+
+### 18.8 Environment flag policy (unchanged from Phase 4B)
+
+All 5 environment flags must be `"1"` for real execution.  Sandbox mode
+respects the same gating but allows fake_outputs in test environments
+when the `runner` is explicitly injected.
+
+### 18.9 Real rawdata conversion remains disabled
+
+- No dcm2niix is called on real user rawdata.
+- No NIfTI outputs are written to real project directories.
+- All tests use fake data or monkeypatched runners.
+- Real conversion requires Phase 4C-1 with explicit approval.
+
+### 18.10 Go / No-Go criteria for Phase 4C-1 (real conversion smoke)
+
+- [ ] dcm2niix availability check passes on the target environment
+- [ ] Sandbox runner validates manifest/provenance/log generation
+- [ ] Fake outputs mode confirms the full artifact pipeline
+- [ ] Command templates are validated against mock DICOM paths
+- [ ] All 5 env flags are set
+- [ ] Synthetic DICOM smoke passes (dcm2niix on mock DICOM data, not real rawdata)
+- [ ] Output manifest is verified with real file sizes and checksums
+- [ ] Provenance is complete
+- [ ] Rawdata unchanged test passes on the synthetic smoke
+- [ ] Explicit maintainer approval recorded
+
+### 18.11 Immediate next task — Phase 4C-1
+
+**Controlled dcm2niix real conversion smoke on synthetic/mock DICOM only.**
+
+- Create synthetic DICOM data (tiny, valid DICOM using pydicom)
+- Run dcm2niix on the synthetic DICOM behind all env flags
+- Verify output NIfTI files exist and are valid
+- Verify manifest and provenance with real checksums
+- Still disabled for real user rawdata
+- Real user rawdata conversion requires Phase 4D
 
 ---
 
-*End of contract document.  This document defines the Phase 4B DICOM
-conversion execution safety wrapper.  Real dcm2niix execution is disabled
-by default.  Rawdata remains read-only.  Research-use only, not for
-clinical diagnosis.*
+*End of contract document.  The Phase 4B safety wrapper has been extended
+with Phase 4C-0 availability preflight and fake/sandbox runner.  Real
+dcm2niix execution remains disabled by default.  Rawdata remains read-only.
+Research-use only, not for clinical diagnosis.*

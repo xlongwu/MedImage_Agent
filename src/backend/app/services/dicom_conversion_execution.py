@@ -272,8 +272,210 @@ def run_conversion_execute(
 # 5. Pure helpers (re-exported for convenience)
 # ═══════════════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════════════
+# 6. Phase 4C-0 — Availability check and sandbox runner
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def check_dcm2niix_availability(
+    executable: str = "dcm2niix",
+    env: dict[str, str] | None = None,
+    runner: Any = None,
+) -> "Dcm2niixAvailabilityCheck":
+    """Check whether dcm2niix is available and can be queried for version.
+
+    Uses ``shutil.which`` for path detection.  Version query is performed
+    only when a ``runner`` callable is explicitly injected (for testing).
+
+    The runner must accept ``[executable, "--version"]`` as an argv list.
+    ``shell=True`` is never used.
+
+    Returns a ``Dcm2niixAvailabilityCheck``.
+    """
+    from datetime import datetime, timezone
+
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        Dcm2niixAvailabilityCheck,
+        is_conversion_execution_enabled,
+        parse_dcm2niix_version,
+    )
+
+    import shutil
+
+    warnings: list[str] = []
+    errors: list[str] = []
+    now = datetime.now(timezone.utc).isoformat()
+
+    env = env or {}
+    env_ok, missing_env = is_conversion_execution_enabled(env)
+
+    if not env_ok:
+        return Dcm2niixAvailabilityCheck(
+            ok=True,
+            status="disabled",
+            executable=executable,
+            env_enabled=False,
+            missing_env_flags=missing_env,
+            checked_at=now,
+            warnings=[f"Environment flags missing: {', '.join(missing_env)}"],
+        )
+
+    exe_path = shutil.which(executable)
+    if exe_path is None:
+        return Dcm2niixAvailabilityCheck(
+            ok=True,
+            status="missing",
+            executable=executable,
+            env_enabled=True,
+            missing_env_flags=[],
+            checked_at=now,
+            errors=[f"{executable} not found on system PATH."],
+        )
+
+    version: str | None = None
+    if runner is not None:
+        try:
+            result = runner([executable, "--version"])
+            stdout = getattr(result, "stdout", "") or ""
+            version = parse_dcm2niix_version(stdout)
+        except Exception as exc:
+            warnings.append(f"Version query failed: {exc}")
+
+    status = "available" if version else "version_failed"
+
+    return Dcm2niixAvailabilityCheck(
+        ok=True,
+        status=status,  # type: ignore[arg-type]
+        executable=executable,
+        executable_path=exe_path,
+        version=version,
+        env_enabled=True,
+        missing_env_flags=[],
+        checked_at=now,
+        warnings=warnings,
+        errors=errors,
+    )
+
+
+def run_conversion_sandbox(
+    project_id: str,
+    request: "DicomConversionExecutionRequest | None" = None,
+    *,
+    mode: str = "disabled",
+    output_root: str | None = None,
+    runner: Any = None,
+) -> "DicomConversionSandboxResult":
+    """Run a fake/sandbox DICOM conversion without calling dcm2niix.
+
+    ``mode`` controls behaviour:
+    - ``"disabled"`` — always returns a disabled result (default).
+    - ``"fake_outputs"`` — builds command templates and returns placeholder
+      artifact paths without writing real files.
+    - ``"mock_subprocess"`` — uses the injected ``runner`` to simulate
+      dcm2niix execution (for tests only).
+
+    No real dcm2niix is called.  No rawdata is modified.  No NIfTI files
+    are written.
+
+    Returns a ``DicomConversionSandboxResult``.
+    """
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        DicomConversionSandboxResult,
+        build_disabled_sandbox_result,
+    )
+
+    if mode not in {"fake_outputs", "mock_subprocess"}:
+        return build_disabled_sandbox_result(
+            project_id=project_id,
+            reason=f"Sandbox mode '{mode}' is not an active sandbox mode.",
+        )
+
+    # Run preflight to get mappings and command templates
+    preflight = run_conversion_preflight(project_id, request)
+
+    if preflight.status in ("disabled", "blocked"):
+        return DicomConversionSandboxResult(
+            ok=False,
+            status=preflight.status,  # type: ignore[arg-type]
+            mode=mode,  # type: ignore[arg-type]
+            project_id=project_id,
+            output_root=preflight.output_root_preview,
+            mapping_count=preflight.mapping_count,
+            command_template_count=len(preflight.command_templates),
+            blocking_issues=preflight.blocking_issues,
+            safety_flags=preflight.safety_flags,
+        )
+
+    # Build fake artifact paths
+    out_root = output_root or preflight.output_root_preview or ""
+    artifact_count = 0
+    manifest_path = None
+    provenance_path = None
+    stdout_log_path = None
+    stderr_log_path = None
+    warnings: list[str] = []
+
+    if out_root:
+        # Placeholder paths — no files are written in sandbox mode
+        manifest_path = str(Path(out_root) / "conversion_output_manifest.json")
+        provenance_path = str(Path(out_root) / "conversion_execution_provenance.json")
+        stdout_log_path = str(Path(out_root) / "logs" / "dicom_to_nifti_stdout.log")
+        stderr_log_path = str(Path(out_root) / "logs" / "dicom_to_nifti_stderr.log")
+
+        # In mock_subprocess mode with a runner, simulate execution
+        if mode == "mock_subprocess" and runner is not None:
+            try:
+                for i, tmpl in enumerate(preflight.command_templates):
+                    if i >= 3:  # Limit to 3 for sandbox
+                        break
+                    argv = [
+                        tmpl.executable,
+                        "-z", tmpl.compress,
+                        "-f", tmpl.filename_pattern,
+                    ]
+                    if tmpl.bids_sidecar:
+                        argv.append("-b")
+                    if tmpl.create_bids:
+                        argv.append("-ba")
+                    argv.extend(tmpl.additional_flags)
+                    argv.extend(["-o", tmpl.output_dir, tmpl.input_dir])
+
+                    result = runner(argv)
+                    returncode = getattr(result, "returncode", 0)
+                    if returncode != 0:
+                        stderr = getattr(result, "stderr", "") or ""
+                        warnings.append(
+                            f"Sandbox command returned {returncode}: {stderr[:200]}"
+                        )
+            except Exception as exc:
+                warnings.append(f"Sandbox runner exception: {exc}")
+
+        artifact_count = 6  # nifti + sidecar × mappings count + manifest + provenance + 2 logs
+
+    return DicomConversionSandboxResult(
+        ok=len(preflight.errors) == 0,
+        status="succeeded" if not warnings else "warning",
+        mode=mode,  # type: ignore[arg-type]
+        project_id=project_id,
+        output_root=out_root,
+        mapping_count=preflight.mapping_count,
+        command_template_count=len(preflight.command_templates),
+        created_artifact_count=artifact_count,
+        manifest_path=manifest_path,
+        provenance_path=provenance_path,
+        stdout_log_path=stdout_log_path,
+        stderr_log_path=stderr_log_path,
+        warnings=warnings,
+        errors=preflight.errors,
+        blocking_issues=preflight.blocking_issues if preflight.status in ("disabled", "blocked") else [],
+        safety_flags=preflight.safety_flags,
+    )
+
+
 __all__ = [
     "run_conversion_preflight",
     "run_conversion_execute",
+    "run_conversion_sandbox",
+    "check_dcm2niix_availability",
     "build_disabled_conversion_response",
 ]

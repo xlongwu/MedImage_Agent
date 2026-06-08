@@ -726,13 +726,63 @@ purity invariants (5 cases).
 - No subprocess, no file writes, no external tool imports
 - No SPM/DPABI/MATLAB references in schema or service
 
+## Phase 4C-0 — dcm2niix Availability Preflight and Fake/Sandbox Runner
+
+Phase 4C-0 adds availability detection and sandbox execution without enabling
+real DICOM conversion.
+
+### Contract update
+
+`docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md` Section 18 extended with:
+- dcm2niix availability check contract (path detection + version query via
+  injected runner, never `shell=True`)
+- Fake/sandbox runner contract (`fake_outputs` and `mock_subprocess` modes)
+- Synthetic output manifest and provenance policies
+- Go/No-Go criteria for future real conversion smoke (Phase 4C-1)
+
+### Schema extension
+
+`src/backend/app/schemas/dicom_conversion_execution.py` extended with:
+- `Dcm2niixAvailabilityStatus` — 5 Literal values
+- `DicomConversionSandboxMode` — 3 Literal values
+- `Dcm2niixAvailabilityCheck` model
+- `DicomConversionSandboxResult` model
+- `parse_dcm2niix_version()` pure helper
+- `is_dcm2niix_availability_ready()`, `requires_fake_or_sandbox_mode()`,
+  `build_disabled_sandbox_result()`, `summarize_sandbox_artifacts()`
+
+### Service implementation
+
+`src/backend/app/services/dicom_conversion_execution.py` extended with:
+- `check_dcm2niix_availability(executable, env, runner)` — path detection
+  via `shutil.which`, version query via injected runner, never `shell=True`
+- `run_conversion_sandbox(project_id, request, mode, output_root, runner)` —
+  `disabled` (default), `fake_outputs` (placeholder paths), `mock_subprocess`
+  (simulates dcm2niix via injected runner)
+- No real dcm2niix is called. No files are written. No rawdata modified.
+
+### Tests
+
+`tests/unit/test_dicom_conversion_availability.py` — 27 tests across 8 groups:
+version parsing (6), env flag gating (3), fake runner (3), sandbox disabled
+(4), mock subprocess (2), helper functions (3), safety invariants (5),
+safety flag defaults (2).
+
+### Key invariants
+
+- All sandbox modes default to `disabled`
+- `mock_subprocess` uses injected runner, never `subprocess.run` directly
+- Version query uses argv list, never `shell=True`
+- All safety flags default to safest values
+- No real rawdata conversion in any mode
+
 ## Next recommended work
 
-1. **Phase 4C-0** — dcm2niix availability preflight + fake/sandbox runner.
-   Detect dcm2niix version, run synthetic conversion on mock DICOM data,
-   verify manifest/provenance generation.  All behind env flag.  Still
-   no real DICOM conversion of actual rawdata.
-2. Review the Phase 4B deliverables with the project maintainer.
+1. **Phase 4C-1** — controlled dcm2niix real conversion smoke on synthetic
+   DICOM only.  Create synthetic DICOM data (tiny, pydicom), run dcm2niix
+   behind all env flags, verify output NIfTI + manifest + provenance.
+   Still disabled for real user rawdata.
+2. Review Phase 4C-0 deliverables with the project maintainer.
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.

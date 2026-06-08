@@ -407,6 +407,132 @@ def summarize_conversion_mappings(
     }
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# 5. Phase 4C-0 — Availability and Sandbox models
+# ═══════════════════════════════════════════════════════════════════════
+
+Dcm2niixAvailabilityStatus = Literal[
+    "available",
+    "missing",
+    "version_failed",
+    "disabled",
+    "unknown",
+]
+
+DicomConversionSandboxMode = Literal[
+    "fake_outputs",
+    "mock_subprocess",
+    "disabled",
+]
+
+
+class Dcm2niixAvailabilityCheck(BaseModel):
+    """Result of a dcm2niix availability and version check."""
+
+    ok: bool = True
+    status: Dcm2niixAvailabilityStatus = "unknown"
+    executable: str = "dcm2niix"
+    executable_path: str | None = None
+    version: str | None = None
+    env_enabled: bool = False
+    missing_env_flags: list[str] = Field(default_factory=list)
+    checked_at: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+class DicomConversionSandboxResult(BaseModel):
+    """Result of a fake/sandbox conversion run.
+
+    No real dcm2niix is called.  Artifact paths are placeholders unless
+    the test environment explicitly creates files under ``output_root``.
+    """
+
+    ok: bool = True
+    status: DicomConversionStatus = "disabled"
+    mode: DicomConversionSandboxMode = "disabled"
+    project_id: str = ""
+    output_root: str | None = None
+    mapping_count: int = 0
+    command_template_count: int = 0
+    created_artifact_count: int = 0
+    manifest_path: str | None = None
+    provenance_path: str | None = None
+    stdout_log_path: str | None = None
+    stderr_log_path: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    blocking_issues: list[str] = Field(default_factory=list)
+    safety_flags: DicomConversionSafetyFlags = Field(
+        default_factory=DicomConversionSafetyFlags
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# 6. Phase 4C-0 — Pure helper functions
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def is_dcm2niix_availability_ready(
+    check: Dcm2niixAvailabilityCheck,
+) -> bool:
+    """Return True if the availability check passes all gating conditions."""
+    return (
+        check.ok
+        and check.status == "available"
+        and check.env_enabled
+        and check.executable_path is not None
+    )
+
+
+def requires_fake_or_sandbox_mode(
+    mode: DicomConversionSandboxMode,
+) -> bool:
+    """Return True if *mode* is a non-disabled sandbox mode."""
+    return mode in {"fake_outputs", "mock_subprocess"}
+
+
+def summarize_sandbox_artifacts(
+    artifacts: list[str],
+) -> dict[str, int]:
+    """Count artifact types from a sandbox result."""
+    return {"total_count": len(artifacts)}
+
+
+def build_disabled_sandbox_result(
+    *,
+    project_id: str = "",
+    reason: str = "Sandbox conversion is disabled by default.",
+) -> DicomConversionSandboxResult:
+    """Build a standard disabled sandbox result."""
+    return DicomConversionSandboxResult(
+        ok=True,
+        status="disabled",
+        mode="disabled",
+        project_id=project_id,
+        blocking_issues=[reason],
+        safety_flags=DicomConversionSafetyFlags(),
+    )
+
+
+def parse_dcm2niix_version(stdout: str) -> str | None:
+    """Parse dcm2niix version from ``dcm2niix --version`` stdout.
+
+    Pure function — no subprocess.  Extracts a version string like
+    ``"v1.0.20230411"`` from the first line of output.
+    """
+    if not stdout:
+        return None
+    first_line = stdout.strip().split("\n")[0]
+    # Look for "version vX.Y.Z" or "vX.Y.Z" pattern
+    import re
+
+    match = re.search(r"v(\d+\.\d+\.\d+)", first_line)
+    if match:
+        return match.group(0)
+    return first_line.strip()[:80] if first_line.strip() else None
+
+
 def redact_command_preview(preview: str) -> str:
     """Redact potentially sensitive paths from a command preview string.
 
