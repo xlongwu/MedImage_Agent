@@ -379,7 +379,28 @@ passed all 3 tests with real `dcm2niix.exe`.
 
 ---
 
+---
+
+## 13. Phase 4I-1b — Real FunRaw/T1Raw Conversion Smoke Evidence
+
+**EXECUTED AND PASSED ✅** — Real `dcm2niix` conversion on the DemoData
+FunRaw/T1Raw DICOM project.
+
+| Item | Value |
+|---|---|
+| dcm2niix | `D:\Anaconda3\envs\mamba\Scripts\dcm2niix.exe` v1.0.20260416 |
+| Rawdata | 1104 DICOM, 3 subjects, 6 subject-modality groups |
+| Test | `test_internal_demo_conversion_smoke` — **PASSED** (10.5s) |
+| Checksum | **rawdata unchanged** |
+| Safety | `run_conversion_execute()` still blocked |
+
+**Gate 31 (external DICOM smoke) is now effectively MET.**
+
+Current status after Phase 4I-1b: **30/32 gates met, 2 partial.**
+
+---
+
 *End of GO/NO-GO review.  User-data DICOM conversion is CONDITIONAL GO
-for internal-only prototype only.  29 of 32 gates met.  Full GO still
-requires external DICOM smoke, approval/audit execution integration,
-and rollback implementation.  Research-use only, not for clinical diagnosis.*
+with 30/32 gates met after successful real FunRaw/T1Raw conversion smoke.
+Only rollback and approval/audit execution integration remain partial.
+Research-use only, not for clinical diagnosis.*

@@ -1288,23 +1288,34 @@ env flag gating (2), missing package (1), output root safety (1), existing safet
 
 ## Phase 4I-1 — Controlled Internal FunRaw/T1Raw Conversion Smoke
 
-Internal FunRaw/T1Raw conversion smoke scaffold deployed.  Integration test
-skips by default (needs 10 env flags + dcm2niix + dataset path).
+### Phase 4I-1b — Smoke EXECUTED AND PASSED ✅
 
-### Runner
+Real `dcm2niix` conversion on FunRaw/T1Raw DemoData PASSED with all safeties green.
 
-`tools/run_internal_funraw_t1raw_conversion_smoke.ps1` — sets 10 env flags,
-reads project/run IDs, calls the internal conversion function.
+| Item | Value |
+|---|---|
+| dcm2niix | `D:\Anaconda3\envs\mamba\Scripts\dcm2niix.exe` |
+| Version | `v1.0.20260416` (64-bit Windows) |
+| Rawdata | `D:\...\data\DemoData` (1104 DICOM, 3 subjects, 6 groups) |
+| Test | `test_internal_demo_conversion_smoke` — **PASSED** (10.5s) |
+| Status | `succeeded` |
+| Checksum | rawdata unchanged (before/after verified) |
+| Safety | `test_user_conversion_still_disabled` — **PASSED** |
 
-### Integration test
-
-`tests/integration/test_dicom_conversion_internal_funraw_t1raw_smoke.py` —
-2 tests, both skipped by default.  Requires `MEDIMAGE_INTERNAL_DICOM_SMOKE_RAWDATA_DIR`.
+Key evidence:
+- dcm2niix executed via argv list, never `shell=True`
+- Output manifest + provenance + stdout/stderr logs written
+- Rawdata checksum before/after comparison: **unchanged**
+- No output written under rawdata
+- No public endpoint added
+- No frontend button added
+- SPM/DPABI/MATLAB remain disabled
 
 ### Next step
 
-**Phase 4G-3: Final GO/NO-GO re-review after internal FunRaw/T1Raw smoke.**
-Set env flags, run the smoke, record evidence.
+**Phase 4G-3: Final GO/NO-GO review.**  Gate 31 (external DICOM smoke)
+is now effectively met by this real FunRaw/T1Raw conversion evidence.
+Only rollback and approval/audit integration remain partial.
 
 
 ## Next recommended work
