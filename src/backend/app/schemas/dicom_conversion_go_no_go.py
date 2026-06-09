@@ -169,7 +169,7 @@ def build_default_go_no_go_review() -> DicomConversionGoNoGoReview:
         DicomConversionGoNoGoCriterion(gate_id=28, label="Audit persists before exec", status="partial", evidence="Schema only; not integrated", risk="Race condition", action_before_go="Gate integration"),
         DicomConversionGoNoGoCriterion(gate_id=29, label="Rawdata unchanged verified", status="met", evidence="rawdata_checksum_before.json written by persist_conversion_plan(); 8 fields in approval record", risk="Silent corruption", action_before_go="Re-verify at exec time"),
         DicomConversionGoNoGoCriterion(gate_id=30, label="Real dcm2niix on synthetic DICOM", status="met", evidence="Phase 4H-3d: integration test PASSED with real dcm2niix.exe on synthetic DICOM", risk="Tool incompatibility", action_before_go="Done — smoke validated"),
-        DicomConversionGoNoGoCriterion(gate_id=31, label="External DICOM smoke (1 subj)", status="missing", evidence="No test on real FunRaw/T1Raw layout", risk="Layout incompatibility", action_before_go="Gated smoke on 1 subject"),
+        DicomConversionGoNoGoCriterion(gate_id=31, label="External DICOM smoke on real layout", status="met", evidence="Phase 4I-1b: internal FunRaw/T1Raw DemoData conversion PASSED — 1104 DICOM, 3 subjects, 6 groups", risk="Layout incompatibility", action_before_go="Done — smoke validated"),
         DicomConversionGoNoGoCriterion(gate_id=32, label="Rollback tested", status="partial", evidence="rollback_plan_dry_run.json written; dry-run tested; no real deletion", risk="Partial outputs", action_before_go="Implement real rollback"),
     ]
 
@@ -188,8 +188,9 @@ def build_default_go_no_go_review() -> DicomConversionGoNoGoReview:
         missing_count=missing,
         criteria=criteria,
         blocking_issues=[
-            "External DICOM smoke on real layout not tested (gate 31)",
+            "Rollback implementation is dry-run only (gate 32)",
+            "Approval/audit execution integration not wired (gate 28)",
         ],
-        recommendation="CONDITIONAL GO — internal-only prototype behind env flags, no frontend execute button. 29/32 gates met.",
-        next_step="Phase 4I-0: Internal-only user-data conversion prototype behind env flags, no frontend execute button.",
+        recommendation="CONDITIONAL GO MAINTAINED — 30/32 gates met, zero missing. Full GO blocked by rollback and audit integration.",
+        next_step="Phase 4J-0: Rollback implementation and approval/audit execution integration.",
     )

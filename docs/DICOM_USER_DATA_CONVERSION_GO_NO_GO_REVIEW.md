@@ -400,7 +400,58 @@ Current status after Phase 4I-1b: **30/32 gates met, 2 partial.**
 
 ---
 
+---
+
+## 14. Phase 4G-3 — Final Re-review After Internal FunRaw/T1Raw Smoke Evidence
+
+### 14.1 Evidence Added Since Phase 4G-2
+
+| Gate | Phase 4G-2 | Phase 4G-3 | Evidence |
+|---|---|---|---|
+| 30 | met | met | unchanged |
+| 31 | missing | **met** | Phase 4I-1b: real FunRaw/T1Raw DemoData conversion PASSED |
+| 32 | partial | partial | unchanged |
+
+### 14.2 Final Gate Summary
+
+| Status | Count |
+|---|---|
+| Met | **30 of 32** |
+| Partial | 2 (rollback, approval/audit execution integration) |
+| Missing | **0** |
+
+### 14.3 Final Phase 4G-3 Decision
+
+**Decision: CONDITIONAL GO MAINTAINED.  Full GO remains blocked.**
+
+**Rationale:**
+- 30/32 gates met.  All critical safety gates met.
+- Zero missing gates — the first time in this review's history.
+- Real dcm2niix validated on both synthetic and real FunRaw/T1Raw DICOM.
+- Rawdata checksum before/after verification is integrated.
+- Approval/audit schema is complete and persisted.
+- Remaining partial gates are productization: rollback execution, approval/audit wiring.
+
+**What blocks full GO:**
+1. Rollback is dry-run only — no real file cleanup implemented.
+2. Approval/audit execution integration is not wired into the conversion path.
+
+**CONDITIONAL GO conditions maintained:**
+- No public `/conversion/execute` endpoint
+- No frontend "Run conversion" button
+- `run_conversion_execute()` returns blocked for normal users
+- 10 env flags required for any real execution
+- SPM/DPABI/MATLAB remain disabled
+- Full preprocessing not enabled
+
+### 14.4 Required Next Task
+
+**Phase 4J-0: Rollback implementation and approval/audit execution integration.**
+Close the last 2 partial gates to enable full GO consideration.
+
+---
+
 *End of GO/NO-GO review.  User-data DICOM conversion is CONDITIONAL GO
-with 30/32 gates met after successful real FunRaw/T1Raw conversion smoke.
-Only rollback and approval/audit execution integration remain partial.
+with 30/32 gates met and zero missing gates.  Full GO is blocked by
+rollback implementation and approval/audit execution integration.
 Research-use only, not for clinical diagnosis.*

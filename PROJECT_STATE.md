@@ -1311,11 +1311,31 @@ Key evidence:
 - No frontend button added
 - SPM/DPABI/MATLAB remain disabled
 
+## Phase 4G-3 — Final GO/NO-GO Re-review
+
+**Decision: CONDITIONAL GO MAINTAINED.  30/32 gates met, zero missing.**
+
+### Key metrics
+
+- Gates met: **30 of 32** (up from 29)
+- Gates partial: 2 (rollback, approval/audit execution integration)
+- Gates missing: **0** (first time in review history)
+
+### Gate changes
+
+- Gate 31 (external DICOM smoke): missing → **met** (Phase 4I-1b evidence)
+- Gate 30 (synthetic smoke): unchanged met
+- Gate 32 (rollback): unchanged partial
+- Gate 28 (audit wiring): unchanged partial
+
+### Blocks to full GO
+
+1. Rollback is dry-run only
+2. Approval/audit execution integration not wired
+
 ### Next step
 
-**Phase 4G-3: Final GO/NO-GO review.**  Gate 31 (external DICOM smoke)
-is now effectively met by this real FunRaw/T1Raw conversion evidence.
-Only rollback and approval/audit integration remain partial.
+**Phase 4J-0: Rollback implementation and approval/audit execution integration.**
 
 
 ## Next recommended work
