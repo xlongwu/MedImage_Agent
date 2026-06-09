@@ -1286,17 +1286,26 @@ env flag gating (2), missing package (1), output root safety (1), existing safet
 - No frontend execute button
 - SPM/DPABI/MATLAB remain disabled
 
+## Phase 4I-1 — Controlled Internal FunRaw/T1Raw Conversion Smoke
+
+Internal FunRaw/T1Raw conversion smoke scaffold deployed.  Integration test
+skips by default (needs 10 env flags + dcm2niix + dataset path).
+
+### Runner
+
+`tools/run_internal_funraw_t1raw_conversion_smoke.ps1` — sets 10 env flags,
+reads project/run IDs, calls the internal conversion function.
+
+### Integration test
+
+`tests/integration/test_dicom_conversion_internal_funraw_t1raw_smoke.py` —
+2 tests, both skipped by default.  Requires `MEDIMAGE_INTERNAL_DICOM_SMOKE_RAWDATA_DIR`.
+
 ### Next step
 
-**Phase 4I-1: Controlled internal FunRaw/T1Raw conversion smoke on the real
-DemoData project.**  Set env flags, persist approval package, run conversion.
-No public endpoint.  No frontend button.
-`src/backend/app/services/dicom_conversion_smoke_evidence.py` provides
-`capture_synthetic_smoke_evidence()` which runs real dcm2niix on synthetic
-DICOM when all 9 env flags + dcm2niix + pydicom are available, and returns
-structured evidence.  On this build environment, dcm2niix is not installed
-— evidence capture returns `status=skipped`.  Awaiting a compatible
-environment for real smoke execution.
+**Phase 4G-3: Final GO/NO-GO re-review after internal FunRaw/T1Raw smoke.**
+Set env flags, run the smoke, record evidence.
+
 
 ## Next recommended work
 
