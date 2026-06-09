@@ -69,7 +69,7 @@ def test_default_review_is_conditional_go():
     assert review.decision == "CONDITIONAL_GO"
     assert review.missing_count == 0  # No missing gates!
     assert review.met_count >= 28  # 28 met + 2 partial = 30 total, 0 missing
-    assert "30/32" in review.recommendation
+    assert "31/32" in review.recommendation
 
 
 def test_default_review_has_all_criteria():

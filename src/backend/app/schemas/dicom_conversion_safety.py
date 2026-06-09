@@ -14,7 +14,7 @@ Reference:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -240,4 +240,152 @@ def summarize_rollback_plan(
         "removable_count": len(plan.removable_paths),
         "protected_count": len(plan.protected_paths),
         "rollback_allowed": plan.rollback_allowed,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 4J-0 — Real rollback execution
+# ═══════════════════════════════════════════════════════════════════════
+
+DicomConversionRollbackMode = Literal[
+    "dry_run",
+    "quarantine",
+    "delete",
+]
+
+
+class DicomConversionRollbackRequest(BaseModel):
+    """Request to execute a real rollback on conversion outputs."""
+
+    project_id: str = ""
+    conversion_run_id: str = ""
+    rollback_mode: DicomConversionRollbackMode = "dry_run"
+    confirm_rollback: bool = False
+    reason: str = ""
+    requested_by: str = ""
+    expected_output_root: str | None = None
+    expected_manifest_path: str | None = None
+
+
+class DicomConversionRollbackExecResult(BaseModel):
+    """Result of executing a real rollback."""
+
+    ok: bool = True
+    status: str = "dry_run"
+    mode: DicomConversionRollbackMode = "dry_run"
+    conversion_run_id: str = ""
+    output_root: str = ""
+    removed_paths: list[str] = Field(default_factory=list)
+    quarantined_paths: list[str] = Field(default_factory=list)
+    protected_paths: list[str] = Field(default_factory=list)
+    skipped_paths: list[str] = Field(default_factory=list)
+    rollback_manifest_path: str | None = None
+    rollback_provenance_path: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    safety_flags: dict[str, bool] = Field(default_factory=dict)
+
+
+def _rollback_safety_flags() -> dict[str, bool]:
+    return {
+        "rawdata_protected": True,
+        "output_under_project": True,
+        "no_path_traversal": True,
+        "manifest_bound": True,
+        "dry_run_default": True,
+        "confirmed": False,
+        "no_external_tools": True,
+        "clinical_use_prohibited": True,
+    }
+
+
+def validate_rollback_request(
+    request: DicomConversionRollbackRequest,
+) -> tuple[bool, list[str]]:
+    """Validate a rollback request. Returns (ok, issues)."""
+    issues: list[str] = []
+    if not request.conversion_run_id:
+        issues.append("conversion_run_id is required")
+    if request.rollback_mode not in {"dry_run", "quarantine", "delete"}:
+        issues.append(f"Invalid rollback_mode: {request.rollback_mode}")
+    if request.rollback_mode == "delete" and not request.confirm_rollback:
+        issues.append("Delete mode requires confirm_rollback=True")
+    return len(issues) == 0, issues
+
+
+def is_rollback_confirmed(
+    request: DicomConversionRollbackRequest,
+) -> bool:
+    """Return True if the rollback is explicitly confirmed."""
+    return request.confirm_rollback
+
+
+_PROTECTED_ROLLBACK_NAMES: frozenset[str] = frozenset({
+    "approval_record.json",
+    "audit_preview.json",
+    "preflight_snapshot.json",
+    "mapping_snapshot.json",
+    "command_templates.json",
+    "rawdata_checksum_before.json",
+    "rawdata_checksum_after.json",
+    "rawdata_checksum_comparison.json",
+    "rollback_plan_dry_run.json",
+    "planned_output_manifest.json",
+    "planned_execution_provenance.json",
+    "output_manifest.json",
+    "execution_provenance.json",
+    "README.md",
+})
+
+
+def classify_rollback_candidate(
+    path: str,
+    project_dir: str = "",
+    output_root: str = "",
+    rawdata_roots: list[str] | None = None,
+) -> str:
+    """Classify a path for rollback: removable, protected, or skipped."""
+    if not path or not output_root:
+        return "protected"
+    # Resolve the path
+    from pathlib import Path as _Path
+    rp = _Path(path).resolve()
+    rr = _Path(output_root).resolve()
+
+    # Check if under output_root
+    try:
+        rp.relative_to(rr)
+    except ValueError:
+        return "protected"  # Outside output_root
+
+    # Check rawdata
+    for root in (rawdata_roots or []):
+        try:
+            rp.relative_to(_Path(root).resolve())
+            return "protected"  # Under rawdata
+        except ValueError:
+            pass
+
+    # Check protected file names
+    if rp.name in _PROTECTED_ROLLBACK_NAMES:
+        return "protected"
+
+    # Check for path traversal
+    if ".." in path or ".." in str(rp):
+        return "protected"
+
+    return "removable"
+
+
+def build_rollback_result_summary(
+    result: "DicomConversionRollbackExecResult",
+) -> dict[str, Any]:
+    """Summarize a rollback execution result."""
+    return {
+        "status": result.status,
+        "mode": result.mode,
+        "removed_count": len(result.removed_paths),
+        "quarantined_count": len(result.quarantined_paths),
+        "protected_count": len(result.protected_paths),
+        "rollback_manifest_path": result.rollback_manifest_path,
     }

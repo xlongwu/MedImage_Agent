@@ -1333,9 +1333,37 @@ Key evidence:
 1. Rollback is dry-run only
 2. Approval/audit execution integration not wired
 
+## Phase 4J-0 — Generated-Output Rollback Implementation
+
+Real rollback implemented with 3 modes: dry-run, quarantine, delete.
+
+### Schema
+
+- `DicomConversionRollbackMode` (dry_run / quarantine / delete)
+- `DicomConversionRollbackRequest` (8 fields)
+- `DicomConversionRollbackExecResult` (14 fields)
+- `classify_rollback_candidate()`, `validate_rollback_request()`, `is_rollback_confirmed()`
+- 13 protected file names (approval, audit, checksum, provenance, readme)
+
+### Service
+
+`run_conversion_rollback()`:
+- dry_run: reports removable paths, deletes nothing
+- quarantine: moves files to `rollback_quarantine/<timestamp>/`
+- delete: deletes only with `confirm_rollback=True`
+- Always protects: rawdata, approval/audit/checksum/provenance, paths outside output_root, path traversal
+- Writes `rollback_manifest.json` + `rollback_provenance.json`
+
+### Tests
+
+`tests/unit/test_dicom_conversion_rollback.py` — 14 tests:
+dry-run (2), quarantine (2), delete (3), path safety (4), existing safety (3).
+
+### GO/NO-GO: Gate 32 (rollback) → met. 31/32 gates now met.
+
 ### Next step
 
-**Phase 4J-0: Rollback implementation and approval/audit execution integration.**
+**Phase 4J-1: Approval/audit execution integration.**  Only remaining partial gate.
 
 
 ## Next recommended work

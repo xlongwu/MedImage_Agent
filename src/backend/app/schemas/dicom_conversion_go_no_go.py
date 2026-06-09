@@ -170,7 +170,7 @@ def build_default_go_no_go_review() -> DicomConversionGoNoGoReview:
         DicomConversionGoNoGoCriterion(gate_id=29, label="Rawdata unchanged verified", status="met", evidence="rawdata_checksum_before.json written by persist_conversion_plan(); 8 fields in approval record", risk="Silent corruption", action_before_go="Re-verify at exec time"),
         DicomConversionGoNoGoCriterion(gate_id=30, label="Real dcm2niix on synthetic DICOM", status="met", evidence="Phase 4H-3d: integration test PASSED with real dcm2niix.exe on synthetic DICOM", risk="Tool incompatibility", action_before_go="Done — smoke validated"),
         DicomConversionGoNoGoCriterion(gate_id=31, label="External DICOM smoke on real layout", status="met", evidence="Phase 4I-1b: internal FunRaw/T1Raw DemoData conversion PASSED — 1104 DICOM, 3 subjects, 6 groups", risk="Layout incompatibility", action_before_go="Done — smoke validated"),
-        DicomConversionGoNoGoCriterion(gate_id=32, label="Rollback tested", status="partial", evidence="rollback_plan_dry_run.json written; dry-run tested; no real deletion", risk="Partial outputs", action_before_go="Implement real rollback"),
+        DicomConversionGoNoGoCriterion(gate_id=32, label="Rollback tested", status="met", evidence="Phase 4J-0: dry-run, quarantine, delete modes implemented; path protection verified; 14 tests passed", risk="Partial outputs", action_before_go="Done — rollback implemented"),
     ]
 
     met = sum(1 for c in criteria if c.status == "met")
@@ -188,9 +188,8 @@ def build_default_go_no_go_review() -> DicomConversionGoNoGoReview:
         missing_count=missing,
         criteria=criteria,
         blocking_issues=[
-            "Rollback implementation is dry-run only (gate 32)",
             "Approval/audit execution integration not wired (gate 28)",
         ],
-        recommendation="CONDITIONAL GO MAINTAINED — 30/32 gates met, zero missing. Full GO blocked by rollback and audit integration.",
-        next_step="Phase 4J-0: Rollback implementation and approval/audit execution integration.",
+        recommendation="CONDITIONAL GO MAINTAINED — 31/32 gates met, zero missing. Full GO blocked by audit integration only.",
+        next_step="Phase 4J-1: Approval/audit execution integration.",
     )
