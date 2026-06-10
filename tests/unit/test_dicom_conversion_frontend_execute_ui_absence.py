@@ -89,7 +89,7 @@ class TestFrontendOnClickAbsence:
             if "onClick" in stripped and (
                 "conversion/execute" in stripped
                 or "runProjectDicomConversionExecute" in stripped
-                or "handleExecute" in stripped
+                or ("handleExecute" in stripped and "handleExecutePreflight" not in stripped)
             ):
                 pytest.fail(
                     f"Execute onClick found at line {i}: {stripped[:120]}"

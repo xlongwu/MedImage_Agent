@@ -133,7 +133,7 @@ class TestFrontendExecuteAbsence:
                     "Run Conversion" in stripped
                     or "runConversion" in stripped
                     or "Execute Conversion" in stripped
-                    or "handleExecute" in stripped
+                    or ("handleExecute" in stripped and "handleExecutePreflight" not in stripped)
                     or "conversion/execute" in stripped
                 ):
                     pytest.fail(
