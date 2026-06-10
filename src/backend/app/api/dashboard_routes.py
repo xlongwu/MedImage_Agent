@@ -1734,6 +1734,41 @@ def get_preprocessing_run(
     return result.model_dump()
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# SPM/MATLAB runtime preflight — Phase 5C
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.get("/api/projects/{project_id}/preprocessing/spm-runtime/preflight")
+def get_spm_runtime_preflight(project_id: str) -> dict[str, Any]:
+    """Check MATLAB/SPM availability for synthetic smoke."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.services.spm_runtime import spm_runtime_preflight
+    result = spm_runtime_preflight(project_id)
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/spm-runtime/synthetic-smoke")
+def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
+    """Generate synthetic SPM Slice Timing + Realign smoke artifacts."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.spm_runtime import SpmSyntheticSmokeRequest
+    from src.backend.app.services.spm_runtime import run_synthetic_spm_smoke
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = SpmSyntheticSmokeRequest(
+        confirm_synthetic_only=body.get("confirm_synthetic_only", False),
+        confirm_no_user_rawdata=body.get("confirm_no_user_rawdata", False),
+        confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
+        confirm_research_use_only=body.get("confirm_research_use_only", False),
+        matlab_executable=body.get("matlab_executable", "matlab"),
+        spm_path=body.get("spm_path", ""),
+    )
+    result = run_synthetic_spm_smoke(project_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
