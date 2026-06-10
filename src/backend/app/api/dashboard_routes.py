@@ -1769,6 +1769,29 @@ def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str,
     return result.model_dump()
 
 
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/dry-run")
+def post_spm_slice_timing_realign_dry_run(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """SPM Slice Timing + Realign dry-run: batch preview, no MATLAB execution."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_spm_dry_run import SliceTimingRealignDryRunRequest
+    from src.backend.app.services.preprocessing_spm_dry_run import run_slice_timing_realign_dry_run
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = SliceTimingRealignDryRunRequest(
+        tr=body.get("tr"), num_slices=body.get("num_slices"),
+        slice_order=body.get("slice_order", ""), reference_slice=body.get("reference_slice"),
+        confirm_dry_run_only=body.get("confirm_dry_run_only", False),
+        confirm_no_matlab_execution=body.get("confirm_no_matlab_execution", False),
+        confirm_no_image_modification=body.get("confirm_no_image_modification", False),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+    )
+    result = run_slice_timing_realign_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
