@@ -630,17 +630,23 @@ def test_run_conversion_execute_still_blocked():
 
 
 def test_no_public_conversion_endpoint():
-    """Gate 16: No public /conversion/execute endpoint exists."""
+    """Gate 16: Public /conversion/execute endpoint exists but is blocked by default.
+
+    In Phase 4L-2 the endpoint is implemented behind env flags and approval gates.
+    Without env flags, it returns 200 with status=disabled/blocked.
+    """
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from src.backend.app.main import app
 
     client = TestClient(app)
-    # Verify /conversion/execute does not exist
     resp = client.post("/api/projects/test/conversion/execute", json={})
-    assert resp.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp.status_code}"
+    assert resp.status_code == 200, f"Expected 200 blocked, got {resp.status_code}"
+    data = resp.json()
+    assert data["ok"] is False
+    assert data["status"] in ("disabled", "blocked")
 
-    # /conversion/run must also not exist
+    # /conversion/run must still not exist
     resp2 = client.post("/api/projects/test/conversion/run", json={})
     assert resp2.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp2.status_code}"
 

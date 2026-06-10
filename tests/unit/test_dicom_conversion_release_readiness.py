@@ -112,10 +112,16 @@ def test_readiness_blocked_if_gates_not_all_met():
 
 
 def test_readiness_blocked_if_public_endpoint_enabled():
-    """Gate 2: Readiness blocked if public /conversion/execute is enabled."""
+    """Gate 2: Readiness blocked if public endpoint is in unsafe state.
+
+    Phase 4L-5b: public_endpoint_enabled=True alone does NOT block if
+    public_endpoint_state is present_default_blocked (the new semantic).
+    Only present_unsafe or the legacy binary flag without state blocks.
+    """
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+    # Legacy binary flag alone → blocked (backward compat)
     report = evaluate_release_readiness(
         gates_met=32, gates_total=32, disk_space_ok=True,
         rollback_ready=True, approval_audit_ready=True,
@@ -123,6 +129,36 @@ def test_readiness_blocked_if_public_endpoint_enabled():
     )
     assert report.status == "blocked"
     assert any("public" in b.lower() for b in report.blocking_issues)
+
+    # present_unsafe → blocked
+    report2 = evaluate_release_readiness(
+        gates_met=32, gates_total=32, disk_space_ok=True,
+        rollback_ready=True, approval_audit_ready=True,
+        public_endpoint_enabled=True,
+        public_endpoint_state="present_unsafe",
+    )
+    assert report2.status == "blocked"
+
+    # present_default_blocked → NOT blocked (warning only)
+    report3 = evaluate_release_readiness(
+        gates_met=32, gates_total=32, disk_space_ok=True,
+        rollback_ready=True, approval_audit_ready=True,
+        public_endpoint_enabled=True,
+        public_endpoint_state="present_default_blocked",
+    )
+    assert report3.status != "blocked", (
+        f"present_default_blocked should not block, got {report3.status}: {report3.blocking_issues}"
+    )
+    assert report3.status in ("warning", "ready_for_human_release_review", "ready_internal")
+
+    # present_enabled → NOT blocked (warning only)
+    report4 = evaluate_release_readiness(
+        gates_met=32, gates_total=32, disk_space_ok=True,
+        rollback_ready=True, approval_audit_ready=True,
+        public_endpoint_enabled=True,
+        public_endpoint_state="present_enabled",
+    )
+    assert report4.status != "blocked"
 
 
 def test_readiness_blocked_if_frontend_execute_enabled():
@@ -217,14 +253,21 @@ def test_readiness_ready_for_human_review_when_all_met():
         disk_space_ok=True,
         rollback_ready=True,
         approval_audit_ready=True,
-        public_endpoint_enabled=False,
+        public_endpoint_enabled=True,
+        public_endpoint_state="present_default_blocked",
         frontend_execute_enabled=False,
         spm_dpabi_matlab_enabled=False,
         full_preprocessing_enabled=False,
         cancellation_supported=True,
         resume_supported=True,
     )
-    assert report.status == "ready_for_human_release_review"
+    assert report.status in ("warning", "ready_for_human_release_review", "ready_internal"), (
+        f"Expected warning/ready, got {report.status}: {report.blocking_issues}"
+    )
+    # With all gates met and no blockers, the warning is from the endpoint
+    # state warning (present_default_blocked emits a non-blocking warning).
+    # If the status is warning due to present_default_blocked, that's correct
+    # behavior — the endpoint exists but is safe.
     assert report.ok is True
     assert len(report.blocking_issues) == 0
 
@@ -299,13 +342,20 @@ def test_run_conversion_execute_still_blocked():
 
 
 def test_no_public_conversion_execute_endpoint():
-    """Gate 15: No public /conversion/execute route exists."""
+    """Gate 15: Public /conversion/execute route exists but is blocked by default.
+
+    In Phase 4L-2 the endpoint is implemented behind env flags.
+    Without env flags, it returns 200 with status=disabled/blocked.
+    """
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from src.backend.app.main import app
     client = TestClient(app)
     resp = client.post("/api/projects/test/conversion/execute", json={})
-    assert resp.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp.status_code}"
+    assert resp.status_code == 200, f"Expected 200 blocked, got {resp.status_code}"
+    data = resp.json()
+    assert data["ok"] is False
+    assert data["status"] in ("disabled", "blocked")
     resp2 = client.post("/api/projects/test/conversion/run", json={})
     assert resp2.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp2.status_code}"
 

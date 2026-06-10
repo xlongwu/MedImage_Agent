@@ -15,19 +15,19 @@ from src.backend.app.schemas.desktop import (
     AssistantChatRequest,
     AssistantChatResponse,
     BidsValidationResponse,
+    BoldReferenceReadinessResponse,
     ConversionDryRunRequest,
     ConversionDryRunResponse,
     DataReadinessResponse,
-    BoldReferenceReadinessResponse,
     MotionMetricsDraftResponse,
     MotionQcReadinessResponse,
+    NiftiQcSnapshotResponse,
+    NiftiThumbnailResponse,
+    QcDashboardFingerprintResponse,
+    QcDashboardReportResponse,
     RsfmriQcPlanningReportResponse,
     SpmRealignDryRunResponse,
     SpmRealignWrapperSkeletonResponse,
-    NiftiQcSnapshotResponse,
-    NiftiThumbnailResponse,
-    QcDashboardReportResponse,
-    QcDashboardFingerprintResponse,
     DatasetDiagnosticsPackageResponse,
     DatasetDiagnosticsPackageStatusResponse,
     DatasetDiagnosticsPackageVerifyResponse,
@@ -1132,6 +1132,449 @@ def get_conversion_release_readiness(
         output_root=output_root,
     )
     return report.model_dump()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# DICOM conversion public execute endpoint — Phase 4L-2
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.post("/api/projects/{project_id}/conversion/execute")
+def post_conversion_execute(
+    project_id: str,
+    request_raw: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Flag-gated public DICOM-to-NIfTI conversion execute endpoint.
+
+    **Only executes when ALL preconditions pass.**  Returns blocked otherwise.
+
+    Required env flags (all must be "1"):
+    - ``MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT``
+    - ``MEDIMAGE_ALLOW_USER_DATA_CONVERSION``
+    - ``MEDIMAGE_ENABLE_DICOM_CONVERSION``
+    - ``MEDIMAGE_ENABLE_REVIEWED_EXECUTION``
+    - ``MEDIMAGE_ENABLE_REAL_PREPROCESSING``
+
+    Required gating:
+    - Release approval must be approved and not expired
+    - Release readiness must be ready_for_human_release_review
+    - GO/NO-GO gates must be 32/32
+    - Approval/audit package must exist
+    - Rawdata checksum-before must exist
+    - Rollback plan must exist
+    - Disk space must pass 1.5x multiplier
+    - Output root must be safe
+
+    Does NOT execute SPM/DPABI/MATLAB.  Does NOT run full preprocessing.
+    Does NOT use shell=True.  Does NOT modify rawdata.
+    Does NOT expose a frontend execute button.
+    """
+    import os as _os
+
+    from src.backend.app.schemas.dicom_conversion_public_execution import (
+        DicomConversionPublicExecutionRequest,
+        DicomConversionPublicExecutionResponse,
+        DicomConversionPublicExecutionSafetyFlags,
+        validate_public_execution_env_flags,
+        validate_public_execution_request_acknowledgements,
+    )
+    from src.backend.app.schemas.dicom_conversion_release_approval import (
+        is_release_approval_complete,
+    )
+
+    # ── 0. Parse request ──────────────────────────────────────────
+    try:
+        body = request_raw or {}
+        req = DicomConversionPublicExecutionRequest(**body)
+    except Exception as exc:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            errors=[f"Invalid request body: {exc}"],
+            blocking_issues=[f"Request validation failed: {exc}"],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(),
+        ).model_dump()
+
+    # ── 1. Env flag check ─────────────────────────────────────────
+    current_env = dict(_os.environ)
+    env_ok, missing_env = validate_public_execution_env_flags(current_env)
+
+    if not env_ok:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="disabled",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=[
+                f"Public conversion endpoint disabled: {len(missing_env)} "
+                f"env flag(s) missing: {', '.join(missing_env)}."
+            ],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                env_flags_missing=True,
+                conversion_disabled_by_default=True,
+            ),
+        ).model_dump()
+
+    # ── 2. Operator confirmations ─────────────────────────────────
+    ok_confirm, missing_confirm = validate_public_execution_request_acknowledgements(req)
+    if not ok_confirm:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=[
+                f"Operator confirmations missing: {', '.join(missing_confirm)}."
+            ],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+            ),
+        ).model_dump()
+
+    # ── 3. Project lookup ─────────────────────────────────────────
+    project = mock_store.get_project(project_id)
+    if not project:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=[f"Project not found: {project_id}"],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+            ),
+        ).model_dump()
+
+    metadata = project.metadata if isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+    rawdata_dir = str(metadata.get("rawdata_dir") or "")
+
+    if not project_dir:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=["Project directory not configured."],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+            ),
+        ).model_dump()
+
+    # ── 4. Release approval validation ────────────────────────────
+    from src.backend.app.services.dicom_conversion_release_approval import (
+        read_release_approval,
+    )
+
+    approval = read_release_approval(
+        project_id=project_id,
+        conversion_run_id=req.conversion_run_id,
+        project_dir=project_dir,
+    )
+
+    approval_ok = approval.approved and not approval.blocked
+    approval_status = approval.status
+
+    if not approval_ok:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=approval.blocking_issues or [
+                f"Release approval is not valid: status={approval_status}."
+            ],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                release_approval_obtained=False,
+            ),
+        ).model_dump()
+
+    # ── 5. Release readiness validation ───────────────────────────
+    from src.backend.app.services.dicom_conversion_release_readiness import (
+        evaluate_conversion_release_readiness,
+    )
+
+    output_root = f"{project_dir}/converted_bids"
+    readiness = evaluate_conversion_release_readiness(
+        project_id=project_id,
+        conversion_run_id=req.conversion_run_id,
+        output_root=output_root,
+    )
+
+    if readiness.status != "ready_for_human_release_review":
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=readiness.blocking_issues or [
+                f"Release readiness is '{readiness.status}', "
+                f"must be 'ready_for_human_release_review'."
+            ],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                release_readiness_ready=False,
+                gates_32_of_32=(readiness.gates_met >= readiness.gates_total),
+            ),
+        ).model_dump()
+
+    # ── 6. GO/NO-GO gate validation ───────────────────────────────
+    gates_ok = readiness.gates_met >= readiness.gates_total
+    if not gates_ok:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=[
+                f"Not all safety gates met: {readiness.gates_met}/{readiness.gates_total}."
+            ],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                gates_32_of_32=False,
+            ),
+        ).model_dump()
+
+    # ── 7. Approval/audit package validation ──────────────────────
+    from src.backend.app.services.dicom_conversion_review_package import (
+        read_conversion_review_package,
+    )
+
+    pkg = read_conversion_review_package(
+        project_id, req.conversion_run_id,
+        project_dir=project_dir, rawdata_dir=rawdata_dir,
+    )
+
+    if not pkg.ok:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=[f"Review package not readable: {pkg.errors}"],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                approval_audit_package_present=False,
+            ),
+        ).model_dump()
+
+    # ── 8. Rawdata checksum-before validation ─────────────────────
+    checksum_before_path = next(
+        (f.path for f in pkg.files if f.kind == "rawdata_checksum_before"), ""
+    )
+    if not checksum_before_path or not Path(checksum_before_path).exists():
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=["Rawdata checksum-before snapshot does not exist."],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                rawdata_checksum_before_exists=False,
+            ),
+        ).model_dump()
+
+    # ── 9. Rollback plan validation ───────────────────────────────
+    rollback_plan_path = next(
+        (f.path for f in pkg.files if f.kind == "rollback_plan_dry_run"), ""
+    )
+    if not rollback_plan_path or not Path(rollback_plan_path).exists():
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=["Rollback plan does not exist."],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                rollback_plan_exists=False,
+            ),
+        ).model_dump()
+
+    # ── 10. Disk-space check ──────────────────────────────────────
+    if not readiness.disk_space.ok:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=[
+                f"Disk space insufficient: {readiness.disk_space.free_bytes} bytes free, "
+                f"{readiness.disk_space.estimated_required_bytes} estimated required."
+            ],
+            errors=readiness.disk_space.errors,
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                disk_space_passed=False,
+            ),
+        ).model_dump()
+
+    # ── 11. Output root safety ───────────────────────────────────
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        validate_output_root_not_under_rawdata,
+        validate_output_root_under_project,
+    )
+
+    out_safe = True
+    out_blockers: list[str] = []
+    if not validate_output_root_under_project(output_root, project_dir):
+        out_safe = False
+        out_blockers.append(
+            f"Output root {output_root} is not under project directory {project_dir}."
+        )
+    if rawdata_dir and not validate_output_root_not_under_rawdata(output_root, rawdata_dir):
+        out_safe = False
+        out_blockers.append(
+            f"Output root {output_root} must not be inside rawdata directory {rawdata_dir}."
+        )
+
+    if not out_safe:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=out_blockers,
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                output_root_safe=False,
+            ),
+        ).model_dump()
+
+    # ── 12. SPM/DPABI/MATLAB guard ────────────────────────────────
+    # These remain disabled — if any env flag suggests they are enabled, block
+    matlab_flag = _os.environ.get("MEDIMAGE_MATLAB_EXECUTION_ENABLED", "")
+    spm_flag = _os.environ.get("MEDIMAGE_SPM_EXECUTION_ENABLED", "")
+    if matlab_flag == "1" or spm_flag == "1":
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            blocking_issues=[
+                "SPM/DPABI/MATLAB execution is not permitted during public conversion."
+            ],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                conversion_disabled_by_default=True,
+                spm_dpabi_matlab_disabled=False,
+            ),
+        ).model_dump()
+
+    # ── 13. Execute ───────────────────────────────────────────────
+    from datetime import datetime, timezone
+
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_internal_user_dicom_conversion_from_persisted_package,
+    )
+
+    started_at = datetime.now(timezone.utc).isoformat()
+    execution_id = f"pubexec-{project_id}-{req.conversion_run_id}-{int(datetime.now(timezone.utc).timestamp())}"
+
+    try:
+        internal_result = run_internal_user_dicom_conversion_from_persisted_package(
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            env=current_env,
+            project_dir=project_dir,
+            rawdata_dir=rawdata_dir,
+        )
+    except Exception as exc:
+        return DicomConversionPublicExecutionResponse(
+            ok=False,
+            status="failed",
+            project_id=project_id,
+            conversion_run_id=req.conversion_run_id,
+            execution_id=execution_id,
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            output_root=output_root,
+            errors=[f"Internal execution failed: {exc}"],
+            safety_flags=DicomConversionPublicExecutionSafetyFlags(
+                env_flags_missing=False,
+                public_execution_allowed=True,
+                release_approval_obtained=True,
+                release_readiness_ready=True,
+                gates_32_of_32=True,
+                approval_audit_package_present=True,
+                rawdata_checksum_before_exists=True,
+                rollback_plan_exists=True,
+                disk_space_passed=True,
+                output_root_safe=True,
+                rawdata_read_only=True,
+                spm_dpabi_matlab_disabled=True,
+                full_preprocessing_disabled=True,
+                human_release_approval_required=True,
+                no_shell_execution=True,
+                conversion_disabled_by_default=False,
+            ),
+        ).model_dump()
+
+    finished_at = datetime.now(timezone.utc).isoformat()
+
+    # Map internal status to public status
+    internal_status = getattr(internal_result, "status", "failed")
+    if internal_status == "succeeded":
+        public_status: str = "succeeded"
+    elif internal_status == "warning":
+        public_status = "warning"
+    elif internal_status == "disabled":
+        public_status = "blocked"
+    elif internal_status == "blocked":
+        public_status = "blocked"
+    else:
+        public_status = "failed"
+
+    # Determine checksum paths
+    run_dir = f"{project_dir}/conversion_runs/{req.conversion_run_id}"
+    cs_after = f"{run_dir}/rawdata_checksum_after.json"
+    cs_comp = f"{run_dir}/rawdata_checksum_comparison.json"
+    checksum_verified = Path(cs_comp).exists() and Path(cs_after).exists()
+
+    response = DicomConversionPublicExecutionResponse(
+        ok=getattr(internal_result, "ok", False),
+        status=public_status,  # type: ignore[arg-type]
+        project_id=project_id,
+        conversion_run_id=req.conversion_run_id,
+        execution_id=execution_id,
+        started_at=started_at,
+        finished_at=finished_at,
+        output_root=output_root,
+        output_manifest_path=getattr(internal_result, "manifest_path", None) or "",
+        execution_provenance_path=getattr(internal_result, "provenance_path", None) or "",
+        audit_execution_start_path=f"{run_dir}/audit_execution_start.json",
+        audit_execution_final_path=f"{run_dir}/audit_execution_final.json",
+        checksum_before_path=checksum_before_path,
+        checksum_after_path=cs_after,
+        checksum_comparison_path=cs_comp,
+        checksum_verified=checksum_verified,
+        rollback_plan_path=rollback_plan_path,
+        rollback_result_path=f"{run_dir}/rollback_result.json",
+        warnings=getattr(internal_result, "warnings", []) or [],
+        errors=getattr(internal_result, "errors", []) or [],
+        blocking_issues=getattr(internal_result, "blocking_issues", []) or [],
+        safety_flags=DicomConversionPublicExecutionSafetyFlags(
+            conversion_disabled_by_default=False,
+            env_flags_missing=False,
+            public_execution_allowed=True,
+            release_approval_obtained=True,
+            release_readiness_ready=True,
+            gates_32_of_32=True,
+            approval_audit_package_present=True,
+            rawdata_checksum_before_exists=True,
+            rollback_plan_exists=True,
+            disk_space_passed=True,
+            output_root_safe=True,
+            rawdata_read_only=True,
+            spm_dpabi_matlab_disabled=True,
+            full_preprocessing_disabled=True,
+            human_release_approval_required=True,
+            no_shell_execution=True,
+        ),
+    )
+
+    return response.model_dump()
 
 
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:

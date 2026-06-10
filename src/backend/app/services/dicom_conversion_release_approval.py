@@ -200,7 +200,7 @@ def read_release_approval(
     if not decision_path.exists():
         return DicomConversionReleaseApprovalDecision(
             ok=False,
-            status="missing",
+            status="blocked",
             approved=False,
             blocked=True,
             blocking_issues=["No release approval decision has been recorded yet."],

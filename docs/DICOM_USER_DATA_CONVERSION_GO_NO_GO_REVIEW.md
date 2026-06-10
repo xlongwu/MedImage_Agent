@@ -636,13 +636,21 @@ Until human release approval is recorded, the following remain in force:
 - Public execution remains disabled.
 - `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is NOT set.
 
-### 15.11 Required Next Task
+### 15.11 Phase 4L-1 Status — COMPLETE (2026-06-10)
 
-**Phase 4 freeze and v0.4.0 release candidate packaging** or **Phase 4L-1:
-Flag-gated public backend execute endpoint design review.**
+Phase 4L-1 public execute endpoint design review completed:
+- Design contract: `docs/DICOM_PUBLIC_EXECUTE_ENDPOINT_DESIGN.md`
+- Schema: `src/backend/app/schemas/dicom_conversion_public_execution.py`
+- Tests: `tests/unit/test_dicom_conversion_public_execution_schema.py` + `test_dicom_conversion_public_execute_absence.py`
 
-Or, if the maintainer prefers to keep conversion internal-only:
-**Freeze Phase 4 and move to other roadmap items** (v0.4.0: NIfTI viewer, enhanced QC dashboard, MATLAB/SPM runtime opt-in).
+**No endpoint was implemented.  No frontend button was added.**
+Public conversion remains disabled.  All 32 gates remain met.
+
+### 15.12 Required Next Task
+
+**Phase 4 freeze and v0.4.0 release candidate packaging** or **Phase 4L-2:
+Flag-gated public backend execute endpoint implementation** only after
+maintainer sign-off.
 
 ---
 

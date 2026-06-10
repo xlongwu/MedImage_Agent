@@ -103,7 +103,8 @@ def evaluate_conversion_release_readiness(
     gate_status = review.decision
 
     # ── 2. Check public endpoint status ──
-    public_endpoint_enabled = _is_public_conversion_endpoint_present()
+    public_endpoint_state = _classify_public_endpoint_state()
+    public_endpoint_enabled = (public_endpoint_state != "absent")
 
     # ── 3. Check frontend execute button status ──
     frontend_execute_enabled = _is_frontend_execute_button_present()
@@ -139,6 +140,7 @@ def evaluate_conversion_release_readiness(
         rollback_ready=rollback_ready,
         approval_audit_ready=approval_audit_ready,
         public_endpoint_enabled=public_endpoint_enabled,
+        public_endpoint_state=public_endpoint_state,
         frontend_execute_enabled=frontend_execute_enabled,
         spm_dpabi_matlab_enabled=spm_enabled,
         full_preprocessing_enabled=preprocessing_enabled,
@@ -187,6 +189,41 @@ def _is_public_conversion_endpoint_present() -> bool:
     except Exception:
         pass
     return False
+
+
+def _classify_public_endpoint_state() -> str:
+    """Classify the state of the public /conversion/execute endpoint.
+
+    Returns: 'absent' | 'present_default_blocked' | 'present_enabled' | 'present_unsafe'
+    """
+    import os
+
+    if not _is_public_conversion_endpoint_present():
+        return "absent"
+
+    public_flags = [
+        "MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
+    ]
+    all_public_set = all(os.environ.get(f) == "1" for f in public_flags)
+
+    if not all_public_set:
+        return "present_default_blocked"
+
+    has_approval = _is_approval_audit_ready()
+    has_rollback = _is_rollback_ready()
+    has_internal = False
+    try:
+        from src.backend.app.services.dicom_conversion_execution import (
+            run_internal_user_dicom_conversion_from_persisted_package,
+        )
+        has_internal = True
+    except ImportError:
+        pass
+
+    if has_approval and has_rollback and has_internal:
+        return "present_enabled"
+    return "present_unsafe"
 
 
 def _is_frontend_execute_button_present() -> bool:
@@ -277,4 +314,5 @@ def _is_approval_audit_ready() -> bool:
 __all__ = [
     "evaluate_conversion_release_readiness",
     "summarize_release_blockers",
+    "_classify_public_endpoint_state",
 ]

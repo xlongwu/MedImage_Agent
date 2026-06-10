@@ -9,6 +9,7 @@ import type {
   DicomConversionSafetyFlags,
 } from "../types";
 import DicomConversionReleaseReadinessPanel from "./DicomConversionReleaseReadinessPanel";
+import DicomConversionExecutePanel from "./DicomConversionExecutePanel";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
@@ -40,6 +41,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
   const [persistError, setPersistError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [releaseReadiness, setReleaseReadiness] = useState<DicomConversionReleaseReadinessReport | null>(null);
   const reqRef = useRef(0);
 
   async function handleRun() {
@@ -254,6 +256,16 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
         <ReleaseReadinessSection
           projectId={projectId!}
           conversionRunId={persistResult.conversion_run_id}
+        />
+      )}
+
+      {/* Phase 4L-4: Flag-gated DICOM Conversion Execute Panel */}
+      {persistResult?.conversion_run_id && (
+        <DicomConversionExecutePanel
+          baseUrl={effectiveBase}
+          projectId={projectId!}
+          conversionRunId={persistResult.conversion_run_id}
+          readiness={releaseReadiness}
         />
       )}
     </Sect>

@@ -1136,3 +1136,77 @@ export type DicomConversionPlanPersistenceResponse = {
   errors: string[];
   safety_flags: Record<string, boolean>;
 };
+
+/** Phase 4L-2 — Public execution endpoint request/response types */
+
+export type DicomConversionPublicExecutionRequest = {
+  conversion_run_id: string;
+  release_approval_id: string;
+  confirm_user_data_conversion: boolean;
+  confirm_rawdata_readonly: boolean;
+  confirm_research_use_only: boolean;
+  confirm_no_clinical_use: boolean;
+  confirm_rollback_available: boolean;
+  confirm_disk_space_checked: boolean;
+  confirm_public_execution_risk: boolean;
+  requested_by: string;
+  reason: string;
+  dry_run_first: boolean;
+  rollback_mode_on_failure: string;
+};
+
+export type DicomConversionPublicExecutionSafetyFlags = {
+  conversion_disabled_by_default: boolean;
+  env_flags_missing: boolean;
+  public_execution_allowed: boolean;
+  release_approval_obtained: boolean;
+  release_readiness_ready: boolean;
+  gates_32_of_32: boolean;
+  approval_audit_package_present: boolean;
+  rawdata_checksum_before_exists: boolean;
+  rollback_plan_exists: boolean;
+  disk_space_passed: boolean;
+  output_root_safe: boolean;
+  rawdata_read_only: boolean;
+  spm_dpabi_matlab_disabled: boolean;
+  full_preprocessing_disabled: boolean;
+  human_release_approval_required: boolean;
+  no_shell_execution: boolean;
+};
+
+export type DicomConversionPublicExecutionResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  conversion_run_id: string;
+  execution_id: string;
+  started_at: string | null;
+  finished_at: string | null;
+  output_root: string;
+  output_manifest_path: string | null;
+  execution_provenance_path: string | null;
+  audit_execution_start_path: string | null;
+  audit_execution_final_path: string | null;
+  checksum_before_path: string | null;
+  checksum_after_path: string | null;
+  checksum_comparison_path: string | null;
+  checksum_verified: boolean;
+  rollback_plan_path: string | null;
+  rollback_result_path: string | null;
+  warnings: string[];
+  errors: string[];
+  blocking_issues: string[];
+  safety_flags: DicomConversionPublicExecutionSafetyFlags;
+};
+
+/** Phase 4L-4 — Local UI state for execute panel */
+
+export type DicomConversionExecutionUiState =
+  | "hidden"
+  | "disabled_info"
+  | "confirming"
+  | "submitting"
+  | "succeeded"
+  | "failed"
+  | "blocked";
+

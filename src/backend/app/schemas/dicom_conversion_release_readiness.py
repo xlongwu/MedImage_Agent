@@ -31,6 +31,13 @@ DicomConversionReleaseReadinessStatus = Literal[
     "ready_for_human_release_review",
 ]
 
+PublicEndpointState = Literal[
+    "absent",
+    "present_default_blocked",
+    "present_enabled",
+    "present_unsafe",
+]
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 2. Pydantic models
@@ -80,6 +87,7 @@ class DicomConversionReleaseReadinessReport(BaseModel):
     rollback_ready: bool = False
     approval_audit_ready: bool = False
     public_endpoint_enabled: bool = False
+    public_endpoint_state: str = "absent"
     frontend_execute_enabled: bool = False
     spm_dpabi_matlab_enabled: bool = False
     full_preprocessing_enabled: bool = False
@@ -87,7 +95,7 @@ class DicomConversionReleaseReadinessReport(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     blocking_issues: list[str] = Field(default_factory=list)
-    safety_flags: dict[str, bool] = Field(default_factory=dict)
+    safety_flags: dict[str, Any] = Field(default_factory=dict)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -196,6 +204,7 @@ def evaluate_release_readiness(
     rollback_ready: bool = False,
     approval_audit_ready: bool = False,
     public_endpoint_enabled: bool = False,
+    public_endpoint_state: str = "absent",
     frontend_execute_enabled: bool = False,
     spm_dpabi_matlab_enabled: bool = False,
     full_preprocessing_enabled: bool = False,
@@ -227,7 +236,27 @@ def evaluate_release_readiness(
             f"Gate status: {gate_status}."
         )
 
-    if public_endpoint_enabled:
+    # ── Endpoint state semantics ──
+    # "present_unsafe"  → BLOCKED (callable without gates)
+    # "present_default_blocked" or "present_enabled" → warning only
+    if public_endpoint_state == "present_unsafe":
+        blocking.append(
+            "Public /conversion/execute endpoint is in an unsafe state — "
+            "callable without required approval, confirmation, or evidence gates."
+        )
+    elif public_endpoint_state == "present_enabled":
+        warnings.append(
+            "Public /conversion/execute endpoint is enabled — all execution "
+            "gates are active but human release approval is still required."
+        )
+    elif public_endpoint_state == "present_default_blocked":
+        warnings.append(
+            "Public /conversion/execute endpoint exists but is default-blocked "
+            "(env flags missing, gates fail-closed)."
+        )
+
+    # Backward compatibility: old binary flag without state acts as blocker
+    if public_endpoint_enabled and public_endpoint_state == "absent":
         blocking.append(
             "Public /conversion/execute endpoint is enabled — must remain "
             "disabled until human release approval."
@@ -292,6 +321,7 @@ def evaluate_release_readiness(
         rollback_ready=rollback_ready,
         approval_audit_ready=approval_audit_ready,
         public_endpoint_enabled=public_endpoint_enabled,
+        public_endpoint_state=public_endpoint_state,
         frontend_execute_enabled=frontend_execute_enabled,
         spm_dpabi_matlab_enabled=spm_dpabi_matlab_enabled,
         full_preprocessing_enabled=full_preprocessing_enabled,
@@ -301,6 +331,7 @@ def evaluate_release_readiness(
         blocking_issues=blocking,
         safety_flags={
             "public_endpoint_disabled": not public_endpoint_enabled,
+            "public_endpoint_state": public_endpoint_state,
             "frontend_execute_disabled": not frontend_execute_enabled,
             "spm_dpabi_matlab_disabled": not spm_dpabi_matlab_enabled,
             "full_preprocessing_disabled": not full_preprocessing_enabled,

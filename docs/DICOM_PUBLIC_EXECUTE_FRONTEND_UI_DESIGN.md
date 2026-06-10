@@ -1,0 +1,505 @@
+# DICOM Public Execute Frontend UI Design — Phase 4L-3
+
+**Status:** Design review — NO implementation.
+**Version:** v1.0-draft
+**Date:** 2026-06-10
+**Parent:** `docs/DICOM_PUBLIC_EXECUTE_ENDPOINT_DESIGN.md` (Phase 4L-1/4L-2)
+
+---
+
+## 1. Purpose and Scope
+
+This document defines the **Phase 4L-3 frontend execution UI design contract**
+for MedImage Agent.  It specifies the proposed "Approve & Execute Conversion"
+button, confirmation dialog, progress display, error/success states, and
+required preconditions that must be satisfied before frontend execution
+capability is exposed.
+
+**Binding constraint:** Phase 4L-3 is **design only**.  No visible button,
+no onClick handler, no API wrapper, and no UI behavior are implemented.
+Frontend execution remains absent.
+
+---
+
+## 2. Why Phase 4L-3 Is Design-Only
+
+1. **No user-facing change.** Users currently see only read-only review panels;
+   adding an execute button would violate the CONDITIONAL GO boundary.
+2. **Precondition verification.** The design ensures every show/hide condition,
+   disabled state, and confirmation step is reviewed before React state machines
+   are wired.
+3. **Safety audit trail.** The design contract is the artifact against which
+   implementation (Phase 4L-4) is verified.
+4. **No dcm2niix risk.** Design documents and test plans cannot trigger
+   conversion, write NIfTI files, or modify rawdata.
+
+---
+
+## 3. Current Backend State After Phase 4L-2
+
+| Capability | Status |
+|---|---|
+| `POST /api/projects/{id}/conversion/execute` | Registered, default-blocked |
+| 5 required env flags (all must be `"1"`) | Not set by default |
+| 7 operator confirmations required | All default `false` |
+| Release approval validation | Approved + not expired required |
+| Release readiness validation | `ready_for_human_release_review` required |
+| GO/NO-GO gates | 32/32 required |
+| Approval/audit/checksum/rollback package | All must exist |
+| Disk-space check | 1.5× multiplier required |
+| Internal execution path | Only reached when all gates pass |
+| SPM/DPABI/MATLAB | Disabled |
+| Full preprocessing | Disabled |
+| Rawdata | Read-only |
+
+---
+
+## 4. Current Frontend State
+
+| Component | Status |
+|---|---|
+| `DicomConversionReviewPanel.tsx` | Read-only preflight + persist review package only |
+| `DicomConversionReleaseReadinessPanel.tsx` | Read-only readiness evaluation only |
+| "Run Conversion" button | ❌ NOT PRESENT |
+| "Execute Conversion" button | ❌ NOT PRESENT |
+| onClick handler calling `/conversion/execute` | ❌ NOT PRESENT |
+| `runProjectDicomConversionExecute()` in `api.ts` | ❌ NOT PRESENT |
+| Frontend execute confirmation dialog | ❌ NOT IMPLEMENTED |
+| Conversion progress display | ❌ NOT IMPLEMENTED |
+
+Confirmed via grepping all frontend source: no `onClick` handler references
+`Run Conversion`, `Execute Conversion`, or any execute API endpoint.
+
+---
+
+## 5. Required Preconditions Before Any Button May Be Shown
+
+The proposed "Approve & Execute Conversion" button must be **hidden** unless
+ALL of the following are true:
+
+1. `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is set in the backend environment
+2. `MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT=1` is set
+3. `MEDIMAGE_ENABLE_DICOM_CONVERSION=1` is set
+4. `MEDIMAGE_ENABLE_REVIEWED_EXECUTION=1` is set
+5. `MEDIMAGE_ENABLE_REAL_PREPROCESSING=1` is set
+6. A frontend feature flag `NEXT_PUBLIC_ENABLE_DICOM_EXECUTE_UI=1` is set
+7. Release readiness status is `ready_for_human_release_review`
+8. Release approval record exists, is approved, and is not expired
+9. GO/NO-GO gates are 32/32 met
+10. Approval/audit package is persisted (review package written)
+11. Rawdata checksum-before snapshot exists
+12. Rollback plan exists
+13. Disk-space check passes
+14. A persisted `conversion_run_id` is available in the component state
+
+If any precondition is not met, the button must not be rendered.  A disabled
+information card explaining which preconditions are missing should be shown
+instead.
+
+---
+
+## 6. Proposed Button Location
+
+The button should be placed in `DicomConversionReviewPanel` at the bottom of
+the review card, after the `ReleaseReadinessSection`.  It must NOT be placed
+inside `DicomConversionReleaseReadinessPanel` — that panel remains read-only.
+
+```
+DICOM Conversion Review
+├── Safety callout (read-only)
+├── Preflight button + Persist button
+├── Conversion Readiness cards
+├── dcm2niix Availability
+├── Command Templates
+├── Safety Flags
+├── Output Root
+├── Mappings
+├── Blocking issues / warnings
+├── Approval Gate Requirements (read-only checklist)
+├── Release Readiness Panel (read-only)
+│
+└── [FUTURE] "Approve & Execute Conversion" button  ← Phase 4L-4
+    (shown only when all gating preconditions pass)
+```
+
+---
+
+## 7. Proposed Disabled-State Behavior
+
+When the button is hidden (preconditions not met), an information card replaces it:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ DICOM conversion execution is disabled until maintainer │
+│ release approval, runtime flags, release readiness, and │
+│ operator confirmations are complete.                    │
+│                                                         │
+│ Missing:                                                │
+│  · Release approval not recorded                        │
+│  · MEDIMAGE_ALLOW_USER_DATA_CONVERSION not set           │
+│  · MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT       │
+│    not set                                              │
+│                                                         │
+│ Use the Release Readiness panel above to check which    │
+│ gates are still blocking.                               │
+└─────────────────────────────────────────────────────────┘
+```
+
+This card is read-only informational UI — it has no onClick handler.
+
+---
+
+## 8. Proposed Confirmation Dialog
+
+When the button is shown AND clicked, a modal confirmation dialog opens
+BEFORE any API call is made.  The dialog must cover the full viewport
+with a dark overlay to prevent accidental clicks.
+
+### Dialog layout
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ⚠ Approve & Execute DICOM Conversion                  │
+│                                                         │
+│  You are about to execute DICOM-to-NIfTI conversion     │
+│  using dcm2niix.  This is a one-way operation.          │
+│                                                         │
+│  Please confirm each statement below before proceeding. │
+│  ───────────────────────────────────────────────────── │
+│  ☐ I understand this is for research use only.          │
+│  ☐ I understand this is not for clinical diagnosis.     │
+│  ☐ I confirm rawdata must remain read-only.             │
+│  ☐ I confirm rollback is available (quarantine/delete). │
+│  ☐ I confirm disk space was checked.                    │
+│  ☐ I confirm I accept the public DICOM conversion risks.│
+│  ☐ I understand SPM/DPABI/MATLAB preprocessing is not   │
+│    part of this action.                                 │
+│  ☐ I understand this only runs DICOM-to-NIfTI conversion│
+│                                                         │
+│  [Cancel]              [Approve & Execute Conversion]   │
+└─────────────────────────────────────────────────────────┘
+```
+
+The "Approve & Execute Conversion" button inside the dialog is disabled
+until ALL 8 checkboxes are checked.  Clicking Cancel closes the dialog
+without making any API call.
+
+---
+
+## 9. Required Operator Acknowledgements
+
+Each checkbox maps to a field in `DicomConversionPublicExecutionRequest`:
+
+| Checkbox | Request Field |
+|---|---|
+| I understand this is for research use only. | `confirm_research_use_only` |
+| I understand this is not for clinical diagnosis. | `confirm_no_clinical_use` |
+| I confirm rawdata must remain read-only. | `confirm_rawdata_readonly` |
+| I confirm rollback is available. | `confirm_rollback_available` |
+| I confirm disk space was checked. | `confirm_disk_space_checked` |
+| I confirm I accept the public DICOM conversion risks. | `confirm_public_execution_risk` |
+| I understand SPM/DPABI/MATLAB is not part of this action. | (safety invariant — not a request field, but validated by backend) |
+| I understand this only runs DICOM-to-NIfTI conversion. | `confirm_user_data_conversion` |
+
+All 8 must be checked before the execute button is clickable.
+
+---
+
+## 10. Release Approval Dependency
+
+The component must validate release approval before showing the button:
+
+- `GET /api/projects/{id}/conversion/release-readiness/{run_id}` returns release
+  readiness status
+- The `read_release_approval()` service returns whether approval is approved
+- If approval is missing / expired / rejected / revoked, the button is hidden
+  and the disabled-info card explains which approval status is blocking
+
+---
+
+## 11. Release Readiness Dependency
+
+The component reads release readiness status from the existing
+`ReleaseReadinessSection` data.  If `status !== "ready_for_human_release_review"`,
+the button is hidden.  Blocking issues from the readiness report are listed
+in the disabled-info card.
+
+---
+
+## 12. Disk-Space and Runtime Policy Display
+
+Already displayed in `DicomConversionReleaseReadinessPanel` (read-only).
+No changes needed — this panel remains read-only.
+
+- Disk space: free bytes, estimated required, multiplier, ok/fail
+- Runtime: timeout, cancellation, resume, retry, max subjects
+
+These are informational and do not block the button independently — the
+readiness report's `disk_space.ok` field gates the button.
+
+---
+
+## 13. Rollback Policy Display
+
+Rollback readiness is shown in the Release Readiness panel as a
+safety-invariant badge (`rollback ready ✓/✗`).  No changes needed.
+
+---
+
+## 14. Audit/Provenance Display
+
+After execution succeeds, the response includes paths for:
+- `audit_execution_start_path`
+- `audit_execution_final_path`
+- `output_manifest_path`
+- `execution_provenance_path`
+
+These should be displayed in the post-execution result card as clickable
+paths (either copyable text or, in the Electron app, using
+`window.medimage.openExternalPath`).  The files themselves are JSON; no
+image preview is needed.
+
+---
+
+## 15. Progress Display Design
+
+During execution (after dialog confirm and API call):
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Converting DICOM to NIfTI...                           │
+│                                                         │
+│  ████████████░░░░░░░░  6/6 mappings complete            │
+│                                                         │
+│  · Sub_001: FunRaw → func/bold ✓ (12.4s)               │
+│  · Sub_002: FunRaw → func/bold ✓ (11.1s)               │
+│  · Sub_003: FunRaw → func/bold ✓ (10.8s)               │
+│  · Sub_001: T1Raw → anat/T1w ✓ (8.3s)                  │
+│  · Sub_002: T1Raw → anat/T1w ✓ (8.1s)                  │
+│  · Sub_003: T1Raw → anat/T1w ⏳ running...              │
+│                                                         │
+│  Elapsed: 52.1s    Estimated remaining: 8.1s            │
+│                                                         │
+│  [Cancel Conversion]                                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Phase 4L-4 note:** Per-subject progress requires the backend to return
+intermediate progress events or for the frontend to poll a progress endpoint.
+This is a future implementation concern.  The initial implementation (Phase 4L-4)
+may show a simple spinner with "Converting..." text and the elapsed time.
+
+---
+
+## 16. Success State Design
+
+After all mappings complete with `status="succeeded"`:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ✅ Conversion Complete                                 │
+│                                                         │
+│  Status: succeeded                                      │
+│  Execution ID: pubexec-proj-001-run-001-1718234567      │
+│  Started: 2026-06-10T14:30:00Z                          │
+│  Finished: 2026-06-10T14:31:03Z                         │
+│  Duration: 63 seconds                                   │
+│  Mappings: 6/6 completed                                │
+│  Checksum verified: ✓ (rawdata unchanged)                │
+│                                                         │
+│  Artifacts:                                             │
+│  · output_manifest.json                                 │
+│  · execution_provenance.json                            │
+│  · audit_execution_start.json                           │
+│  · audit_execution_final.json                           │
+│  · rawdata_checksum_comparison.json                     │
+│  · rollback_result.json                                 │
+│                                                         │
+│  Output root: /project/converted_bids                   │
+│                                                         │
+│  [View in Explorer]                                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 17. Failure State Design
+
+When conversion fails or returns `status="blocked"/"failed"/"safety_violation"`:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  ❌ Conversion Failed                                   │
+│                                                         │
+│  Status: safety_violation                               │
+│  Rawdata checksum CHANGED — DO NOT PROCEED.             │
+│                                                         │
+│  All downstream processing is blocked.  Review the      │
+│  checksum comparison and contact the maintainer.        │
+│                                                         │
+│  Errors:                                                │
+│  · RAWDATA CHECKSUM CHANGED                             │
+│                                                         │
+│  Rollback: quarantine completed                         │
+│  Quarantine path: /project/rollback_quarantine/...      │
+│                                                         │
+│  [Review Checksum Comparison]  [View Rollback Result]   │
+└─────────────────────────────────────────────────────────┘
+```
+
+For non-safety failures (dcm2niix non-zero exit, disk full, etc.), the
+error card shows the failure reason and links to the rollback panel.
+
+---
+
+## 18. Cancellation / Timeout UX
+
+**Phase 4L-4:** Cancellation is declared but not implemented in the backend.
+The Cancel button in the progress view should be present but disabled with
+tooltip "Cancellation is not yet supported."
+
+**Phase 4L-5+:** When backend cancellation is implemented:
+- Cancel button sends `POST /api/projects/{id}/conversion/cancel`
+- Backend sends SIGTERM to dcm2niix subprocess
+- Progress transitions to "Cancelling..."
+- On confirm: partial outputs are preserved; manual rollback available
+
+Timeout: after 1800s per subject or 7200s total, the backend returns a
+`status="timeout"` response.  Frontend shows the timeout error with rollback
+options.
+
+---
+
+## 19. Retry / Resume UX
+
+**Not implemented.**  Retry and resume are schema-only (Phase 3).  When
+implemented, they will appear as action buttons on the failure/success card.
+
+---
+
+## 20. Rawdata Read-Only Warning
+
+The confirmation dialog includes an explicit rawdata read-only checkbox.
+Additionally, the Review Panel safety callout must continue to display:
+
+> Rawdata remains read-only. No files in the rawdata directory are modified,
+> deleted, or created by this operation.
+
+---
+
+## 21. Research-Use-Only / No-Clinical-Use Warning
+
+The confirmation dialog includes two checkboxes:
+- "I understand this is for research use only."
+- "I understand this is not for clinical diagnosis."
+
+Additionally, the button area must display a persistent banner:
+
+> MedImage Agent is for research use only. It is not for clinical diagnosis
+> or medical decision-making.
+
+---
+
+## 22. Error-Copy Requirements
+
+All error messages must be:
+- ASCII-only (no emoji in production copy — emoji in this doc are for design illustration only)
+- Actionable: each error must include "what to do next"
+- Non-technical: avoid stack traces, Python exception class names, or internal paths
+
+Example mapping:
+
+| Backend error | User-facing copy |
+|---|---|
+| `Release approval status is 'missing'` | Release approval has not been recorded. Ask a maintainer to complete the release approval workflow. |
+| `Not all safety gates met: 30/32` | 2 safety gates are still blocking. Review the Release Readiness panel for details. |
+| `RAWDATA CHECKSUM CHANGED` | Critical: Rawdata checksum mismatch detected. Do NOT continue. Contact the maintainer immediately. |
+| `Disk space insufficient` | Not enough free disk space. Free up space or choose a different output location. |
+
+---
+
+## 23. Accessibility and Layout Requirements
+
+- Confirmation dialog must be keyboard-navigable (Tab to cycle checkboxes,
+  Enter to toggle, Escape to close)
+- Button must have `aria-label="Approve and execute DICOM conversion"`
+- Progress must use `role="progressbar"` with `aria-valuenow` and `aria-valuemax`
+- Error/success cards must use `role="alert"` for screen readers
+- All text must be resizable (relative units, no fixed px on text)
+- Color is not the sole indicator of state — text labels accompany all badges
+
+---
+
+## 24. Test Strategy
+
+### 24.1 Frontend UI absence tests (`test_dicom_conversion_frontend_execute_ui_absence.py`)
+
+| # | Test |
+|---|---|
+| 1 | No visible text "Run Conversion" in any frontend source file |
+| 2 | No visible text "Execute Conversion" in any frontend source file |
+| 3 | No `onClick` handler calls `/conversion/execute` |
+| 4 | No `runProjectDicomConversionExecute` in `api.ts` |
+| 5 | `DicomConversionReleaseReadinessPanel` has no execution trigger |
+| 6 | `DicomConversionReviewPanel` has no execution trigger |
+| 7 | Backend endpoint returns blocked without env flags |
+| 8 | Backend endpoint returns disabled when `MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT` missing |
+| 9 | Frontend TypeScript compiles clean (`npm run typecheck`) |
+| 10 | Frontend Vite production build succeeds (`npm run build`) |
+
+### 24.2 Existing test matrices (must continue passing)
+
+- `test_dicom_conversion_public_execute_endpoint.py` — 20 tests
+- `test_dicom_conversion_public_execute_absence.py` — 12 tests
+- `test_dicom_conversion_public_execution_schema.py` — 28 tests
+- All release approval, readiness, DICOM safety, and regression tests
+
+---
+
+## 25. Non-Goals
+
+- Do NOT add a visible "Run Conversion" button.
+- Do NOT add a visible "Execute Conversion" button.
+- Do NOT add an onClick handler that calls `/conversion/execute`.
+- Do NOT add `runProjectDicomConversionExecute()` to `api.ts`.
+- Do NOT change `DicomConversionReleaseReadinessPanel` behavior — it stays read-only.
+- Do NOT change backend endpoint behavior.
+- Do NOT set `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`.
+- Do NOT call dcm2niix.
+- Do NOT modify rawdata.
+- Do NOT enable SPM/DPABI/MATLAB.
+- Do NOT enable full preprocessing.
+
+---
+
+## 26. Phase 4L-4 Implementation Checklist
+
+To be completed **only** after maintainer sign-off (NOT in Phase 4L-3):
+
+- [ ] Add `NEXT_PUBLIC_ENABLE_DICOM_EXECUTE_UI` feature flag
+- [ ] Add `DicomConversionPublicExecutionRequest` / `Response` types to `types.ts`
+- [ ] Add `runProjectDicomConversionExecute()` to `api.ts` behind the feature flag
+- [ ] Add hidden/disabled state logic in `DicomConversionReviewPanel`
+- [ ] Add disabled-info card showing missing preconditions
+- [ ] Add "Approve & Execute Conversion" button (shown only when all gates pass)
+- [ ] Add confirmation dialog component with 8 checkboxes
+- [ ] Add progress display component (spinner + elapsed time)
+- [ ] Add success state component with artifact links
+- [ ] Add failure state component with rollback links
+- [ ] Add persistent research-use-only banner near the button
+- [ ] Write frontend component unit tests
+- [ ] Write frontend integration smoke (opt-in, behind feature flag)
+- [ ] Update `PROJECT_STATE.md`
+- [ ] Verify button absent when feature flag is off
+- [ ] Verify no dcm2niix is triggered when button is absent
+- [ ] Verify SPM/DPABI/MATLAB remain disabled
+- [ ] Verify rawdata unchanged
+- [ ] Full frontend build + typecheck passes
+
+---
+
+*End of Phase 4L-3 frontend execution UI design contract.  No button was added.
+No onClick handler was added.  No API wrapper was added.  Frontend execution
+remains absent.  SPM/DPABI/MATLAB remain disabled.  Full preprocessing remains
+disabled.  Rawdata remains read-only.  Research-use only, not for clinical
+diagnosis.*

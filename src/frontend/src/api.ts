@@ -299,6 +299,18 @@ export async function persistProjectDicomConversionPlan(
   );
 }
 
+export async function runProjectDicomConversionExecute(
+  baseUrl: string,
+  projectId: string,
+  body: Record<string, unknown>,
+) {
+  return requestJson<import("./types").DicomConversionPublicExecutionResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/conversion/execute`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
 export async function listPipelinePresets(baseUrl: string) {
   return requestJson<{ ok: boolean; presets: PipelinePreset[] }>(
     baseUrl,

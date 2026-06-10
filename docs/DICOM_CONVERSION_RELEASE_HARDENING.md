@@ -420,9 +420,19 @@ layer for human sign-off without changing any gate status.
 
 ### 21.15 Immediate Next Task
 
-**Phase 4 freeze and v0.4.0 release candidate packaging.**  Or,
-if maintainer signs off: **Phase 4L-1: Flag-gated public backend execute
-endpoint design review.**
+**Phase 4L-1: Flag-gated public backend execute endpoint design review — COMPLETE (2026-06-10).**
+See `docs/DICOM_PUBLIC_EXECUTE_ENDPOINT_DESIGN.md` for the design contract.
+
+Next: **Phase 4L-2: Flag-gated public backend execute endpoint implementation**
+only after maintainer sign-off and `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`.
+
+### 22. Phase 4L-1 Design Review Record
+
+Phase 4L-1 completed on 2026-06-10.  Design contract, schema, and tests
+delivered.  No endpoint implemented.  No frontend button added.
+Public conversion remains disabled.  Design contract at
+`docs/DICOM_PUBLIC_EXECUTE_ENDPOINT_DESIGN.md`.
+Schema at `src/backend/app/schemas/dicom_conversion_public_execution.py`.
 
 ---
 

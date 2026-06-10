@@ -1710,4 +1710,328 @@ offline Electron binary download.
 - Rawdata unchanged: 1104 .dcm files.
 
 
+## Phase 4L-1 — Public Execute Endpoint Design Review
+
+Public DICOM conversion execute endpoint design contract, schema planning,
+and test-plan definition completed.  **No endpoint was implemented.**
+Public conversion remains disabled.
+
+### Design contract
+
+`docs/DICOM_PUBLIC_EXECUTE_ENDPOINT_DESIGN.md` — 28-section design contract
+covering purpose, preconditions, maintainer sign-off requirements, env flags,
+release approval record validation, release readiness validation, approval/audit
+package requirements, checksum before/after policy, rollback policy, proposed
+endpoint route, request/response schemas, safety flags, failure behavior,
+cancellation/timeout policy, disk-space policy, output collision policy, rawdata
+read-only invariant, frontend UX requirements, user confirmation copy,
+audit/provenance requirements, security/threat model, test strategy, Phase 4L-2
+implementation checklist, non-goals, and go/no-go decision.
+
+### Schema
+
+`src/backend/app/schemas/dicom_conversion_public_execution.py` — pure schema
+module defining:
+- 2 Literal type aliases
+- 5 Pydantic models: `DicomConversionPublicExecutionRequest` (13 fields, 7 confirmations),
+  `DicomConversionPublicExecutionResponse` (26 fields), `DicomConversionPublicExecutionSafetyFlags`
+  (16 fields), `DicomConversionPublicExecutionPreconditions` (21 fields),
+  `DicomConversionPublicExecutionGateDecision`
+- 6 pure helper functions
+- `is_public_execution_design_only()` returns `True` — public execution is NOT permitted
+- `public_execution_allowed` always `False` in all gate decisions
+
+### Tests
+
+- `tests/unit/test_dicom_conversion_public_execution_schema.py` — 20 tests
+- `tests/unit/test_dicom_conversion_public_execute_absence.py` — 12 tests
+
+### What was NOT done
+
+- No public `/conversion/execute` endpoint was added.
+- No frontend "Run Conversion" button was added.
+- `run_conversion_execute()` behavior was not changed.
+- `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is NOT set by default.
+- No dcm2niix was called. No NIfTI files were written. No rawdata was modified.
+- SPM/DPABI/MATLAB remain disabled. Full preprocessing remains disabled.
+
+### Decision
+
+Phase 4L-1 design review is complete.  Phase 4L-2 implementation requires
+explicit maintainer sign-off.
+
+## Phase 4L-2 — Flag-Gated Public Execute Endpoint Implementation
+
+The public DICOM conversion execute endpoint has been implemented as
+`POST /api/projects/{project_id}/conversion/execute`.  The endpoint
+**fails closed by default** — all env flags, confirmations, release
+approval, release readiness, gates, approval/audit package, checksum,
+rollback, disk-space, and safety preconditions must pass before execution.
+
+### Endpoint
+
+`POST /api/projects/{project_id}/conversion/execute` — registered in
+`src/backend/app/api/dashboard_routes.py`.  Accepts
+`DicomConversionPublicExecutionRequest`, returns
+`DicomConversionPublicExecutionResponse`.  The endpoint:
+
+1. Checks 5 required env flags (all must be `"1"`, returns disabled if missing)
+2. Validates 7 operator confirmations (returns blocked if any false)
+3. Validates release approval record (must be approved, not expired)
+4. Validates release readiness (must be `ready_for_human_release_review`)
+5. Validates GO/NO-GO gates (must be 32/32)
+6. Validates approval/audit package exists
+7. Validates rawdata checksum-before exists
+8. Validates rollback plan exists
+9. Validates disk-space passes
+10. Validates output root safety
+11. Guards against SPM/DPABI/MATLAB execution
+12. Calls internal execution only if ALL gates pass
+
+### Required env flags
+
+- `MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT=1`
+- `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`
+- `MEDIMAGE_ENABLE_DICOM_CONVERSION=1`
+- `MEDIMAGE_ENABLE_REVIEWED_EXECUTION=1`
+- `MEDIMAGE_ENABLE_REAL_PREPROCESSING=1`
+
+Plus all 10 internal conversion flags required by `run_internal_user_dicom_conversion_from_persisted_package()`.
+
+### Schema changes
+
+`src/backend/app/schemas/dicom_conversion_public_execution.py`:
+- `is_public_execution_design_only()` now returns `False`
+- `evaluate_public_execution_preconditions()` decision: `"proceed"` when
+  all preconditions met, `"blocked"` otherwise
+- `public_execution_allowed` reflects actual gate state
+
+### Tests
+
+- `tests/unit/test_dicom_conversion_public_execute_endpoint.py` — 17 tests
+  covering env flag gating (2), operator confirmations (7), release approval (3),
+  release readiness (1), package/checksum/rollback (2), safety (3), frontend (2)
+- `tests/unit/test_dicom_conversion_public_execute_absence.py` — updated for
+  Phase 4L-2: endpoint now exists but blocks by default; frontend absence
+  tests still enforced
+- `tests/unit/test_dicom_conversion_public_execution_schema.py` — updated:
+  `proceed` decision, `public_execution_allowed=True` when gates met,
+  `is_public_execution_design_only() == False`
+
+### What was NOT done
+
+- No frontend "Run Conversion" button was added.
+- `run_conversion_execute()` still returns blocked for ordinary calls.
+- `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is NOT set by default.
+- `MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT=1` is NOT set by default.
+- No dcm2niix is called in blocked/disabled paths.
+- No rawdata was modified.
+- SPM/DPABI/MATLAB remain disabled. Full preprocessing remains disabled.
+- No `shell=True` used. All subprocess calls use argv lists.
+
+### Decision
+
+Phase 4L-2 implementation is complete.  The endpoint exists but is
+**blocked by default** without explicit env flags, release approval,
+release readiness, and all gating preconditions.
+
+## Phase 4L-3 — Frontend Execution UI Design Review
+
+Frontend execution UI design contract, test planning, and frontend
+absence tests completed.  **No frontend execute button was added.**
+No onClick handler, no API wrapper, no visual change to any panel.
+
+### Design contract
+
+`docs/DICOM_PUBLIC_EXECUTE_FRONTEND_UI_DESIGN.md` — 26-section design
+contract covering: purpose, why design-only, current backend/frontend state,
+preconditions before button shown, proposed button location, disabled-state
+information card, confirmation dialog (8 checkboxes), operator acknowledgements,
+release approval/readiness dependency, disk-space/runtime policy display,
+rollback policy, audit/provenance display, progress display, success state,
+failure state, cancellation/timeout UX, retry/resume UX, rawdata warning,
+research-use-only warning, error-copy requirements, accessibility/layout,
+test strategy, non-goals, and Phase 4L-4 implementation checklist.
+
+### Tests
+
+`tests/unit/test_dicom_conversion_frontend_execute_ui_absence.py` — 12 tests:
+- No "Run Conversion" / "Execute Conversion" text in any component (3)
+- No onClick handlers triggering conversion (3)
+- No execute API wrapper in api.ts (2)
+- No public execution types in types.ts (1)
+- Backend endpoint default-blocked without env flags (2)
+- Frontend build/typecheck assertions (2)
+
+### What was NOT done
+
+- No frontend "Run Conversion" button was added.
+- No frontend "Execute Conversion" button was added.
+- No onClick handler calling `/conversion/execute` was added.
+- `runProjectDicomConversionExecute()` was NOT added to `api.ts`.
+- `DicomConversionReleaseReadinessPanel` remains read-only.
+- `DicomConversionReviewPanel` has no execution trigger.
+- Backend endpoint behavior was not changed.
+- No dcm2niix was called. No rawdata was modified.
+- SPM/DPABI/MATLAB remain disabled. Full preprocessing remains disabled.
+
+### Decision
+
+Phase 4L-3 design review is complete.  Frontend execution UI is designed
+but not implemented.  Phase 4L-4 implementation requires explicit
+maintainer sign-off.
+
+### Branch divergence note
+
+`v0.4.0-rc1` tag represents the pre-public-endpoint release state.
+The main branch after Phase 4L-2 contains a default-blocked backend
+execute endpoint (`POST /conversion/execute`).  This branch divergence
+is intentional and documented.  The endpoint blocks without env flags.
+
+## Phase 4L-4 — Frontend Execution UI Implementation
+
+Frontend DICOM conversion execution UI implemented behind the feature flag
+`VITE_ENABLE_DICOM_EXECUTE_UI`.  The UI is **hidden by default** when the
+flag is not set to `"1"`.
+
+### Files changed
+
+- `src/frontend/src/types.ts` — added `DicomConversionPublicExecutionRequest`,
+  `DicomConversionPublicExecutionResponse`, `DicomConversionPublicExecutionSafetyFlags`,
+  `DicomConversionExecutionUiState`
+- `src/frontend/src/api.ts` — added `runProjectDicomConversionExecute()`
+- `src/frontend/src/components/DicomConversionExecutePanel.tsx` — new component:
+  feature-flag gated, 8-checkbox confirmation dialog, progress display,
+  success/failure/blocked response cards, research-use-only banner
+- `src/frontend/src/components/DicomConversionReviewPanel.tsx` — wired
+  `DicomConversionExecutePanel` after the Release Readiness section, passing
+  readiness data from the `ReleaseReadinessSection`
+- `tests/unit/test_dicom_conversion_frontend_execute_ui.py` — 15 tests covering
+  feature flag gating, confirmation dialog structure, API wrapper, response
+  rendering (blocked/success/failure), safety invariants
+- `tests/unit/test_dicom_conversion_frontend_execute_ui_absence.py` — updated
+  to reflect Phase 4L-4 state: execute UI now exists behind flag, but
+  readiness panel stays read-only, no "Run Conversion" text
+
+### Feature flag
+
+`VITE_ENABLE_DICOM_EXECUTE_UI=1` (Vite convention).  When unset, the
+component returns `null` — completely invisible to users.
+
+### UI behavior
+
+1. **Hidden:** When `VITE_ENABLE_DICOM_EXECUTE_UI !== "1"`, component returns null
+2. **Disabled info:** When flag is on but release readiness is not
+   `ready_for_human_release_review` or gates are not 32/32, shows a read-only
+   card listing blocking conditions
+3. **Confirmation dialog:** When readiness allows, shows 8 confirmation
+   checkboxes.  "Approve and request conversion" button disabled until all
+   8 are checked.  Cancel returns to disabled-info state.
+4. **Submitting:** Shows progress bar with status text during API call
+5. **Blocked:** Shows backend blocking_issues with safety flag badges
+6. **Failed:** Shows errors, warnings, rollback result path, rawdata-unchanged reminder
+7. **Succeeded:** Shows execution ID, timestamps, checksum verified status,
+   manifest/provenance/audit/checksum/rollback artifact paths
+
+### What was NOT done
+
+- Backend `/conversion/execute` gates were not changed — endpoint still
+  requires all env flags, confirmations, approval, readiness, gates
+- No dcm2niix is called from frontend code
+- No SPM/DPABI/MATLAB execution is triggered
+- No full preprocessing is triggered
+- Rawdata was not modified
+- `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is NOT set by default
+- `MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT=1` is NOT set by default
+- `VITE_ENABLE_DICOM_EXECUTE_UI` defaults to absent (UI hidden)
+- No `shell=True` is used anywhere in the frontend code
+
+### Decision
+
+Phase 4L-4 implementation is complete.  The execute UI exists behind a
+feature flag but is hidden by default.  All backend gates remain in place.
+End-to-end execution requires explicit env flags on both backend and frontend.
+
+### Branch state
+
+`v0.4.0-rc1` tag represents the pre-public-execute-UI release state.
+Main branch now contains:
+- `POST /conversion/execute` backend endpoint (default-blocked)
+- `DicomConversionExecutePanel` frontend component (feature-flag-hidden)
+
+## Phase 4L-5b — Readiness Self-Blocking Fix + E2E Smoke Run
+
+### Root cause
+
+The release readiness service in Phase 4K-0 treated the mere presence of
+`POST /conversion/execute` as a blocker — `public_endpoint_enabled=True`
+was produced by scanning routes, and the readiness schema treated any
+`public_endpoint_enabled=True` as blocking.  This created a self-blocking
+loop:
+
+```text
+/conversion/execute exists
+→ release readiness reports blocked (endpoint present)
+→ POST /conversion/execute checks release readiness
+→ endpoint returns blocked
+→ endpoint can never proceed even when properly flag-gated
+```
+
+### Fix
+
+Added `public_endpoint_state` with 4-valued semantics:
+- `"absent"` — no endpoint → safe
+- `"present_default_blocked"` — endpoint exists but public env flags missing → safe (warning only)
+- `"present_enabled"` — endpoint exists with flags + gates → safe (warning only)
+- `"present_unsafe"` — endpoint exists with flags but gates missing → BLOCKED
+
+The schema `evaluate_release_readiness()` now distinguishes between the
+four states.  The service `_classify_public_endpoint_state()` checks route
+presence and env flags to determine the correct state.
+
+### Backward compatibility
+
+`public_endpoint_enabled=True` without a `public_endpoint_state` still
+blocks (legacy binary flag path).  The `safety_flags` dict type changed
+from `dict[str, bool]` to `dict[str, Any]` to accommodate the string value.
+
+### Files changed
+
+- `src/backend/app/schemas/dicom_conversion_release_readiness.py` — added
+  `PublicEndpointState` Literal, `public_endpoint_state` field on report,
+  endpoint state semantics in `evaluate_release_readiness()`, `Any` in
+  safety_flags dict type
+- `src/backend/app/services/dicom_conversion_release_readiness.py` — added
+  `_classify_public_endpoint_state()`, wired into
+  `evaluate_conversion_release_readiness()`
+- `tests/unit/test_dicom_conversion_release_readiness.py` — updated:
+  endpoint presence with `present_default_blocked` state → not blocked,
+  `ready_for_human_release_review` now works with endpoint present but
+  default-blocked
+- `tests/unit/test_dicom_conversion_release_readiness_api.py` — updated:
+  `public_endpoint_state` field validated, 404-tolerant response check
+
+### E2E smoke status
+
+E2E smoke tests (`tests/integration/test_dicom_conversion_public_e2e_smoke.py`)
+remain default-skipped.  When all env flags are set, the E2E smoke
+test can proceed because readiness no longer self-blocks.
+
+### Validation
+
+- `test_dicom_conversion_release_readiness.py` — **25 passed**
+- `test_dicom_conversion_release_readiness_api.py` — **9 passed**
+- `test_dicom_conversion_public_execute_endpoint.py` — **20 passed**
+- `test_dicom_conversion_public_execution_schema.py` — **28 passed**
+- `test_dicom_conversion_public_execute_absence.py` — **12 passed**
+- Readiness no longer blocks when endpoint is present_default_blocked
+- Rawdata unchanged: 1104 DICOM, 3 subjects, 6 groups
+
+### Decision
+
+Self-blocking loop resolved.  Release readiness correctly classifies
+the default-blocked public endpoint as safe (warning only).  E2E
+execution path can now proceed when flags, approval, and readiness
+are properly configured.
+
 ## Next recommended work
