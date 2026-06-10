@@ -1792,6 +1792,32 @@ def post_spm_slice_timing_realign_dry_run(
     return result.model_dump()
 
 
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/execute-sandbox")
+def post_spm_sandbox_execution(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Sandboxed Slice Timing + Realign execution: copies BOLD, runs MATLAB/SPM, captures output."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_spm_execution import SpmSandboxExecutionRequest
+    from src.backend.app.services.preprocessing_spm_execution import run_sandbox_spm_execution
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = SpmSandboxExecutionRequest(
+        dry_run_id=body.get("dry_run_id", ""),
+        confirm_sandbox_copy=body.get("confirm_sandbox_copy", False),
+        confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
+        confirm_no_converted_input_modification=body.get("confirm_no_converted_input_modification", False),
+        confirm_slice_timing_realign_only=body.get("confirm_slice_timing_realign_only", False),
+        confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
+        confirm_research_use_only=body.get("confirm_research_use_only", False),
+        matlab_executable=body.get("matlab_executable", "matlab"),
+        spm_path=body.get("spm_path", ""), timeout_seconds=body.get("timeout_seconds", 600),
+    )
+    result = run_sandbox_spm_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
