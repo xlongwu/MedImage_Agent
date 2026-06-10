@@ -1696,7 +1696,18 @@ offline Electron binary download.
 - 32/32 gates confirmed in packaged backend build.
 - No public `/conversion/execute` endpoint exists.
 - Rawdata unchanged: 1104 `.dcm` files.
-- GUI launch deferred to local Windows desktop.
+
+### Packaged GUI Smoke
+
+**PASSED.** All 15 checks passed on local Windows desktop:
+- App launches, backend connects, DemoData project created.
+- Data Readiness: 3 subjects, 1104 DICOM, 6 groups.
+- NIfTI QC: DICOM-only warning, no synthetic fallback.
+- Conversion Dry-Run: 6 high-confidence mappings (FunRaw→func/bold, T1Raw→anat/T1w).
+- Release Readiness: 32/32 gates, human approval required.
+- No "Run Conversion" button, no /conversion/execute endpoint.
+- SPM/DPABI/MATLAB disabled, full preprocessing disabled.
+- Rawdata unchanged: 1104 .dcm files.
 
 
 ## Next recommended work
