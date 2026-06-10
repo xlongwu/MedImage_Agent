@@ -1561,3 +1561,26 @@ export async function getProjectDicomConversionReleaseReadiness(
     `/api/projects/${encodeURIComponent(projectId)}/conversion/release-readiness/${encodeURIComponent(conversionRunId)}`,
   );
 }
+
+export async function registerConvertedPreprocessingInput(
+  baseUrl: string,
+  projectId: string,
+  body: { conversion_run_id: string; converted_bids_dir?: string; confirm_rawdata_readonly?: boolean; confirm_use_converted_outputs?: boolean },
+) {
+  return requestJson<import("./types").PreprocessingInputRegistrationResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/input/register-converted`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export async function getPreprocessingPlanPreview(
+  baseUrl: string,
+  projectId: string,
+) {
+  return requestJson<import("./types").PreprocessingPlanPreviewResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/plan/preview`,
+    { method: "POST" },
+  );
+}

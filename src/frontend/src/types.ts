@@ -1210,3 +1210,52 @@ export type DicomConversionExecutionUiState =
   | "failed"
   | "blocked";
 
+/** Phase 5A — Preprocessing handoff types */
+
+export type PreprocessingInputRegistrationResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  conversion_run_id: string;
+  preprocessing_input_dir: string;
+  rawdata_dir: string;
+  subject_count: number;
+  bold_count: number;
+  t1w_count: number;
+  nifti_count: number;
+  sidecar_count: number;
+  missing_t1w_subjects: string[];
+  missing_bold_subjects: string[];
+  subjects: string[];
+  warnings: string[];
+  errors: string[];
+  blocking_issues: string[];
+  next_actions: string[];
+  safety_flags: Record<string, boolean>;
+};
+
+export type PreprocessingStagePreview = {
+  stage_id: string;
+  name: string;
+  backend: string;
+  subject_level: boolean;
+  requires_external_tool: boolean;
+  enabled: boolean;
+  optional: boolean;
+  description: string;
+};
+
+export type PreprocessingPlanPreviewResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  stages: PreprocessingStagePreview[];
+  stage_count: number;
+  enabled_stage_count: number;
+  execution_disabled: boolean;
+  preprocessing_input_registered: boolean;
+  warnings: string[];
+  next_actions: string[];
+  safety_flags: Record<string, boolean>;
+};
+

@@ -1577,6 +1577,84 @@ def post_conversion_execute(
     return response.model_dump()
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Preprocessing handoff — Phase 5A
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.post("/api/projects/{project_id}/preprocessing/input/register-converted")
+def post_register_converted_preprocessing_input(
+    project_id: str,
+    body: dict[str, Any],
+) -> dict[str, Any]:
+    """Register converted BIDS/NIfTI outputs as preprocessing input.
+
+    Discovers converted outputs from a DICOM conversion run, counts
+    BOLD/T1w/NIfTI/sidecar files, detects missing subject pairings,
+    and records the preprocessing input directory in project metadata.
+
+    Does NOT execute preprocessing.  Does NOT modify rawdata.
+    Does NOT call external tools.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.schemas.preprocessing_handoff import (
+        PreprocessingInputRegistrationRequest,
+    )
+    from src.backend.app.services.preprocessing_handoff import (
+        register_converted_bids_as_preprocessing_input,
+    )
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+
+    req = PreprocessingInputRegistrationRequest(
+        conversion_run_id=body.get("conversion_run_id", ""),
+        converted_bids_dir=body.get("converted_bids_dir"),
+        mode=body.get("mode", "reference"),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+        confirm_use_converted_outputs=body.get("confirm_use_converted_outputs", False),
+    )
+
+    result = register_converted_bids_as_preprocessing_input(
+        project_id=project_id,
+        request=req,
+        project_dir=project_dir,
+    )
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/plan/preview")
+def post_preprocessing_plan_preview(
+    project_id: str,
+) -> dict[str, Any]:
+    """Return a DPARSFA-style preprocessing plan preview.
+
+    Shows all DPARSFA stages, marks which require external tools,
+    and confirms preprocessing execution is disabled.
+
+    Does NOT execute preprocessing.  Does NOT call external tools.
+    Does NOT modify rawdata.  Preview-only.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.schemas.preprocessing_handoff import (
+        build_default_dparsfa_style_plan,
+    )
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    input_registered = bool(metadata.get("preprocessing_input_dir"))
+
+    plan = build_default_dparsfa_style_plan(
+        project_id=project_id,
+        input_registered=input_registered,
+    )
+    return plan.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
