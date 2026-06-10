@@ -296,8 +296,9 @@ def plan_conversion(
     # ── FunRaw/T1Raw path-based mapping ──
     if funraw_t1raw_layout and funraw_t1raw_layout["layout_type"] == "funraw_t1raw":
         ft = funraw_t1raw_layout
-        # Clear low-confidence generic DICOM mappings when FunRaw/T1Raw is detected
-        if any(m["confidence"] != "high" for m in mappings):
+        # Use FunRaw/T1Raw mappings when no mappings exist or existing ones are low-confidence
+        # (empty mappings → True: generic DICOM preflight failed, e.g. no pydicom)
+        if not mappings or any(m["confidence"] != "high" for m in mappings):
             mappings.clear()
             # Update source summaries with detected counts
             for s in sources:
