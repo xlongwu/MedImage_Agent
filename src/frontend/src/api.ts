@@ -1584,3 +1584,30 @@ export async function getPreprocessingPlanPreview(
     { method: "POST" },
   );
 }
+
+export async function createPreprocessingRun(
+  baseUrl: string, projectId: string,
+  body: { preprocessing_input_dir?: string; confirm_use_converted_input?: boolean; confirm_no_rawdata_modification?: boolean; confirm_python_only_execution?: boolean; confirm_no_spm_matlab?: boolean },
+) {
+  return requestJson<import("./types").PreprocessingRunCreateResponse>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export async function executePreprocessingPythonPreflight(
+  baseUrl: string, projectId: string, preprocessingRunId: string,
+) {
+  return requestJson<import("./types").PreprocessingRunExecuteResponse>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/execute-python-preflight`,
+    { method: "POST" },
+  );
+}
+
+export async function getPreprocessingRunStatus(
+  baseUrl: string, projectId: string, preprocessingRunId: string,
+) {
+  return requestJson<import("./types").PreprocessingRunStatusResponse>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}`,
+  );
+}

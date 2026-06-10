@@ -1259,3 +1259,9 @@ export type PreprocessingPlanPreviewResponse = {
   safety_flags: Record<string, boolean>;
 };
 
+/** Phase 5B — Preprocessing run workspace */
+export type PreprocessingRunCreateResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; run_dir: string; preprocessing_input_dir: string; stage_count: number; python_stage_count: number; disabled_external_stage_count: number; warnings: string[]; blocking_issues: string[]; next_actions: string[]; safety_flags: Record<string, boolean>; };
+export type PreprocessingStageStatus = { stage_id: string; name: string; status: string; backend: string; requires_external_tool: boolean; enabled: boolean; optional: boolean; };
+export type PreprocessingRunExecuteResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; completed_stages: string[]; disabled_external_stages: string[]; stage_statuses: PreprocessingStageStatus[]; input_inventory_path: string; qc_preflight_summary_path: string; manifest_path: string; warnings: string[]; next_actions: string[]; safety_flags: Record<string, boolean>; };
+export type PreprocessingRunStatusResponse = { ok: boolean; project_id: string; preprocessing_run_id: string; run_dir: string; preprocessing_input_dir: string; status: string; stage_statuses: PreprocessingStageStatus[]; artifacts: Record<string, string>; warnings: string[]; safety_flags: Record<string, boolean>; };
+

@@ -201,6 +201,46 @@ def test_rawdata_not_modified(tmp_path, monkeypatch):
 # Group 4 — API endpoints
 # ═══════════════════════════════════════════════════════════════════════
 
+def test_dummy_scan_not_completed(tmp_path, monkeypatch):
+    """Dummy scan removal must be planned_not_executed, not completed."""
+    _setup_store(tmp_path, monkeypatch)
+    cb = _make_converted_bids(tmp_path, subjects=1)
+    from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
+    from src.backend.app.services.preprocessing_run import create_preprocessing_run, execute_python_preflight
+    req = PreprocessingRunCreateRequest(preprocessing_input_dir=str(cb))
+    cr = create_preprocessing_run("brain-tumor-study", req, project_dir=str(tmp_path))
+    result = execute_python_preflight("brain-tumor-study", cr.preprocessing_run_id, project_dir=str(tmp_path))
+    dummy = [s for s in result.stage_statuses if s.stage_id == "dummy_scan_removal"]
+    assert len(dummy) == 1
+    assert dummy[0].status == "planned_not_executed", f"Expected planned_not_executed, got {dummy[0].status}"
+    assert "dummy_scan_removal" not in result.completed_stages
+
+
+def test_no_image_transform_outputs(tmp_path, monkeypatch):
+    """Python preflight must not write any NIfTI/image-transform outputs."""
+    _setup_store(tmp_path, monkeypatch)
+    cb = _make_converted_bids(tmp_path, subjects=1)
+    from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
+    from src.backend.app.services.preprocessing_run import create_preprocessing_run, execute_python_preflight
+    req = PreprocessingRunCreateRequest(preprocessing_input_dir=str(cb))
+    cr = create_preprocessing_run("brain-tumor-study", req, project_dir=str(tmp_path))
+    result = execute_python_preflight("brain-tumor-study", cr.preprocessing_run_id, project_dir=str(tmp_path))
+    run_dir = Path(cr.run_dir)
+    nifti_files = list(run_dir.rglob("*.nii*"))
+    assert len(nifti_files) == 0, f"No NIfTI files should be created by Python preflight, found: {nifti_files}"
+
+
+def test_readme_states_no_image_transform(tmp_path, monkeypatch):
+    _setup_store(tmp_path, monkeypatch)
+    cb = _make_converted_bids(tmp_path, subjects=1)
+    from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
+    from src.backend.app.services.preprocessing_run import create_preprocessing_run
+    req = PreprocessingRunCreateRequest(preprocessing_input_dir=str(cb))
+    cr = create_preprocessing_run("brain-tumor-study", req, project_dir=str(tmp_path))
+    content = (Path(cr.run_dir) / "README.md").read_text()
+    assert "No image-transform preprocessing" in content
+
+
 def test_create_run_endpoint_returns_200(tmp_path):
     from fastapi.testclient import TestClient
     from src.backend.app.main import app

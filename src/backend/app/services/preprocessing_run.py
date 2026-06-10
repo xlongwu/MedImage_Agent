@@ -28,7 +28,8 @@ def _safety_flags() -> dict[str, bool]:
             "clinical_use_prohibited": True}
 
 
-_PYTHON_STAGES = ["input_validation", "dummy_scan_removal", "subject_qc", "group_summary"]
+_PYTHON_STAGES = ["input_validation", "subject_qc", "group_summary"]
+_PLANNED_NOT_EXECUTED = ["dummy_scan_removal"]
 _EXTERNAL_STAGES = ["slice_timing", "realignment", "t1_coregistration", "segmentation",
                     "normalization", "nuisance_regression", "temporal_filtering",
                     "spatial_smoothing", "alff_falff", "reho", "functional_connectivity"]
@@ -43,6 +44,8 @@ def _build_stage_statuses() -> list[PreprocessingStageStatus]:
         status = "not_started"
         if sid in _EXTERNAL_STAGES:
             status = "disabled_external"
+        elif sid in _PLANNED_NOT_EXECUTED:
+            status = "planned_not_executed"
         result.append(PreprocessingStageStatus(
             stage_id=sid, name=s["name"], status=status,
             backend=s["backend"], requires_external_tool=s["requires_external_tool"],
@@ -121,7 +124,7 @@ def create_preprocessing_run(
     # Write README
     (run_dir / "README.md").write_text(
         f"# Preprocessing Run {run_id}\n\nPython-only preflight workspace.\n"
-        f"No SPM/MATLAB/DPABI executed. No full preprocessing. Rawdata unchanged.\n"
+        f"No SPM/MATLAB/DPABI executed. No image-transform preprocessing (dummy scan removal, realignment, etc.). Rawdata unchanged.\n"
         f"Research use only.\n", encoding="utf-8")
 
     stages = _build_stage_statuses()
@@ -186,7 +189,7 @@ def execute_python_preflight(
 
     # Build manifest
     stages = _build_stage_statuses()
-    completed = [s.stage_id for s in stages if s.backend == "python" and not s.requires_external_tool]
+    completed = [s.stage_id for s in stages if s.backend == "python" and not s.requires_external_tool and s.stage_id not in _PLANNED_NOT_EXECUTED]
     ext_disabled = [s.stage_id for s in stages if s.status == "disabled_external"]
     # Mark python stages as completed
     for s in stages:

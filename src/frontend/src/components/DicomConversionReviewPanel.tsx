@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, getPreprocessingPlanPreview, getProjectDicomConversionReleaseReadiness, persistProjectDicomConversionPlan, registerConvertedPreprocessingInput, runProjectDicomConversionPreflight } from "../api";
+import { DEFAULT_API_BASE, createPreprocessingRun, executePreprocessingPythonPreflight, getPreprocessingPlanPreview, getProjectDicomConversionReleaseReadiness, persistProjectDicomConversionPlan, registerConvertedPreprocessingInput, runProjectDicomConversionPreflight } from "../api";
 import type {
   Dcm2niixCommandTemplate,
   DicomConversionMapping,
@@ -9,6 +9,9 @@ import type {
   DicomConversionSafetyFlags,
   PreprocessingInputRegistrationResponse,
   PreprocessingPlanPreviewResponse,
+  PreprocessingRunCreateResponse,
+  PreprocessingRunExecuteResponse,
+  PreprocessingStageStatus,
 } from "../types";
 import DicomConversionReleaseReadinessPanel from "./DicomConversionReleaseReadinessPanel";
 import DicomConversionExecutePanel from "./DicomConversionExecutePanel";
@@ -278,6 +281,11 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
           conversionRunId={persistResult.conversion_run_id}
         />
       )}
+
+      {/* Phase 5B: Preprocessing Run Workspace */}
+      {persistResult?.conversion_run_id && (
+        <PreprocessingRunSection projectId={projectId!} />
+      )}
     </Sect>
   );
 }
@@ -321,6 +329,80 @@ const APPROVAL_CHECKLIST: string[] = [
   "Rollback/cleanup policy accepted",
   "Clinical-use prohibition acknowledged",
 ];
+
+function PreprocessingRunSection({ projectId }: { projectId: string }) {
+  const [runResult, setRunResult] = useState<PreprocessingRunCreateResponse | null>(null);
+  const [runLoading, setRunLoading] = useState(false); const [runError, setRunError] = useState("");
+  const [execResult, setExecResult] = useState<PreprocessingRunExecuteResponse | null>(null);
+  const [execLoading, setExecLoading] = useState(false);
+
+  async function handleCreateRun() {
+    setRunLoading(true); setRunError(""); setRunResult(null); setExecResult(null);
+    try {
+      const res = await createPreprocessingRun(DEFAULT_API_BASE, projectId,
+        { confirm_use_converted_input: true, confirm_no_rawdata_modification: true, confirm_python_only_execution: true, confirm_no_spm_matlab: true });
+      setRunResult(res as PreprocessingRunCreateResponse);
+    } catch (e) { setRunError(e instanceof Error ? e.message : String(e)); }
+    finally { setRunLoading(false); }
+  }
+
+  async function handleExecutePreflight() {
+    if (!runResult?.preprocessing_run_id) return;
+    setExecLoading(true); setExecResult(null);
+    try {
+      const res = await executePreprocessingPythonPreflight(DEFAULT_API_BASE, projectId, runResult.preprocessing_run_id);
+      setExecResult(res as PreprocessingRunExecuteResponse);
+    } catch (e) { /* ignore */ }
+    finally { setExecLoading(false); }
+  }
+
+  return (
+    <section style={{ padding: 16, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(255, 255, 255, 0.88)", marginTop: 12 }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Preprocessing Run Workspace</h3>
+      <span style={{ color: "#667085", fontSize: 12 }}>Create a preprocessing run and execute Python-only metadata/QC preflight.</span>
+
+      <div style={{ padding: 8, border: "1px solid rgba(242, 153, 74, 0.22)", borderRadius: 4, background: "rgba(255, 251, 242, 0.94)", fontSize: 11, color: "#9a5a15", margin: "8px 0" }}>
+        Only Python metadata/QC preflight stages are executed. No image-transform preprocessing is run. SPM/DPABI/MATLAB remain disabled.
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <button onClick={handleCreateRun} disabled={runLoading} style={{ padding: "6px 14px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
+          {runLoading ? "Creating..." : "Create preprocessing run"}
+        </button>
+        {runResult?.ok && (
+          <button onClick={handleExecutePreflight} disabled={execLoading} style={{ padding: "6px 14px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
+            {execLoading ? "Running..." : "Run Python-only preflight"}
+          </button>
+        )}
+      </div>
+      {runError && <div className="errorBox" style={{ fontSize: 11, marginBottom: 6 }}>{runError}</div>}
+
+      {runResult && (
+        <div style={{ padding: 8, border: `1px solid ${runResult.ok ? "rgba(33,150,83,0.24)" : "rgba(235,87,87,0.26)"}`, borderRadius: 4, background: runResult.ok ? "rgba(232,245,233,0.88)" : "rgba(255,235,238,0.88)", fontSize: 11, marginBottom: 8 }}>
+          <div style={{ fontWeight: 700 }}>Run: {runResult.preprocessing_run_id}</div>
+          <div style={{ fontSize: 10, color: "#667085" }}>dir: {runResult.run_dir}</div>
+          <div>Python stages: {runResult.python_stage_count} · External disabled: {runResult.disabled_external_stage_count}</div>
+        </div>
+      )}
+
+      {execResult && (
+        <div style={{ padding: 8, border: `1px solid ${execResult.ok ? "rgba(33,150,83,0.24)" : "rgba(235,87,87,0.26)"}`, borderRadius: 4, background: execResult.ok ? "rgba(232,245,233,0.88)" : "rgba(255,235,238,0.88)", fontSize: 11 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Preflight: {execResult.status}</div>
+          <div style={{ display: "grid", gap: 2 }}>
+            {execResult.stage_statuses.map((s: PreprocessingStageStatus, i: number) => (
+              <div key={i} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <span style={{ color: s.status === "completed_python" ? "#176b3b" : s.status === "disabled_external" ? "#b53b3b" : s.status === "planned_not_executed" ? "#9a5a15" : "#667085", fontWeight: 700, width: 20 }}>{s.status === "completed_python" ? "✓" : s.status === "disabled_external" ? "✗" : "○"}</span>
+                <span style={{ flex: 1 }}>{s.name}</span>
+                <span style={{ fontSize: 9, color: "#667085" }}>{s.status.replace(/_/g, " ")}</span>
+              </div>
+            ))}
+          </div>
+          {execResult.warnings.map((w: string, i: number) => <div key={i} style={{ color: "#9a5a15", marginTop: 4, fontSize: 10 }}>{w}</div>)}
+        </div>
+      )}
+    </section>
+  );
+}
 
 function PreprocessingHandoffSection({ projectId, conversionRunId }: { projectId: string; conversionRunId: string }) {
   const [regResult, setRegResult] = useState<PreprocessingInputRegistrationResponse | null>(null);
