@@ -1538,3 +1538,14 @@ export async function getProjectRunStateTimeline(
     `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/state-timeline`,
   );
 }
+
+export async function getProjectDicomConversionReleaseReadiness(
+  baseUrl: string,
+  projectId: string,
+  conversionRunId: string,
+) {
+  return requestJson<import("./types").DicomConversionReleaseReadinessReport>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/conversion/release-readiness/${encodeURIComponent(conversionRunId)}`,
+  );
+}

@@ -447,6 +447,14 @@ def build_conversion_run_paths(
         "stdout_log_path": f"{logs_dir}/stdout.log",
         "stderr_log_path": f"{logs_dir}/stderr.log",
         "readme_path": f"{run_dir}/README.md",
+        # Phase 4H-1 / 4J-0 / 4J-1
+        "rawdata_checksum_before_path": f"{run_dir}/rawdata_checksum_before.json",
+        "rawdata_checksum_after_path": f"{run_dir}/rawdata_checksum_after.json",
+        "rawdata_checksum_comparison_path": f"{run_dir}/rawdata_checksum_comparison.json",
+        "rollback_plan_dry_run_path": f"{run_dir}/rollback_plan_dry_run.json",
+        "rollback_result_path": f"{run_dir}/rollback_result.json",
+        "audit_execution_start_path": f"{run_dir}/audit_execution_start.json",
+        "audit_execution_final_path": f"{run_dir}/audit_execution_final.json",
     }
 
 
@@ -497,4 +505,113 @@ def summarize_persisted_conversion_plan(
         "mapping_count": len(plan.mappings),
         "template_count": len(plan.command_templates),
         "run_dir": plan.reservation.run_dir,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Phase 4J-1 — Audit execution integration
+# ═══════════════════════════════════════════════════════════════════════
+
+DicomConversionAuditExecutionState = Literal[
+    "planned",
+    "preflight_checked",
+    "execution_started",
+    "execution_succeeded",
+    "execution_failed",
+    "rollback_planned",
+    "rollback_completed",
+    "blocked",
+]
+
+
+class DicomConversionExecutionAuditUpdate(BaseModel):
+    """Audit state tracking for a conversion execution."""
+
+    project_id: str = ""
+    conversion_run_id: str = ""
+    audit_state: DicomConversionAuditExecutionState = "planned"
+    started_at: str | None = None
+    finished_at: str | None = None
+    approval_record_path: str | None = None
+    audit_record_path: str | None = None
+    preflight_snapshot_path: str | None = None
+    mapping_snapshot_path: str | None = None
+    command_templates_path: str | None = None
+    checksum_before_path: str | None = None
+    checksum_after_path: str | None = None
+    checksum_comparison_path: str | None = None
+    rollback_plan_path: str | None = None
+    rollback_result_path: str | None = None
+    output_manifest_path: str | None = None
+    execution_provenance_path: str | None = None
+    stdout_log_path: str | None = None
+    stderr_log_path: str | None = None
+    dcm2niix_version: str | None = None
+    return_code: int | None = None
+    warnings: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
+def validate_execution_approval_package(
+    approval_path: str,
+    audit_path: str,
+    checksum_path: str,
+    rollback_path: str,
+) -> tuple[bool, list[str]]:
+    """Check that all required approval/audit files exist."""
+    from pathlib import Path as _Path
+    issues: list[str] = []
+    for label, p in [
+        ("approval", approval_path),
+        ("audit", audit_path),
+        ("checksum", checksum_path),
+        ("rollback", rollback_path),
+    ]:
+        if not p or not _Path(p).exists():
+            issues.append(f"Missing {label}: {p}")
+    return len(issues) == 0, issues
+
+
+def build_execution_audit_update(
+    project_id: str,
+    conversion_run_id: str,
+    output_root: str,
+    state: DicomConversionAuditExecutionState = "execution_started",
+    **kwargs: Any,
+) -> DicomConversionExecutionAuditUpdate:
+    """Build an audit update with the given state and metadata.
+
+    Default paths are set only when the caller does not override them via kwargs.
+    """
+    defaults: dict[str, Any] = {
+        "approval_record_path": f"{output_root}/approval_record.json",
+        "audit_record_path": f"{output_root}/audit_preview.json",
+        "checksum_before_path": f"{output_root}/rawdata_checksum_before.json",
+        "rollback_plan_path": f"{output_root}/rollback_plan_dry_run.json",
+        "output_manifest_path": f"{output_root}/output_manifest.json",
+        "execution_provenance_path": f"{output_root}/execution_provenance.json",
+    }
+    # Let kwargs override defaults
+    merged = {**defaults, **kwargs}
+    return DicomConversionExecutionAuditUpdate(
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        audit_state=state,
+        **merged,
+    )
+
+
+def is_audit_ready_for_execution(
+    audit: DicomConversionExecutionAuditUpdate,
+) -> bool:
+    """Return True if the audit state allows execution."""
+    return audit.audit_state in {"planned", "preflight_checked"}
+
+
+def is_audit_finalized(
+    audit: DicomConversionExecutionAuditUpdate,
+) -> bool:
+    """Return True if the audit has reached a terminal state."""
+    return audit.audit_state in {
+        "execution_succeeded", "execution_failed", "rollback_completed", "blocked",
     }

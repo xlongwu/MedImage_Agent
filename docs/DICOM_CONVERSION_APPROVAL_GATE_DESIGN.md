@@ -410,6 +410,54 @@ required before future real DICOM-to-NIfTI conversion.
 
 ---
 
+## 22. Phase 4J-1 — Execution-Integration Requirements
+
+### 22.1 Persisted approval record must be loaded before execution
+
+The internal conversion execution path (`run_internal_user_dicom_conversion_from_persisted_package()`)
+must load `approval_record.json` and deserialise it into a `DicomConversionApprovalRecord`
+before any dcm2niix invocation.
+
+### 22.2 Persisted audit preview must be loaded before execution
+
+The internal conversion execution path must load `audit_preview.json` and verify
+it exists and is readable before any dcm2niix invocation.
+
+### 22.3 Approval gate must be evaluated immediately before execution
+
+`evaluate_conversion_approval_gate()` must be called with the loaded approval record.
+If the gate status is not `"approved"`, execution must return `status="blocked"`
+and no subprocess may be spawned.
+
+### 22.4 Audit record must be finalized after success/failure
+
+- `audit_execution_start.json` must be written BEFORE dcm2niix is called.
+- `audit_execution_final.json` must be written AFTER dcm2niix returns.
+- The final audit must record the outcome (`execution_succeeded` or `execution_failed`).
+
+### 22.5 Checksum before/after evidence must be referenced
+
+Both the pre-conversion and post-conversion checksum snapshot paths must be
+referenced in the audit final record and in the execution provenance.
+
+### 22.6 Rollback plan/result must be referenced if failure occurs
+
+If execution fails, the rollback plan path must be referenced in the audit final
+record.  If rollback was executed, the rollback result path must also be referenced.
+
+### 22.7 Provenance must reference approval and audit record paths
+
+The execution provenance must include references to:
+- Approval record path
+- Audit preview path
+- Audit final path
+- Checksum snapshot paths
+- Rollback plan path
+
+These are stored in the provenance `metadata` field as a dict.
+
+---
+
 *End of design review document.  Real user-data DICOM conversion remains
 disabled.  This document defines the approval gate that must be satisfied
 before any real conversion can be enabled.  Research-use only, not for

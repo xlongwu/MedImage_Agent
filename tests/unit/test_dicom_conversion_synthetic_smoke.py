@@ -365,7 +365,8 @@ def test_create_synthetic_funraw_layout(tmp_path):
     assert len(result) >= 2
     assert (tmp_path / "FunRaw" / "Sub_001").exists()
     assert (tmp_path / "T1Raw" / "Sub_002").exists()
-    assert len(list((tmp_path / "FunRaw" / "Sub_001").glob("*.dcm"))) == 3
+    # Files are in series subdirectory; use recursive glob
+    assert len(list((tmp_path / "FunRaw" / "Sub_001").rglob("*.dcm"))) == 3
 
 
 # ═══════════════════════════════════════════════════════════════════════

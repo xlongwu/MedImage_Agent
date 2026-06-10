@@ -1363,15 +1363,340 @@ dry-run (2), quarantine (2), delete (3), path safety (4), existing safety (3).
 
 ### Next step
 
-**Phase 4J-1: Approval/audit execution integration.**  Only remaining partial gate.
+**Phase 4J-1: Approval/audit execution integration — COMPLETE.**  Only remaining partial gate now met.
+
+---
+
+## Phase 4J-1 — Approval/Audit Execution Integration
+
+Approval and audit validation integrated into the internal DICOM conversion
+execution path.  Gate 28 (audit persists before exec) is now met.
+
+### Schema
+
+- `DicomConversionAuditExecutionState` (8 states: planned → ... → blocked)
+- `DicomConversionExecutionAuditUpdate` (21 fields)
+- `validate_execution_approval_package()`, `build_execution_audit_update()`,
+  `is_audit_ready_for_execution()`, `is_audit_finalized()`
+- `build_conversion_run_paths()` extended with 8 new paths (checksum, rollback, audit)
+
+### Service — execution path
+
+`run_internal_user_dicom_conversion_from_persisted_package()` now:
+1. Loads `approval_record.json` and evaluates approval gate before execution
+2. Loads `audit_preview.json` and validates required fields
+3. Validates command-template count matches mapping snapshot
+4. Writes `audit_execution_start.json` before dcm2niix invocation
+5. Writes `audit_execution_final.json` after success or failure
+6. References approval/audit/checksum/rollback paths in execution provenance
+
+### Service — review package
+
+`read_conversion_review_package()` now includes:
+- `rawdata_checksum_after.json`, `rawdata_checksum_comparison.json`
+- `rollback_result.json`
+- `audit_execution_start.json`, `audit_execution_final.json`
+
+### Tests
+
+`tests/unit/test_dicom_conversion_approval_audit_execution_integration.py` — 20 tests:
+- Missing approval/audit/checksum/rollback blocks execution before subprocess (5 tests)
+- Audit start written before runner, final written on success/failure (3 tests)
+- Provenance references all evidence paths (4 tests)
+- Safety: no rawdata modification, no public endpoint, no frontend button,
+  no SPM/DPABI/MATLAB, no shell=True, no subprocess when incomplete (8 tests)
+
+### GO/NO-GO
+
+- Gate 27 (approval gate schema complete): partial → **met**
+- Gate 28 (audit persists before exec): partial → **met**
+- Gates met: **32 of 32**
+- Gates partial: **0**
+- Gates missing: **0**
+- Decision: **FULL GO ELIGIBLE — REQUIRES FINAL HUMAN RELEASE APPROVAL**
+
+### Key invariants maintained
+
+- `run_conversion_execute()` remains blocked for normal users
+- No public `/conversion/execute` endpoint
+- No frontend "Run conversion" button
+- No SPM/DPABI/MATLAB execution enabled
+- No full preprocessing enabled
+- Rawdata remains read-only
+- All subprocess calls use argv lists; no `shell=True`
+
+### Explicit confirmations
+
+- No public conversion endpoint was added
+- No frontend execute button was added
+- Rawdata was not modified
+- SPM/DPABI/MATLAB remain disabled
+
+### Next recommended work
+
+**Phase 4G-4: Final full GO eligibility review — COMPLETE.**  See below.
+
+---
+
+## Phase 4G-4 — Final Full GO Eligibility Review
+
+Final GO/NO-GO re-review completed after Phase 4J-1 approval/audit integration.
+
+### Decision
+
+**FULL GO ELIGIBLE — REQUIRES FINAL HUMAN RELEASE APPROVAL.**
+
+### Gate summary
+
+- Gates met: **32 of 32**
+- Gates partial: **0**
+- Gates missing: **0**
+
+All 32 DICOM conversion safety gates are met for the first time in review history.
+
+### Evidence reviewed
+
+- Phase 4J-0: Rollback implementation (14 tests)
+- Phase 4J-1: Approval/audit execution integration (20 tests)
+- Phase 4H-3d: Real dcm2niix synthetic smoke
+- Phase 4I-1b: FunRaw/T1Raw DemoData smoke (1104 DICOM, 3 subjects)
+- Phase 3 freeze: 2915 passed, 1 skipped
+- All regression matrices: Phase 1, 2, 3, SPM — all green
+
+### Remaining gates
+
+None.  All 32 gates met.
+
+### Public execution status
+
+**Public user-data conversion remains DISABLED.**
+- No public `/conversion/execute` endpoint
+- No frontend "Run Conversion" button
+- `run_conversion_execute()` returns blocked for normal users
+- 10 env flags required for any real execution
+- SPM/DPABI/MATLAB remain disabled
+- Full preprocessing not enabled
+- Rawdata remains read-only
+
+### Human release approval requirements
+
+Before public conversion can be enabled:
+1. Explicit maintainer approval
+2. Phase 4K-0 release hardening (GUI verification, NSIS rebuild, docs update)
+3. `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` env flag added
+4. Public endpoint + frontend button added ONLY after human sign-off
 
 
-## Next recommended work
+---
 
-1. **Phase 4H-3 execution** — Run `capture_synthetic_smoke_evidence()` on
-   a machine with dcm2niix installed and all 9 env flags set.  Record
-   the output as GO/NO-GO evidence.
-2. Review Phase 4H-3 deliverables with the project maintainer.
+## Phase 4K-0 — Release Hardening Before Public Conversion UI
+
+Release hardening infrastructure created: contract, schema, service, tests.
+Public conversion remains disabled.
+
+### Deliverables
+
+- `docs/DICOM_CONVERSION_RELEASE_HARDENING.md` — 20-section release hardening contract
+- `src/backend/app/schemas/dicom_conversion_release_readiness.py` — readiness models + 4 pure helpers
+- `src/backend/app/services/dicom_conversion_release_readiness.py` — readiness evaluation service
+- `tests/unit/test_dicom_conversion_release_readiness.py` — 19 tests
+
+### Release readiness models
+
+- `DicomConversionReleaseReadinessStatus`: blocked / warning / ready_internal / ready_for_human_release_review
+- `DicomConversionDiskSpaceCheck`: free_bytes, estimated, multiplier, ok
+- `DicomConversionRuntimePolicy`: timeout, cancellation, resume, retry, max subjects
+- `DicomConversionReleaseReadinessReport`: comprehensive readiness evaluation
+
+### Key policies documented
+
+- Disk-space preflight: block if free < estimated × 1.5
+- Timeout: 1800s per subject, 7200s total
+- Cancellation: declared, not yet implemented in UI
+- Rollback: fully implemented (dry-run, quarantine, delete)
+- Audit finalization: start before dcm2niix, final after
+- Output collision: fail_if_exists default
+- Retry/resume: schema only, not implemented
+
+### Safety invariants confirmed
+
+- No public `/conversion/execute` endpoint exists
+- No frontend "Run Conversion" button exists
+- `run_conversion_execute()` remains blocked for normal users
+- SPM/DPABI/MATLAB remain disabled
+- Full preprocessing remains disabled
+- Human release approval still required
+- Rawdata remains read-only
+
+### Tests
+
+`tests/unit/test_dicom_conversion_release_readiness.py` — 19 tests:
+- Disk space: sufficient, insufficient, no root, unknown free (4)
+- Runtime policy: warnings when unsupported, no warnings when supported (2)
+- Readiness: blocked by gates, endpoint, frontend, SPM, preprocessing, disk (6)
+- Readiness: warning for cancellation, resume (2)
+- Readiness: ready_for_human_release_review when all met (1)
+- Human approval required (1)
+- Service: no dcm2niix, no rawdata, no subprocess (3)
+
+### Next recommended work
+
+1. **Phase 4K-1: Release checklist UI polish and documentation — COMPLETE.**
+2. **Phase 4L-0: Final human release approval workflow — COMPLETE  (see below).**
 3. Verify Electron GUI startup on a local Windows desktop.
 4. Run full NSIS + portable build when a compatible environment is available.
 5. Keep release validation repeatable with the mamba interpreter.
+
+---
+
+## Phase 4L-0 — Final Human Release Approval Workflow
+
+Human release approval schema, service, and tests added.  Approval is
+recorded as metadata only and does not enable public conversion.
+
+### Schema
+
+- `DicomConversionReleaseApprovalStatus`: missing / draft / approved / rejected / revoked / expired
+- `DicomConversionReleaseApprovalRecord`: 9 required fields + maintainer identity + evidence links
+- `DicomConversionReleaseApprovalDecision`: evaluation result model
+- `is_release_approval_complete()`, `is_release_approval_valid()`, `evaluate_release_approval()`, `build_release_approval_summary()`
+
+### Service
+
+`persist_release_approval()`:
+- Validates record completeness
+- Validates against release readiness (gates, readiness status)
+- Writes `release_approval_record.json` + `release_approval_decision.json`
+- Never executes conversion, never calls dcm2niix, never modifies rawdata
+
+### Approval requirements
+
+- Maintainer identity (`approved_by`)
+- Human approval statement (free-text)
+- 7 safety acknowledgements: rawdata read-only, no clinical use, rollback, approval/audit, public endpoint, frontend execute, SPM/DPABI/MATLAB disabled
+- Release readiness must be `ready_for_human_release_review`
+- 32/32 gates must be met
+
+### What remains disabled
+
+- No public `/conversion/execute` endpoint
+- No frontend "Run Conversion" button
+- `run_conversion_execute()` returns blocked for normal users
+- `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is NOT set
+- SPM/DPABI/MATLAB remain disabled
+- Full preprocessing not enabled
+- Rawdata remains read-only
+
+### Tests
+
+`tests/unit/test_dicom_conversion_release_approval.py` — 18 tests:
+- Schema completeness (3), validation (9), evaluation (2), purity (3)
+- Service: persist metadata, no dcm2niix, no rawdata, incomplete blocked (4)
+- Safety: run_conversion_execute blocked, no endpoint, no button (3)
+
+### Next recommended work
+
+1. **Phase 4 freeze and v0.4.0 release candidate packaging — IN PROGRESS (see below).**
+2. Phase 4L-1: Flag-gated public backend execute endpoint design review.
+3. Verify Electron GUI startup on a local Windows desktop.
+4. Run full NSIS + portable build when a compatible environment is available.
+
+---
+
+## Phase 4 Freeze — v0.4.0 Release Candidate
+
+**Status:** FROZEN.  Phase 4 DICOM conversion safety/productization is complete.
+**Date:** 2026-06-19
+
+### Summary
+
+Phase 4 delivers a complete DICOM-to-NIfTI conversion safety framework with
+32/32 safety gates met.  Public conversion execution is NOT enabled — this
+remains gated behind maintainer approval and `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`.
+
+### Gate Status
+
+- Met: **32 of 32**
+- Partial: **0**
+- Missing: **0**
+- Decision: **FULL GO ELIGIBLE — REQUIRES FINAL HUMAN RELEASE APPROVAL**
+
+### Phase 4 Deliverables
+
+| Phase | Capability | Status |
+|---|---|---|
+| 4A | Real preprocessing execution contract | Design doc |
+| 4B | DICOM-to-NIfTI execution wrapper | Disabled by default |
+| 4C | dcm2niix availability + synthetic smoke | Validated |
+| 4D | Approval gate design (17 preconditions) | Schema + integration |
+| 4E | Approval persistence + review package | 10 metadata files |
+| 4F | Synthetic persisted-package conversion | 8 env flags, argv list |
+| 4G | GO/NO-GO review (5 iterations) | 32/32 gates |
+| 4H | Checksum/rollback + real synthetic smoke | Validated |
+| 4I | Internal FunRaw/T1Raw DemoData smoke | 1104 DICOM, 3 subjects |
+| 4J-0 | Rollback implementation | 3 modes, 14 tests |
+| 4J-1 | Approval/audit execution integration | Gate evaluated before exec |
+| 4K-0 | Release hardening infrastructure | Schema, service, contract |
+| 4K-1 | Release readiness UI | Read-only panel + endpoint |
+| 4L-0 | Human release approval workflow | Schema, service, tests |
+
+### What Remains Disabled
+
+- No public `/conversion/execute` endpoint
+- No frontend "Run Conversion" button
+- `run_conversion_execute()` returns blocked for normal users
+- `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` NOT set
+- SPM/DPABI/MATLAB disabled
+- Full preprocessing disabled
+- Rawdata read-only invariant preserved
+
+### Test Baseline
+
+Full backend: see focused validation below.
+Frontend: TypeScript clean, Vite build successful.
+
+### Release Artifacts
+
+| Artifact | Path |
+|---|---|
+| Backend sidecar | `desktop/packaging/dist/backend/medimage-backend.exe` |
+| Launcher fallback | `desktop/packaging/dist/launcher/MedImage Agent.exe` |
+| Unpacked Electron app | `desktop/electron/dist/win-unpacked/MedImage Agent.exe` |
+
+### Next Post-Freeze Task
+
+**Phase 4L-1: Flag-gated public backend execute endpoint design review** —
+only after explicit maintainer sign-off and `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`.
+
+Or **v0.4.0 roadmap**: NIfTI viewer, enhanced QC dashboard, MATLAB/SPM runtime opt-in.
+
+### Packaging Status (2026-06-19)
+
+| Artifact | Size | Status |
+|---|---|---|
+| Backend sidecar | 39.3 MB | ✅ Built |
+| Launcher fallback | 48.7 MB | ✅ Built |
+| Unpacked Electron app | 172.5 MB | ✅ Built |
+| Backend payload (in app) | 39.3 MB | ✅ Built |
+| Rawdata (1104 .dcm) | — | ✅ Verified unchanged |
+
+**Build method:** `build_all_windows.ps1 -DirOnly -SkipFullPytest -SkipDependencyInstall -SkipNpmInstall`.
+Electron builder dependency resolved via `npm install --ignore-scripts` to bypass
+offline Electron binary download.
+
+### Packaged Backend API Smoke
+
+| Endpoint | Result |
+|---|---|
+| `/api/health` | 200 OK |
+| `/api/projects` | 200 OK (8 projects) |
+| `/api/projects/{id}/conversion/release-readiness/{run_id}` | 200 OK, gates: 32/32 |
+| `/api/projects/{id}/conversion/execute` | **404 Not Found** ✅ |
+
+- 32/32 gates confirmed in packaged backend build.
+- No public `/conversion/execute` endpoint exists.
+- Rawdata unchanged: 1104 `.dcm` files.
+- GUI launch deferred to local Windows desktop.
+
+
+## Next recommended work

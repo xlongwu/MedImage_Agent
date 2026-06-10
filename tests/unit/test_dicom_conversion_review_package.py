@@ -50,7 +50,7 @@ def test_read_package_returns_all_files(tmp_path):
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = read_conversion_review_package("test", run_id, project_dir=project_dir)
     assert result.ok is True
-    assert len(result.files) == 12  # 10 original + 2 Phase 4H-2 (checksum, rollback)
+    assert len(result.files) == 17  # 12 recent + 5 Phase 4J-1 (checksum_after, checksum_comparison, rollback_result, audit_start, audit_final)
     kinds = {f.kind for f in result.files}
     assert "approval_record" in kinds
     assert "readme" in kinds

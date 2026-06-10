@@ -6,7 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6)](https://www.typescriptlang.org/)
 [![Node](https://img.shields.io/badge/Node-24%2B-339933)](https://nodejs.org/)
 
-![Tests](https://img.shields.io/badge/tests-2426%20passed-brightgreen)  ![Release](https://img.shields.io/badge/release-v0.3.0--rc1-blue)
+![Tests](https://img.shields.io/badge/tests-2426%20passed-brightgreen)  ![Release](https://img.shields.io/badge/release-v0.4.0--rc1-blue)
 
 **English** | [中文](README_CN.md)
 
@@ -16,7 +16,7 @@ stays inside the Pipeline Runtime and registered node runners. It is a
 research engineering platform, **not a clinical diagnosis or clinical decision
 product**.
 
-**Latest Release**: [v0.3.0-rc1](https://github.com/xlongwu/MedImage_Agent_WebUI_App/releases/tag/v0.3.0-rc1) — Desktop MVP Release Candidate ([release notes](docs/releases/v0.3.0-rc1.md))
+**Latest Release**: [v0.4.0-rc1](https://github.com/xlongwu/MedImage_Agent_WebUI_App/releases/tag/v0.4.0-rc1) — DICOM Conversion Safety Release Candidate ([release notes](docs/releases/v0.4.0-rc1.md))
 
 ---
 

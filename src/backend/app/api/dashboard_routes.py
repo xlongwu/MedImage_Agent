@@ -1101,6 +1101,39 @@ def post_conversion_review_package_export(
     return result.model_dump()
 
 
+@router.get("/api/projects/{project_id}/conversion/release-readiness/{conversion_run_id}")
+def get_conversion_release_readiness(
+    project_id: str,
+    conversion_run_id: str,
+) -> dict[str, Any]:
+    """Read-only release readiness check — never executes conversion.
+
+    Evaluates GO/NO-GO state, disk space, rollback readiness,
+    approval/audit readiness, and safety invariants.  Does NOT call
+    dcm2niix, write NIfTI files, or modify rawdata.
+
+    Public user-data conversion remains disabled.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.services.dicom_conversion_release_readiness import (
+        evaluate_conversion_release_readiness,
+    )
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+    output_root = f"{project_dir}/converted_bids" if project_dir else ""
+
+    report = evaluate_conversion_release_readiness(
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        output_root=output_root,
+    )
+    return report.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})

@@ -444,14 +444,212 @@ Current status after Phase 4I-1b: **30/32 gates met, 2 partial.**
 - SPM/DPABI/MATLAB remain disabled
 - Full preprocessing not enabled
 
-### 14.4 Required Next Task
+### 14.4 Required Next Task (Phase 4J-0 complete; Phase 4J-1 in progress)
 
-**Phase 4J-0: Rollback implementation and approval/audit execution integration.**
-Close the last 2 partial gates to enable full GO consideration.
+**Phase 4J-0: Rollback implementation — COMPLETE.**  Gate 32 moved to met.
+
+**Phase 4J-1: Approval/audit execution integration — CURRENT.**  Gate 28 is the last
+remaining partial gate.  This integration:
+- Consumes persisted approval/audit package during execution.
+- Writes audit start/final records.
+- References approval/audit/checksum/rollback in provenance.
+- Keeps public conversion disabled.
+- Adds no frontend execute button.
+- Keeps SPM/DPABI/MATLAB disabled.
+
+After Phase 4J-1:
+- Gates met: 32 of 32
+- Gates partial: 0
+- Gates missing: 0
+- Full GO should still require a final GO/NO-GO re-review (Phase 4G-4).
+
+### 14.5 Required Next Task (Phase 4J-1 COMPLETE)
+
+**Phase 4J-1: Approval/audit execution integration — COMPLETE.**  Gate 28 now met.
+
+**Phase 4G-4: Final full GO eligibility review — CURRENT.**  See Section 15.
 
 ---
 
-*End of GO/NO-GO review.  User-data DICOM conversion is CONDITIONAL GO
+## 15. Phase 4G-4 — Final Full GO Eligibility Review
+
+**Status:** Formal review — FULL GO ELIGIBLE, REQUIRES FINAL HUMAN RELEASE APPROVAL.
+**Date:** 2026-06-19
+
+### 15.1 Purpose and Scope
+
+This is the final GO/NO-GO re-review after Phase 4J-1 completed the last
+remaining partial gate (approval/audit execution integration).  All 32 DICOM
+conversion safety gates are now met.  This review assesses whether the
+implementation is ready for release hardening and eventual public enablement.
+
+**This review does NOT enable public user-data conversion.**  Public execution
+remains disabled by policy.
+
+### 15.2 Evidence Added Since Phase 4G-3
+
+| Phase | Capability | Evidence |
+|---|---|---|
+| 4J-0 | Rollback implementation | 14 tests passed; dry-run, quarantine, delete modes; rawdata + metadata protected |
+| 4J-1 | Approval/audit execution integration | 20 tests passed; approval gate evaluated before exec; audit start/final written; provenance references all evidence |
+
+### 15.3 Approval/Audit Execution Integration Evidence
+
+`run_internal_user_dicom_conversion_from_persisted_package()` now performs
+the complete approval/audit lifecycle:
+
+1. Loads `approval_record.json` → deserialises `DicomConversionApprovalRecord`
+2. Evaluates approval gate via `evaluate_conversion_approval_gate()` — blocks if not `"approved"`
+3. Loads `audit_preview.json` — blocks if missing or incomplete
+4. Validates command-template count matches mapping snapshot count
+5. Writes `audit_execution_start.json` (state=`execution_started`) BEFORE dcm2niix
+6. Executes dcm2niix via argv list only (no `shell=True`)
+7. Writes `audit_execution_final.json` (state=`execution_succeeded`/`execution_failed`) AFTER dcm2niix
+8. Execution provenance metadata includes: approval path, audit path, audit final path, checksum paths, rollback plan path, approval status, audit state
+
+**Tests:** `test_dicom_conversion_approval_audit_execution_integration.py` — 20/20 passed.
+
+### 15.4 Updated 32-Gate Table
+
+| # | Gate | Status | Evidence |
+|---|---|---|---|
+| 1 | Real rawdata read-only | ✅ met | All services emit `rawdata_read_only` flag; pre/post checksum comparison implemented |
+| 2 | Output root under project dir | ✅ met | `validate_output_root_under_project()` validated |
+| 3 | Output root not under rawdata | ✅ met | `validate_output_root_not_under_rawdata()` validated |
+| 4 | Conversion run dir reserved | ✅ met | `persist_conversion_plan()` with `fail_if_exists` |
+| 5 | Approval record persisted | ✅ met | `approval_record.json` written by Phase 4E-0 |
+| 6 | Audit preview persisted | ✅ met | `audit_preview.json` written; validated before execution |
+| 7 | Preflight snapshot persisted | ✅ met | `preflight_snapshot.json` written |
+| 8 | Mapping snapshot persisted | ✅ met | `mapping_snapshot.json` written |
+| 9 | Command template persisted | ✅ met | `command_templates.json` written; validated before execution |
+| 10 | Manifest/provenance planned | ✅ met | `planned_*.json` written and replaced after execution |
+| 11 | Logs planned | ✅ met | `stdout.log`/`stderr.log` paths planned and captured |
+| 12 | Rollback policy defined | ✅ met | Phase 4J-0: dry-run, quarantine, delete implemented; 14 tests |
+| 13 | Overwrite policy explicit | ✅ met | `fail_if_exists` default |
+| 14 | dcm2niix availability checked | ✅ met | `check_dcm2niix_availability()` with version query |
+| 15 | Env flags required | ✅ met | 10 flags required; all must be `"1"` |
+| 16 | Command argv list only | ✅ met | All runners accept `list[str]`; no `shell=True` |
+| 17 | No raw shell string | ✅ met | `extra='forbid'` on command templates |
+| 18 | Metadata-only audit export | ✅ met | Excludes `.dcm`/`.nii`/`.nii.gz` |
+| 19 | Review package readable | ✅ met | `read_conversion_review_package()` returns all 17 files |
+| 20 | Synthetic smoke validated | ✅ met | 12 tests passed |
+| 21 | Synthetic result viewer | ✅ met | `read_synthetic_smoke_results()` available |
+| 22 | No real execute button | ✅ met | Frontend has no "Run Conversion" onClick handler |
+| 23 | Safe allowlist constrained | ✅ met | SPM/DPABI nodes excluded |
+| 24 | SPM/DPABI/MATLAB disabled | ✅ met | Guard tests pass |
+| 25 | Full preprocessing disabled | ✅ met | No nodes registered |
+| 26 | `run_conversion_execute` blocked | ✅ met | Always returns disabled |
+| 27 | Approval gate schema complete | ✅ met | 17 preconditions + Phase 4J-1 execution integration |
+| 28 | Audit persists before exec | ✅ met | Phase 4J-1: start before dcm2niix, final after; provenance references |
+| 29 | Rawdata unchanged verified | ✅ met | Pre/post checksum snapshot + comparison |
+| 30 | Real dcm2niix on synthetic | ✅ met | Phase 4H-3d: integration test PASSED |
+| 31 | External DICOM smoke | ✅ met | Phase 4I-1b: 1104 DICOM, 3 subjects, 6 groups PASSED |
+| 32 | Rollback tested | ✅ met | Phase 4J-0: dry-run, quarantine, delete; 14 tests |
+
+### 15.5 Gates Now Met
+
+| Status | Count |
+|---|---|
+| Met | **32 of 32** |
+| Partial | **0** |
+| Missing | **0** |
+
+All 32 safety gates are met.  This is the first time in the GO/NO-GO review
+history that zero gates remain partial or missing.
+
+### 15.6 Remaining Release Risks
+
+| Risk | Severity | Mitigation |
+|---|---|---|
+| Accidental public enablement | High | Policy gate; no endpoint/button; env flags required |
+| dcm2niix version drift | Medium | Version recorded in audit; preflight re-checks |
+| Operator bypass via API | Medium | No public endpoint; `run_conversion_execute()` blocked |
+| Desktop packaging untested with conversion | Low | Deferred to Phase 4K hardening |
+| No macOS/Linux dcm2niix smoke | Low | Windows-only validated; cross-platform deferred |
+| NSIS installer not rebuilt | Low | Deferred to Phase 4K |
+
+### 15.7 Final Decision Matrix
+
+| Criterion | Weight | Score (0–3) | Notes |
+|---|---|---|---|
+| Safety wrapper completeness | High | 3 | All env flags, path validation, command-template enforcement |
+| Approval gate design | High | 3 | 17 preconditions + execution integration |
+| Synthetic smoke validation | High | 3 | Real dcm2niix validated on synthetic + real DICOM |
+| Rawdata safety | High | 3 | Pre/post checksum; rollback protects rawdata |
+| Manifest/provenance | Medium | 3 | Full schema reuse from Phase 3 |
+| Log capture | Medium | 3 | stdout/stderr captured |
+| Rollback | Medium | 3 | Dry-run, quarantine, delete implemented |
+| Audit persistence | Medium | 3 | Start before exec, final after; provenance references |
+| Frontend safety | High | 3 | No execute button; no onClick handler |
+| External tool isolation | High | 3 | Env flags + argv list + no shell |
+| Test coverage | Medium | 3 | 160+ tests across all Phase 4 layers |
+| Real smoke evidence | High | 3 | Synthetic + FunRaw/T1Raw DemoData validated |
+
+**Weighted assessment**: All criteria score 3/3.  Implementation is complete.
+
+### 15.8 Final Decision
+
+**Decision: FULL GO ELIGIBLE — REQUIRES FINAL HUMAN RELEASE APPROVAL.**
+
+**Rationale:**
+- 32/32 gates met.  Zero partial.  Zero missing.
+- Approval/audit execution integration is complete (Phase 4J-1).
+- Rollback is fully implemented (Phase 4J-0).
+- Real dcm2niix validated on both synthetic and real FunRaw/T1Raw DICOM.
+- Rawdata checksum before/after verification is integrated.
+- Execution provenance references all approval, audit, checksum, and rollback evidence.
+- All critical safety gates (rawdata read-only, no shell, env flags, frontend safety) are met.
+- Test coverage is comprehensive across all Phase 4 layers.
+
+**This decision does NOT mean public conversion is enabled.**  It means the
+implementation is eligible for release hardening (Phase 4K).
+
+### 15.9 Human Release Approval Requirements
+
+Before public user-data conversion can be enabled, the following must occur:
+
+1. **Explicit maintainer approval** recorded in commit message, PR review, or release notes.
+2. **Phase 4K-0 release hardening** completed:
+   - Electron GUI startup verified with conversion workflow
+   - NSIS installer rebuilt
+   - README / README_CN updated with conversion safety documentation
+   - Test baseline re-verified after any packaging changes
+3. **`MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`** env flag added as final gate.
+4. **Public `/conversion/execute` endpoint** added ONLY after Phase 4K human sign-off.
+5. **Frontend "Run Conversion" button** added ONLY after Phase 4K human sign-off.
+
+Until human release approval is recorded, the following remain in force:
+- No public `/conversion/execute` endpoint
+- No frontend "Run Conversion" button
+- `run_conversion_execute()` returns blocked for normal users
+- 10 env flags required for any real execution
+- SPM/DPABI/MATLAB remain disabled
+- Full preprocessing not enabled
+- Rawdata remains read-only
+
+### 15.10 Phase 4L-0 Status
+
+**Phase 4L-0: Human release approval workflow — IMPLEMENTED.**
+- 32/32 gates are met.
+- Full GO eligibility exists.
+- Human release approval is now formalized with schema, service, and tests.
+- Public execution remains disabled.
+- `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is NOT set.
+
+### 15.11 Required Next Task
+
+**Phase 4 freeze and v0.4.0 release candidate packaging** or **Phase 4L-1:
+Flag-gated public backend execute endpoint design review.**
+
+Or, if the maintainer prefers to keep conversion internal-only:
+**Freeze Phase 4 and move to other roadmap items** (v0.4.0: NIfTI viewer, enhanced QC dashboard, MATLAB/SPM runtime opt-in).
+
+---
+
+*End of GO/NO-GO review.  User-data DICOM conversion is FULL GO ELIGIBLE
+with 32/32 gates met, zero missing, zero partial.  Public enablement
+requires final human release approval.  Research-use only, not for
+clinical diagnosis.*  User-data DICOM conversion is CONDITIONAL GO
 with 30/32 gates met and zero missing gates.  Full GO is blocked by
 rollback implementation and approval/audit execution integration.
 Research-use only, not for clinical diagnosis.*

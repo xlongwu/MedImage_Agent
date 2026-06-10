@@ -38,6 +38,11 @@ from src.backend.app.services.conversion_planner import plan_conversion
 from src.backend.app.services.mock_store import mock_store
 
 
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _detect_dcm2niix() -> tuple[bool, str | None, str | None]:
     """Detect whether dcm2niix is available on the system PATH.
 
@@ -1267,6 +1272,12 @@ def run_internal_user_dicom_conversion_from_persisted_package(
         DicomConversionSafetyFlags,
         DicomConversionSandboxResult,
     )
+    from src.backend.app.schemas.dicom_conversion_approval import (
+        DicomConversionApprovalRecord,
+        DicomConversionExecutionAuditUpdate,
+        build_execution_audit_update,
+        evaluate_conversion_approval_gate,
+    )
     from src.backend.app.schemas.execution_manifest import (
         ExecutionProvenance,
         OutputManifest,
@@ -1325,6 +1336,58 @@ def run_internal_user_dicom_conversion_from_persisted_package(
             safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
         )
 
+    # ── 3b. Load and evaluate approval record ──
+    approval_path = next((f.path for f in pkg.files if f.kind == "approval_record"), "")
+    if not approval_path or not Path(approval_path).exists():
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=["Approval record not found in review package."],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+    try:
+        approval_json = json.loads(Path(approval_path).read_text())
+        approval = DicomConversionApprovalRecord(**approval_json)
+    except Exception as exc:
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=[f"Failed to parse approval record: {exc}"],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+    gate = evaluate_conversion_approval_gate(approval, preflight_ok=True)
+    if gate.status != "approved":
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=[
+                f"Approval gate not passed: {gate.status}. "
+                f"Missing fields: {gate.missing_fields}. "
+                f"Blocking: {gate.blocking_issues}"
+            ],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+
+    # ── 3c. Load and validate audit preview ──
+    audit_path = next((f.path for f in pkg.files if f.kind == "audit_preview"), "")
+    if not audit_path or not Path(audit_path).exists():
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=["Audit preview not found in review package."],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+    try:
+        audit_json = json.loads(Path(audit_path).read_text())
+    except Exception as exc:
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=[f"Failed to parse audit preview: {exc}"],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+    if not audit_json.get("audit_id") or not audit_json.get("project_id"):
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=["Audit preview is incomplete: missing audit_id or project_id."],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
+
     # ── 4. Output root safety ──
     output_root = pkg.run_dir or ""
     if rawdata_dir and output_root.startswith(rawdata_dir):
@@ -1354,6 +1417,8 @@ def run_internal_user_dicom_conversion_from_persisted_package(
 
     # ── 6. Pre-conversion checksum snapshot ──
     checksum_before = None
+    checksum_before_path = next((f.path for f in pkg.files if f.kind == "rawdata_checksum_before"), "")
+    rollback_plan_path = next((f.path for f in pkg.files if f.kind == "rollback_plan_dry_run"), "")
     if rawdata_dir:
         checksum_before = build_pre_conversion_rawdata_snapshot([rawdata_dir])
 
@@ -1366,19 +1431,49 @@ def run_internal_user_dicom_conversion_from_persisted_package(
             safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
         )
 
-    # ── 8. Execute dcm2niix ──
+    # ── 7b. Write audit execution start record ──
     output_path = Path(output_root)
+    tmpl_path = next((f.path for f in pkg.files if f.kind == "command_templates"), "")
+    audit_start = build_execution_audit_update(
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        output_root=output_root,
+        state="execution_started",
+        audit_record_path=audit_path,
+        preflight_snapshot_path=next((f.path for f in pkg.files if f.kind == "preflight_snapshot"), ""),
+        mapping_snapshot_path=mapping_path,
+        command_templates_path=tmpl_path,
+        checksum_before_path=next((f.path for f in pkg.files if f.kind == "rawdata_checksum_before"), ""),
+        rollback_plan_path=next((f.path for f in pkg.files if f.kind == "rollback_plan_dry_run"), ""),
+        dcm2niix_version=avail.version,
+        started_at=_now_iso(),
+    )
+    audit_start_path_obj = output_path / "audit_execution_start.json"
+    audit_start_path_obj.parent.mkdir(parents=True, exist_ok=True)
+    audit_start_path_obj.write_text(audit_start.model_dump_json(indent=2), encoding="utf-8")
+    audit_final_path_obj = output_path / "audit_execution_final.json"
+
+    # ── 8. Execute dcm2niix ──
     output_path.mkdir(parents=True, exist_ok=True)
     logs_dir = output_path / "logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
 
-    # Read command templates
-    tmpl_path = next((f.path for f in pkg.files if f.kind == "command_templates"), "")
     try:
         tmpl_data = json.loads(Path(tmpl_path).read_text()) if tmpl_path else {}
     except Exception:
         tmpl_data = {}
     templates = tmpl_data.get("templates", [])
+
+    # Validate command templates match mapping snapshot
+    if len(templates) != len(mappings_data.get("mappings", [])):
+        return DicomConversionSandboxResult(
+            ok=False, status="blocked", mode="disabled", project_id=project_id,
+            blocking_issues=[
+                f"Command template count ({len(templates)}) does not match "
+                f"mapping count ({len(mappings_data.get('mappings', []))})."
+            ],
+            safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
+        )
 
     stdout_log_path = logs_dir / "dcm2niix_stdout.log"
     stderr_log_path = logs_dir / "dcm2niix_stderr.log"
@@ -1438,9 +1533,56 @@ def run_internal_user_dicom_conversion_from_persisted_package(
                 errors.append("RAWDATA CHECKSUM CHANGED — rawdata may have been modified!")
                 checksum_changed = True
 
-    # ── 10. Write manifest and provenance ──
+    # ── 9a. Write checksum artifacts ──
+    if checksum_after:
+        (output_path / "rawdata_checksum_after.json").write_text(
+            checksum_after.model_dump_json(indent=2), encoding="utf-8",
+        )
+        if checksum_before:
+            comp = compare_conversion_rawdata_snapshots(checksum_before, checksum_after)
+            (output_path / "rawdata_checksum_comparison.json").write_text(
+                comp.model_dump_json(indent=2), encoding="utf-8",
+            )
+
+    status = "failed" if checksum_changed else ("succeeded" if final_rc == 0 else "warning")
+
+    # Define paths needed by audit final and provenance
     manifest_path = output_path / "output_manifest.json"
     provenance_path = output_path / "execution_provenance.json"
+
+    # ── 9b. Write audit execution final record ──
+    audit_final_state: str = (
+        "execution_succeeded" if status == "succeeded" else "execution_failed"
+    )
+    audit_final = DicomConversionExecutionAuditUpdate(
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        audit_state=audit_final_state,  # type: ignore[arg-type]
+        started_at=audit_start.started_at,
+        finished_at=_now_iso(),
+        approval_record_path=approval_path,
+        audit_record_path=audit_path,
+        preflight_snapshot_path=audit_start.preflight_snapshot_path,
+        mapping_snapshot_path=mapping_path,
+        command_templates_path=tmpl_path,
+        checksum_before_path=audit_start.checksum_before_path,
+        checksum_after_path=str(output_path / "rawdata_checksum_after.json"),
+        checksum_comparison_path=str(output_path / "rawdata_checksum_comparison.json"),
+        rollback_plan_path=audit_start.rollback_plan_path,
+        rollback_result_path=str(output_path / "rollback_result.json") if status != "succeeded" else None,
+        output_manifest_path=str(manifest_path),
+        execution_provenance_path=str(provenance_path),
+        stdout_log_path=str(stdout_log_path),
+        stderr_log_path=str(stderr_log_path),
+        dcm2niix_version=avail.version,
+        return_code=final_rc,
+        warnings=warnings,
+        errors=errors,
+    )
+    audit_final_path_obj = output_path / "audit_execution_final.json"
+    audit_final_path_obj.write_text(audit_final.model_dump_json(indent=2), encoding="utf-8")
+
+    # ── 10. Write manifest and provenance content (paths already defined above) ──
 
     items: list[OutputManifestItem] = []
     for p in sorted(output_path.rglob("*")):
@@ -1469,15 +1611,19 @@ def run_internal_user_dicom_conversion_from_persisted_package(
         stdout_log_path=str(stdout_log_path),
         stderr_log_path=str(stderr_log_path),
         return_code=final_rc,
+        metadata={
+            "phase": "4J-1",
+            "approval_record_path": approval_path,
+            "audit_record_path": audit_path,
+            "audit_final_path": str(audit_final_path_obj),
+            "checksum_before_path": checksum_before_path,
+            "checksum_after_path": str(output_path / "rawdata_checksum_after.json"),
+            "rollback_plan_path": rollback_plan_path,
+            "approval_status": gate.status,
+            "audit_state": audit_final_state,
+        },
     )
     provenance_path.write_text(provenance.model_dump_json(indent=2), encoding="utf-8")
-
-    if checksum_after:
-        (output_path / "rawdata_checksum_after.json").write_text(
-            checksum_after.model_dump_json(indent=2), encoding="utf-8",
-        )
-
-    status = "failed" if checksum_changed else ("succeeded" if final_rc == 0 else "warning")
 
     return DicomConversionSandboxResult(
         ok=not checksum_changed and len(errors) == 0,

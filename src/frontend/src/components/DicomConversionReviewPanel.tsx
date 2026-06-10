@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, persistProjectDicomConversionPlan, runProjectDicomConversionPreflight } from "../api";
+import { DEFAULT_API_BASE, getProjectDicomConversionReleaseReadiness, persistProjectDicomConversionPlan, runProjectDicomConversionPreflight } from "../api";
 import type {
   Dcm2niixCommandTemplate,
   DicomConversionMapping,
   DicomConversionPlanPersistenceResponse,
   DicomConversionPreflightResponse,
+  DicomConversionReleaseReadinessReport,
   DicomConversionSafetyFlags,
 } from "../types";
+import DicomConversionReleaseReadinessPanel from "./DicomConversionReleaseReadinessPanel";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
@@ -246,6 +248,14 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
           </div>
         </>
       )}
+
+      {/* Phase 4K-1: Release Readiness Panel */}
+      {persistResult?.conversion_run_id && (
+        <ReleaseReadinessSection
+          projectId={projectId!}
+          conversionRunId={persistResult.conversion_run_id}
+        />
+      )}
     </Sect>
   );
 }
@@ -293,3 +303,20 @@ const APPROVAL_CHECKLIST: string[] = [
 const Sect: React.FC<{ children: React.ReactNode }> = ({ children }) => <section style={{ padding: 16, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(255, 255, 255, 0.88)", marginTop: 4 }}>{children}</section>;
 const H3: React.FC<{ children: React.ReactNode }> = ({ children }) => <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{children}</h3>;
 const Sub: React.FC<{ children: React.ReactNode }> = ({ children }) => <span style={{ color: "#667085", fontSize: 12 }}>{children}</span>;
+
+function ReleaseReadinessSection({ projectId, conversionRunId }: { projectId: string; conversionRunId: string }) {
+  const [rr, setRr] = useState<DicomConversionReleaseReadinessReport | null>(null);
+  const [rrLoading, setRrLoading] = useState(false);
+  const [rrError, setRrError] = useState("");
+
+  async function handleCheck() {
+    setRrLoading(true); setRrError("");
+    try {
+      const res = await getProjectDicomConversionReleaseReadiness(DEFAULT_API_BASE, projectId, conversionRunId);
+      setRr(res as DicomConversionReleaseReadinessReport);
+    } catch (e) { setRrError(e instanceof Error ? e.message : String(e)); }
+    finally { setRrLoading(false); }
+  }
+
+  return <DicomConversionReleaseReadinessPanel readiness={rr} loading={rrLoading} error={rrError} onRefresh={handleCheck} />;
+}

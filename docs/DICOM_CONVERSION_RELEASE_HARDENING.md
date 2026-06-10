@@ -1,0 +1,433 @@
+# DICOM Conversion Release Hardening — Phase 4K-0
+
+**Status:** Release hardening contract — NOT a public release enablement.
+**Date:** 2026-06-19
+**Parent:** `docs/DICOM_USER_DATA_CONVERSION_GO_NO_GO_REVIEW.md` (Phase 4G-4)
+
+---
+
+## 1. Purpose and Scope
+
+This document defines the **release hardening** requirements that must be
+satisfied before MedImage Agent can expose a public DICOM-to-NIfTI conversion
+user interface or public `/conversion/execute` endpoint.
+
+**Phase 4K-0 does NOT enable public conversion.**  It establishes the
+infrastructure to validate readiness, protect against common failure modes,
+and guide the maintainer through the final human approval checklist.
+
+---
+
+## 2. Current FULL GO Eligible State
+
+As of Phase 4G-4:
+
+- **32/32 safety gates met.**  Zero partial.  Zero missing.
+- Approval/audit execution integration complete (Phase 4J-1).
+- Rollback fully implemented: dry-run, quarantine, delete (Phase 4J-0).
+- Real dcm2niix validated on synthetic + FunRaw/T1Raw DemoData (1104 DICOM, 3 subjects).
+- Rawdata checksum before/after verification integrated.
+- Execution provenance references all evidence.
+
+**This is FULL GO ELIGIBLE, not FULL GO ENABLED.**
+
+---
+
+## 3. What Remains Disabled in Phase 4K-0
+
+| Capability | Status |
+|---|---|
+| Public `/conversion/execute` endpoint | ❌ NOT PRESENT |
+| Frontend "Run Conversion" button | ❌ NOT PRESENT |
+| `run_conversion_execute()` for normal users | ❌ BLOCKED |
+| SPM/DPABI/MATLAB execution | ❌ DISABLED |
+| Full preprocessing (slice timing, realignment, etc.) | ❌ DISABLED |
+| Rawdata modification | ❌ PROHIBITED |
+
+---
+
+## 4. Release Hardening Non-Goals
+
+- Do NOT add a public conversion execute endpoint.
+- Do NOT add a frontend execute button.
+- Do NOT change `run_conversion_execute()` behavior.
+- Do NOT enable SPM/DPABI/MATLAB.
+- Do NOT implement full preprocessing.
+- Do NOT modify rawdata.
+- Do NOT use `shell=True`.
+
+---
+
+## 5. Disk-Space Preflight Policy
+
+Before any real conversion, the system must validate that sufficient free
+disk space exists under the output root.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `estimated_required_bytes` | `total_rawdata_bytes * 2` | Rough estimate for NIfTI + sidecar + logs |
+| `required_multiplier` | `1.5` | Safety margin; block if `free_bytes < estimated * multiplier` |
+| `check_at_preflight` | `true` | Disk check runs as part of release readiness |
+| `block_on_insufficient` | `true` | Insufficient space → `status=blocked` |
+
+---
+
+## 6. Long-Running Task Policy
+
+DICOM-to-NIfTI conversion may be long-running for large datasets.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `max_subjects_per_run` | `50` | Block if project has more subjects |
+| `report_progress` | `subject-level` | Progress reported per subject after each mapping completes |
+| `backgroundable` | `true` | Conversion may run as a background task |
+
+---
+
+## 7. Cancellation / Interruption Policy
+
+| Scenario | Behavior |
+|---|---|
+| User-initiated cancellation | SIGTERM to dcm2niix subprocess; mark run `interrupted` |
+| Process crash | On restart, detect orphaned run directory; mark `interrupted` |
+| Partial outputs on cancel | Preserved; rollback available on demand |
+| `cancellation_supported` | `true` (Phase 4K-0: declared, not yet implemented in UI) |
+
+---
+
+## 8. Timeout Policy
+
+| Parameter | Default | Description |
+|---|---|---|
+| `timeout_seconds` | `1800` (30 min) | Per-subject dcm2niix timeout |
+| `total_timeout_seconds` | `7200` (2 hr) | Total run timeout across all subjects |
+| `block_on_timeout_risk` | `false` | Warning only; does not block |
+
+---
+
+## 9. Output Collision Policy
+
+| Policy | Default | Behavior |
+|---|---|---|
+| `fail_if_exists` | ✅ default | Block if output directory already has conversion artifacts |
+| `write_new_run_directory` | Allowed | Each run gets a unique `conversion_run_id` |
+| `overwrite_derivatives_only` | Allowed with warning | Operator must explicitly acknowledge |
+
+---
+
+## 10. Retry/Resume Policy
+
+Aligned with `docs/RUN_RETRY_RESUME_CONTRACT.md`:
+
+| Operation | Supported | Notes |
+|---|---|---|
+| Retry (failed run) | Schema only | Re-execute all mappings; previous partial outputs removed |
+| Resume (interrupted run) | Schema only | Continue from first incomplete mapping |
+| Rerun (fresh) | Yes | New `conversion_run_id`, new run directory |
+
+Retry/resume execution is NOT implemented in Phase 4K-0.
+
+---
+
+## 11. Error Recovery Policy
+
+| Error | Recovery |
+|---|---|
+| dcm2niix returns non-zero | Capture stderr; mark node `failed`; audit final records failure |
+| dcm2niix timeout | Kill process; mark node `timeout`; audit final records timeout |
+| Output manifest mismatch | Block downstream; mark run `failed` |
+| Rawdata checksum changed | Block ALL downstream; mark run `safety_violation`; NEVER auto-recover |
+| Disk full | Stop immediately; preserve partial outputs; mark run `failed` |
+
+---
+
+## 12. Rollback Policy
+
+Implemented in Phase 4J-0:
+
+| Mode | Behavior |
+|---|---|
+| `dry_run` | Report removable paths; delete nothing |
+| `quarantine` | Move conversion outputs to `rollback_quarantine/<timestamp>/` |
+| `delete` | Delete conversion outputs; requires `confirm_rollback=True` |
+
+Always protected:
+- Rawdata (any path under `rawdata_dir`)
+- Approval record, audit preview, audit start/final
+- Checksum snapshots (before/after/comparison)
+- Rollback plan/manifest/provenance
+- Paths outside `output_root`
+- Path traversal attempts
+
+---
+
+## 13. Audit Finalization Policy
+
+Per Phase 4J-1, every conversion execution produces:
+
+| Artifact | Written When |
+|---|---|
+| `audit_execution_start.json` | Before dcm2niix invocation |
+| `audit_execution_final.json` | After dcm2niix returns (success or failure) |
+| Execution provenance | After audit final; references all evidence paths |
+
+Audit final records: `audit_state`, `started_at`, `finished_at`, `return_code`,
+all evidence paths, `warnings`, `errors`.
+
+---
+
+## 14. User Confirmation Copy Requirements
+
+Before human release approval, the following UI copy must be confirmed:
+
+1. **Conversion warning**: "This will convert DICOM rawdata to NIfTI format
+   using dcm2niix. Rawdata will not be modified. Outputs will be written to
+   the project's converted_bids directory."
+2. **Clinical use prohibition**: "MedImage Agent is for research use only.
+   It is not for clinical diagnosis."
+3. **External tool notice**: "This operation uses the external tool dcm2niix.
+   Ensure you have reviewed all command templates."
+4. **Rollback notice**: "If conversion fails, you can roll back partial
+   outputs using the rollback panel."
+
+---
+
+## 15. Frontend Readiness Requirements
+
+Before a "Run Conversion" button can be added (Phase 4L or later):
+
+- [ ] Release readiness check passes (all gates met, disk space sufficient)
+- [ ] Approval gate checklist is displayed and all 17 items confirmed
+- [ ] Command templates are displayed and reviewed
+- [ ] Output root is displayed and confirmed
+- [ ] Rollback policy is acknowledged
+- [ ] Clinical use prohibition is acknowledged
+- [ ] "Run Conversion" button is labelled "Approve & Execute Conversion"
+- [ ] Secondary confirmation dialog appears before execution
+- [ ] Progress indicator shows per-subject status
+- [ ] Cancel button is available during execution
+
+**None of the above is implemented in Phase 4K-0.**  This is a checklist
+for future work.
+
+---
+
+## 16. Backend Endpoint Readiness Requirements
+
+Before a public `/conversion/execute` endpoint can be added (Phase 4L or later):
+
+- [ ] Endpoint is gated behind `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`
+- [ ] Endpoint requires explicit `approved=true` in request body
+- [ ] Endpoint validates all 17 approval preconditions
+- [ ] Endpoint writes audit start before dcm2niix
+- [ ] Endpoint writes audit final after dcm2niix
+- [ ] Endpoint returns `conversion_disabled=true` if any gate fails
+- [ ] Endpoint is NOT accessible without all 10+1 env flags
+- [ ] Endpoint logs all invocations
+
+**None of the above is implemented in Phase 4K-0.**
+
+---
+
+## 17. Release Checklist
+
+Before Phase 4K-0 is considered complete:
+
+- [x] Release hardening contract documented (this document)
+- [ ] Release readiness schema created
+- [ ] Release readiness service created
+- [ ] Unit tests for release readiness pass
+- [ ] All existing DICOM safety tests pass
+- [ ] Phase 2/3/SPM regression matrices pass
+- [ ] GO/NO-GO schema reflects 32/32 gates met
+- [ ] PROJECT_STATE.md updated with Phase 4K-0 entry
+- [ ] No public `/conversion/execute` endpoint exists
+- [ ] No frontend "Run Conversion" button exists
+- [ ] `run_conversion_execute()` remains blocked
+- [ ] SPM/DPABI/MATLAB remain disabled
+- [ ] Rawdata remains read-only
+
+---
+
+## 18. Final Human Approval Checklist
+
+Before public conversion can be enabled (Phase 4L or later):
+
+- [ ] Maintainer reviews and approves the Phase 4G-4 GO/NO-GO decision
+- [ ] Maintainer reviews and approves this release hardening document
+- [ ] Maintainer sets `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`
+- [ ] Maintainer signs off on the public `/conversion/execute` endpoint
+- [ ] Maintainer signs off on the frontend "Approve & Execute Conversion" button
+- [ ] README / README_CN updated with conversion safety documentation
+- [ ] Electron GUI verified with conversion workflow
+- [ ] NSIS installer rebuilt and smoke-tested
+- [ ] Approval recorded in commit message or PR review
+
+**None of the above has occurred in Phase 4K-0.**
+
+---
+
+## 19. Required Tests
+
+`tests/unit/test_dicom_conversion_release_readiness.py`:
+
+| # | Test |
+|---|---|
+| 1 | Readiness blocked if not all 32 gates met |
+| 2 | Readiness blocked if public endpoint is enabled |
+| 3 | Readiness blocked if frontend execute is enabled |
+| 4 | Readiness blocked if SPM/DPABI/MATLAB enabled |
+| 5 | Readiness blocked if full preprocessing enabled |
+| 6 | Readiness blocked if disk space insufficient |
+| 7 | Readiness warning if cancellation unsupported |
+| 8 | Readiness warning if resume unsupported |
+| 9 | Readiness `ready_for_human_release_review` when gates met and blockers absent |
+| 10 | Human release approval remains required |
+| 11 | Service does not call dcm2niix |
+| 12 | Service does not modify rawdata |
+| 13 | Service imports no subprocess |
+| 14 | `run_conversion_execute()` remains blocked |
+| 15 | No public `/conversion/execute` route exists |
+| 16 | No frontend "Run Conversion" button exists |
+
+---
+
+## 20. Immediate Next Task
+
+**Phase 4K-1: Release checklist UI polish and documentation — COMPLETE.**
+Read-only release readiness panel added to frontend + backend endpoint.
+
+---
+
+## 21. Phase 4L-0 — Final Human Release Approval Workflow
+
+**Implemented.**  This section records the Phase 4L-0 contract after implementation.
+
+### 21.1 Purpose and Scope
+
+Phase 4L-0 formalizes the human release approval process required before
+public DICOM-to-NIfTI conversion can be enabled.  It provides schema,
+service, and tests for recording and validating maintainer approval.
+
+**This does NOT expose public conversion.**  Recording approval is a
+metadata operation that does not change execution behavior.
+
+### 21.2 Why Human Release Approval Is Still Required
+
+- 32/32 safety gates are met — the implementation is FULL GO ELIGIBLE.
+- But public enablement is a policy decision, not a technical one.
+- A human maintainer must explicitly review and sign off before:
+  - Adding `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1`
+  - Adding a public `/conversion/execute` endpoint
+  - Adding a frontend "Run Conversion" button
+
+### 21.3 Approval Authority and Maintainer Identity
+
+| Field | Requirement |
+|---|---|
+| `approved_by` | Non-empty string identifying the maintainer |
+| `approved_at` | ISO-8601 timestamp set at persist time |
+| `expires_at` | Optional; defaults to 180 days from approval |
+
+### 21.4 Approval Record Fields
+
+| Field | Type | Required |
+|---|---|---|
+| `approval_id` | string | Auto-generated |
+| `project_id` | string | Required |
+| `conversion_run_id` | string | Required |
+| `approved_by` | string | **Required** |
+| `human_approval_statement` | string | **Required** (free-text) |
+| `rawdata_readonly_acknowledged` | bool | **Required** |
+| `no_clinical_use_acknowledged` | bool | **Required** |
+| `rollback_acknowledged` | bool | **Required** |
+| `approval_audit_acknowledged` | bool | **Required** |
+| `public_endpoint_acknowledged` | bool | **Required** |
+| `frontend_execute_acknowledged` | bool | **Required** |
+| `spm_dpabi_matlab_disabled_acknowledged` | bool | **Required** |
+
+### 21.5 Required Evidence Before Approval
+
+- Release readiness status must be `ready_for_human_release_review`
+- 32/32 safety gates must be met
+- All 9 required approval fields must be complete
+
+### 21.6 Approval Expiration / Revocation Policy
+
+- Approval expires after 180 days by default
+- Approval can be revoked by writing a new record with `status="revoked"`
+- Expired/revoked approval blocks public enablement
+
+### 21.7 Environment Flag Policy
+
+`MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` is **NOT set** in Phase 4L-0.
+This flag is the final gate and should only be set after:
+1. Human release approval is recorded
+2. Phase 4K hardening is complete
+3. Explicit maintainer sign-off
+
+### 21.8 Public Endpoint Preconditions
+
+Before `/conversion/execute` can be added:
+- [ ] Human release approval recorded
+- [ ] `MEDIMAGE_ALLOW_USER_DATA_CONVERSION=1` set
+- [ ] Explicit maintainer sign-off
+
+**None of these conditions are met in Phase 4L-0.**
+
+### 21.9 Frontend Execute UI Preconditions
+
+Before "Run Conversion" button can be added:
+- [ ] All public endpoint preconditions met
+- [ ] Frontend approval checklist displays all 17 items
+- [ ] Secondary confirmation dialog implemented
+
+**None of these conditions are met in Phase 4L-0.**
+
+### 21.10 Audit Requirements
+
+- Release approval record is persisted as `release_approval_record.json`
+- Release approval decision is persisted as `release_approval_decision.json`
+- Both files are under the conversion run directory
+- Both files are metadata-only — no image data, no execution
+
+### 21.11 Release Approval Storage Policy
+
+```
+<project_dir>/conversion_runs/<conversion_run_id>/
+├── release_approval_record.json    ← human approval metadata
+└── release_approval_decision.json  ← automated decision
+```
+
+### 21.12 Failure / Rejection Behavior
+
+- Incomplete record → `status=blocked`, writes record with `persisted_incomplete=true`
+- Validation failure → `status=blocked`, writes record with `persisted_blocked=true`
+- Rejection → `status=rejected`, writes decision only
+- Expiration → `status=expired`, does not auto-revoke
+
+### 21.13 Test Strategy
+
+`tests/unit/test_dicom_conversion_release_approval.py` — 18 tests:
+- Schema: completeness (3), validation (8), evaluation (2), purity (3)
+- Service: persist metadata (1), no dcm2niix (1), no rawdata (1), incomplete blocked (1)
+- Safety: run_conversion_execute blocked, no public endpoint, no frontend button (3)
+
+### 21.14 GO/NO-GO Impact
+
+No gate changes.  All 32 gates remain met.  This phase adds the process
+layer for human sign-off without changing any gate status.
+
+### 21.15 Immediate Next Task
+
+**Phase 4 freeze and v0.4.0 release candidate packaging.**  Or,
+if maintainer signs off: **Phase 4L-1: Flag-gated public backend execute
+endpoint design review.**
+
+---
+
+*End of release hardening contract.  Public conversion remains disabled.
+SPM/DPABI/MATLAB remain disabled.  Full preprocessing remains disabled.
+Rawdata remains read-only.  Research-use only, not for clinical diagnosis.*  Public conversion remains disabled.
+SPM/DPABI/MATLAB remain disabled.  Full preprocessing remains disabled.
+Rawdata remains read-only.  Research-use only, not for clinical diagnosis.*

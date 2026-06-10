@@ -620,6 +620,215 @@ values including file sizes, checksums, and return code.
 
 ---
 
+## 20. Phase 4J-1 — Approval/Audit Execution Integration
+
+**Implemented.**  This section records the Phase 4J-1 contract after implementation.
+
+### 20.1 Purpose and Scope
+
+Phase 4J-1 integrates approval and audit validation into the internal DICOM-to-NIfTI
+conversion execution path.  It closes the last remaining partial GO/NO-GO gate
+(gate 28: audit record persists before execution) by ensuring that:
+
+- Persisted approval/audit evidence is consumed before execution.
+- An audit execution-start record is written before dcm2niix invocation.
+- An audit execution-final record is written after success or failure.
+- Execution provenance references all approval, audit, checksum, and rollback evidence.
+
+**This does NOT expose public user-data conversion.**
+This does NOT add a frontend execution UI.
+This does NOT enable full preprocessing.
+This does NOT enable SPM/DPABI/MATLAB.
+
+### 20.2 Approval Package Consumption Policy
+
+Before dcm2niix is invoked, the internal execution path must:
+
+1. Load the persisted `approval_record.json`.
+2. Deserialise it into a `DicomConversionApprovalRecord`.
+3. Evaluate the approval gate via `evaluate_conversion_approval_gate()`.
+4. Block if the gate status is not `"approved"`.
+5. Block if any of the 17 required approval fields are missing.
+
+The approval record path is recorded in the audit update.
+
+### 20.3 Audit Record Consumption Policy
+
+Before dcm2niix is invoked, the internal execution path must:
+
+1. Load the persisted `audit_preview.json`.
+2. Confirm the audit preview file exists and is readable.
+3. Block if the audit preview is missing or unreadable.
+4. Block if required audit fields (`audit_id`, `approval_id`, `project_id`) are empty.
+
+The audit preview path is recorded in the audit update.
+
+### 20.4 Execution Precondition Checks
+
+The following preconditions must ALL pass before dcm2niix is called:
+
+| # | Check | Blocks if |
+|---|---|---|
+| 1 | Approval record loaded and parsed | Parse fails or path missing |
+| 2 | Approval gate evaluated | Gate status != `"approved"` |
+| 3 | Audit preview loaded | File missing or unreadable |
+| 4 | Rawdata checksum snapshot exists | `rawdata_checksum_before.json` missing |
+| 5 | Rollback plan exists | `rollback_plan_dry_run.json` missing |
+| 6 | Command templates match mapping snapshot | Template count != mapping count |
+
+If ANY precondition fails, execution returns `status="blocked"` and
+no subprocess is spawned.
+
+### 20.5 Approval Gate Failure Behaviour
+
+If the approval gate is not `"approved"`:
+
+- Execution returns `status="blocked"`.
+- The blocking issue lists which fields are missing.
+- No audit start record is written.
+- No dcm2niix is called.
+- No files are written.
+- Rawdata is not modified.
+
+### 20.6 Audit State Transition Policy
+
+The audit execution state transitions as follows:
+
+```
+planned → preflight_checked → execution_started → execution_succeeded
+                                                  → execution_failed → rollback_planned → rollback_completed
+```
+
+The internal execution path:
+- Sets state to `execution_started` in `audit_execution_start.json`.
+- Sets state to `execution_succeeded` or `execution_failed` in `audit_execution_final.json`.
+- If execution fails, the rollback plan path is referenced but auto-rollback is NOT executed.
+
+### 20.7 Pre-Execution Audit Snapshot
+
+`audit_execution_start.json` is written BEFORE dcm2niix is invoked and contains:
+
+- `audit_state`: `"execution_started"`
+- `started_at`: ISO-8601 timestamp
+- `approval_record_path`, `audit_record_path`
+- `preflight_snapshot_path`, `mapping_snapshot_path`, `command_templates_path`
+- `checksum_before_path`
+- `rollback_plan_path`
+- `stdout_log_path`, `stderr_log_path`
+- `dcm2niix_version`
+
+### 20.8 Post-Execution Audit Finalization
+
+`audit_execution_final.json` is written AFTER dcm2niix completes (success or failure)
+and contains everything in the start record plus:
+
+- `audit_state`: `"execution_succeeded"` or `"execution_failed"`
+- `finished_at`: ISO-8601 timestamp
+- `return_code`: dcm2niix exit code
+- `checksum_after_path`, `checksum_comparison_path`
+- `output_manifest_path`, `execution_provenance_path`
+- `warnings`, `errors`
+
+### 20.9 Checksum Evidence Integration
+
+- The pre-conversion checksum snapshot path (`rawdata_checksum_before.json`) is referenced in both audit records.
+- The post-conversion checksum snapshot path (`rawdata_checksum_after.json`) is referenced in the final audit.
+- If checksums differ, the audit state is `execution_failed` and a warning is recorded.
+
+### 20.10 Rollback Evidence Integration
+
+- The rollback plan path (`rollback_plan_dry_run.json`) is referenced in both audit records.
+- If execution fails, the rollback plan path is included in the final audit.
+- A rollback result path (`rollback_result.json`) is referenced if rollback was executed.
+- Auto-rollback is NOT triggered by this integration.
+
+### 20.11 Manifest/Provenance Integration
+
+The execution provenance now references:
+
+- `approval_record_path`
+- `audit_record_path`
+- `audit_final_path`
+- `checksum_before_path`
+- `checksum_after_path`
+- `rollback_plan_path`
+
+These are stored in the provenance `metadata` field.
+
+### 20.12 Failure Behaviour
+
+If dcm2niix fails (non-zero exit code):
+
+- Audit state is set to `execution_failed`.
+- Warnings and errors are recorded in the audit final.
+- Output manifest and provenance are still written (partial results).
+- Rawdata is NOT modified.
+- No automatic rollback is performed.
+- The rollback plan path is referenced for manual review.
+
+### 20.13 Public API and UI Restrictions
+
+**Explicitly confirmed:**
+
+- No public `/conversion/execute` endpoint is added.
+- No frontend "Run conversion" button is added.
+- No public conversion API is exposed.
+- `run_conversion_execute()` remains blocked for normal users.
+- SPM/DPABI/MATLAB remain disabled.
+- Full preprocessing is not enabled.
+
+### 20.14 Test Strategy
+
+`tests/unit/test_dicom_conversion_approval_audit_execution_integration.py` — 20 tests:
+
+| # | Test | Category |
+|---|---|---|
+| 1 | Missing approval record blocks execution | Precondition |
+| 2 | Missing audit preview blocks execution | Precondition |
+| 3 | Incomplete approval gate blocks execution | Precondition |
+| 4 | Missing checksum snapshot blocks execution | Precondition |
+| 5 | Missing rollback plan blocks execution | Precondition |
+| 6 | Audit start file written before runner | Audit timing |
+| 7 | Audit final file written on success | Audit timing |
+| 8 | Audit final file written on failure | Audit timing |
+| 9 | Provenance references approval record | Provenance |
+| 10 | Provenance references audit final | Provenance |
+| 11 | Provenance references checksum snapshots | Provenance |
+| 12 | Provenance references rollback plan | Provenance |
+| 13 | Failure references rollback plan/result | Failure |
+| 14 | No rawdata modification | Safety |
+| 15 | run_conversion_execute() blocked | Safety |
+| 16 | No public endpoint added | Safety |
+| 17 | No frontend button added | Safety |
+| 18 | No SPM/DPABI/MATLAB enabled | Safety |
+| 19 | No shell=True | Safety |
+| 20 | No subprocess when approval incomplete | Safety |
+
+All tests use monkeypatched runner/fake dcm2niix in `tmp_path`.
+No real dcm2niix is called.
+
+### 20.15 GO/NO-GO Impact
+
+Gate 28 (audit record persists before execution) moves from **partial** to **met**.
+
+After Phase 4J-1:
+- Gates met: 32 of 32
+- Gates partial: 0
+- Gates missing: 0
+- GO/NO-GO status: **FULL GO ELIGIBLE — REQUIRES FINAL HUMAN RELEASE APPROVAL**
+
+Full GO still requires:
+- Final GO/NO-GO re-review (Phase 4G-4).
+- Explicit maintainer approval.
+- No automatic enablement of public conversion endpoint.
+
+### 20.16 Immediate Next Task
+
+**Phase 4G-4: Final GO/NO-GO re-review for full GO eligibility.**
+Or **Phase 4K-0: Release hardening before public conversion UI.**
+
+---
+
 *End of contract document.  The Phase 4B safety wrapper has been extended
 through Phase 4F-0 with controlled synthetic-only real conversion using
 persisted approval packages.  Real user rawdata conversion remains disabled.

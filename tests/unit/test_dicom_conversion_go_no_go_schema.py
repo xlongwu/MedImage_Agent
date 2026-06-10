@@ -65,11 +65,77 @@ def test_partial_critical_produces_no_go():
 
 def test_default_review_is_conditional_go():
     review = build_default_go_no_go_review()
-    # Phase 4G-3: CONDITIONAL GO maintained, 30/32 gates met, zero missing
+    # Phase 4G-4: FULL GO ELIGIBLE, 32/32 gates met, zero partial, zero missing
     assert review.decision == "CONDITIONAL_GO"
     assert review.missing_count == 0  # No missing gates!
-    assert review.met_count >= 28  # 28 met + 2 partial = 30 total, 0 missing
-    assert "31/32" in review.recommendation
+    assert review.partial_count == 0  # No partial gates!
+    assert review.met_count == 32  # All 32 gates met
+    assert "32/32" in review.recommendation
+    assert "FULL GO ELIGIBLE" in review.recommendation
+    assert "REQUIRES FINAL HUMAN RELEASE APPROVAL" in review.recommendation
+    assert review.blocking_issues == []
+    assert review.review_id == "phase-4g-4-review"
+
+
+def test_phase_4g4_all_32_gates_met():
+    """After Phase 4G-4 final review, all 32 gates are met."""
+    review = build_default_go_no_go_review()
+    # Verify specific gates that were previously partial
+    gate_27 = [c for c in review.criteria if c.gate_id == 27][0]
+    assert gate_27.status == "met", f"Gate 27 (approval gate) should be met, got {gate_27.status}"
+    gate_28 = [c for c in review.criteria if c.gate_id == 28][0]
+    assert gate_28.status == "met", f"Gate 28 (audit execution) should be met, got {gate_28.status}"
+    gate_32 = [c for c in review.criteria if c.gate_id == 32][0]
+    assert gate_32.status == "met", f"Gate 32 (rollback) should be met, got {gate_32.status}"
+
+
+def test_no_gates_missing_or_partial():
+    """Phase 4G-4: zero missing, zero partial."""
+    review = build_default_go_no_go_review()
+    missing = [c for c in review.criteria if c.status == "missing"]
+    partial = [c for c in review.criteria if c.status == "partial"]
+    assert len(missing) == 0, f"Unexpected missing gates: {[c.label for c in missing]}"
+    assert len(partial) == 0, f"Unexpected partial gates: {[c.label for c in partial]}"
+
+
+def test_decision_is_full_go_eligible_not_public_enabled():
+    """Decision is full-go-eligible, not public-enabled."""
+    review = build_default_go_no_go_review()
+    assert review.decision == "CONDITIONAL_GO"
+    assert "public conversion still disabled" in review.recommendation.lower() or \
+           "public conversion remains disabled" in review.recommendation.lower()
+
+
+def test_human_release_approval_required():
+    """Human release approval remains required."""
+    review = build_default_go_no_go_review()
+    assert "REQUIRES FINAL HUMAN RELEASE APPROVAL" in review.recommendation
+
+
+def test_user_conversion_remains_disabled_by_default():
+    """User-data conversion remains disabled by default even at full GO eligibility."""
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        DicomConversionExecutionRequest,
+    )
+    result = run_conversion_execute("test", DicomConversionExecutionRequest())
+    assert result.conversion_disabled is True, "Public conversion must remain disabled"
+
+
+def test_no_frontend_execute_button_remains_current_state():
+    """No frontend execute button remains current state."""
+    review = build_default_go_no_go_review()
+    gate_22 = [c for c in review.criteria if c.gate_id == 22][0]
+    assert gate_22.status == "met", "Gate 22 (no execute button) must remain met"
+
+
+def test_spm_dpabi_matlab_disabled_remains_required():
+    """SPM/DPABI/MATLAB disabled remains required."""
+    review = build_default_go_no_go_review()
+    gate_24 = [c for c in review.criteria if c.gate_id == 24][0]
+    assert gate_24.status == "met", "Gate 24 (SPM/DPABI/MATLAB disabled) must remain met"
 
 
 def test_default_review_has_all_criteria():

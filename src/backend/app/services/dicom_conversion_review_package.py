@@ -199,6 +199,12 @@ def read_conversion_review_package(
         ("stdout_log", "logs/stdout.log"),
         ("stderr_log", "logs/stderr.log"),
         ("readme", "README.md"),
+        # Phase 4H-1 / 4J-0 / 4J-1
+        ("rawdata_checksum_after", "rawdata_checksum_after.json"),
+        ("rawdata_checksum_comparison", "rawdata_checksum_comparison.json"),
+        ("rollback_result", "rollback_result.json"),
+        ("audit_execution_start", "audit_execution_start.json"),
+        ("audit_execution_final", "audit_execution_final.json"),
     ]
 
     files: list[DicomConversionReviewPackageFile] = []

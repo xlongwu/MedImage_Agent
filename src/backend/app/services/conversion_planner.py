@@ -185,6 +185,9 @@ def plan_conversion(
             filtered[rawdata_dir] = root_map.get(rawdata_dir, Path(rawdata_dir))
         root_map = filtered
 
+    # ── FunRaw/T1Raw detection (check before generic DICOM preflight) ──
+    funraw_t1raw_layout = detect_funraw_t1raw_layout(rawdata_dir) if rawdata_dir else None
+
     # ── Classify sources ──
     for root_str, root_path in root_map.items():
         source_type = _classify_root(root_path)
@@ -290,10 +293,12 @@ def plan_conversion(
             "warnings": source_warnings,
         })
 
-    # ── FunRaw/T1Raw path-based fallback ──
-    if not mappings and rawdata_dir:
-        ft = detect_funraw_t1raw_layout(rawdata_dir)
-        if ft["layout_type"] == "funraw_t1raw":
+    # ── FunRaw/T1Raw path-based mapping ──
+    if funraw_t1raw_layout and funraw_t1raw_layout["layout_type"] == "funraw_t1raw":
+        ft = funraw_t1raw_layout
+        # Clear low-confidence generic DICOM mappings when FunRaw/T1Raw is detected
+        if any(m["confidence"] != "high" for m in mappings):
+            mappings.clear()
             # Update source summaries with detected counts
             for s in sources:
                 if s["source_type"] == "dicom":

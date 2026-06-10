@@ -1054,6 +1054,57 @@ export type DicomConversionPreflightResponse = {
   safety_flags: DicomConversionSafetyFlags;
 };
 
+/** Phase 4K-0 — Release readiness types */
+
+export type DicomConversionReleaseReadinessStatus =
+  | "blocked"
+  | "warning"
+  | "ready_internal"
+  | "ready_for_human_release_review";
+
+export type DicomConversionDiskSpaceCheck = {
+  output_root: string;
+  free_bytes: number;
+  estimated_required_bytes: number;
+  required_multiplier: number;
+  ok: boolean;
+  warnings: string[];
+  errors: string[];
+};
+
+export type DicomConversionRuntimePolicy = {
+  timeout_seconds: number;
+  cancellation_supported: boolean;
+  resume_supported: boolean;
+  retry_supported: boolean;
+  max_subjects_per_run: number;
+  warnings: string[];
+  errors: string[];
+};
+
+export type DicomConversionReleaseReadinessReport = {
+  ok: boolean;
+  status: DicomConversionReleaseReadinessStatus;
+  project_id: string;
+  conversion_run_id: string;
+  gate_status: string;
+  gates_met: number;
+  gates_total: number;
+  disk_space: DicomConversionDiskSpaceCheck;
+  runtime_policy: DicomConversionRuntimePolicy;
+  rollback_ready: boolean;
+  approval_audit_ready: boolean;
+  public_endpoint_enabled: boolean;
+  frontend_execute_enabled: boolean;
+  spm_dpabi_matlab_enabled: boolean;
+  full_preprocessing_enabled: boolean;
+  human_release_approval_required: boolean;
+  warnings: string[];
+  errors: string[];
+  blocking_issues: string[];
+  safety_flags: Record<string, boolean>;
+};
+
 /** Phase 4E-0 — Plan persistence types */
 
 export type DicomConversionRunReservation = {
