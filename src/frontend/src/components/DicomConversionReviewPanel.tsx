@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectDicomConversionReleaseReadiness, persistProjectDicomConversionPlan, runProjectDicomConversionPreflight } from "../api";
+import { DEFAULT_API_BASE, getPreprocessingPlanPreview, getProjectDicomConversionReleaseReadiness, persistProjectDicomConversionPlan, registerConvertedPreprocessingInput, runProjectDicomConversionPreflight } from "../api";
 import type {
   Dcm2niixCommandTemplate,
   DicomConversionMapping,
@@ -7,6 +7,8 @@ import type {
   DicomConversionPreflightResponse,
   DicomConversionReleaseReadinessReport,
   DicomConversionSafetyFlags,
+  PreprocessingInputRegistrationResponse,
+  PreprocessingPlanPreviewResponse,
 } from "../types";
 import DicomConversionReleaseReadinessPanel from "./DicomConversionReleaseReadinessPanel";
 import DicomConversionExecutePanel from "./DicomConversionExecutePanel";
@@ -268,6 +270,14 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
           readiness={releaseReadiness}
         />
       )}
+
+      {/* Phase 5A: Converted BIDS → Preprocessing Input handoff */}
+      {persistResult?.conversion_run_id && (
+        <PreprocessingHandoffSection
+          projectId={projectId!}
+          conversionRunId={persistResult.conversion_run_id}
+        />
+      )}
     </Sect>
   );
 }
@@ -311,6 +321,108 @@ const APPROVAL_CHECKLIST: string[] = [
   "Rollback/cleanup policy accepted",
   "Clinical-use prohibition acknowledged",
 ];
+
+function PreprocessingHandoffSection({ projectId, conversionRunId }: { projectId: string; conversionRunId: string }) {
+  const [regResult, setRegResult] = useState<PreprocessingInputRegistrationResponse | null>(null);
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState("");
+  const [planResult, setPlanResult] = useState<PreprocessingPlanPreviewResponse | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  async function handleRegister() {
+    setRegLoading(true); setRegError(""); setRegResult(null);
+    try {
+      const res = await registerConvertedPreprocessingInput(DEFAULT_API_BASE, projectId, {
+        conversion_run_id: conversionRunId,
+        mode: "reference",
+        confirm_rawdata_readonly: true,
+        confirm_use_converted_outputs: true,
+      });
+      setRegResult(res as PreprocessingInputRegistrationResponse);
+    } catch (e) { setRegError(e instanceof Error ? e.message : String(e)); }
+    finally { setRegLoading(false); }
+  }
+
+  async function handlePlanPreview() {
+    setPlanLoading(true); setPlanResult(null);
+    try {
+      const res = await getPreprocessingPlanPreview(DEFAULT_API_BASE, projectId);
+      setPlanResult(res as PreprocessingPlanPreviewResponse);
+    } catch (e) { /* ignore */ }
+    finally { setPlanLoading(false); }
+  }
+
+  return (
+    <section style={{ padding: 16, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(255, 255, 255, 0.88)", marginTop: 12 }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Converted BIDS → Preprocessing Input</h3>
+      <span style={{ color: "#667085", fontSize: 12 }}>Register converted NIfTI outputs for preprocessing planning. No preprocessing is executed.</span>
+
+      {/* Safety callout */}
+      <div style={{ padding: 8, border: "1px solid rgba(242, 153, 74, 0.22)", borderRadius: 4, background: "rgba(255, 251, 242, 0.94)", fontSize: 11, color: "#9a5a15", margin: "8px 0" }}>
+        Preprocessing execution is not enabled in this phase. This panel registers converted outputs for readiness and planning only.
+      </div>
+
+      {/* Register button */}
+      <div style={{ marginBottom: 8 }}>
+        <button onClick={handleRegister} disabled={regLoading} style={{ padding: "6px 14px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
+          {regLoading ? "Registering..." : "Register converted outputs for preprocessing"}
+        </button>
+      </div>
+
+      {regError && <div className="errorBox" style={{ fontSize: 11, marginBottom: 6 }}>{regError}</div>}
+
+      {/* Registration result */}
+      {regResult && (
+        <div style={{ marginBottom: 12, padding: 10, border: `1px solid ${regResult.ok ? "rgba(33,150,83,0.24)" : "rgba(235,87,87,0.26)"}`, borderRadius: 6, background: regResult.ok ? "rgba(232,245,233,0.88)" : "rgba(255,235,238,0.88)", fontSize: 11 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Status: {regResult.status}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 4 }}>
+            <span>subjects: <strong>{regResult.subject_count}</strong></span>
+            <span>BOLD: <strong>{regResult.bold_count}</strong></span>
+            <span>T1w: <strong>{regResult.t1w_count}</strong></span>
+            <span>NIfTI: <strong>{regResult.nifti_count}</strong></span>
+          </div>
+          {regResult.missing_t1w_subjects.length > 0 && (
+            <div style={{ color: "#b53b3b", marginTop: 4 }}>Missing T1w: {regResult.missing_t1w_subjects.join(", ")}</div>
+          )}
+          {regResult.missing_bold_subjects.length > 0 && (
+            <div style={{ color: "#b53b3b" }}>Missing BOLD: {regResult.missing_bold_subjects.join(", ")}</div>
+          )}
+          {regResult.warnings.map((w: string, i: number) => <div key={i} style={{ color: "#9a5a15" }}>{w}</div>)}
+          {regResult.ok && (
+            <div style={{ marginTop: 6 }}>
+              <button onClick={handlePlanPreview} disabled={planLoading} style={{ padding: "4px 10px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 3, cursor: "pointer", fontWeight: 600, fontSize: 10 }}>
+                {planLoading ? "Loading..." : "Preview preprocessing plan"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Plan preview result */}
+      {planResult && (
+        <div style={{ padding: 10, border: "1px solid rgba(25,118,210,0.22)", borderRadius: 6, background: "rgba(227,242,253,0.88)", fontSize: 11 }}>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: "#0d47a1" }}>
+            Preprocessing Plan Preview · {planResult.status}
+            {planResult.execution_disabled && <span style={{ color: "#b53b3b", marginLeft: 8 }}>EXECUTION DISABLED</span>}
+          </div>
+          <div style={{ fontSize: 10, color: "#9a5a15", marginBottom: 4 }}>
+            Preprocessing execution is not enabled. This is a preview only.
+          </div>
+          <div style={{ display: "grid", gap: 2 }}>
+            {planResult.stages.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", padding: "2px 6px", border: "1px solid rgba(137,150,171,0.14)", borderRadius: 3, background: "#fff" }}>
+                <span style={{ color: s.enabled ? "#176b3b" : "#b53b3b", fontWeight: 700, width: 18, textAlign: "center" }}>{s.enabled ? "✓" : "✗"}</span>
+                <span style={{ flex: 1 }}>{s.name}</span>
+                <span style={{ fontSize: 10, color: "#667085" }}>{s.backend}{s.requires_external_tool ? " (ext)" : ""}{s.optional ? " (opt)" : ""}</span>
+              </div>
+            ))}
+          </div>
+          {planResult.warnings.map((w: string, i: number) => <div key={i} style={{ color: "#9a5a15", marginTop: 4, fontSize: 10 }}>{w}</div>)}
+        </div>
+      )}
+    </section>
+  );
+}
 
 const Sect: React.FC<{ children: React.ReactNode }> = ({ children }) => <section style={{ padding: 16, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(255, 255, 255, 0.88)", marginTop: 4 }}>{children}</section>;
 const H3: React.FC<{ children: React.ReactNode }> = ({ children }) => <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>{children}</h3>;

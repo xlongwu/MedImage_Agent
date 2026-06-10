@@ -1565,7 +1565,7 @@ export async function getProjectDicomConversionReleaseReadiness(
 export async function registerConvertedPreprocessingInput(
   baseUrl: string,
   projectId: string,
-  body: { conversion_run_id: string; converted_bids_dir?: string; confirm_rawdata_readonly?: boolean; confirm_use_converted_outputs?: boolean },
+  body: { conversion_run_id: string; converted_bids_dir?: string; mode?: string; confirm_rawdata_readonly?: boolean; confirm_use_converted_outputs?: boolean },
 ) {
   return requestJson<import("./types").PreprocessingInputRegistrationResponse>(
     baseUrl,
