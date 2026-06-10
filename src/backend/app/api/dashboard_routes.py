@@ -1655,6 +1655,85 @@ def post_preprocessing_plan_preview(
     return plan.model_dump()
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Preprocessing run workspace — Phase 5B
+# ═══════════════════════════════════════════════════════════════════════
+
+@router.post("/api/projects/{project_id}/preprocessing/runs")
+def post_create_preprocessing_run(
+    project_id: str,
+    body: dict[str, Any],
+) -> dict[str, Any]:
+    """Create a preprocessing run workspace from converted BIDS input.
+
+    Creates a run directory, writes README, and prepares for Python-only
+    preflight execution.  No SPM/DPABI/MATLAB.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
+    from src.backend.app.services.preprocessing_run import create_preprocessing_run
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+
+    req = PreprocessingRunCreateRequest(
+        plan_id=body.get("plan_id", ""),
+        preprocessing_input_dir=body.get("preprocessing_input_dir", ""),
+        run_name=body.get("run_name", ""),
+        confirm_use_converted_input=body.get("confirm_use_converted_input", False),
+        confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
+        confirm_python_only_execution=body.get("confirm_python_only_execution", False),
+        confirm_no_spm_matlab=body.get("confirm_no_spm_matlab", False),
+    )
+    result = create_preprocessing_run(project_id, req, project_dir=project_dir)
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/execute-python-preflight")
+def post_execute_python_preflight(
+    project_id: str,
+    preprocessing_run_id: str,
+) -> dict[str, Any]:
+    """Execute Python-only metadata/QC preflight stages.
+
+    Builds input inventory, QC preflight summary, and run manifest.
+    Does NOT execute SPM/DPABI/MATLAB.  Does NOT run full preprocessing.
+    """
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.services.preprocessing_run import execute_python_preflight
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+
+    result = execute_python_preflight(project_id, preprocessing_run_id, project_dir=project_dir)
+    return result.model_dump()
+
+
+@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}")
+def get_preprocessing_run(
+    project_id: str,
+    preprocessing_run_id: str,
+) -> dict[str, Any]:
+    """Get preprocessing run status and artifacts."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    from src.backend.app.services.preprocessing_run import get_preprocessing_run_status
+
+    project = mock_store.get_project(project_id)
+    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+    project_dir = str(metadata.get("project_dir") or "")
+
+    result = get_preprocessing_run_status(project_id, preprocessing_run_id, project_dir=project_dir)
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
