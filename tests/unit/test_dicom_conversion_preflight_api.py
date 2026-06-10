@@ -91,9 +91,28 @@ def test_preflight_endpoint_404_for_missing_project():
     assert resp.status_code == 404
 
 
-def test_no_user_data_conversion_execute_endpoint():
-    """There must be NO endpoint that executes real user data conversion."""
+def test_user_data_conversion_execute_endpoint_default_blocked():
+    """The conversion execute endpoint exists but MUST remain default-blocked.
+
+    Phase 4L-2 added the /conversion/execute endpoint behind env gates.
+    Without env flags, it must return disabled/blocked and never execute.
+    """
     client = TestClient(app)
-    # The execute endpoint for user data should not exist or return 405/404
     resp = client.post("/api/projects/brain-tumor-study/conversion/execute")
-    assert resp.status_code in {404, 405}
+    assert resp.status_code == 200, f"Expected 200 (blocked), got {resp.status_code}"
+    payload = resp.json()
+    # Must be disabled/blocked by default (status field)
+    assert payload.get("status") in ("disabled", "blocked"), \
+        f"Expected status=disabled or blocked, got {payload.get('status')}"
+    # Safety flags must confirm no execution allowed
+    sf = payload.get("safety_flags", {})
+    assert sf.get("conversion_disabled_by_default") is True, \
+        "conversion_disabled_by_default must be True"
+    assert sf.get("public_execution_allowed") is False, \
+        "public_execution_allowed must be False"
+    assert sf.get("rawdata_read_only") is True, \
+        "rawdata_read_only must be True"
+    # Blocking issues must report missing env flags
+    blocking = payload.get("blocking_issues", [])
+    assert any("env flag" in b.lower() for b in blocking), \
+        f"Blocking issues must mention missing env flags, got: {blocking}"
