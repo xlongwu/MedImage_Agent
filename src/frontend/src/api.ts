@@ -1611,3 +1611,13 @@ export async function getPreprocessingRunStatus(
     baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}`,
   );
 }
+
+export async function executeSpmSandboxSliceTimingRealign(
+  baseUrl: string, projectId: string, preprocessingRunId: string,
+  body: { dry_run_id: string; preprocessing_input_dir?: string; confirm_sandbox_copy?: boolean; confirm_no_rawdata_modification?: boolean; confirm_slice_timing_realign_only?: boolean; confirm_no_full_preprocessing?: boolean; confirm_research_use_only?: boolean },
+) {
+  return requestJson<import("./types").SpmSandboxExecutionResponse>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/spm/slice-timing-realign/execute-sandbox`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
