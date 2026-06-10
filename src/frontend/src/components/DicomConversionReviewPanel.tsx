@@ -15,6 +15,7 @@ import type {
 } from "../types";
 import DicomConversionReleaseReadinessPanel from "./DicomConversionReleaseReadinessPanel";
 import DicomConversionExecutePanel from "./DicomConversionExecutePanel";
+import SpmSandboxExecutionPanel from "./SpmSandboxExecutionPanel";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
@@ -285,6 +286,15 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
       {/* Phase 5B: Preprocessing Run Workspace */}
       {persistResult?.conversion_run_id && (
         <PreprocessingRunSection projectId={projectId!} />
+      )}
+
+      {/* Phase 5E: Sandbox Slice Timing + Realign (feature-flagged) */}
+      {persistResult?.conversion_run_id && (
+        <SpmSandboxExecutionPanel
+          projectId={projectId!}
+          preprocessingRunId="pp-test"
+          dryRunId="dr-test"
+        />
       )}
     </Sect>
   );
