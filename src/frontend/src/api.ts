@@ -1631,3 +1631,23 @@ export async function registerSandboxSpmOutputs(
     { method: "POST", body: JSON.stringify(body) },
   );
 }
+
+export async function executeNuisanceRegressionSandbox(
+  baseUrl: string, projectId: string, preprocessingRunId: string,
+  body: { dry_run_id: string; functional_input_dir?: string; confirm_sandbox_copy?: boolean; confirm_no_rawdata_modification?: boolean; confirm_previous_stage_readonly?: boolean; confirm_nuisance_regression_only?: boolean; confirm_no_full_preprocessing?: boolean; confirm_research_use_only?: boolean },
+) {
+  return requestJson<import("./types").NuisanceSandboxExecutionResponse>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/nuisance-regression/execute-sandbox`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export async function runFilteringDryRun(
+  baseUrl: string, projectId: string, preprocessingRunId: string,
+  body: { functional_input_dir?: string; low_cut_hz?: number; high_cut_hz?: number; confirm_dry_run_only?: boolean },
+) {
+  return requestJson<import("./types").FilteringDryRunResponse>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/temporal-filtering/dry-run`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}

@@ -68,23 +68,78 @@ def run_nuisance_sandbox_execution(
         designs.append(design)
     if not motion_files:
         warnings.append("No motion parameter files found; metadata-only execution.")
-    warnings.append("Nuisance regression is metadata-only. Numerical regression not yet applied.")
+    # Attempt numerical regression if nibabel and numpy are available
+    metadata_only = True; regressed = 0; numerical_errors: list[str] = []
+    _NIBABEL_OK = False
+    try:
+        import nibabel as _nib
+        import numpy as _np
+        _NIBABEL_OK = True
+    except ImportError:
+        warnings.append("nibabel/numpy not available; metadata-only execution.")
 
-    # Metadata-only execution: write regressor design, no numerical regression
+    if _NIBABEL_OK and motion_files:
+        for cp, design in zip(copied, designs):
+            try:
+                img = _nib.load(str(cp))
+                data = img.get_fdata()
+                T = data.shape[-1] if data.ndim >= 4 else data.shape[0]
+                if T < 3:
+                    numerical_errors.append(f"{design['subject']}: too few timepoints ({T})")
+                    continue
+                mf_path = design.get("motion_file", "")
+                if not mf_path or mf_path == "MISSING":
+                    continue
+                rp = _np.loadtxt(mf_path)
+                if rp.ndim == 1:
+                    rp = rp.reshape(-1, 1)
+                if rp.shape[0] != T:
+                    rp = rp[:min(rp.shape[0], T)]
+                    if rp.shape[0] != T:
+                        numerical_errors.append(f"{design['subject']}: motion/time mismatch")
+                        continue
+                # Build design: motion params + linear trend + constant
+                X = _np.column_stack([rp, _np.arange(T), _np.ones(T)])
+                # OLS regression: residuals = data - X * (X\data)
+                orig_shape = data.shape
+                data_2d = data.reshape(-1, T)
+                beta = _np.linalg.lstsq(X, data_2d.T, rcond=None)[0]
+                predicted = X @ beta
+                residuals = data_2d - predicted.T
+                residuals = residuals.reshape(orig_shape)
+                resid_img = _nib.Nifti1Image(residuals.astype(_np.float32), img.affine, img.header)
+                out_path = sandbox_out / design['subject'] / f"residual_{cp.name}"
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                _nib.save(resid_img, str(out_path))
+                design['regression_applied'] = True
+                design['output_path'] = str(out_path)
+                regressed += 1
+                metadata_only = False
+            except Exception as exc:
+                numerical_errors.append(f"{design['subject']}: {exc}")
+
+    if numerical_errors:
+        warnings.extend(numerical_errors)
+
+    # Write regressor design and artifacts
     rd_path = exec_dir / "regressor_design.json"
-    rd_path.write_text(json.dumps({"designs": designs, "metadata_only": True}, indent=2))
+    rd_path.write_text(json.dumps({"designs": designs, "metadata_only": metadata_only}, indent=2))
 
     stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
-    stdout_log.write_text("Nuisance regression metadata-only execution.\n")
+    result_status = "warning" if metadata_only else "succeeded"
+    stdout_log.write_text(f"Nuisance regression: status={result_status}, regressed={regressed}\n")
     stderr_log.write_text("")
 
-    (exec_dir / "manifest.json").write_text(json.dumps({"status": "warning", "metadata_only": True}))
-    (exec_dir / "provenance.json").write_text(json.dumps({"sandbox_only": True, "metadata_only": True}))
-    (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "regressed": 0, "metadata_only": True}))
-    (exec_dir / "README.md").write_text("# Nuisance Regression Sandbox\nMetadata-only. No numerical regression applied.\n")
+    (exec_dir / "manifest.json").write_text(json.dumps({"status": result_status, "metadata_only": metadata_only}))
+    (exec_dir / "provenance.json").write_text(json.dumps({"sandbox_only": True, "metadata_only": metadata_only}))
+    (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "regressed": regressed, "metadata_only": metadata_only}))
+    (exec_dir / "README.md").write_text(
+        f"# Nuisance Regression Sandbox\n"
+        f"Status: {result_status}. Regressed: {regressed}/{len(copied)}.\n"
+        f"{'Metadata-only. No numerical regression applied.' if metadata_only else 'Numerical regression applied to sandbox copies.'}\n")
 
     return NuisanceSandboxExecutionResponse(
-        ok=True, status="warning", project_id=project_id, preprocessing_run_id=run_id,
+        ok=True, status=result_status, project_id=project_id, preprocessing_run_id=run_id,
         dry_run_id=request.dry_run_id, execution_id=exec_id, execution_dir=str(exec_dir),
         sandbox_input_dir=str(sandbox_in), sandbox_output_dir=str(sandbox_out),
         subjects_total=len(copied), regressor_design_path=str(rd_path),

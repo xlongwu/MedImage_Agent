@@ -43,6 +43,13 @@ def run_filtering_dry_run(
         return FilteringDryRunResponse(ok=False, status="blocked", project_id=project_id,
             blocking_issues=blocking, safety_flags=filtering_safety_flags())
 
+    # Check if current input source indicates metadata-only nuisance
+    input_source = str(meta.get("current_functional_input_source", ""))
+    if "metadata_only" in input_source.lower() or "not_ready" in input_source.lower():
+        return FilteringDryRunResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=["Nuisance regression was metadata-only; numerical outputs required for filtering."],
+            safety_flags=filtering_safety_flags())
+
     bold_files = [p for p in sorted(func_path.rglob("*.nii*")) if p.is_file() and ("bold" in p.name.lower() or "rest" in p.name.lower())]
     if not bold_files:
         return FilteringDryRunResponse(ok=False, status="blocked", project_id=project_id,

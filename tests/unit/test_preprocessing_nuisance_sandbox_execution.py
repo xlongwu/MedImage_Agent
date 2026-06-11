@@ -41,12 +41,19 @@ def test_sandbox_copies_and_writes_designs(tmp_path, monkeypatch):
     assert result.ok and Path(result.manifest_path).exists()
 
 def test_metadata_only_warning(tmp_path, monkeypatch):
+    # Force nibabel import to fail so metadata-only path is taken
+    import builtins
+    real_import = builtins.__import__
+    def mock_import(name, *args, **kwargs):
+        if name == "nibabel": raise ImportError("Mocked: nibabel not available")
+        return real_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, "__import__", mock_import)
     _setup(tmp_path, monkeypatch); func_dir = _make_func(tmp_path)
     dd = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / "dr-test"; dd.mkdir(parents=True)
     (dd / "nuisance_dry_run_manifest.json").write_text('{"status":"dry_run_preview"}')
     req = NuisanceSandboxExecutionRequest(dry_run_id="dr-test", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
     result = run_nuisance_sandbox_execution("brain-tumor-study", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
-    assert result.status == "warning" and "metadata-only" in str(result.warnings).lower()
+    assert result.status == "warning" and any("nibabel" in str(w).lower() or "metadata-only" in str(w).lower() for w in result.warnings)
 
 def test_endpoint_200(tmp_path):
     from fastapi.testclient import TestClient
