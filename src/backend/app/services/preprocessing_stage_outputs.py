@@ -1,0 +1,102 @@
+"""Preprocessing Stage Output Registration Service — Phase 5F.
+
+Registers sandbox SPM Slice Timing + Realign outputs as next-stage
+preprocessing input. No additional execution. Rawdata unchanged.
+"""
+from __future__ import annotations
+import json, hashlib
+from pathlib import Path
+from typing import Any
+
+from src.backend.app.schemas.preprocessing_stage_outputs import (
+    StageOutputRegistrationRequest, StageOutputRegistrationResponse, registration_safety_flags,
+)
+from src.backend.app.services.mock_store import mock_store
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+def register_sandbox_spm_outputs(
+    project_id: str, run_id: str, request: StageOutputRegistrationRequest,
+    *, project_dir: str = ""
+) -> StageOutputRegistrationResponse:
+    blocking: list[str] = []; warnings: list[str] = []
+    if not request.execution_id:
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=["execution_id is required."], safety_flags=registration_safety_flags())
+
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    effective_pd = project_dir or str(meta.get("project_dir") or "")
+
+    # Locate execution directory
+    exec_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "spm_exec" / request.execution_id
+    if not exec_dir.exists():
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            preprocessing_run_id=run_id, execution_id=request.execution_id,
+            blocking_issues=[f"Execution dir not found: {exec_dir}"],
+            safety_flags=registration_safety_flags())
+
+    # Verify execution succeeded (or fake-runner success)
+    manifest_path = exec_dir / "manifest.json"
+    if manifest_path.exists():
+        mf = json.loads(manifest_path.read_text())
+        if mf.get("status") not in ("succeeded", "generated", "dry_run_preview"):
+            blocking.append(f"Execution status is {mf.get('status')}, not succeeded.")
+
+    sandbox_out = exec_dir / "sandbox_output"
+    if not sandbox_out.exists():
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=[f"Sandbox output dir not found: {sandbox_out}"],
+            safety_flags=registration_safety_flags())
+
+    # Discover output BOLD files (ra/r/a prefixes from SPM)
+    bold_outputs: list[Path] = []; motion_files: list[Path] = []; mean_images: list[Path] = []
+    for p in sorted(sandbox_out.rglob("*")):
+        if not p.is_file(): continue
+        name = p.name
+        if p.suffix in (".nii", ".gz") or "".join(p.suffixes).lower() in (".nii", ".nii.gz"):
+            if name.lower().startswith(("ra", "r", "a")) and ("bold" in name.lower() or "rest" in name.lower()):
+                bold_outputs.append(p)
+            elif name.lower().startswith("mean"):
+                mean_images.append(p)
+        elif name.startswith("rp_") and name.endswith(".txt"):
+            motion_files.append(p)
+
+    if not bold_outputs:
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=["No output BOLD files found in sandbox output."],
+            safety_flags=registration_safety_flags())
+
+    # Create stage output registry
+    stage_out_id = "so-" + hashlib.sha256(f"{project_id}:{run_id}:{request.execution_id}".encode()).hexdigest()[:10]
+    reg_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "registered_stage_outputs" / stage_out_id if effective_pd else Path(f"outputs/stage_outputs/{stage_out_id}")
+    reg_dir.mkdir(parents=True, exist_ok=True)
+
+    (reg_dir / "stage_output_registry.json").write_text(json.dumps({
+        "stage_output_id": stage_out_id, "source_execution": request.execution_id,
+        "stage": "slice_timing_realign", "status": "registered", "created_at": _now_iso()}, indent=2))
+    (reg_dir / "next_stage_input_manifest.json").write_text(json.dumps({
+        "next_stage_input_dir": str(sandbox_out), "bold_count": len(bold_outputs),
+        "motion_files": [str(f) for f in motion_files], "mean_images": [str(f) for f in mean_images]}, indent=2))
+    (reg_dir / "subject_output_summary.json").write_text(json.dumps({
+        "total": len(bold_outputs), "outputs": [str(p) for p in bold_outputs]}, indent=2))
+    (reg_dir / "README.md").write_text("# Stage Output Registration\nSandbox outputs registered. No additional execution. Rawdata unchanged.\n")
+
+    # Update run metadata
+    if isinstance(project.metadata, dict):
+        project.metadata["current_functional_input_source"] = "sandbox_spm_slice_timing_realign"
+        project.metadata["current_functional_input_dir"] = str(sandbox_out)
+        project.metadata["next_stage_input_registered"] = stage_out_id
+
+    return StageOutputRegistrationResponse(
+        ok=True, status="registered", project_id=project_id, preprocessing_run_id=run_id,
+        execution_id=request.execution_id, registered_stage_output_id=stage_out_id,
+        stage_output_dir=str(reg_dir), next_stage_input_dir=str(sandbox_out),
+        subject_count=len(bold_outputs), registered_bold_outputs=[str(p) for p in bold_outputs],
+        motion_files=[str(f) for f in motion_files], mean_images=[str(f) for f in mean_images],
+        next_actions=["Review registered outputs.", "Plan coregistration/normalization dry-run."],
+        safety_flags=registration_safety_flags())
