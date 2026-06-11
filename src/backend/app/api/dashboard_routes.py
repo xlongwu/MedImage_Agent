@@ -1841,6 +1841,33 @@ def post_register_sandbox_spm_outputs(
     return result.model_dump()
 
 
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/dry-run")
+def post_coreg_norm_dry_run(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Coregistration + Normalization dry-run batch preview."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_coreg_norm_dry_run import CoregNormDryRunRequest
+    from src.backend.app.services.preprocessing_coreg_norm_dry_run import run_coreg_norm_dry_run
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = CoregNormDryRunRequest(
+        registered_stage_output_id=body.get("registered_stage_output_id", ""),
+        confirm_dry_run_only=body.get("confirm_dry_run_only", False),
+        confirm_no_matlab_execution=body.get("confirm_no_matlab_execution", False),
+        confirm_no_image_modification=body.get("confirm_no_image_modification", False),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+        confirm_converted_input_readonly=body.get("confirm_converted_input_readonly", False),
+        coreg_target=body.get("coreg_target", "mean_functional"),
+        normalization_voxel_size=body.get("normalization_voxel_size", "[3,3,3]"),
+        write_normalized_functional=body.get("write_normalized_functional", True),
+        write_normalized_t1w=body.get("write_normalized_t1w", True),
+    )
+    result = run_coreg_norm_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})

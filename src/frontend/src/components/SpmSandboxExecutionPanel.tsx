@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { SpmSandboxExecutionResponse } from "../types";
+import type { SpmSandboxExecutionResponse, StageOutputRegistrationResponse } from "../types";
+type RegResponse = StageOutputRegistrationResponse;
 
 type Props = {
   projectId: string;
@@ -15,6 +16,8 @@ export default function SpmSandboxExecutionPanel({ projectId, preprocessingRunId
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [checks, setChecks] = useState<boolean[]>([false, false, false, false, false, false, false]);
+  const [regResult, setRegResult] = useState<RegResponse | null>(null);
+  const [regLoading, setRegLoading] = useState(false);
 
   if (!enabled) return null;
 
@@ -36,6 +39,24 @@ export default function SpmSandboxExecutionPanel({ projectId, preprocessingRunId
       setResult(res as SpmSandboxExecutionResponse);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
+  }
+
+  async function handleRegister() {
+    if (!result?.execution_id) return;
+    setRegLoading(true); setRegResult(null);
+    try {
+      const { registerSandboxSpmOutputs } = await import("../api");
+      const res = await registerSandboxSpmOutputs("", projectId, preprocessingRunId, {
+        execution_id: result.execution_id,
+        confirm_sandbox_outputs: true,
+        confirm_rawdata_readonly: true,
+        confirm_converted_input_readonly: true,
+        confirm_no_additional_execution: true,
+        confirm_use_as_next_stage_input: true,
+      });
+      setRegResult(res as RegResponse);
+    } catch (e) { /* ignore */ }
+    finally { setRegLoading(false); }
   }
 
   const confirmLabels = [
@@ -90,6 +111,24 @@ export default function SpmSandboxExecutionPanel({ projectId, preprocessingRunId
           </div>
           {result.blocking_issues?.map((b: string, i: number) => <div key={i} style={{ color: "#b53b3b" }}>{b}</div>)}
           {result.warnings?.map((w: string, i: number) => <div key={i} style={{ color: "#9a5a15" }}>{w}</div>)}
+        </div>
+      )}
+
+      {/* Register sandbox outputs button */}
+      {result?.ok && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={handleRegister} disabled={regLoading}
+            style={{ padding: "6px 14px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
+            {regLoading ? "Registering..." : "Register sandbox outputs for next stage"}
+          </button>
+          {regResult && (
+            <div style={{ marginTop: 6, padding: 8, border: "1px solid rgba(33,150,83,0.24)", borderRadius: 4, background: "rgba(232,245,233,0.88)", fontSize: 11 }}>
+              <div style={{ fontWeight: 700 }}>Registered: {regResult.registered_stage_output_id}</div>
+              <div>next-stage input: {regResult.next_stage_input_dir}</div>
+              <div>subjects: {regResult.subject_count} | BOLD outputs: {regResult.registered_bold_outputs?.length || 0}</div>
+              {regResult.warnings?.map((w: string, i: number) => <div key={i} style={{ color: "#9a5a15" }}>{w}</div>)}
+            </div>
+          )}
         </div>
       )}
     </section>
