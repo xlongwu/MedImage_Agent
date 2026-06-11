@@ -1,6 +1,8 @@
 # MedImage Agent
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
+[![Version](https://img.shields.io/badge/version-v0.5.0--rc1-1976d2)](https://github.com/xlongwu/MedImage_Agent)
+[![Phase 5](https://img.shields.io/badge/Phase%205-complete-176b3b)](#phase-5-preprocessing-pipeline)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.136%2B-green)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-3178c6)](https://www.typescriptlang.org/)

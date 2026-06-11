@@ -2,9 +2,17 @@
 
 ## Current milestone
 
-Desktop real-project execution and run artifact inspection loop completed.
-Phase 5 (Preprocessing Pipeline) active: converted BIDS handoff, SPM dry-run
-planning, sandbox Slice Timing + Realign execution, and stage output registration.
+**v0.5.0-rc1** — Phase 5 Preprocessing Pipeline complete. Release candidate packaging.
+All 15 phases (5A–5O) delivered. Backend + frontend validation dashboard operational.
+No new feature development in this milestone. Release hardening and smoke testing only.
+
+## Phase 5 Freeze
+
+Phase 5 feature development is frozen as of v0.5.0-rc1.
+- No new preprocessing stages will be added in the v0.5.x line.
+- Group statistics, classification, and clinical diagnosis remain out of scope.
+- DPABI remains disabled.
+- Only bugfixes, UI polish, packaging fixes, and smoke validation are accepted.
 
 ## Phase 5 Status
 
