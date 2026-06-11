@@ -2305,6 +2305,18 @@ def get_pipeline_report(project_id: str, preprocessing_run_id: str) -> dict[str,
     return result.model_dump()
 
 
+@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/validation")
+def get_pipeline_validation(project_id: str, preprocessing_run_id: str) -> dict[str, Any]:
+    """End-to-end preprocessing pipeline validation."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.services.preprocessing_pipeline_validation import validate_preprocessing_pipeline
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    result = validate_preprocessing_pipeline(project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
