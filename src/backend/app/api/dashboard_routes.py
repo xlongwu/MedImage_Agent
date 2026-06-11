@@ -1944,6 +1944,85 @@ def post_smoothing_dry_run(
     return result.model_dump()
 
 
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/execute-sandbox")
+def post_smoothing_sandbox_execution(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Sandboxed Smoothing execution on copied normalized functional inputs."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_smoothing_execution import SmoothingSandboxExecutionRequest
+    from src.backend.app.services.preprocessing_smoothing_execution import run_smoothing_sandbox_execution
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = SmoothingSandboxExecutionRequest(
+        dry_run_id=body.get("dry_run_id", ""),
+        functional_input_dir=body.get("functional_input_dir", ""),
+        confirm_sandbox_copy=body.get("confirm_sandbox_copy", False),
+        confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
+        confirm_no_converted_input_modification=body.get("confirm_no_converted_input_modification", False),
+        confirm_previous_stage_readonly=body.get("confirm_previous_stage_readonly", False),
+        confirm_smoothing_only=body.get("confirm_smoothing_only", False),
+        confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
+        confirm_research_use_only=body.get("confirm_research_use_only", False),
+        matlab_executable=body.get("matlab_executable", "matlab"),
+        spm_path=body.get("spm_path", ""), timeout_seconds=body.get("timeout_seconds", 600),
+    )
+    result = run_smoothing_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-smoothing")
+def post_register_smoothing_outputs(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Register Smoothing sandbox outputs as next-stage input."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
+    from src.backend.app.services.preprocessing_stage_outputs import register_smoothing_outputs
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = StageOutputRegistrationRequest(
+        execution_id=body.get("execution_id", ""),
+        confirm_sandbox_outputs=body.get("confirm_sandbox_outputs", False),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+        confirm_converted_input_readonly=body.get("confirm_converted_input_readonly", False),
+        confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
+        confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
+    )
+    result = register_smoothing_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/dry-run")
+def post_nuisance_dry_run(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Nuisance regression dry-run planning."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_nuisance_dry_run import NuisanceDryRunRequest
+    from src.backend.app.services.preprocessing_nuisance_dry_run import run_nuisance_dry_run
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = NuisanceDryRunRequest(
+        registered_stage_output_id=body.get("registered_stage_output_id", ""),
+        functional_input_dir=body.get("functional_input_dir", ""),
+        include_motion_24=body.get("include_motion_24", True),
+        include_wm_csf=body.get("include_wm_csf", False),
+        include_global_signal=body.get("include_global_signal", False),
+        include_linear_trend=body.get("include_linear_trend", True),
+        include_constant=body.get("include_constant", True),
+        confirm_dry_run_only=body.get("confirm_dry_run_only", False),
+        confirm_no_image_modification=body.get("confirm_no_image_modification", False),
+        confirm_no_external_tools=body.get("confirm_no_external_tools", False),
+        confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
+    )
+    result = run_nuisance_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
