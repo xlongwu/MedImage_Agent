@@ -2168,6 +2168,81 @@ def post_alff_reho_dry_run(
     return result.model_dump()
 
 
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/execute-sandbox")
+def post_alff_reho_sandbox_execution(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Sandboxed ALFF/ReHo execution (Python-only)."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_alff_reho_execution import AlffRehoSandboxExecutionRequest
+    from src.backend.app.services.preprocessing_alff_reho_execution import run_alff_reho_sandbox_execution
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = AlffRehoSandboxExecutionRequest(
+        dry_run_id=body.get("dry_run_id", ""),
+        functional_input_dir=body.get("functional_input_dir", ""),
+        confirm_sandbox_copy=body.get("confirm_sandbox_copy", False),
+        confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
+        confirm_previous_stage_readonly=body.get("confirm_previous_stage_readonly", False),
+        confirm_alff_reho_only=body.get("confirm_alff_reho_only", False),
+        confirm_no_fc_execution=body.get("confirm_no_fc_execution", False),
+        confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
+        confirm_research_use_only=body.get("confirm_research_use_only", False),
+    )
+    result = run_alff_reho_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-alff-reho")
+def post_register_alff_reho_outputs(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Register ALFF/ReHo derivative outputs."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
+    from src.backend.app.services.preprocessing_stage_outputs import register_alff_reho_outputs
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = StageOutputRegistrationRequest(
+        execution_id=body.get("execution_id", ""),
+        confirm_sandbox_outputs=body.get("confirm_sandbox_outputs", False),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+        confirm_converted_input_readonly=body.get("confirm_converted_input_readonly", False),
+        confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
+        confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
+    )
+    result = register_alff_reho_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/dry-run")
+def post_fc_dry_run(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """FC dry-run planning."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_fc_dry_run import FcDryRunRequest
+    from src.backend.app.services.preprocessing_fc_dry_run import run_fc_dry_run
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = FcDryRunRequest(
+        filtered_stage_output_id=body.get("filtered_stage_output_id", ""),
+        functional_input_dir=body.get("functional_input_dir", ""),
+        atlas_name=body.get("atlas_name", ""), atlas_path=body.get("atlas_path", ""),
+        correlation_method=body.get("correlation_method", "pearson"),
+        fisher_z=body.get("fisher_z", True),
+        confirm_dry_run_only=body.get("confirm_dry_run_only", False),
+        confirm_no_image_modification=body.get("confirm_no_image_modification", False),
+        confirm_no_external_tools=body.get("confirm_no_external_tools", False),
+        confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
+    )
+    result = run_fc_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
