@@ -5,6 +5,8 @@ import BidsValidationPanel from "./components/BidsValidationPanel";
 import ConversionDryRunPanel from "./components/ConversionDryRunPanel";
 import DicomConversionReviewPanel from "./components/DicomConversionReviewPanel";
 import DataReadinessPanel from "./components/DataReadinessPanel";
+import AdvancedPreprocessingPipelinePanel from "./components/AdvancedPreprocessingPipelinePanel";
+const AdvancedPreprocessingPipelineCard = AdvancedPreprocessingPipelinePanel;
 import BoldReferenceReadinessPanel from "./components/BoldReferenceReadinessPanel";
 import EnvironmentHealthPanel from "./components/EnvironmentHealthPanel";
 import SpmRealignDryRunPanel from "./components/SpmRealignDryRunPanel";
@@ -15,6 +17,7 @@ import QcDashboardSummaryPanel from "./components/QcDashboardSummaryPanel";
 import MotionQcReadinessPanel from "./components/MotionQcReadinessPanel";
 import RsfmriQcPlanningReportPanel from "./components/RsfmriQcPlanningReportPanel";
 import RsfmriPresetPanel from "./components/RsfmriPresetPanel";
+import { ActionList, MetricTile, StatusPill as DashboardStatusPill, cleanupNextActions } from "./components/dashboardUi";
 import type { PresetPlanDraft } from "./types";
 import PlanReviewConsole from "./components/PlanReviewConsole";
 import ProjectRunsPanel from "./components/ProjectRunsPanel";
@@ -57,6 +60,95 @@ const quickActions = [
   { title: "View Results", subtitle: "Open latest report", kind: "chart", action: "view-results" },
 ];
 
+type WorkflowTab = "data" | "preprocessing" | "reports" | "environment";
+
+type ProjectDataState = "raw_dicom" | "converted_bids" | "empty" | "mixed" | "unknown";
+
+type ProjectInventory = {
+  projectName: string;
+  modality: string;
+  dataState: ProjectDataState;
+  dataStateLabel: string;
+  stateSentence: string;
+  rawDicomCandidates: number;
+  dicomSeriesCount: number;
+  dicomFileCount: number;
+  convertedSubjects: number;
+  niftiFileCount: number;
+  hasRawDicom: boolean;
+  hasConvertedData: boolean;
+};
+
+export function deriveProjectWorkflowState(
+  project: any,
+  readiness: any,
+  bidsValidation: any,
+  dicomPreflight: any
+): ProjectDataState {
+  if (!project) return "unknown";
+
+  const projectMetadata = project?.metadata || {};
+  const projectDiagnostics = projectMetadata.diagnostics || {};
+
+  const dicomFileCount =
+    dicomPreflight?.dicom_file_count ??
+    readiness?.dicom_files ??
+    projectDiagnostics.dicom_file_count ??
+    projectDiagnostics.dicom_files ??
+    0;
+
+  const dicomSeriesCount =
+    dicomPreflight?.dicom_series_count ??
+    readiness?.dicom_series ??
+    projectDiagnostics.dicom_series_count ??
+    projectDiagnostics.dicom_series ??
+    0;
+
+  const niftiCount =
+    bidsValidation?.nifti_file_count ??
+    readiness?.nifti_files ??
+    projectDiagnostics.nifti_file_count ??
+    projectDiagnostics.nifti_files ??
+    0;
+
+  const convertedSubjects =
+    bidsValidation?.subject_count ??
+    readiness?.subjects ??
+    projectDiagnostics.converted_subject_count ??
+    projectDiagnostics.nifti_subject_count ??
+    projectDiagnostics.image_subject_count ??
+    project?.subjects_count ??
+    0;
+
+  const importCount = readiness?.import_count ?? projectDiagnostics.import_count ?? 0;
+  const rawdataDir = projectMetadata.rawdata_dir ?? bidsValidation?.roots?.[0] ?? "";
+
+  const hasRawDicom = dicomFileCount > 0 || dicomSeriesCount > 0;
+  const hasConvertedData = convertedSubjects > 0 || niftiCount > 0;
+
+  if (hasRawDicom && hasConvertedData) {
+    return "mixed";
+  }
+  if (hasRawDicom && niftiCount === 0 && convertedSubjects === 0) {
+    return "raw_dicom";
+  }
+  if (hasConvertedData && dicomFileCount === 0 && dicomSeriesCount === 0) {
+    return "converted_bids";
+  }
+  if (!rawdataDir && !hasRawDicom && !hasConvertedData && importCount === 0) {
+    return "empty";
+  }
+
+  // fallback logic
+  if (hasConvertedData) {
+    return "converted_bids";
+  }
+  if (hasRawDicom) {
+    return "raw_dicom";
+  }
+  return "empty";
+}
+
 function directoryBasename(path: string): string {
   const normalized = path.trim().replace(/[\\/]+$/, "");
   const parts = normalized.split(/[\\/]/).filter(Boolean);
@@ -69,6 +161,85 @@ function diagnosticNumber(
 ): number {
   const value = Number(diagnostics[key]);
   return Number.isFinite(value) ? value : 0;
+}
+
+function firstDiagnosticNumber(
+  diagnostics: Record<string, unknown>,
+  keys: string[],
+  fallback = 0
+): number {
+  for (const key of keys) {
+    const value = Number(diagnostics[key]);
+    if (Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return fallback;
+}
+
+function diagnosticArrayLength(
+  diagnostics: Record<string, unknown>,
+  key: string
+): number {
+  const value = diagnostics[key];
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function buildProjectInventory(
+  project: ProjectDetail,
+  overview: StudyOverview,
+  diagnostics: Record<string, unknown>
+): ProjectInventory {
+  const dicomFileCount = firstDiagnosticNumber(diagnostics, ["dicom_file_count", "dicom_files"], overview.dicom_files ?? 0);
+  const dicomSeriesCount = firstDiagnosticNumber(diagnostics, ["dicom_series_count", "series_count"], overview.dicom_series ?? 0);
+  const niftiFileCount = firstDiagnosticNumber(diagnostics, ["nifti_file_count", "nifti_files", "image_source_count"]);
+  const convertedSubjectInventory = firstDiagnosticNumber(
+    diagnostics,
+    ["converted_subject_count", "nifti_subject_count", "image_subject_count"],
+    project.subjects_count,
+  );
+  const hasRawDicom = dicomFileCount > 0;
+  const hasConvertedData = niftiFileCount > 0 || convertedSubjectInventory > 0;
+  const convertedSubjects = hasRawDicom
+    ? firstDiagnosticNumber(diagnostics, ["converted_subject_count", "nifti_subject_count", "image_subject_count"])
+    : convertedSubjectInventory;
+  const rawDicomCandidates = firstDiagnosticNumber(
+    diagnostics,
+    ["raw_dicom_candidate_subjects", "dicom_candidate_subjects", "dicom_subject_count"],
+    diagnosticArrayLength(diagnostics, "subject_candidates") || overview.dicom_subjects || (hasRawDicom ? project.subjects_count : 0),
+  );
+  const dataState = deriveProjectWorkflowState(project, overview, null, null);
+  const dataStateLabel =
+    dataState === "raw_dicom"
+      ? "Raw DICOM"
+      : dataState === "mixed"
+        ? "Mixed"
+        : dataState === "converted_bids"
+          ? "Converted BIDS/NIfTI"
+          : "Empty project";
+  const stateSentence =
+    dataState === "raw_dicom"
+      ? "Raw DICOM data detected. Convert to BIDS/NIfTI before NIfTI QC or preprocessing."
+      : dataState === "mixed"
+        ? "Raw DICOM and converted imaging outputs are both present. Review conversion state before preprocessing."
+        : dataState === "converted_bids"
+          ? "Converted BIDS/NIfTI data is available for QC and preprocessing validation."
+          : "Import a BIDS/NIfTI dataset or raw DICOM directory to begin.";
+
+  return {
+    projectName: overview.study_name || project.name,
+    modality: project.modality || overview.modality || "rs-fMRI",
+    dataState,
+    dataStateLabel,
+    stateSentence,
+    rawDicomCandidates,
+    dicomSeriesCount,
+    dicomFileCount,
+    convertedSubjects,
+    niftiFileCount,
+    hasRawDicom,
+    hasConvertedData,
+  };
 }
 
 function projectSummaryFromCreateResult(result: ProjectCreateResponse): ProjectSummary {
@@ -86,7 +257,9 @@ function projectSummaryFromCreateResult(result: ProjectCreateResponse): ProjectS
 export default function App() {
   const baseUrl = DEFAULT_API_BASE;
   const [mode, setMode] = useState<"dashboard" | "advanced" | "planner">("dashboard");
+  const [activeWorkflow, setActiveWorkflow] = useState<WorkflowTab>("data");
   const [health, setHealth] = useState<boolean | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [apiError, setApiError] = useState("");
   const [notice, setNotice] = useState("");
   const [presetPlanDraft, setPresetPlanDraft] = useState<PresetPlanDraft | null>(null);
@@ -120,7 +293,20 @@ export default function App() {
       ? project.data
       : null;
   const selectedProjectMetadata = selectedProjectForPlanReview?.metadata;
+  const projectDiagnostics = useMemo(() => {
+    if (projectCreateResult?.project_id === selectedProjectId) {
+      return projectCreateResult.diagnostics;
+    }
+    const diagnostics = selectedProjectMetadata?.diagnostics;
+    return diagnostics && typeof diagnostics === "object"
+      ? diagnostics as Record<string, unknown>
+      : {};
+  }, [projectCreateResult, selectedProjectId, selectedProjectMetadata]);
   const overview = useProjectOverview(project.data.study_id);
+  const projectInventory = useMemo(
+    () => buildProjectInventory(project.data, overview.data, projectDiagnostics),
+    [project.data, overview.data, projectDiagnostics],
+  );
   const dataset = useDatasetSummary(project.data.id);
   const model = useModelStatus(project.data.id);
   const tasks = useTasks();
@@ -135,6 +321,22 @@ export default function App() {
   useEffect(() => {
     checkHealth();
   }, []);
+
+  useEffect(() => {
+    if (projectInventory) {
+      if (projectInventory.dataState === "converted_bids") {
+        setActiveWorkflow("preprocessing");
+      } else if (projectInventory.dataState === "raw_dicom") {
+        setActiveWorkflow("data");
+      } else if (projectInventory.dataState === "mixed") {
+        setActiveWorkflow("data");
+      } else if (projectInventory.dataState === "empty") {
+        setActiveWorkflow("data");
+      } else {
+        setActiveWorkflow("data");
+      }
+    }
+  }, [selectedProjectId, projectInventory.dataState]);
 
   useEffect(() => {
     if (!projects.data.length) {
@@ -210,6 +412,14 @@ export default function App() {
     const running = tasks.data.filter((task) => task.status === "running").length;
     const failed = tasks.data.filter((task) => task.status === "failed").length;
     return { completed, running, failed };
+  }, [tasks.data]);
+
+  const hasPreprocessingRun = useMemo(() => {
+    return tasks.data.some(
+      (task) =>
+        task.pipeline?.toLowerCase().includes("preprocess") ||
+        task.run_name?.toLowerCase().includes("preprocess")
+    );
   }, [tasks.data]);
 
   const sequenceOptions = useMemo(() => {
@@ -439,6 +649,10 @@ export default function App() {
     }
   }
 
+  function handleScrollToPanel(panelId: string) {
+    document.getElementById(panelId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   async function handleAssistantSubmit(event: FormEvent) {
     event.preventDefault();
     const message = assistantInput.trim();
@@ -536,7 +750,7 @@ export default function App() {
           <button onClick={handleReconnectTaskStream}>Reconnect</button>
         </div>
       ) : null}
-      <div className="dashboard-frame">
+      <div className={`dashboard-frame ${drawerOpen ? "drawer-open" : "drawer-collapsed"}`}>
         <aside className="side-rail">
           <div className="brand-block">
             <div className="brand-glyph">M</div>
@@ -573,7 +787,25 @@ export default function App() {
           </div>
         </aside>
 
-        <main className="workspace-grid">
+        <main className="workflow-main">
+          <section className="project-overview-grid" aria-label="Project overview">
+            <ProjectHeroPanel inventory={projectInventory} />
+            <RecommendedNextStepCard
+              inventory={projectInventory}
+              hasPreprocessingRun={hasPreprocessingRun}
+              onPrimaryAction={() => {
+                setActiveWorkflow(projectInventory.dataState === "converted_bids" ? "preprocessing" : "data");
+                window.setTimeout(() => handleScrollToPanel("workflow-workspace"), 0);
+              }}
+              onSecondaryAction={() => {
+                setActiveWorkflow(projectInventory.dataState === "converted_bids" ? "reports" : "data");
+                window.setTimeout(() => handleScrollToPanel("workflow-workspace"), 0);
+              }}
+            />
+          </section>
+
+          <ReadinessStatusStrip inventory={projectInventory} health={health} hasPreprocessingRun={hasPreprocessingRun} />
+
           <MedicalImageViewer
             project={project.data}
             sequence={sequence}
@@ -591,59 +823,36 @@ export default function App() {
             onSliceChange={setSliceIndex}
           />
 
-          <StudyOverviewCard overview={overview.data} loading={overview.loading} error={overview.error} />
+          <WorkflowTabs activeTab={activeWorkflow} onChange={setActiveWorkflow} />
 
-          <DatasetSummaryCard summary={dataset.data} loading={dataset.loading} error={dataset.error} />
+          <section id="workflow-workspace" className="workflow-workspace" aria-live="polite">
+            {activeWorkflow === "data" ? (
+              <DataConversionWorkspace baseUrl={baseUrl} projectId={selectedProjectId} inventory={projectInventory} />
+            ) : activeWorkflow === "preprocessing" ? (
+              <PreprocessingWorkspace
+                projectId={selectedProjectId}
+                dataState={projectInventory.dataState}
+                inventory={projectInventory}
+                hasPreprocessingRun={hasPreprocessingRun}
+                onOpenDataConversion={() => setActiveWorkflow("data")}
+                onOpenToolsDrawer={() => setDrawerOpen(true)}
+              />
+            ) : activeWorkflow === "reports" ? (
+              <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
+            ) : (
+              <SettingsEnvironmentWorkspace
+                baseUrl={baseUrl}
+                projectId={selectedProjectId}
+                onReviewDraft={(draft) => {
+                  setPresetPlanDraft(draft);
+                  setMode("planner");
+                  setNotice("Preset draft loaded into Plan Review Console. Review and save before dry-run.");
+                }}
+              />
+            )}
+          </section>
 
-          <DataReadinessPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <BidsValidationPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <ConversionDryRunPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <DicomConversionReviewPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <EnvironmentHealthPanel baseUrl={baseUrl} />
-
-          <QcDashboardSummaryPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <SpmRealignDryRunPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <SpmRealignWrapperSkeletonPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <NiftiQcSnapshotPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <BoldReferenceReadinessPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <MotionQcReadinessPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <MotionMetricsDraftPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <RsfmriQcPlanningReportPanel baseUrl={baseUrl} projectId={selectedProjectId} />
-
-          <RsfmriPresetPanel
-            baseUrl={baseUrl}
-            projectId={selectedProjectId}
-            onReviewDraft={(draft) => {
-              setPresetPlanDraft(draft);
-              setMode("planner");
-              setNotice("Preset draft loaded into Plan Review Console. Review and save before dry-run.");
-            }}
-          />
-
-          <ModelCard model={model.data} loading={model.loading} error={model.error} />
-          <MetricCard
-            title="Recent Tasks"
-            values={[
-              [String(taskCounts.completed), "Completed"],
-              [String(taskCounts.running), "Running"],
-              [String(taskCounts.failed), "Failed"],
-            ]}
-            tone="amber"
-            note={tasks.fromFallback ? "fallback" : "live"}
-          />
-
-          <TaskLogTable
+          <CompactTaskLog
             tasks={tasks.data}
             loading={tasks.loading}
             error={tasks.error}
@@ -669,48 +878,30 @@ export default function App() {
           />
         </main>
 
-        <aside className="right-rail">
-          <AssistantPanel
-            messages={chatMessages}
-            input={assistantInput}
-            loading={assistantLoading}
-            error={assistantError}
-            onInput={setAssistantInput}
-            onSubmit={handleAssistantSubmit}
-            onNewChat={() => setChatMessages(fallbackChat)}
-          />
-
-          <PipelineSettingsCard
-            project={project.data}
-            model={model.data}
-            dataset={dataset.data}
-            executionMode={executionMode}
-            externalSmokeApprovedRun={externalSmokeApprovedRun}
-            externalSmokeApprovedBy={externalSmokeApprovedBy}
-            onExecutionModeChange={setExecutionMode}
-            onExternalSmokeApprovedRunChange={setExternalSmokeApprovedRun}
-            onExternalSmokeApprovedByChange={setExternalSmokeApprovedBy}
-            onConfigure={() => setMode("advanced")}
-          />
-
-          <section className="quick-card">
-            <div className="card-title">Quick Actions</div>
-            <div className="quick-grid">
-              {quickActions.map((item) => (
-                <button
-                  key={item.title}
-                  className={`quick-action ${item.kind}`}
-                  onClick={() => handleQuickAction(item.action)}
-                  disabled={pipeline.loading && item.action === "run-pipeline"}
-                >
-                  <span>{item.title.slice(0, 1)}</span>
-                  <strong>{item.action === "run-pipeline" && pipeline.loading ? "Running..." : item.title}</strong>
-                  <small>{item.subtitle}</small>
-                </button>
-              ))}
-            </div>
-          </section>
-        </aside>
+        <SecondaryToolsDrawer
+          isOpen={drawerOpen}
+          onToggle={() => setDrawerOpen(!drawerOpen)}
+          onSetMode={(m) => setMode(m)}
+          project={project.data}
+          model={model.data}
+          dataset={dataset.data}
+          executionMode={executionMode}
+          externalSmokeApprovedRun={externalSmokeApprovedRun}
+          externalSmokeApprovedBy={externalSmokeApprovedBy}
+          assistantMessages={chatMessages}
+          assistantInput={assistantInput}
+          assistantLoading={assistantLoading}
+          assistantError={assistantError}
+          pipelineLoading={pipeline.loading}
+          onExecutionModeChange={setExecutionMode}
+          onExternalSmokeApprovedRunChange={setExternalSmokeApprovedRun}
+          onExternalSmokeApprovedByChange={setExternalSmokeApprovedBy}
+          onConfigure={() => setMode("advanced")}
+          onAssistantInput={setAssistantInput}
+          onAssistantSubmit={handleAssistantSubmit}
+          onNewChat={() => setChatMessages(fallbackChat)}
+          onQuickAction={handleQuickAction}
+        />
       </div>
     </div>
   );
@@ -779,12 +970,643 @@ function ProjectList({
           key={item.id}
           className={`project-pill ${item.id === selectedProjectId ? "selected" : ""}`}
           onClick={() => onSelect(item.id)}
+          title={item.name}
         >
-          {item.name}
-          {item.id === selectedProjectId ? <span /> : null}
+          <span className="project-pill-name">{item.name}</span>
+          {item.id === selectedProjectId ? <span className="project-pill-dot" /> : null}
         </button>
       ))}
     </div>
+  );
+}
+
+function ProjectHeroPanel({ inventory }: { inventory: ProjectInventory }) {
+  const niftiDisplayVal =
+    (inventory.dataState === "converted_bids" || inventory.convertedSubjects > 0) && inventory.niftiFileCount === 0
+      ? "Metadata-only inventory"
+      : inventory.niftiFileCount.toLocaleString();
+
+  return (
+    <section className="project-hero-panel" aria-label="Project summary">
+      <div className="summary-meta-row">
+        <DashboardStatusPill status={inventory.dataState === "converted_bids" ? "ready" : inventory.dataState === "empty" ? "not_started" : "warning"}>
+          {inventory.dataStateLabel}
+        </DashboardStatusPill>
+        <span className="panel-kicker">{inventory.modality}</span>
+      </div>
+      <h1>{inventory.projectName}</h1>
+      <p style={{ marginBottom: "20px" }}>{inventory.stateSentence}</p>
+
+      <div className="hero-metrics-grid">
+        <MetricTile label="Raw DICOM candidates" value={inventory.rawDicomCandidates} tone={inventory.hasRawDicom ? "blue" : "neutral"} />
+        <MetricTile label="DICOM series" value={inventory.dicomSeriesCount} />
+        <MetricTile label="DICOM files" value={inventory.dicomFileCount.toLocaleString()} />
+        <MetricTile label="Converted subjects" value={inventory.convertedSubjects} tone={inventory.convertedSubjects > 0 ? "green" : "neutral"} />
+        <MetricTile label="NIfTI files" value={niftiDisplayVal} tone={inventory.niftiFileCount > 0 ? "green" : "neutral"} />
+      </div>
+    </section>
+  );
+}
+
+function RecommendedNextStepCard({
+  inventory,
+  hasPreprocessingRun,
+  onPrimaryAction,
+  onSecondaryAction,
+}: {
+  inventory: ProjectInventory;
+  hasPreprocessingRun: boolean;
+  onPrimaryAction: () => void;
+  onSecondaryAction: () => void;
+}) {
+  const primary =
+    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
+      ? "Generate conversion dry-run"
+      : inventory.dataState === "converted_bids"
+        ? (hasPreprocessingRun ? "Check preprocessing validation" : "Create preprocessing run")
+        : "Import dataset";
+  const explanation =
+    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
+      ? "Create a read-only conversion plan before NIfTI QC or preprocessing."
+      : inventory.dataState === "converted_bids"
+        ? "Inspect preprocessing readiness before creating or reviewing a run."
+        : "Import a BIDS/NIfTI dataset or raw DICOM directory to begin.";
+  const secondary =
+    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
+      ? "Review conversion readiness"
+      : inventory.dataState === "converted_bids"
+        ? "Review QC report status"
+        : "";
+  const steps =
+    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
+      ? ["Generate conversion dry-run", "Review conversion readiness", "Persist review package"]
+      : inventory.dataState === "converted_bids"
+        ? [
+            hasPreprocessingRun ? "Check preprocessing validation" : "Create preprocessing run",
+            "Review QC report status",
+            "Open Plan Review when ready"
+          ]
+        : ["Import dataset", "Review data readiness", "Check environment health"];
+
+  return (
+    <aside className="recommended-card" aria-label="Recommended next step">
+      <div>
+        <h2>Recommended Next Step</h2>
+        <p>{explanation}</p>
+      </div>
+      <ol className="recommended-steps">
+        {steps.slice(0, 3).map((step, index) => (
+          <li key={step}><span>{index + 1}</span>{step}</li>
+        ))}
+      </ol>
+      <div className="recommended-actions">
+        <button type="button" className="primary-scroll-button" onClick={onPrimaryAction}>
+          {primary}
+        </button>
+        {secondary ? (
+          <button type="button" className="secondary-scroll-button" onClick={onSecondaryAction}>
+            {secondary}
+          </button>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
+function ReadinessStatusStrip({
+  inventory,
+  health,
+  hasPreprocessingRun,
+}: {
+  inventory: ProjectInventory;
+  health: boolean | null;
+  hasPreprocessingRun: boolean;
+}) {
+  const isConverted = inventory.dataState === "converted_bids";
+  const isRawDicom = inventory.dataState === "raw_dicom";
+  const isMixed = inventory.dataState === "mixed";
+  const isEmpty = inventory.dataState === "empty";
+
+  // Data status
+  let dataStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  if (isConverted) {
+    dataStatus = "ready";
+  } else if (isRawDicom || isMixed) {
+    dataStatus = inventory.rawDicomCandidates > 0 ? "ready" : "warning";
+  } else if (isEmpty) {
+    dataStatus = "not_started";
+  }
+
+  // DICOM status
+  const dicomStatus = inventory.dicomFileCount > 0 ? "ready" : "not_applicable";
+
+  // BIDS/NIfTI status
+  let bidsStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  if (isConverted) {
+    bidsStatus = "ready";
+  } else if (isRawDicom) {
+    bidsStatus = "warning";
+  } else if (isMixed) {
+    bidsStatus = "ready";
+  } else if (isEmpty) {
+    bidsStatus = "not_started";
+  }
+
+  // Conversion Safety status
+  let safetyStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  if (isConverted) {
+    safetyStatus = "not_applicable";
+  } else if (isRawDicom || isMixed) {
+    safetyStatus = "warning";
+  } else {
+    safetyStatus = "not_applicable";
+  }
+
+  // Preprocessing status
+  let prepStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  if (isConverted || isMixed) {
+    prepStatus = hasPreprocessingRun ? "ready" : "not_started";
+  } else if (isRawDicom) {
+    prepStatus = "not_applicable";
+  } else {
+    prepStatus = "not_started";
+  }
+
+  // Environment status
+  const envStatus = health === false ? "blocked" : health ? "ready" : "unknown";
+
+  return (
+    <section className="readiness-status-strip" aria-label="Readiness status strip">
+      <StatusStripItem label="Data" status={dataStatus} />
+      <StatusStripItem label="DICOM" status={dicomStatus} />
+      <StatusStripItem label="BIDS/NIfTI" status={bidsStatus} projectState={inventory.dataState} />
+      <StatusStripItem label="Conversion Safety" status={safetyStatus} projectState={inventory.dataState} />
+      <StatusStripItem label="Preprocessing" status={prepStatus} />
+      <StatusStripItem label="Environment" status={envStatus} />
+    </section>
+  );
+}
+
+function StatusStripItem({
+  label,
+  status,
+  projectState,
+}: {
+  label: string;
+  status: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown";
+  projectState?: string;
+}) {
+  let copy: string | undefined = undefined;
+  if (label === "BIDS/NIfTI" && status === "warning" && projectState === "raw_dicom") {
+    copy = "Expected before conversion";
+  } else if (label === "Conversion Safety" && status === "warning" && projectState === "raw_dicom") {
+    copy = "Review required";
+  }
+  return (
+    <div className="status-strip-item">
+      <small>{label}</small>
+      <DashboardStatusPill status={status}>{copy}</DashboardStatusPill>
+    </div>
+  );
+}
+
+function WorkflowTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: WorkflowTab;
+  onChange: (tab: WorkflowTab) => void;
+}) {
+  const tabs: Array<{ id: WorkflowTab; label: string; description: string }> = [
+    { id: "data", label: "Data & Conversion", description: "DICOM, BIDS, dry-run" },
+    { id: "preprocessing", label: "Preprocessing", description: "Validation and reports" },
+    { id: "reports", label: "QC & Reports", description: "Artifacts and warnings" },
+    { id: "environment", label: "Settings / Environment", description: "Planning tools" },
+  ];
+
+  return (
+    <nav className="workflow-tabs" aria-label="Workflow stages">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          className={activeTab === tab.id ? "active" : ""}
+          onClick={() => onChange(tab.id)}
+        >
+          <span>{tab.label}</span>
+          <small>{tab.description}</small>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function WorkspaceHeader({
+  title,
+  subtitle,
+  status,
+}: {
+  title: string;
+  subtitle: string;
+  status?: string;
+}) {
+  return (
+    <div className="workspace-header">
+      <div>
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </div>
+      {status ? <DashboardStatusPill status={status}>{status}</DashboardStatusPill> : null}
+    </div>
+  );
+}
+
+function DataConversionWorkspace({
+  baseUrl,
+  projectId,
+  inventory,
+}: {
+  baseUrl: string;
+  projectId: string | null;
+  inventory: ProjectInventory;
+}) {
+  const isConverted = inventory.dataState === "converted_bids";
+
+  if (isConverted) {
+    return (
+      <div className="workspace-stack data-conversion-workspace">
+        <WorkspaceHeader
+          title="Data & Conversion"
+          subtitle="Converted BIDS/NIfTI project overview."
+          status="Ready"
+        />
+        <div style={{ padding: 12, border: "1px solid rgba(10, 132, 255, 0.18)", borderRadius: 8, background: "rgba(239, 246, 255, 0.82)", color: "#1557a5", fontSize: 12 }}>
+          This project is already in converted BIDS/NIfTI mode. DICOM conversion is not the primary workflow.
+        </div>
+        <div className="workspace-summary-row">
+          <div>
+            <span>Primary action</span>
+            <strong>Check preprocessing validation</strong>
+          </div>
+          <div>
+            <span>Key blocker</span>
+            <strong>None</strong>
+          </div>
+        </div>
+        <div className="workspace-panel-grid">
+          <div id="bids-validation-panel"><BidsValidationPanel baseUrl={baseUrl} projectId={projectId} projectState={inventory.dataState} /></div>
+          <div id="preprocessing-validation-card"><AdvancedPreprocessingPipelineCard projectId={projectId} preprocessingRunId={null} /></div>
+          <div id="qc-dashboard-summary-panel"><QcDashboardSummaryPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="workspace-stack data-conversion-workspace">
+      <WorkspaceHeader
+        title="Data & Conversion"
+        subtitle="Review raw input state, BIDS/NIfTI readiness, and conversion safety without writing files."
+        status={inventory.hasRawDicom ? "Expected before conversion" : inventory.hasConvertedData ? "Ready" : "Not started"}
+      />
+      {inventory.dataState === "mixed" && (
+        <div style={{ padding: 10, border: "1px solid rgba(10, 132, 255, 0.18)", borderRadius: 8, background: "rgba(239, 246, 255, 0.82)", color: "#1557a5", fontSize: 12, marginBottom: 10 }}>
+          <strong>Notice:</strong> Converted BIDS/NIfTI outputs are already present in this project, but raw DICOM files have also been detected. Review the conversion state before preprocessing.
+        </div>
+      )}
+      <div className="workspace-summary-row">
+        <div>
+          <span>Primary action</span>
+          <strong>{inventory.hasRawDicom ? "Generate conversion dry-run" : inventory.hasConvertedData ? "Review BIDS/NIfTI validation" : "Import dataset"}</strong>
+        </div>
+        <div>
+          <span>Key blocker</span>
+          <strong>{inventory.hasRawDicom ? "NIfTI QC waits for conversion" : inventory.hasConvertedData ? "Preprocessing run required" : "No imaging inventory"}</strong>
+        </div>
+      </div>
+      <div className="workspace-panel-grid">
+        <div id="data-readiness-panel"><DataReadinessPanel baseUrl={baseUrl} projectId={projectId} projectState={inventory.dataState} /></div>
+        <div id="bids-validation-panel"><BidsValidationPanel baseUrl={baseUrl} projectId={projectId} projectState={inventory.dataState} /></div>
+        <div id="conversion-dry-run-panel"><ConversionDryRunPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div id="dicom-conversion-review-panel"><DicomConversionReviewPanel baseUrl={baseUrl} projectId={projectId} /></div>
+      </div>
+    </div>
+  );
+}
+
+function PreprocessingWorkspace({
+  projectId,
+  dataState,
+  inventory,
+  hasPreprocessingRun,
+  onOpenDataConversion,
+  onOpenToolsDrawer,
+}: {
+  projectId: string | null;
+  dataState?: ProjectDataState;
+  inventory: ProjectInventory;
+  hasPreprocessingRun: boolean;
+  onOpenDataConversion: () => void;
+  onOpenToolsDrawer: () => void;
+}) {
+  const isRawDicom = dataState === "raw_dicom";
+
+  if (isRawDicom) {
+    return (
+      <div className="workspace-stack preprocessing-workspace">
+        <WorkspaceHeader
+          title="Preprocessing"
+          subtitle="Validate the preprocessing pipeline after conversion or BIDS registration. No full preprocessing action is exposed here."
+          status="Blocked"
+        />
+        <section className="workflow-empty-note">
+          <h3>Preprocessing validation</h3>
+          <p>Convert DICOM to BIDS/NIfTI before preprocessing validation.</p>
+          <button type="button" onClick={onOpenDataConversion}>Open Data & Conversion</button>
+        </section>
+      </div>
+    );
+  }
+
+  const isMissingRegistration = dataState === "empty" || (dataState === "converted_bids" && inventory.convertedSubjects === 0);
+  const ctaTitle = isMissingRegistration
+    ? "Register converted outputs before preprocessing"
+    : "Create preprocessing run";
+  const ctaDescription = isMissingRegistration
+    ? "Configure your BIDS dataset directory or import converted NIfTI outputs before setting up preprocessing."
+    : "Set up and run the preprocessing pipeline using the local workstation tool stack.";
+  const ctaButtonText = isMissingRegistration
+    ? "Open Data & Conversion"
+    : "Configure Preprocessing Run";
+  const handleCtaClick = isMissingRegistration
+    ? onOpenDataConversion
+    : onOpenToolsDrawer;
+
+  return (
+    <div className="workspace-stack preprocessing-workspace">
+      <WorkspaceHeader
+        title="Preprocessing"
+        subtitle="Validate the preprocessing pipeline after conversion or BIDS registration. No full preprocessing action is exposed here."
+        status={hasPreprocessingRun ? "Ready" : "Not started"}
+      />
+      {!hasPreprocessingRun && (
+        <section className="workflow-empty-note">
+          <h3>{ctaTitle}</h3>
+          <p>{ctaDescription}</p>
+          <button type="button" onClick={handleCtaClick}>{ctaButtonText}</button>
+        </section>
+      )}
+      <AdvancedPreprocessingPipelinePanel projectId={projectId} preprocessingRunId={null} />
+    </div>
+  );
+}
+
+function QCReportsWorkspace({ baseUrl, projectId }: { baseUrl: string; projectId: string | null }) {
+  return (
+    <div className="workspace-stack qc-reports-workspace">
+      <WorkspaceHeader
+        title="QC & Reports"
+        subtitle="Compact report status, latest artifacts, warnings, and export actions."
+        status="Review"
+      />
+      <div className="workspace-panel-grid">
+        <div><QcDashboardSummaryPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div><NiftiQcSnapshotPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div><BoldReferenceReadinessPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div><MotionQcReadinessPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div><MotionMetricsDraftPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div><RsfmriQcPlanningReportPanel baseUrl={baseUrl} projectId={projectId} /></div>
+      </div>
+    </div>
+  );
+}
+
+function SettingsEnvironmentWorkspace({
+  baseUrl,
+  projectId,
+  onReviewDraft,
+}: {
+  baseUrl: string;
+  projectId: string | null;
+  onReviewDraft: (draft: PresetPlanDraft) => void;
+}) {
+  return (
+    <div className="workspace-stack settings-environment-workspace">
+      <WorkspaceHeader
+        title="Settings / Environment"
+        subtitle="Planning-only checks for environment health, SPM wrappers, and preset review."
+        status="Planning only"
+      />
+      <div className="planning-note">
+        These tools produce readiness previews and review packages. They do not enable MATLAB/SPM execution or DPABI execution.
+      </div>
+      <div className="workspace-panel-grid">
+        <div><EnvironmentHealthPanel baseUrl={baseUrl} /></div>
+        <div><SpmRealignDryRunPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div><SpmRealignWrapperSkeletonPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div>
+          <RsfmriPresetPanel
+            baseUrl={baseUrl}
+            projectId={projectId}
+            onReviewDraft={onReviewDraft}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompactTaskLog({
+  tasks,
+  loading,
+  error,
+  onRetry,
+  selectedTaskId,
+  onSelectTask,
+}: {
+  tasks: TaskLogEntry[];
+  loading: boolean;
+  error: string;
+  onRetry: () => void;
+  selectedTaskId: string | null;
+  onSelectTask: (taskId: string) => void;
+}) {
+  const visibleTasks = tasks.slice(0, 2);
+  return (
+    <section className="compact-task-log" aria-label="Compact task log" style={{ padding: "10px 16px" }}>
+      <details className="activity-details" style={{ width: "100%" }}>
+        <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <h2 style={{ margin: 0, fontSize: "14px" }}>Recent Activity</h2>
+            <small style={{ color: "#667085" }}>(Click to view recent task logs / demo runs)</small>
+          </div>
+          {error ? <button type="button" onClick={(e) => { e.stopPropagation(); onRetry(); }} style={{ fontSize: 10, minHeight: 20, padding: "2px 6px" }}>Retry</button> : null}
+        </summary>
+        <div style={{ marginTop: 10 }}>
+          {visibleTasks.length ? (
+            <div className="compact-task-list">
+              {visibleTasks.map((task) => (
+                <button
+                  type="button"
+                  key={task.id}
+                  className={task.id === selectedTaskId ? "selected" : ""}
+                  onClick={() => onSelectTask(task.id)}
+                >
+                  <span>{task.run_name}</span>
+                  <StatusPill status={task.status} />
+                  <small>{task.progress}%</small>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="empty">No recent task activity for this project yet.</div>
+          )}
+        </div>
+      </details>
+    </section>
+  );
+}
+
+function SecondaryToolsDrawer({
+  isOpen,
+  onToggle,
+  onSetMode,
+  project,
+  model,
+  dataset,
+  executionMode,
+  externalSmokeApprovedRun,
+  externalSmokeApprovedBy,
+  assistantMessages,
+  assistantInput,
+  assistantLoading,
+  assistantError,
+  pipelineLoading,
+  onExecutionModeChange,
+  onExternalSmokeApprovedRunChange,
+  onExternalSmokeApprovedByChange,
+  onConfigure,
+  onAssistantInput,
+  onAssistantSubmit,
+  onNewChat,
+  onQuickAction,
+}: {
+  isOpen: boolean;
+  onToggle: () => void;
+  onSetMode: (mode: "dashboard" | "advanced" | "planner") => void;
+  project: ProjectDetail;
+  model: ModelStatus;
+  dataset: DatasetSummary;
+  executionMode: ExecutionMode;
+  externalSmokeApprovedRun: boolean;
+  externalSmokeApprovedBy: string;
+  assistantMessages: ChatMessage[];
+  assistantInput: string;
+  assistantLoading: boolean;
+  assistantError: string;
+  pipelineLoading: boolean;
+  onExecutionModeChange: (mode: ExecutionMode) => void;
+  onExternalSmokeApprovedRunChange: (value: boolean) => void;
+  onExternalSmokeApprovedByChange: (value: string) => void;
+  onConfigure: () => void;
+  onAssistantInput: (value: string) => void;
+  onAssistantSubmit: (event: FormEvent) => void;
+  onNewChat: () => void;
+  onQuickAction: (action: string) => void;
+}) {
+  if (!isOpen) {
+    return (
+      <aside className="secondary-tools-drawer collapsed" aria-label="Secondary tools drawer collapsed">
+        <button
+          type="button"
+          className="drawer-toggle-btn"
+          onClick={onToggle}
+          title="Open Tools Drawer"
+          aria-label="Open Tools Drawer"
+        >
+          <span style={{ fontSize: 16 }}>🛠️</span>
+          <div className="vertical-text">Tools</div>
+        </button>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="secondary-tools-drawer open" aria-label="Secondary tools drawer">
+      <details open>
+        <summary onClick={(e) => { e.preventDefault(); onToggle(); }} style={{ cursor: "pointer" }}>
+          <span>Tools Drawer</span>
+          <span style={{ fontSize: 14, fontWeight: "bold", padding: "0 6px" }}>✕</span>
+        </summary>
+        <div className="secondary-tools-stack">
+          <PipelineSettingsCard
+            project={project}
+            model={model}
+            dataset={dataset}
+            executionMode={executionMode}
+            externalSmokeApprovedRun={externalSmokeApprovedRun}
+            externalSmokeApprovedBy={externalSmokeApprovedBy}
+            onExecutionModeChange={onExecutionModeChange}
+            onExternalSmokeApprovedRunChange={onExternalSmokeApprovedRunChange}
+            onExternalSmokeApprovedByChange={onExternalSmokeApprovedByChange}
+            onConfigure={onConfigure}
+          />
+
+          <details className="drawer-section">
+            <summary style={{ cursor: "pointer" }}>Assistant</summary>
+            <AssistantPanel
+              messages={assistantMessages}
+              input={assistantInput}
+              loading={assistantLoading}
+              error={assistantError}
+              onInput={onAssistantInput}
+              onSubmit={onAssistantSubmit}
+              onNewChat={onNewChat}
+            />
+          </details>
+
+          <details className="drawer-section">
+            <summary style={{ cursor: "pointer" }}>Legacy Actions</summary>
+            <div className="quick-grid compact">
+              {quickActions.map((item) => (
+                <button
+                  key={item.title}
+                  className={`quick-action ${item.kind}`}
+                  onClick={() => onQuickAction(item.action)}
+                  disabled={pipelineLoading && item.action === "run-pipeline"}
+                >
+                  <span>{item.title.slice(0, 1)}</span>
+                  <strong>{item.action === "run-pipeline" && pipelineLoading ? "Running..." : item.title}</strong>
+                  <small>{item.subtitle}</small>
+                </button>
+              ))}
+            </div>
+          </details>
+
+          <details className="drawer-section">
+            <summary style={{ cursor: "pointer" }}>Planning Tools</summary>
+            <div style={{ display: "grid", gap: 8, paddingTop: 8 }}>
+              <button
+                type="button"
+                className="soft-button"
+                onClick={() => onSetMode("planner")}
+                style={{ width: "100%", minHeight: 34, fontSize: 12, fontWeight: 800 }}
+              >
+                Plan Review Console
+              </button>
+              <button
+                type="button"
+                className="soft-button"
+                onClick={() => onSetMode("advanced")}
+                style={{ width: "100%", minHeight: 34, fontSize: 12, fontWeight: 800 }}
+              >
+                Advanced Console
+              </button>
+            </div>
+          </details>
+        </div>
+      </details>
+    </aside>
   );
 }
 
@@ -799,12 +1621,22 @@ function ProjectCreateResultPanel({
   error: string;
   onDismiss: () => void;
 }) {
+  const [showTechDetails, setShowTechDetails] = useState(false);
+
   if (!result && !loading && !error) {
     return null;
   }
 
   const diagnostics = result?.diagnostics ?? {};
   const status = String(diagnostics.status ?? "UNKNOWN");
+  const dicomFileCount = diagnosticNumber(diagnostics, "dicom_file_count");
+  const hasRawDicom = dicomFileCount > 0 && diagnosticNumber(diagnostics, "image_source_count") === 0;
+  const rawDicomCandidates = firstDiagnosticNumber(
+    diagnostics,
+    ["raw_dicom_candidate_subjects", "dicom_candidate_subjects", "dicom_subject_count"],
+    diagnosticArrayLength(diagnostics, "subject_candidates") || diagnosticNumber(diagnostics, "subjects_total"),
+  );
+  const nextActions = cleanupNextActions(result?.next_actions ?? [], { rawDicom: hasRawDicom });
   return (
     <section className="task-detail-panel">
       <div className="card-row">
@@ -825,17 +1657,39 @@ function ProjectCreateResultPanel({
         <>
           <div className="detail-grid">
             <div><span>Status</span><strong>{status}</strong></div>
-            <div><span>Subjects</span><strong>{diagnosticNumber(diagnostics, "subjects_total")}</strong></div>
+            <div><span>Converted subjects</span><strong>{diagnosticNumber(diagnostics, "image_subject_count")}</strong></div>
+            <div><span>Raw DICOM candidates</span><strong>{rawDicomCandidates}</strong></div>
+            <div><span>DICOM files</span><strong>{dicomFileCount.toLocaleString()}</strong></div>
             <div><span>Complete</span><strong>{diagnosticNumber(diagnostics, "subjects_complete")}</strong></div>
             <div><span>Warning</span><strong>{diagnosticNumber(diagnostics, "subjects_warning")}</strong></div>
             <div><span>Incomplete</span><strong>{diagnosticNumber(diagnostics, "subjects_incomplete")}</strong></div>
           </div>
 
-          <div className="event-list">
-            <div className="event-row"><span>Project directory</span><p>{result.project_dir}</p></div>
-            <div className="event-row"><span>Rawdata directory</span><p>{result.rawdata_dir}</p></div>
-            <div className="event-row"><span>Dataset index</span><p>{result.dataset_index_path || "Not generated"}</p></div>
+          <div style={{ marginTop: 10, marginBottom: 10 }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "#667085", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={showTechDetails}
+                onChange={(e) => setShowTechDetails(e.target.checked)}
+              />
+              Show technical details
+            </label>
           </div>
+
+          {showTechDetails && (
+            <>
+              <div className="event-list">
+                <div className="event-row"><span>Project directory</span><p>{result.project_dir}</p></div>
+                <div className="event-row"><span>Rawdata directory</span><p>{result.rawdata_dir}</p></div>
+                <div className="event-row"><span>Dataset index</span><p>{result.dataset_index_path || "Not generated"}</p></div>
+              </div>
+
+              <div className="tool-result-list">
+                <div className="panel-kicker">Next actions</div>
+                <ActionList actions={nextActions} rawDicom={hasRawDicom} />
+              </div>
+            </>
+          )}
 
           {result.warnings.length ? (
             <div className="diagnostic-list">
@@ -847,15 +1701,6 @@ function ProjectCreateResultPanel({
               ))}
             </div>
           ) : null}
-
-          <div className="tool-result-list">
-            <div className="panel-kicker">Next actions</div>
-            {result.next_actions.map((action, index) => (
-              <div className="tool-result-row" key={`${action}-${index}`}>
-                <strong>{index + 1}. {action}</strong>
-              </div>
-            ))}
-          </div>
         </>
       ) : null}
     </section>
@@ -1042,6 +1887,7 @@ function MiniScan({ axis }: { axis: string }) {
 }
 
 function StudyOverviewCard({ overview, loading, error }: { overview: StudyOverview; loading: boolean; error: string }) {
+  const hasDicom = overview.dicom_files !== undefined && overview.dicom_files > 0;
   return (
     <section className="overview-card">
       <div className="card-title">Study Overview {loading ? "..." : error ? "(fallback)" : ""}</div>
@@ -1050,7 +1896,13 @@ function StudyOverviewCard({ overview, loading, error }: { overview: StudyOvervi
         <dt>Study ID</dt><dd>{overview.study_id}</dd>
         <dt>Modality</dt><dd>{overview.modality}</dd>
         <dt>Sequences</dt><dd>{overview.sequences.join(", ")}</dd>
-        <dt>Subjects</dt><dd>{overview.subjects}</dd>
+        <dt>Subjects</dt><dd>{overview.subjects || (hasDicom ? `${overview.dicom_subjects} (candidate)` : "0")}</dd>
+        {hasDicom && (
+          <>
+            <dt>DICOM Series</dt><dd>{overview.dicom_series} series</dd>
+            <dt>DICOM Files</dt><dd>{overview.dicom_files?.toLocaleString()} files</dd>
+          </>
+        )}
         <dt>Date</dt><dd>{overview.date}</dd>
       </dl>
       <button className="soft-button">View Details</button>
@@ -1059,16 +1911,25 @@ function StudyOverviewCard({ overview, loading, error }: { overview: StudyOvervi
 }
 
 function DatasetSummaryCard({ summary, loading, error }: { summary: DatasetSummary; loading: boolean; error: string }) {
+  const isRawDicom = summary.dicom_files !== undefined && summary.dicom_files > 0 && summary.subjects === 0;
   return (
     <MetricCard
       title={`Dataset Summary ${loading ? "..." : error ? "(fallback)" : ""}`}
-      values={[
-        [String(summary.subjects), "Subjects"],
-        [summary.scans.toLocaleString(), "Scans"],
-        [summary.total_size, "Total Size"],
-      ]}
+      values={
+        isRawDicom
+          ? [
+              [String(summary.dicom_subjects || 0), "Candidate Subjects"],
+              [String(summary.dicom_series || 0), "DICOM Series"],
+              [summary.total_size || "0 KB", "Total Size (DICOM)"],
+            ]
+          : [
+              [String(summary.subjects), "Subjects"],
+              [summary.scans.toLocaleString(), "Scans"],
+              [summary.total_size, "Total Size"],
+            ]
+      }
       tone="blue"
-      note={summary.health_status}
+      note={isRawDicom ? "Raw DICOM (Expected before conversion)" : summary.health_status}
     />
   );
 }
@@ -1206,6 +2067,8 @@ function TaskDetailsPanel({
   onRetry: () => void;
   onReconnect: () => void;
 }) {
+  const [showTechDetails, setShowTechDetails] = useState(false);
+
   if (!task) {
     return null;
   }
@@ -1280,37 +2143,53 @@ function TaskDetailsPanel({
           ))}
         </div>
       ) : null}
-      {diagnostics.external_tool_results.length ? (
-        <div className="tool-result-list">
-          <div className="panel-kicker">External tool results</div>
-          {diagnostics.external_tool_results.slice(0, 3).map((result, index) => (
-            <div className="tool-result-row" key={index}>
-              <strong>{String(result.command || result.function || `External run ${index + 1}`)}</strong>
-              <span>returncode {String(result.returncode ?? "n/a")}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {auditPackage ? (
-        <div className="audit-package-box">
-          <div>
-            <span>Audit package</span>
-            <strong>{auditPackage.generated_at}</strong>
-          </div>
-          <p>{auditPackage.report_path}</p>
-          <p>{auditPackage.json_path}</p>
-        </div>
-      ) : null}
-      <div className="event-list">
-        {loading ? <div className="event-row muted">Loading persisted events...</div> : null}
-        {latestEvents.map((event) => (
-          <div className="event-row" key={`${event.id}-${event.timestamp}-${event.message}`}>
-            <span>{event.timestamp}</span>
-            <strong>{event.progress}%</strong>
-            <p>{event.message}</p>
-          </div>
-        ))}
+
+      <div style={{ marginTop: 10, marginBottom: 10 }}>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "#667085", cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={showTechDetails}
+            onChange={(e) => setShowTechDetails(e.target.checked)}
+          />
+          Show technical details
+        </label>
       </div>
+
+      {showTechDetails && (
+        <>
+          {diagnostics.external_tool_results.length ? (
+            <div className="tool-result-list">
+              <div className="panel-kicker">External tool results</div>
+              {diagnostics.external_tool_results.slice(0, 3).map((result, index) => (
+                <div className="tool-result-row" key={index}>
+                  <strong>{String(result.command || result.function || `External run ${index + 1}`)}</strong>
+                  <span>returncode {String(result.returncode ?? "n/a")}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {auditPackage ? (
+            <div className="audit-package-box">
+              <div>
+                <span>Audit package</span>
+                <strong>{auditPackage.generated_at}</strong>
+              </div>
+              <p>{auditPackage.report_path}</p>
+              <p>{auditPackage.json_path}</p>
+            </div>
+          ) : null}
+          <div className="event-list">
+            {loading ? <div className="event-row muted">Loading persisted events...</div> : null}
+            {latestEvents.map((event) => (
+              <div className="event-row" key={`${event.id}-${event.timestamp}-${event.message}`}>
+                <span>{event.timestamp}</span>
+                <strong>{event.progress}%</strong>
+                <p>{event.message}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       {error ? <div className="detail-error">{error}</div> : null}
     </section>
   );
