@@ -226,3 +226,64 @@ def register_smoothing_outputs(
         subject_count=len(smoothed), registered_bold_outputs=[str(p) for p in smoothed],
         next_actions=["Review outputs.", "Plan nuisance regression dry-run."],
         safety_flags=registration_safety_flags())
+
+
+def register_nuisance_outputs(
+    project_id: str, run_id: str, request: StageOutputRegistrationRequest,
+    *, project_dir: str = ""
+) -> StageOutputRegistrationResponse:
+    if not request.execution_id:
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=["execution_id is required."], safety_flags=registration_safety_flags())
+
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    effective_pd = project_dir or str(meta.get("project_dir") or "")
+
+    exec_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "spm_exec" / request.execution_id
+    if not exec_dir.exists():
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=[f"Execution dir not found: {exec_dir}"], safety_flags=registration_safety_flags())
+
+    manifest_path = exec_dir / "manifest.json"
+    metadata_only = False
+    if manifest_path.exists():
+        mf = json.loads(manifest_path.read_text())
+        metadata_only = mf.get("metadata_only", False)
+        if mf.get("status") not in ("succeeded", "warning", "generated"):
+            return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+                blocking_issues=[f"Execution not succeeded: {mf.get('status')}"], safety_flags=registration_safety_flags())
+
+    sandbox_out = exec_dir / "sandbox_output"
+    if not sandbox_out.exists():
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=["Sandbox output dir not found."], safety_flags=registration_safety_flags())
+
+    # For metadata-only execution, register as not_ready
+    stage_out_id = "nr-so-" + hashlib.sha256(f"{project_id}:{run_id}:{request.execution_id}".encode()).hexdigest()[:10]
+    reg_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "registered_stage_outputs" / stage_out_id if effective_pd else Path(f"outputs/stage_outputs/{stage_out_id}")
+    reg_dir.mkdir(parents=True, exist_ok=True)
+
+    warnings: list[str] = []
+    if metadata_only:
+        warnings.append("Nuisance regression was metadata-only; numerical regression not yet applied.")
+        (reg_dir / "nuisance_stage_output_registry.json").write_text(json.dumps({
+            "stage_output_id": stage_out_id, "status": "not_ready_for_filtering", "metadata_only": True}, indent=2))
+    else:
+        (reg_dir / "nuisance_stage_output_registry.json").write_text(json.dumps({
+            "stage_output_id": stage_out_id, "status": "registered"}, indent=2))
+
+    (reg_dir / "README.md").write_text("# Nuisance Regression Output Registration\n")
+
+    if isinstance(project.metadata, dict):
+        project.metadata["current_functional_input_source"] = "sandbox_python_nuisance_regression"
+        if not metadata_only:
+            project.metadata["current_functional_input_dir"] = str(sandbox_out)
+
+    return StageOutputRegistrationResponse(
+        ok=True, status="registered" if not metadata_only else "warning", project_id=project_id,
+        preprocessing_run_id=run_id, execution_id=request.execution_id,
+        registered_stage_output_id=stage_out_id, stage_output_dir=str(reg_dir),
+        next_stage_input_dir=str(sandbox_out) if not metadata_only else "",
+        warnings=warnings, next_actions=["Review status.", "Plan temporal filtering dry-run." if not metadata_only else "Numerical regression needed before filtering."],
+        safety_flags=registration_safety_flags())
