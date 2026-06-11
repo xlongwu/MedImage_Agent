@@ -16,6 +16,7 @@ import type {
 import DicomConversionReleaseReadinessPanel from "./DicomConversionReleaseReadinessPanel";
 import DicomConversionExecutePanel from "./DicomConversionExecutePanel";
 import SpmSandboxExecutionPanel from "./SpmSandboxExecutionPanel";
+import AdvancedPreprocessingPipelinePanel from "./AdvancedPreprocessingPipelinePanel";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
@@ -294,6 +295,14 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
           projectId={projectId!}
           preprocessingRunId="pp-test"
           dryRunId="dr-test"
+        />
+      )}
+
+      {/* Phase 5O: Advanced Preprocessing Pipeline Validation */}
+      {persistResult?.conversion_run_id && (
+        <AdvancedPreprocessingPipelinePanel
+          projectId={projectId!}
+          preprocessingRunId="pp-test"
         />
       )}
     </Sect>

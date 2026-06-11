@@ -1651,3 +1651,19 @@ export async function runFilteringDryRun(
     { method: "POST", body: JSON.stringify(body) },
   );
 }
+
+export async function getPreprocessingPipelineValidation(
+  baseUrl: string, projectId: string, preprocessingRunId: string,
+) {
+  return requestJson<Record<string, unknown>>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/validation`,
+  );
+}
+
+export async function getPreprocessingPipelineReport(
+  baseUrl: string, projectId: string, preprocessingRunId: string,
+) {
+  return requestJson<Record<string, unknown>>(
+    baseUrl, `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/report`,
+  );
+}
