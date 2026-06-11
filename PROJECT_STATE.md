@@ -3,9 +3,24 @@
 ## Current milestone
 
 Desktop real-project execution and run artifact inspection loop completed.
-Current focus is MVP release hardening: validation, delivery-state cleanup,
-documentation sync, and smoke-check repeatability. No new features are in
-scope for this phase.
+Phase 5 (Preprocessing Pipeline) active: converted BIDS handoff, SPM dry-run
+planning, sandbox Slice Timing + Realign execution, and stage output registration.
+
+## Phase 5 Status
+
+### 5A-5B: Preprocessing handoff + run workspace ✅
+- Converted BIDS registration, DPARSFA-style plan preview, Python-only preflight
+
+### 5C-5E: SPM runtime + sandbox execution ✅
+- SPM/MATLAB runtime preflight, synthetic smoke, sandbox Slice Timing + Realign
+
+### 5F: Sandbox output registration ✅
+- Register SPM outputs as next-stage preprocessing input
+
+### 5G: Coregistration + Normalization dry-run ✅
+- Batch preview for coregistration, segmentation, normalization
+- Register sandbox outputs button in frontend
+- No MATLAB/SPM execution, no image outputs, no rawdata modification
 
 ## Completed capabilities
 
