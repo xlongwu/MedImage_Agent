@@ -1896,6 +1896,54 @@ def post_coreg_norm_sandbox_execution(
     return result.model_dump()
 
 
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-coreg-norm")
+def post_register_coreg_norm_outputs(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Register Coreg/Norm sandbox outputs as next-stage input."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
+    from src.backend.app.services.preprocessing_stage_outputs import register_coreg_norm_outputs
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = StageOutputRegistrationRequest(
+        execution_id=body.get("execution_id", ""),
+        confirm_sandbox_outputs=body.get("confirm_sandbox_outputs", False),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+        confirm_converted_input_readonly=body.get("confirm_converted_input_readonly", False),
+        confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
+        confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
+    )
+    result = register_coreg_norm_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/dry-run")
+def post_smoothing_dry_run(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Smoothing batch preview dry-run."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_smoothing_dry_run import SmoothingDryRunRequest
+    from src.backend.app.services.preprocessing_smoothing_dry_run import run_smoothing_dry_run
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = SmoothingDryRunRequest(
+        registered_stage_output_id=body.get("registered_stage_output_id", ""),
+        functional_input_dir=body.get("functional_input_dir", ""),
+        fwhm=body.get("fwhm", "[6,6,6]"),
+        confirm_dry_run_only=body.get("confirm_dry_run_only", False),
+        confirm_no_matlab_execution=body.get("confirm_no_matlab_execution", False),
+        confirm_no_image_modification=body.get("confirm_no_image_modification", False),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+        confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
+    )
+    result = run_smoothing_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
