@@ -386,3 +386,48 @@ def register_alff_reho_outputs(
         warnings=[] if metric_ready else ["ALFF/ReHo execution was metadata-only; metric maps not generated."],
         next_actions=["Review outputs.", "Plan FC dry-run using filtered functional inputs."],
         safety_flags=registration_safety_flags())
+
+
+def register_fc_outputs(
+    project_id: str, run_id: str, request: StageOutputRegistrationRequest,
+    *, project_dir: str = ""
+) -> StageOutputRegistrationResponse:
+    if not request.execution_id:
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=["execution_id is required."], safety_flags=registration_safety_flags())
+
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    effective_pd = project_dir or str(meta.get("project_dir") or "")
+
+    exec_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "spm_exec" / request.execution_id
+    if not exec_dir.exists():
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=[f"Execution dir not found: {exec_dir}"], safety_flags=registration_safety_flags())
+
+    sandbox_out = exec_dir / "sandbox_output"
+    if not sandbox_out.exists():
+        return StageOutputRegistrationResponse(ok=False, status="blocked", project_id=project_id,
+            blocking_issues=["Sandbox output not found."], safety_flags=registration_safety_flags())
+
+    fc_files = [p for p in sorted(sandbox_out.rglob("FC_matrix_*.json")) if p.is_file()]
+    fz_files = [p for p in sorted(sandbox_out.rglob("FC_FisherZ_*.json")) if p.is_file()]
+    ready = len(fc_files) > 0
+
+    stage_out_id = "fc-so-" + hashlib.sha256(f"{project_id}:{run_id}:{request.execution_id}".encode()).hexdigest()[:10]
+    reg_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "registered_stage_outputs" / stage_out_id if effective_pd else Path(f"outputs/stage_outputs/{stage_out_id}")
+    reg_dir.mkdir(parents=True, exist_ok=True)
+
+    (reg_dir / "fc_stage_output_registry.json").write_text(json.dumps({
+        "stage_output_id": stage_out_id, "fc_outputs_ready": ready,
+        "fc_matrix_count": len(fc_files), "fisher_z_count": len(fz_files)}, indent=2))
+    (reg_dir / "README.md").write_text("# FC Output Registration\n")
+
+    return StageOutputRegistrationResponse(
+        ok=True, status="registered" if ready else "warning", project_id=project_id,
+        preprocessing_run_id=run_id, execution_id=request.execution_id,
+        registered_stage_output_id=stage_out_id, stage_output_dir=str(reg_dir),
+        registered_bold_outputs=[str(p) for p in fc_files],
+        warnings=[] if ready else ["FC execution was metadata-only; no matrices generated."],
+        next_actions=["Review FC outputs.", "Group analysis requires explicit opt-in."],
+        safety_flags=registration_safety_flags())

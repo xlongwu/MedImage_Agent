@@ -2243,6 +2243,68 @@ def post_fc_dry_run(
     return result.model_dump()
 
 
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/execute-sandbox")
+def post_fc_sandbox_execution(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Sandboxed FC execution (Python-only, atlas-optional)."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_fc_execution import FcSandboxExecutionRequest
+    from src.backend.app.services.preprocessing_fc_execution import run_fc_sandbox_execution
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = FcSandboxExecutionRequest(
+        dry_run_id=body.get("dry_run_id", ""),
+        functional_input_dir=body.get("functional_input_dir", ""),
+        confirm_sandbox_copy=body.get("confirm_sandbox_copy", False),
+        confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
+        confirm_previous_stage_readonly=body.get("confirm_previous_stage_readonly", False),
+        confirm_fc_only=body.get("confirm_fc_only", False),
+        confirm_no_group_statistics=body.get("confirm_no_group_statistics", False),
+        confirm_no_classification=body.get("confirm_no_classification", False),
+        confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
+        confirm_research_use_only=body.get("confirm_research_use_only", False),
+    )
+    result = run_fc_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-fc")
+def post_register_fc_outputs(
+    project_id: str, preprocessing_run_id: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    """Register FC derivative outputs."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
+    from src.backend.app.services.preprocessing_stage_outputs import register_fc_outputs
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    req = StageOutputRegistrationRequest(
+        execution_id=body.get("execution_id", ""),
+        confirm_sandbox_outputs=body.get("confirm_sandbox_outputs", False),
+        confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
+        confirm_converted_input_readonly=body.get("confirm_converted_input_readonly", False),
+        confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
+        confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
+    )
+    result = register_fc_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
+@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/report")
+def get_pipeline_report(project_id: str, preprocessing_run_id: str) -> dict[str, Any]:
+    """Export preprocessing pipeline report."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    from src.backend.app.services.preprocessing_pipeline_report import generate_pipeline_report
+    project = mock_store.get_project(project_id)
+    meta = project.metadata if project and isinstance(project.metadata, dict) else {}
+    result = generate_pipeline_report(project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", "")))
+    return result.model_dump()
+
+
 def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     validation = payload.get("validation", {})
     dicom_preflight = payload.get("dicom_preflight", {})
