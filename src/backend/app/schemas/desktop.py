@@ -83,6 +83,9 @@ class StudyOverview(BaseModel):
     scans: int
     total_size: str
     date: str
+    dicom_subjects: int = 0
+    dicom_series: int = 0
+    dicom_files: int = 0
 
 
 class DatasetSummary(BaseModel):
@@ -91,6 +94,9 @@ class DatasetSummary(BaseModel):
     scans: int
     total_size: str
     health_status: str
+    dicom_subjects: int = 0
+    dicom_series: int = 0
+    dicom_files: int = 0
 
 
 class ModelStatus(BaseModel):

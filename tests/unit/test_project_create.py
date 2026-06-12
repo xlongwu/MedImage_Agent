@@ -136,6 +136,42 @@ def test_created_project_persists_in_dashboard_project_api(tmp_path, monkeypatch
     assert detail_payload["metadata"]["updated_at"]
 
 
+def test_create_project_with_raw_dicom_directory_is_listed(tmp_path, monkeypatch):
+    """DICOM-only rawdata should create a visible raw DICOM dashboard project."""
+    _clean_desktop_config(tmp_path, monkeypatch)
+    rawdata = tmp_path / "dicom_raw"
+    series_dir = rawdata / "FunRaw" / "Sub_001"
+    series_dir.mkdir(parents=True)
+    for index in range(3):
+        (series_dir / f"slice_{index:03d}.dcm").write_bytes(b"DICOM placeholder")
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "DICOM Upload Test",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(tmp_path / "dicom_project"),
+            "run_inspection": True,
+            "overwrite": False,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    diagnostics = data["diagnostics"]
+    assert diagnostics["status"] == "RAW_DICOM"
+    assert diagnostics["dicom_file_count"] == 3
+    assert diagnostics["dicom_series_count"] == 1
+    assert diagnostics["raw_dicom_candidate_subjects"] == 1
+    projects = client.get("/api/projects").json()
+    listed = [item for item in projects if item["id"] == data["project_id"]]
+    assert listed, "DICOM-only uploaded project must appear in Recent projects source list"
+    assert listed[0]["subjects_count"] == 1
+    imports = client.get(f"/api/datasets/imports?project_id={data['project_id']}").json()
+    assert imports["imports"][0]["dataset_type"] == "dicom"
+
+
 def test_created_project_saves_rawdata_reference_in_imports(tmp_path, monkeypatch):
     store = _clean_desktop_config(tmp_path, monkeypatch)
     rawdata = Path("examples/synthetic_bids/rawdata").resolve()

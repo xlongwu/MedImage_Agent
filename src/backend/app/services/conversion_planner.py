@@ -131,9 +131,35 @@ def _classify_root(root: Path) -> str:
 
 def plan_conversion(
     project_id: str,
-    request: ConversionDryRunRequest,
+    request: ConversionDryRunRequest | dict[str, Any] | None,
 ) -> ConversionDryRunResponse:
     """Inspect imports and generate a conversion mapping preview."""
+    if request is None:
+        request = ConversionDryRunRequest()
+    elif isinstance(request, dict) or hasattr(request, "get"):
+        safe_req = {}
+        for field_name in ConversionDryRunRequest.model_fields:
+            if field_name in request:
+                safe_req[field_name] = request[field_name]
+        # Support either output_root or output_root_name
+        if "output_root_name" not in safe_req:
+            if "output_root_name" in request:
+                safe_req["output_root_name"] = request["output_root_name"]
+            elif "output_root" in request:
+                safe_req["output_root_name"] = request["output_root"]
+        try:
+            request = ConversionDryRunRequest(**safe_req)
+        except Exception:
+            request = ConversionDryRunRequest()
+            for k, v in safe_req.items():
+                if hasattr(request, k):
+                    setattr(request, k, v)
+
+    def get_req_attr(name: str, default: Any = None) -> Any:
+        if isinstance(request, dict):
+            return request.get(name, default)
+        return getattr(request, name, default)
+
 
     now = _now_iso()
     warnings: list[str] = []
@@ -148,7 +174,7 @@ def plan_conversion(
     config_path = str(metadata.get("project_config_path") or "")
 
     # Sanitize output_root_name to prevent path traversal
-    safe_name = request.output_root_name or "conversion_output"
+    safe_name = get_req_attr("output_root_name") or "conversion_output"
     safe_name = safe_name.replace("\\", "/")
     # Remove traversal patterns
     parts = [p for p in safe_name.split("/") if p and p not in (".", "..")]
@@ -176,10 +202,11 @@ def plan_conversion(
             root_map[imp.path] = Path(imp.path).expanduser().resolve()
 
     # Filter by request source_import_ids if provided
-    if request.source_import_ids:
+    source_import_ids = get_req_attr("source_import_ids")
+    if source_import_ids:
         filtered: dict[str, Path] = {}
         for imp in imports:
-            if imp.dataset_id in request.source_import_ids:
+            if imp.dataset_id in source_import_ids:
                 filtered[imp.path] = Path(imp.path).expanduser().resolve()
         if not filtered and rawdata_dir:
             filtered[rawdata_dir] = root_map.get(rawdata_dir, Path(rawdata_dir))
@@ -199,7 +226,7 @@ def plan_conversion(
 
         source_id = f"source_{hashlib_short(root_str)}"
 
-        if source_type == "dicom" and request.include_dicom:
+        if source_type == "dicom" and get_req_attr("include_dicom"):
             try:
                 preflight = build_dicom_preflight(
                     project_id=project_id,
@@ -220,7 +247,7 @@ def plan_conversion(
                 desc = series.series_description or series.protocol_name or ""
                 suffix = _bids_suffix_from_desc(desc)
                 session = None
-                if request.session_mapping_strategy == "infer_from_dicom":
+                if get_req_attr("session_mapping_strategy") == "infer_from_dicom":
                     pass  # No session info in current preflight
                 modality = _bids_modality(suffix) if suffix else "func"
                 confidence = _confidence_for_mapping(
@@ -243,7 +270,7 @@ def plan_conversion(
                     "warnings": [],
                 })
 
-        elif source_type == "loose_nifti" and request.include_loose_nifti:
+        elif source_type == "loose_nifti" and get_req_attr("include_loose_nifti"):
             nifti_files = []
             try:
                 for path in root_path.rglob("*"):
@@ -387,8 +414,8 @@ def plan_conversion(
         status=status,
         dry_run=True,
         checked_at=now,
-        target_layout=request.target_layout,
-        output_root_name=request.output_root_name,
+        target_layout=get_req_attr("target_layout", "bids"),
+        output_root_name=get_req_attr("output_root_name", "converted_bids"),
         output_root_preview=output_root_str,
         source_summaries=[ConversionSourceSummary(**s) for s in sources],
         mapping_preview=[ConversionMappingPreview(**m) for m in mappings],

@@ -6,7 +6,24 @@ from pathlib import Path
 from src.backend.app.tools.run_import_diagnostics_cli import main
 
 
-def test_import_diagnostics_cli_package_and_verify(tmp_path: Path, capsys):
+def test_import_diagnostics_cli_package_and_verify(tmp_path: Path, capsys, monkeypatch):
+    from src.backend.app.schemas.desktop import ImageValidationReport
+    monkeypatch.setattr(
+        "src.backend.app.api.dashboard_routes.build_image_validation_report",
+        lambda *args, **kwargs: ImageValidationReport(
+            ok=True,
+            project_id="brain-tumor-study",
+            status="pass",
+            checked_at="2026-06-11T00:00:00Z",
+            source_count=1,
+            subject_count=1,
+            sequence_count=1,
+            expected_sequences=["T1"],
+            issues=[],
+            manifest_path="fake_manifest.json"
+        )
+    )
+
     demo = tmp_path / "DemoData" / "FunRaw" / "Sub_001"
     demo.mkdir(parents=True)
     (demo / "0000001.dcm").write_bytes(b"DICOM placeholder")

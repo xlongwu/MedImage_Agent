@@ -66,7 +66,7 @@ export default function SpmSandboxExecutionPanel({ projectId, preprocessingRunId
     "I understand this runs Slice Timing + Realign only.",
     "I understand this is not full preprocessing.",
     "I understand this is for research use only.",
-    "I understand this is not for clinical diagnosis.",
+    "I understand this is not for clinical use.",
   ];
 
   return (

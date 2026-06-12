@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { DEFAULT_API_BASE, generateQcDashboardReport, getLatestQcDashboardReport, getQcDashboardFingerprint } from "../api";
 import type { QcDashboardFingerprintResponse } from "../types";
 import type { QcDashboardReportResponse } from "../types";
+import { ActionList, CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
@@ -64,11 +65,11 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
     <Sec>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div><H3>QC Dashboard Report</H3><Sub>Aggregate summary of all QC checks. No preprocessing is executed.</Sub></div>
-        {data && <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>}
+        {data && <StatusPill status={data.status} />}
       </div>
-      <div style={{ padding: 8, border: "1px solid rgba(242,153,74,0.28)", borderRadius: 6, background: "rgba(255,251,242,0.94)", fontSize: 11, color: "#9a5a15", marginBottom: 12 }}>
+      <SafetyBanner tone="warning">
         Dashboard report only. No preprocessing is executed. Rawdata is not modified.
-      </div>
+      </SafetyBanner>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button onClick={handleGenerate} disabled={loading} style={{ padding: "8px 18px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
@@ -155,16 +156,15 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
 
           {/* Counts */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", gap: 8, marginBottom: 12 }}>
-            <M label="ready" value={data.ready_count} color="#176b3b" />
-            <M label="warning" value={data.warning_count} color="#9a5a15" />
-            <M label="blocked" value={data.blocked_count} color="#b53b3b" />
-            <M label="unknown" value={data.unknown_count} color="#667085" />
+            <MetricTile label="Ready" value={data.ready_count} tone="green" />
+            <MetricTile label="Warning" value={data.warning_count} tone={data.warning_count > 0 ? "amber" : "neutral"} />
+            <MetricTile label="Blocked" value={data.blocked_count} tone={data.blocked_count > 0 ? "red" : "neutral"} />
+            <MetricTile label="Unknown" value={data.unknown_count} />
           </div>
 
           {/* Module cards */}
           {data.modules.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Modules ({data.modules.length})</h4>
+            <CollapsibleDetails title="QC module details" summary={`${data.modules.length} module(s)`}>
               <div style={{ display: "grid", gap: 6, maxHeight: 360, overflow: "auto" }}>
                 {data.modules.map((m) => (
                   <div key={m.module_id} style={{ padding: "8px 10px", border: "1px solid rgba(137,150,171,0.22)", borderRadius: 6, background: "#fff", display: "grid", gap: 4, fontSize: 11 }}>
@@ -188,19 +188,20 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
                   </div>
                 ))}
               </div>
-            </div>
+            </CollapsibleDetails>
           )}
 
           {/* Artifacts */}
           {data.artifacts.length > 0 && (
-            <div style={{ marginBottom: 12, fontSize: 11 }}>
-              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Report Artifacts</h4>
+            <CollapsibleDetails title="Report artifacts" summary={`${data.artifacts.length} artifact(s)`}>
+            <div style={{ fontSize: 11 }}>
               {data.artifacts.map((a, i) => (
                 <div key={i} style={mono}>
                   [{a.kind}] {a.path} {a.size_bytes != null ? `(${a.size_bytes} B)` : ""}
                 </div>
               ))}
             </div>
+            </CollapsibleDetails>
           )}
 
           {/* Markdown preview */}
@@ -216,7 +217,7 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
           {data.next_actions.length > 0 && (
             <div>
               <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
-              <div style={{ display: "grid", gap: 5 }}>{data.next_actions.map((a, i) => <div key={i} style={{ padding: "6px 10px", border: "1px solid rgba(56,103,214,0.22)", borderRadius: 6, background: "rgba(239,246,255,0.82)", color: "#2450a6", fontSize: 12 }}>{i + 1}. {a}</div>)}</div>
+              <ActionList actions={data.next_actions} />
             </div>
           )}
         </>

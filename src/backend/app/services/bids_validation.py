@@ -308,8 +308,35 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
                 ))
 
     # ── Determine status ──
-    if not all_roots or (not subject_count and not nifti_file_count):
+    dicom_count = 0
+    from src.backend.app.services.funraw_t1raw_detector import detect_funraw_t1raw_layout
+    for root in all_roots:
+        ft = detect_funraw_t1raw_layout(root)
+        if ft["layout_type"] == "funraw_t1raw":
+            dicom_count += ft["dicom_file_count"]
+        else:
+            try:
+                for child in root.rglob("*"):
+                    if child.is_file() and (child.suffix.lower() in (".dcm", ".ima") or child.name.isdigit()):
+                        dicom_count += 1
+                        if dicom_count > 10:
+                            break
+            except Exception:
+                pass
+
+    is_raw_dicom = (nifti_file_count == 0 and dicom_count > 0)
+
+    if not all_roots:
         status = "fail"
+    elif not subject_count and not nifti_file_count:
+        if is_raw_dicom:
+            status = "warning"
+            warnings.append(
+                "BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion. "
+                "No NIfTI files found, but DICOM files are present."
+            )
+        else:
+            status = "fail"
     elif issues and any(i["severity"] == "error" for i in issues):
         status = "fail"
     elif issues:
@@ -321,6 +348,8 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
     next_actions: list[str] = []
     if status == "fail":
         next_actions.append("Provide a valid BIDS rawdata directory with sub-* folders.")
+    elif is_raw_dicom:
+        next_actions.append("Run DICOM-to-BIDS conversion to produce NIfTI/BIDS outputs.")
     if any(i["code"] == "DATASET_DESC_MISSING" for i in issues):
         next_actions.append("Create a dataset_description.json file in the root directory.")
     if loose_nifti:

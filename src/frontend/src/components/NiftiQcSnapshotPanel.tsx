@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_API_BASE, getProjectNiftiQcSnapshot, getProjectNiftiThumbnail } from "../api";
 import type { NiftiQcSnapshotResponse } from "../types";
+import { ActionList, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
@@ -35,24 +36,34 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
   if (loading) return <Sec><H3>NIfTI QC Snapshot</H3><div className="empty">Loading...</div></Sec>;
   if (error) return <Sec><H3>NIfTI QC Snapshot</H3><div className="errorBox">{error}</div></Sec>;
   if (!data) return <Sec><H3>NIfTI QC Snapshot</H3><div className="empty">No data.</div></Sec>;
+  const niftiNotApplicable = data.image_count === 0;
 
   return (
     <Sec>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div><H3>NIfTI QC Snapshot</H3><Sub>Read-only metadata and intensity QC. No preprocessing is executed.</Sub></div>
-        <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
+        <StatusPill status={niftiNotApplicable ? "not_applicable" : data.status}>
+          {niftiNotApplicable ? "Not applicable" : data.status.toUpperCase()}
+        </StatusPill>
       </div>
-      <div style={{ padding: 8, border: "1px solid rgba(242,153,74,0.28)", borderRadius: 6, background: "rgba(255,251,242,0.94)", fontSize: 11, color: "#9a5a15", marginBottom: 12 }}>
+      <SafetyBanner tone="warning">
         Read-only QC snapshot. No preprocessing is executed. Rawdata is not modified.
-      </div>
+      </SafetyBanner>
+
+      {niftiNotApplicable ? (
+        <SafetyBanner tone="info">
+          NIfTI QC is not applicable until DICOM data is converted.
+          Keep using <strong>Generate conversion dry-run</strong> as the next safe step.
+        </SafetyBanner>
+      ) : null}
 
       {/* Counts grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8, marginBottom: 12 }}>
-        <M label="images" value={data.image_count} />
-        <M label="readable" value={data.readable_count} />
-        <M label="unreadable" value={data.unreadable_count} />
-        <M label="4D" value={data.four_d_count} />
-        <M label="warnings" value={data.warning_count} />
+        <MetricTile label="Images" value={data.image_count} tone={data.image_count > 0 ? "green" : "neutral"} />
+        <MetricTile label="Readable" value={data.readable_count} />
+        <MetricTile label="Unreadable" value={data.unreadable_count} tone={data.unreadable_count > 0 ? "red" : "neutral"} />
+        <MetricTile label="4D" value={data.four_d_count} />
+        <MetricTile label="Warnings" value={data.warning_count} tone={data.warning_count > 0 ? "amber" : "neutral"} />
       </div>
 
       {/* Safety flags */}
@@ -132,7 +143,7 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
       {data.next_actions.length > 0 && (
         <div>
           <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
-          <div style={{ display: "grid", gap: 5 }}>{data.next_actions.map((a, i) => <div key={i} style={{ padding: "6px 10px", border: "1px solid rgba(56,103,214,0.22)", borderRadius: 6, background: "rgba(239,246,255,0.82)", color: "#2450a6", fontSize: 12 }}>{i + 1}. {a}</div>)}</div>
+          <ActionList actions={data.next_actions} rawDicom={niftiNotApplicable} />
         </div>
       )}
     </Sec>

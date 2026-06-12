@@ -392,8 +392,17 @@ button:disabled {
   margin-top: 22px;
 }
 
+.project-pill-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
 .project-pill {
   justify-content: space-between;
+  flex: 1;
+  min-width: 0;
   min-height: 34px;
   font-size: 13px;
   font-weight: 700;
@@ -424,6 +433,33 @@ button:disabled {
   border-radius: 50%;
   background: var(--blue);
   margin-left: 6px;
+}
+
+.project-delete-button {
+  display: grid;
+  flex: 0 0 28px;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.project-delete-button:hover:not(:disabled),
+.project-delete-button:focus-visible {
+  border-color: var(--border);
+  background: white;
+  color: #b42318;
+}
+
+.project-delete-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .license-card {

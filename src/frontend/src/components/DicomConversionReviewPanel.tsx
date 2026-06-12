@@ -45,6 +45,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
   const [showTechDetails, setShowTechDetails] = useState(false);
   const [releaseReadiness, setReleaseReadiness] = useState<DicomConversionReleaseReadinessReport | null>(null);
   const reqRef = useRef(0);
+  const canPersistReview = Boolean(data && data.mapping_count > 0);
 
   useEffect(() => {
     setData(null);
@@ -68,6 +69,10 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
 
   async function handlePersist() {
     if (!projectId || !data) return;
+    if (data.mapping_count <= 0) {
+      setPersistError("Run conversion preflight and review at least one mapping before saving.");
+      return;
+    }
     setPersisting(true); setPersistError(""); setPersistResult(null);
     try {
       const body: Record<string, unknown> = {
@@ -107,7 +112,21 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
           {loading ? "Running preflight..." : "Run conversion preflight"}
         </button>
         {data && (
-          <button onClick={handlePersist} disabled={persisting} style={{ padding: "8px 18px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
+          <button
+            onClick={handlePersist}
+            disabled={persisting || !canPersistReview}
+            title={!canPersistReview ? "Run preflight until at least one DICOM mapping is available." : undefined}
+            style={{
+              padding: "8px 18px",
+              background: canPersistReview ? "#4caf50" : "#a8b1c3",
+              color: "#fff",
+              border: "none",
+              borderRadius: 4,
+              cursor: canPersistReview && !persisting ? "pointer" : "not-allowed",
+              fontWeight: 600,
+              opacity: canPersistReview ? 1 : 0.82,
+            }}
+          >
             {persisting ? "Saving..." : "Persist review package"}
           </button>
         )}
@@ -115,13 +134,18 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
 
       {loading && <div className="empty" style={{ marginBottom: 12 }}>Running conversion preflight...</div>}
       {!data && !loading && <div className="empty" style={{ marginBottom: 12 }}>Click the button above to run a conversion readiness preflight.</div>}
+      {data && data.mapping_count <= 0 && (
+        <div className="empty" style={{ marginBottom: 12 }}>
+          No conversion mappings were found. Generate the conversion dry-run or re-run preflight after selecting a raw DICOM project.
+        </div>
+      )}
 
       {/* Persist result */}
       {persistError && <div className="errorBox" style={{ marginBottom: 10, fontSize: 11 }}>{persistError}</div>}
       {persistResult && (
         <div style={{ marginBottom: 12, padding: 10, border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6, background: "rgba(239, 246, 255, 0.88)", fontSize: 11 }}>
           <div style={{ fontWeight: 700, marginBottom: 6, color: "#2450a6" }}>
-            Review package persisted 路 status: {persistResult.status}
+            Review package persisted - status: {persistResult.status}
           </div>
           <div style={{ color: "#9a5a15", marginBottom: 6 }}>
             This saves review metadata only. It does not run conversion.
@@ -158,7 +182,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
             <div style={{ border: "1px solid rgba(185, 110, 0, 0.28)", borderRadius: 8, padding: "10px 12px", background: "rgba(255, 248, 236, 0.94)", color: "#925400", fontSize: 12, marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <span>
-                  ⚠️ <strong>Conversion is blocked by safety gates.</strong>{" "}
+                  <strong>Conversion is blocked by safety gates.</strong>{" "}
                   {data.blocking_issues.length} prerequisite(s) missing.
                 </span>
                 <span style={{ color: "#925400", fontSize: 11, whiteSpace: "nowrap" }}>
@@ -166,9 +190,9 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
                 </span>
               </div>
               <details style={{ marginTop: 6 }}>
-                <summary style={{ cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#b96e00" }}>Why blocked? · Show technical details</summary>
+                <summary style={{ cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#b96e00" }}>Why blocked? Show technical details</summary>
                 <div style={{ marginTop: 6, display: "grid", gap: 3 }}>
-                  {data.blocking_issues.map((b, i) => <span key={i} style={{ color: "#b42318", fontSize: 11 }}>• {b}</span>)}
+                  {data.blocking_issues.map((b, i) => <span key={i} style={{ color: "#b42318", fontSize: 11 }}>- {b}</span>)}
                 </div>
               </details>
             </div>
@@ -203,7 +227,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
                 <div style={{ fontSize: 11, color: "#667085" }}>
                   env enabled: {String(data.env_enabled)}
                   {data.missing_env_flags.length > 0 && (
-                    <span style={{ color: "#9a5a15" }}> 路 missing flags: {data.missing_env_flags.join(", ")}</span>
+                    <span style={{ color: "#9a5a15" }}> - missing flags: {data.missing_env_flags.join(", ")}</span>
                   )}
                 </div>
               </div>
@@ -212,7 +236,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
               {data.command_templates.length > 0 && (
                 <CollapsibleDetails title="Command templates" summary={`${data.command_templates.length} template(s)`}>
                   <div style={{ fontSize: 10, color: "#9a5a15", marginBottom: 6 }}>
-                    Command preview only 鈥?not executed for user rawdata in this release.
+                    Command preview only - not executed for user rawdata in this release.
                   </div>
                   <div style={{ display: "grid", gap: 6, maxHeight: 280, overflow: "auto" }}>
                     {data.command_templates.map((t, i) => <TemplateRow key={i} template={t} />)}
@@ -311,7 +335,7 @@ function TemplateRow({ template }: { template: Dcm2niixCommandTemplate }) {
     <div style={{ padding: 8, border: "1px solid rgba(137, 150, 171, 0.22)", borderRadius: 6, background: "#fff", fontSize: 11 }}>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
         <span style={{ fontWeight: 600 }}>{template.executable}</span>
-        <span style={{ color: "#667085" }}>鈫?{template.output_dir}</span>
+        <span style={{ color: "#667085" }}>-&gt; {template.output_dir}</span>
       </div>
       <div style={mono}>{template.command_preview}</div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4, fontSize: 10, color: "#98a2b3" }}>

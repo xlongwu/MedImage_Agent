@@ -51,7 +51,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
         <div><H3>{preset.name}</H3><Sub>{preset.modality} · v{preset.version}</Sub></div>
       </div>
       <div style={{ padding: 8, border: "1px solid rgba(235, 87, 87, 0.18)", borderRadius: 6, background: "rgba(255, 245, 245, 0.92)", fontSize: 11, color: "#b53b3b", marginBottom: 12 }}>
-        This preset is a contract MVP for planning only. It does not execute real SPM/DPABI preprocessing. Real MATLAB/SPM execution is not available in this release. Research-use only. Not for clinical diagnosis.
+        This preset is a contract MVP for planning only. It does not execute real SPM/DPABI preprocessing. Real MATLAB/SPM execution is not available in this release. Research-use only. Not for clinical use.
       </div>
       <p style={{ fontSize: 12, color: "#344054", margin: "0 0 12px" }}>{preset.description}</p>
 

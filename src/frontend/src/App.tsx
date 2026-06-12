@@ -33,7 +33,7 @@ import { useTaskDiagnostics } from "./hooks/useTaskDiagnostics";
 import { useTaskEvents } from "./hooks/useTaskEvents";
 import { useTasks } from "./hooks/useTasks";
 import { useTaskStream } from "./hooks/useTaskStream";
-import { approveTask, generateTaskAuditPackage, getTask, sendAssistantMessage } from "./lib/api";
+import { approveTask, deleteProject, generateTaskAuditPackage, getApiBaseUrl, getTask, sendAssistantMessage } from "./lib/api";
 import { fallbackChat } from "./lib/mockData";
 import type { ChatMessage } from "./lib/types/assistant";
 import type { DatasetSummary } from "./lib/types/dataset";
@@ -55,7 +55,7 @@ const navItems = [
 
 const quickActions = [
   { title: "New Pipeline", subtitle: "Create auditable workflow", kind: "flow", action: "new-pipeline" },
-  { title: "Upload Data", subtitle: "Create project from BIDS directory", kind: "cloud", action: "upload-data" },
+  { title: "Upload Data", subtitle: "Create project from DICOM or BIDS directory", kind: "cloud", action: "upload-data" },
   { title: "Run Pipeline", subtitle: "Start analysis", kind: "play", action: "run-pipeline" },
   { title: "View Results", subtitle: "Open latest report", kind: "chart", action: "view-results" },
 ];
@@ -77,7 +77,48 @@ type ProjectInventory = {
   niftiFileCount: number;
   hasRawDicom: boolean;
   hasConvertedData: boolean;
+  metadataOnlyNiftiInventory: boolean;
 };
+
+function maxNumericSignal(...values: unknown[]): number {
+  let max = 0;
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      max = Math.max(max, value.length);
+      continue;
+    }
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > max) {
+      max = numeric;
+    }
+  }
+  return max;
+}
+
+function countSignal(...values: unknown[]): number {
+  return maxNumericSignal(...values);
+}
+
+function textSignal(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map(textSignal).filter(Boolean).join(" ");
+  }
+  if (value && typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function isMetadataOnlySignal(...values: unknown[]): boolean {
+  return /metadata[-_\s]?only|Metadata-/.test(values.map(textSignal).join(" "));
+}
 
 export function deriveProjectWorkflowState(
   project: any,
@@ -90,60 +131,118 @@ export function deriveProjectWorkflowState(
   const projectMetadata = project?.metadata || {};
   const projectDiagnostics = projectMetadata.diagnostics || {};
 
-  const dicomFileCount =
-    dicomPreflight?.dicom_file_count ??
-    readiness?.dicom_files ??
-    projectDiagnostics.dicom_file_count ??
-    projectDiagnostics.dicom_files ??
-    0;
+  const dicomFileCount = maxNumericSignal(
+    dicomPreflight?.dicom_file_count,
+    dicomPreflight?.dicom_files,
+    readiness?.dicom_file_count,
+    readiness?.dicom_files,
+    readiness?.dicom_preflight?.dicom_file_count,
+    readiness?.dicomPreflight?.dicom_file_count,
+    projectDiagnostics.dicom_file_count,
+    projectDiagnostics.dicom_files,
+    projectDiagnostics.raw_dicom_file_count,
+  );
 
-  const dicomSeriesCount =
-    dicomPreflight?.dicom_series_count ??
-    readiness?.dicom_series ??
-    projectDiagnostics.dicom_series_count ??
-    projectDiagnostics.dicom_series ??
-    0;
+  const dicomSeriesCount = maxNumericSignal(
+    dicomPreflight?.dicom_series_count,
+    dicomPreflight?.series_count,
+    readiness?.dicom_series_count,
+    readiness?.dicom_series,
+    readiness?.series_count,
+    readiness?.dicom_preflight?.series_count,
+    readiness?.dicomPreflight?.series_count,
+    projectDiagnostics.dicom_series_count,
+    projectDiagnostics.dicom_series,
+    projectDiagnostics.series_count,
+  );
 
-  const niftiCount =
-    bidsValidation?.nifti_file_count ??
-    readiness?.nifti_files ??
-    projectDiagnostics.nifti_file_count ??
-    projectDiagnostics.nifti_files ??
-    0;
+  const niftiCount = maxNumericSignal(
+    bidsValidation?.nifti_file_count,
+    readiness?.nifti_file_count,
+    readiness?.nifti_files,
+    readiness?.image_source_count,
+    projectDiagnostics.nifti_file_count,
+    projectDiagnostics.nifti_files,
+    projectDiagnostics.image_source_count,
+  );
 
-  const convertedSubjects =
-    bidsValidation?.subject_count ??
-    readiness?.subjects ??
-    projectDiagnostics.converted_subject_count ??
-    projectDiagnostics.nifti_subject_count ??
-    projectDiagnostics.image_subject_count ??
-    project?.subjects_count ??
-    0;
+  const bidsRootCount = countSignal(
+    bidsValidation?.roots,
+    bidsValidation?.bids_roots,
+    readiness?.bids_roots,
+    readiness?.bids_root_count,
+    projectDiagnostics.bids_roots,
+    projectDiagnostics.bids_root_count,
+  );
+
+  const metadataOnly = isMetadataOnlySignal(projectDiagnostics, readiness, bidsValidation);
+  const rawText = textSignal([
+    projectDiagnostics,
+    readiness?.warnings,
+    readiness?.errors,
+    readiness?.next_actions,
+    readiness?.checks,
+    bidsValidation?.warnings,
+    bidsValidation?.errors,
+    bidsValidation?.issues,
+  ]);
+  const readinessIndicatesRawDicom =
+    /funraw|t1raw|raw dicom|dicom rawdata|dicom layout detected|dicom files are present/i.test(rawText);
+  const dicomPreflightSucceeded =
+    Boolean(dicomPreflight?.ok) &&
+    (dicomFileCount > 0 || dicomSeriesCount > 0 || countSignal(dicomPreflight?.series) > 0);
+
+  const hasRawDicomEvidence =
+    dicomFileCount > 0 ||
+    dicomSeriesCount > 0 ||
+    dicomPreflightSucceeded ||
+    readinessIndicatesRawDicom;
+
+  const bidsValidationSubjects = maxNumericSignal(bidsValidation?.subject_count);
+  const explicitConvertedSubjects = maxNumericSignal(
+    hasRawDicomEvidence && niftiCount === 0 ? 0 : bidsValidationSubjects,
+    readiness?.converted_subject_count,
+    readiness?.converted_subjects,
+    readiness?.nifti_subject_count,
+    readiness?.image_subject_count,
+    projectDiagnostics.converted_subject_count,
+    projectDiagnostics.converted_subjects,
+    projectDiagnostics.nifti_subject_count,
+    projectDiagnostics.image_subject_count,
+  );
+
+  const overviewSubjectCount = maxNumericSignal(readiness?.subjects);
+  const projectSubjectCount = maxNumericSignal(project?.subjects_count);
+  const hasConvertedSubjectEvidence =
+    !metadataOnly &&
+    (explicitConvertedSubjects > 0 ||
+      (!hasRawDicomEvidence && (overviewSubjectCount > 0 || projectSubjectCount > 0)));
+
+  const hasRealBidsRoots =
+    bidsRootCount > 0 && (!hasRawDicomEvidence || niftiCount > 0 || explicitConvertedSubjects > 0);
+  const hasRealConvertedData =
+    niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence;
+  const convertedDataAbsent =
+    niftiCount === 0 && !hasRealBidsRoots && !hasConvertedSubjectEvidence;
 
   const importCount = readiness?.import_count ?? projectDiagnostics.import_count ?? 0;
   const rawdataDir = projectMetadata.rawdata_dir ?? bidsValidation?.roots?.[0] ?? "";
 
-  const hasRawDicom = dicomFileCount > 0 || dicomSeriesCount > 0;
-  const hasConvertedData = convertedSubjects > 0 || niftiCount > 0;
-
-  if (hasRawDicom && hasConvertedData) {
+  if (hasRawDicomEvidence && hasRealConvertedData) {
     return "mixed";
   }
-  if (hasRawDicom && niftiCount === 0 && convertedSubjects === 0) {
+  if (hasRawDicomEvidence && convertedDataAbsent) {
     return "raw_dicom";
   }
-  if (hasConvertedData && dicomFileCount === 0 && dicomSeriesCount === 0) {
+  if (hasRealConvertedData) {
     return "converted_bids";
   }
-  if (!rawdataDir && !hasRawDicom && !hasConvertedData && importCount === 0) {
+  if (!rawdataDir && !hasRawDicomEvidence && !hasRealConvertedData && importCount === 0) {
     return "empty";
   }
 
   // fallback logic
-  if (hasConvertedData) {
-    return "converted_bids";
-  }
-  if (hasRawDicom) {
+  if (hasRawDicomEvidence) {
     return "raw_dicom";
   }
   return "empty";
@@ -198,17 +297,33 @@ function buildProjectInventory(
     ["converted_subject_count", "nifti_subject_count", "image_subject_count"],
     project.subjects_count,
   );
-  const hasRawDicom = dicomFileCount > 0;
-  const hasConvertedData = niftiFileCount > 0 || convertedSubjectInventory > 0;
-  const convertedSubjects = hasRawDicom
-    ? firstDiagnosticNumber(diagnostics, ["converted_subject_count", "nifti_subject_count", "image_subject_count"])
-    : convertedSubjectInventory;
   const rawDicomCandidates = firstDiagnosticNumber(
     diagnostics,
     ["raw_dicom_candidate_subjects", "dicom_candidate_subjects", "dicom_subject_count"],
-    diagnosticArrayLength(diagnostics, "subject_candidates") || overview.dicom_subjects || (hasRawDicom ? project.subjects_count : 0),
+    diagnosticArrayLength(diagnostics, "subject_candidates") ||
+      overview.dicom_subjects ||
+      (dicomFileCount > 0 || dicomSeriesCount > 0 ? project.subjects_count : 0),
   );
-  const dataState = deriveProjectWorkflowState(project, overview, null, null);
+  const hasRawDicom = dicomFileCount > 0 || dicomSeriesCount > 0 || rawDicomCandidates > 0;
+  const convertedSubjects = hasRawDicom
+    ? firstDiagnosticNumber(diagnostics, ["converted_subject_count", "nifti_subject_count", "image_subject_count"])
+    : convertedSubjectInventory;
+  const metadataOnlyNiftiInventory = niftiFileCount === 0 && isMetadataOnlySignal(diagnostics);
+  const workflowSignals = {
+    ...overview,
+    ...diagnostics,
+    dicom_file_count: dicomFileCount,
+    dicom_files: dicomFileCount,
+    dicom_series_count: dicomSeriesCount,
+    dicom_series: dicomSeriesCount,
+    raw_dicom_candidate_subjects: rawDicomCandidates,
+    nifti_file_count: niftiFileCount,
+    nifti_files: niftiFileCount,
+    converted_subject_count: convertedSubjects,
+    image_subject_count: convertedSubjects,
+  };
+  const dataState = deriveProjectWorkflowState(project, workflowSignals, null, null);
+  const hasConvertedData = dataState === "converted_bids" || dataState === "mixed";
   const dataStateLabel =
     dataState === "raw_dicom"
       ? "Raw DICOM"
@@ -239,6 +354,7 @@ function buildProjectInventory(
     niftiFileCount,
     hasRawDicom,
     hasConvertedData,
+    metadataOnlyNiftiInventory,
   };
 }
 
@@ -254,8 +370,39 @@ function projectSummaryFromCreateResult(result: ProjectCreateResponse): ProjectS
   };
 }
 
+function mergeCreatedProjectIntoList(
+  result: ProjectCreateResponse,
+  projects: ProjectSummary[],
+): ProjectSummary[] {
+  const createdProject = projectSummaryFromCreateResult(result);
+  return [
+    createdProject,
+    ...projects.filter((item) => item.id !== result.project_id),
+  ];
+}
+
+function uniqueProjectName(baseName: string, projects: ProjectSummary[]): string {
+  const trimmed = baseName.trim() || "DICOM Project";
+  const existingNames = new Set(projects.map((item) => item.name.trim().toLowerCase()));
+  if (!existingNames.has(trimmed.toLowerCase())) {
+    return trimmed;
+  }
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${trimmed} ${index}`;
+    if (!existingNames.has(candidate.toLowerCase())) {
+      return candidate;
+    }
+  }
+  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
+  return `${trimmed} ${stamp}`;
+}
+
+function isProjectNameConflict(message: string): boolean {
+  return /already exists|Set overwrite=true|Project directory already exists/i.test(message);
+}
+
 export default function App() {
-  const baseUrl = DEFAULT_API_BASE;
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_API_BASE);
   const [mode, setMode] = useState<"dashboard" | "advanced" | "planner">("dashboard");
   const [activeWorkflow, setActiveWorkflow] = useState<WorkflowTab>("data");
   const [health, setHealth] = useState<boolean | null>(null);
@@ -283,6 +430,7 @@ export default function App() {
   const [projectCreateLoading, setProjectCreateLoading] = useState(false);
   const [projectCreateError, setProjectCreateError] = useState("");
   const [projectCreateResult, setProjectCreateResult] = useState<ProjectCreateResponse | null>(null);
+  const [projectDeleteLoadingId, setProjectDeleteLoadingId] = useState<string | null>(null);
 
   const projects = useProjects();
   const project = useProject(selectedProjectId);
@@ -319,8 +467,22 @@ export default function App() {
   const updateTaskFromStream = tasks.updateTaskFromStream;
 
   useEffect(() => {
-    checkHealth();
+    let active = true;
+    getApiBaseUrl()
+      .then((url) => {
+        if (active) {
+          setBaseUrl(url);
+        }
+      })
+      .catch((_err: unknown): void => {});
+    return () => {
+      active = false;
+    };
   }, []);
+
+  useEffect(() => {
+    checkHealth();
+  }, [baseUrl]);
 
   useEffect(() => {
     if (projectInventory) {
@@ -563,33 +725,41 @@ export default function App() {
       return;
     }
 
-    const defaultProjectName = directoryBasename(selectedPath);
-    const projectName = window.prompt("Project name", defaultProjectName);
-    if (projectName === null) {
-      setNotice("Project creation cancelled");
-      return;
-    }
-    if (!projectName.trim()) {
-      setProjectCreateError("Project name is required.");
-      setNotice("Project creation failed: project name is required.");
-      return;
-    }
-
     setProjectCreateLoading(true);
     setProjectCreateResult(null);
+    setNotice("Creating project from selected data directory...");
     try {
-      const result = await createProjectFromDirectory(baseUrl, {
-        project_name: projectName.trim(),
-        rawdata_dir: selectedPath.trim(),
-        copy_mode: "reference",
-        run_inspection: true,
-        overwrite: true,
-      });
+      const uploadBaseUrl = await getApiBaseUrl();
+      setBaseUrl(uploadBaseUrl);
+      const requestedProjectName = uniqueProjectName(directoryBasename(selectedPath), projects.data);
+      let effectiveProjectName = uniqueProjectName(requestedProjectName, projects.data);
+      const createWithName = (name: string) =>
+        createProjectFromDirectory(uploadBaseUrl, {
+          project_name: name,
+          rawdata_dir: selectedPath.trim(),
+          copy_mode: "reference",
+          run_inspection: true,
+          overwrite: false,
+        });
+      let result: ProjectCreateResponse;
+      try {
+        result = await createWithName(effectiveProjectName);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!isProjectNameConflict(message)) {
+          throw err;
+        }
+        effectiveProjectName = uniqueProjectName(`${requestedProjectName} ${new Date().toISOString().slice(0, 10)}`, projects.data);
+        result = await createWithName(effectiveProjectName);
+      }
 
+      const projectsBeforeReload = projects.data;
       const refreshedProjects = await projects.reload();
       const projectListSynced = Boolean(
         refreshedProjects?.some((item) => item.id === result.project_id)
       );
+      const listSource = refreshedProjects ?? projectsBeforeReload;
+      projects.setData(mergeCreatedProjectIntoList(result, listSource));
       const syncWarning =
         "Project was created, but the project list has not synchronized yet. Showing a temporary entry.";
       const displayedResult = projectListSynced
@@ -598,13 +768,6 @@ export default function App() {
             ...result,
             warnings: [...result.warnings, syncWarning],
           };
-      if (!projectListSynced) {
-        const temporaryProject = projectSummaryFromCreateResult(result);
-        projects.setData((current) => [
-          temporaryProject,
-          ...current.filter((item) => item.id !== result.project_id),
-        ]);
-      }
       setSelectedProjectId(result.project_id);
       setSelectedSubjectId(null);
       setSliceIndex(null);
@@ -613,13 +776,52 @@ export default function App() {
       const warningText = displayedResult.warnings.length
         ? ` with ${displayedResult.warnings.length} warning(s)`
         : "";
-      setNotice(`Project created: ${result.project_name} (${status})${warningText}`);
+      const renameText = result.project_name !== requestedProjectName ? ` as ${result.project_name}` : "";
+      setNotice(`Project created${renameText}: ${result.project_name} (${status})${warningText}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setProjectCreateError(message);
       setNotice(`Project creation failed: ${message}`);
     } finally {
       setProjectCreateLoading(false);
+    }
+  }
+
+  async function handleDeleteProject(projectId: string, projectName: string) {
+    if (projectDeleteLoadingId) {
+      return;
+    }
+    const confirmed = window.confirm(
+      `Remove "${projectName}" from Recent projects? This will not delete rawdata or project files.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setProjectDeleteLoadingId(projectId);
+    try {
+      await deleteProject(projectId);
+      const remainingProjects = projects.data.filter((item) => item.id !== projectId);
+      projects.setData(remainingProjects);
+      if (selectedProjectId === projectId) {
+        setSelectedProjectId(remainingProjects[0]?.id ?? null);
+        setSelectedSubjectId(null);
+        setSliceIndex(null);
+        setProjectCreateResult(null);
+      }
+
+      const refreshedProjects = await projects.reload();
+      const latestProjects = (refreshedProjects ?? remainingProjects).filter((item) => item.id !== projectId);
+      projects.setData(latestProjects);
+      if (selectedProjectId === projectId) {
+        setSelectedProjectId(latestProjects[0]?.id ?? null);
+      }
+      setNotice(`Removed project: ${projectName}. Rawdata and project files were not deleted.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setNotice(`Project removal failed: ${message}`);
+    } finally {
+      setProjectDeleteLoadingId(null);
     }
   }
 
@@ -776,7 +978,9 @@ export default function App() {
             selectedProjectId={selectedProjectId || project.data.id}
             loading={projects.loading}
             error={projects.error}
+            deletingProjectId={projectDeleteLoadingId}
             onSelect={setSelectedProjectId}
+            onDelete={handleDeleteProject}
           />
           <div className="license-card">
             <div className="diamond-mark" />
@@ -954,38 +1158,48 @@ function ProjectList({
   selectedProjectId,
   loading,
   error,
+  deletingProjectId,
   onSelect,
+  onDelete,
 }: {
   projects: ProjectSummary[];
   selectedProjectId: string;
   loading: boolean;
   error: string;
+  deletingProjectId: string | null;
   onSelect: (id: string) => void;
+  onDelete: (id: string, name: string) => void;
 }) {
   return (
     <div className="project-stack">
       <div className="panel-kicker">Recent projects {loading ? "(loading)" : error ? "(fallback)" : ""}</div>
       {projects.map((item) => (
-        <button
-          key={item.id}
-          className={`project-pill ${item.id === selectedProjectId ? "selected" : ""}`}
-          onClick={() => onSelect(item.id)}
-          title={item.name}
-        >
-          <span className="project-pill-name">{item.name}</span>
-          {item.id === selectedProjectId ? <span className="project-pill-dot" /> : null}
-        </button>
+        <div key={item.id} className="project-pill-row">
+          <button
+            className={`project-pill ${item.id === selectedProjectId ? "selected" : ""}`}
+            onClick={() => onSelect(item.id)}
+            title={item.name}
+          >
+            <span className="project-pill-name">{item.name}</span>
+            {item.id === selectedProjectId ? <span className="project-pill-dot" /> : null}
+          </button>
+          <button
+            type="button"
+            className="project-delete-button"
+            title={`Remove ${item.name}`}
+            aria-label={`Remove ${item.name} from Recent projects`}
+            disabled={deletingProjectId === item.id}
+            onClick={() => onDelete(item.id, item.name)}
+          >
+            {deletingProjectId === item.id ? "..." : "x"}
+          </button>
+        </div>
       ))}
     </div>
   );
 }
 
 function ProjectHeroPanel({ inventory }: { inventory: ProjectInventory }) {
-  const niftiDisplayVal =
-    (inventory.dataState === "converted_bids" || inventory.convertedSubjects > 0) && inventory.niftiFileCount === 0
-      ? "Metadata-only inventory"
-      : inventory.niftiFileCount.toLocaleString();
-
   return (
     <section className="project-hero-panel" aria-label="Project summary">
       <div className="summary-meta-row">
@@ -997,14 +1211,23 @@ function ProjectHeroPanel({ inventory }: { inventory: ProjectInventory }) {
       <h1>{inventory.projectName}</h1>
       <p style={{ marginBottom: "20px" }}>{inventory.stateSentence}</p>
 
-      <div className="hero-metrics-grid">
-        <MetricTile label="Raw DICOM candidates" value={inventory.rawDicomCandidates} tone={inventory.hasRawDicom ? "blue" : "neutral"} />
-        <MetricTile label="DICOM series" value={inventory.dicomSeriesCount} />
-        <MetricTile label="DICOM files" value={inventory.dicomFileCount.toLocaleString()} />
-        <MetricTile label="Converted subjects" value={inventory.convertedSubjects} tone={inventory.convertedSubjects > 0 ? "green" : "neutral"} />
-        <MetricTile label="NIfTI files" value={niftiDisplayVal} tone={inventory.niftiFileCount > 0 ? "green" : "neutral"} />
-      </div>
+      <ProjectInventorySummary inventory={inventory} />
+      {inventory.metadataOnlyNiftiInventory ? (
+        <div className="panel-kicker" style={{ marginTop: 10 }}>NIfTI inventory: metadata only</div>
+      ) : null}
     </section>
+  );
+}
+
+function ProjectInventorySummary({ inventory }: { inventory: ProjectInventory }) {
+  return (
+    <div className="hero-metrics-grid">
+      <MetricTile label="Raw DICOM candidates" value={inventory.rawDicomCandidates} tone={inventory.hasRawDicom ? "blue" : "neutral"} />
+      <MetricTile label="DICOM series" value={inventory.dicomSeriesCount} />
+      <MetricTile label="DICOM files" value={inventory.dicomFileCount.toLocaleString()} />
+      <MetricTile label="Converted subjects" value={inventory.convertedSubjects} tone={inventory.convertedSubjects > 0 ? "green" : "neutral"} />
+      <MetricTile label="NIfTI files" value={inventory.niftiFileCount.toLocaleString()} tone={inventory.niftiFileCount > 0 ? "green" : "neutral"} />
+    </div>
   );
 }
 

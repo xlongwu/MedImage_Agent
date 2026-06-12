@@ -27,6 +27,7 @@ from src.backend.app.services import (
 from src.backend.app.services import (
     conversion_planner,
     data_readiness,
+    dicom_conversion_execution,
     nifti_qc_snapshot,
 )
 from src.backend.app.services.funraw_t1raw_detector import (
@@ -73,7 +74,8 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
                 reviewed_plan_store, project_history_routes,
                 execute_reviewed_routes, bold_reference_readiness,
                 motion_qc_readiness, conversion_planner,
-                data_readiness, nifti_qc_snapshot):
+                data_readiness, dicom_conversion_execution,
+                nifti_qc_snapshot):
         monkeypatch.setattr(mod, "mock_store", store)
     monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
                         tmp_path / "audit")
@@ -191,6 +193,30 @@ def test_conversion_dry_run_creates_mapping_for_funraw_t1raw(tmp_path, monkeypat
     assert data["status"] in ("ready", "warning"), \
         f"Got status: {data['status']}, blocking: {data.get('blocking_issues')}"
     assert len(data["mapping_preview"]) == 4  # 2 FunRaw subjects + 2 T1Raw subjects
+
+
+def test_conversion_preflight_keeps_funraw_t1raw_mappings(tmp_path, monkeypatch):
+    _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+    root = _make_funraw_t1raw_fixture(tmp_path)
+    created = _create_project(client, tmp_path, root)
+
+    dry_run_resp = client.post(
+        f"/api/projects/{created['project_id']}/conversion/dry-run",
+        json={"include_dicom": True},
+    )
+    assert dry_run_resp.status_code == 200, dry_run_resp.text
+    assert len(dry_run_resp.json()["mapping_preview"]) == 4
+
+    preflight_resp = client.post(
+        f"/api/projects/{created['project_id']}/conversion/preflight",
+    )
+    assert preflight_resp.status_code == 200, preflight_resp.text
+    data = preflight_resp.json()
+    assert data["mapping_count"] == 4
+    assert len(data["mappings"]) == 4
+    assert len(data["command_templates"]) == 4
+    assert {m["modality"] for m in data["mappings"]} == {"func", "anat"}
 
 
 def test_conversion_dry_run_maps_funraw_to_func(tmp_path, monkeypatch):

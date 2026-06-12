@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_API_BASE, getProjectDataReadiness } from "../api";
 import type { DataReadinessCheck, DataReadinessResponse } from "../types";
+import { ActionList, CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = {
   baseUrl?: string;
   projectId: string | null;
+  projectState?: string;
 };
 
 const statusBadge: Record<string, React.CSSProperties> = {
@@ -113,7 +115,7 @@ function CheckRow({ check, hasDicom }: { check: DataReadinessCheck; hasDicom?: b
   );
 }
 
-export default function DataReadinessPanel({ baseUrl, projectId }: Props) {
+export default function DataReadinessPanel({ baseUrl, projectId, projectState }: Props) {
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<DataReadinessResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -195,73 +197,73 @@ export default function DataReadinessPanel({ baseUrl, projectId }: Props) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 15 }}>Data Readiness</h3>
-          <span style={{ color: "#667085", fontSize: 12 }}>Prep-check for pipeline execution readiness.</span>
+          <span style={{ color: "#667085", fontSize: 12 }}>High-value project readiness summary.</span>
         </div>
-        <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
+        <StatusPill status={data.status} />
       </div>
 
-      {/* DICOM raw layout callout */}
       {hasDicomRawLayout && (
-        <div style={{
-          marginBottom: 12, padding: 10,
-          border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6,
-          background: "rgba(239, 246, 255, 0.88)", color: "#2450a6", fontSize: 12,
-          lineHeight: 1.6,
-        }}>
+        <SafetyBanner tone="info">
           <strong>FunRaw / T1Raw DICOM rawdata detected.</strong>{" "}
-          This is valid raw input. No NIfTI files exist yet.
+          This is valid raw input. Converted NIfTI files are not available yet.
           Run <strong>Conversion Dry-Run</strong> before NIfTI QC or preprocessing.
-          Sub-001 through Sub-003 detected across FunRaw (func) and T1Raw (anat) groups.
-        </div>
+        </SafetyBanner>
       )}
 
-      {data.errors.length > 0 && (
-        <div className="errorBox" style={{ marginBottom: 10 }}>{data.errors.join("\n")}</div>
-      )}
-      {data.warnings.length > 0 && (
-        <div style={{
-          marginBottom: 10, padding: 8,
-          border: "1px solid rgba(242, 153, 74, 0.24)", borderRadius: 6,
-          background: "rgba(255, 251, 242, 0.94)", color: "#9a5a15", fontSize: 12,
-        }}>
-          {data.warnings.slice(0, 5).map((w, i) => <div key={i}>{w}</div>)}
-          {data.warnings.length > 5 && <div>+{data.warnings.length - 5} more</div>}
-        </div>
-      )}
+      {(() => {
+        const filteredErrors = projectState === "converted_bids"
+          ? data.errors.filter((e) => !e.toLowerCase().includes("rawdata"))
+          : data.errors;
+        const filteredWarnings = projectState === "converted_bids"
+          ? data.warnings.filter((w) => !w.toLowerCase().includes("rawdata"))
+          : data.warnings;
+
+        return (
+          <>
+            {filteredErrors.length > 0 ? (
+              <div className="errorBox" style={{ marginBottom: 10 }}>{filteredErrors.slice(0, 3).join("\n")}</div>
+            ) : null}
+            {filteredWarnings.length > 0 ? (
+              <SafetyBanner tone="warning">
+                {filteredWarnings.slice(0, 2).map((w, i) => <div key={i}>{w}</div>)}
+                {filteredWarnings.length > 2 ? <div>+{filteredWarnings.length - 2} more in details</div> : null}
+              </SafetyBanner>
+            ) : null}
+          </>
+        );
+      })()}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 12 }}>
-        <div style={metricBox}><span>rawdata</span><b style={mono}>{data.rawdata_dir || "-"}</b></div>
-        <div style={metricBox}><span>config path</span><b style={mono}>{data.project_config_path || "-"}</b></div>
-        <div style={metricBox}><span>dataset index</span><b style={mono}>{data.dataset_index_path || "-"}</b></div>
-        <div style={metricBox}><span>imports</span><strong>{data.import_count}</strong></div>
-        <div style={metricBox}><span>{hasDicomRawLayout ? "NIfTI sources" : "image sources"}</span><strong>{data.image_source_count}</strong></div>
-        <div style={metricBox}><span>subjects</span><strong>{data.subject_count}</strong></div>
-        <div style={metricBox}><span>sequences</span><strong>{data.sequence_count}</strong></div>
-        <div style={metricBox}><span>DICOM files</span><strong>{data.dicom_file_count}</strong></div>
-        <div style={metricBox}><span>DICOM series</span><strong>{data.dicom_series_count}</strong></div>
+        <MetricTile label="rawdata exists" value={data.rawdata_dir ? "Yes" : "No"} tone={data.rawdata_dir ? "green" : (projectState === "converted_bids" ? "neutral" : "red")} />
+        <MetricTile label="imports recorded" value={data.import_count} />
+        <MetricTile label="DICOM preflight" value={data.dicom_file_count > 0 ? "Detected" : "No DICOM"} tone={data.dicom_file_count > 0 ? "blue" : "neutral"} />
+        <MetricTile label="Raw DICOM candidates" value={hasDicomRawLayout ? "See preflight" : "N/A"} />
+        <MetricTile label="Converted subjects" value={data.subject_count} tone={data.subject_count > 0 ? "green" : "neutral"} />
+        <MetricTile label="Converted NIfTI status" value={data.image_source_count > 0 ? "Available" : "Not started"} tone={data.image_source_count > 0 ? "green" : "amber"} />
+        <MetricTile label="DICOM files" value={data.dicom_file_count.toLocaleString()} />
+        <MetricTile label="DICOM series" value={data.dicom_series_count} />
       </div>
 
-      <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Checks</h4>
-      <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-        {data.checks.map((check) => (
-          <CheckRow key={check.name} check={check} hasDicom={hasDicomRawLayout} />
-        ))}
-      </div>
+      <CollapsibleDetails title="Detailed readiness checks" summary={`${data.checks.length} checks`}>
+        <div style={{ display: "grid", gap: 8 }}>
+          {data.checks.map((check) => (
+            <CheckRow key={check.name} check={check} hasDicom={hasDicomRawLayout} />
+          ))}
+        </div>
+      </CollapsibleDetails>
+
+      <CollapsibleDetails title="Project paths" summary="rawdata, config, dataset index">
+        <div style={{ display: "grid", gap: 6, fontSize: 11, color: "#667085" }}>
+          <div><strong>rawdata:</strong> <span style={mono}>{data.rawdata_dir || "-"}</span></div>
+          <div><strong>config path:</strong> <span style={mono}>{data.project_config_path || "-"}</span></div>
+          <div><strong>dataset index:</strong> <span style={mono}>{data.dataset_index_path || "-"}</span></div>
+        </div>
+      </CollapsibleDetails>
 
       {sortedActions.length > 0 && (
-        <div>
+        <div style={{ marginTop: 12 }}>
           <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
-          <div style={{ display: "grid", gap: 5 }}>
-            {sortedActions.map((action, i) => (
-              <div key={i} style={{
-                padding: "6px 10px",
-                border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6,
-                background: "rgba(239, 246, 255, 0.82)", color: "#2450a6", fontSize: 12,
-              }}>
-                {i + 1}. {action}
-              </div>
-            ))}
-          </div>
+          <ActionList actions={sortedActions} rawDicom={hasDicomRawLayout} />
         </div>
       )}
     </section>

@@ -86,7 +86,7 @@ class TestConfirmationDialog:
         source = _read_component_source()
         confirmations = [
             "research use only",
-            "not for clinical diagnosis",
+            "not for clinical use",
             "rawdata must remain read-only",
             "rollback is available",
             "disk space was checked",

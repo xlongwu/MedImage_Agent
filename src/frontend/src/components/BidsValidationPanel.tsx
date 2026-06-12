@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_API_BASE, getProjectBidsValidation } from "../api";
 import type { BidsValidationIssue, BidsRepairSuggestion, BidsValidationResponse } from "../types";
+import { ActionList, CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = {
   baseUrl?: string;
   projectId: string | null;
+  projectState?: string;
 };
 
 const statusBadge: Record<string, React.CSSProperties> = {
@@ -38,7 +40,7 @@ const mono: React.CSSProperties = {
   fontFamily: '"Cascadia Mono", "Consolas", monospace', fontSize: 11, overflowWrap: "anywhere",
 };
 
-export default function BidsValidationPanel({ baseUrl, projectId }: Props) {
+export default function BidsValidationPanel({ baseUrl, projectId, projectState }: Props) {
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<BidsValidationResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,66 +62,75 @@ export default function BidsValidationPanel({ baseUrl, projectId }: Props) {
   if (loading) return <section style={sectionStyle}><h3 style={h3Style}>BIDS Validation</h3><div className="empty">Validating BIDS structure...</div></section>;
   if (error) return <section style={sectionStyle}><h3 style={h3Style}>BIDS Validation</h3><div className="errorBox">{error}</div></section>;
   if (!data) return null;
+  const rawDicomExpected = projectState === "raw_dicom";
+  const metadataOnlyNiftiInventory =
+    !rawDicomExpected && data.subject_count > 0 && data.nifti_file_count === 0;
 
   return (
     <section style={sectionStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div><h3 style={h3Style}>BIDS Validation</h3><span style={{ color: "#667085", fontSize: 12 }}>Read-only structural checks and repair suggestions.</span></div>
-        <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
+        <StatusPill status={rawDicomExpected ? "warning" : data.status}>
+          {rawDicomExpected ? "Expected before conversion" : data.status.toUpperCase()}
+        </StatusPill>
       </div>
 
-      <div style={{ padding: 8, border: "1px solid rgba(56, 103, 214, 0.18)", borderRadius: 6, background: "rgba(239, 246, 255, 0.72)", fontSize: 11, color: "#2450a6", marginBottom: 12 }}>
+      <SafetyBanner tone="info">
         All suggestions are non-destructive. Rawdata will not be modified. Auto-apply is not available in this version.
-      </div>
+      </SafetyBanner>
 
-      {data.status === "fail" && data.nifti_file_count === 0 && (
-        <div style={{ padding: 8, border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6, background: "rgba(239, 246, 255, 0.88)", fontSize: 11, color: "#2450a6", marginBottom: 12, lineHeight: 1.5 }}>
-          <strong>Note:</strong> This is a raw DICOM dataset, not yet converted to BIDS.
-          BIDS validation failure is expected before DICOM-to-NIfTI conversion.
+      {rawDicomExpected && (
+        <SafetyBanner tone="warning">
+          <strong>BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion.</strong>{" "}
+          This project currently looks like raw DICOM rather than converted BIDS/NIfTI.
           Run <strong>Conversion Dry-Run</strong> to review the BIDS mapping plan.
-        </div>
+        </SafetyBanner>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8, marginBottom: 12 }}>
-        <Metric label="roots" value={data.roots.length} />
-        <Metric label="subjects" value={data.subject_count} />
-        <Metric label="sessions" value={data.session_count} />
-        <Metric label="NIfTI files" value={data.nifti_file_count} />
-        <Metric label="JSON sidecars" value={data.sidecar_json_count} />
-        <Metric label="TSV files" value={data.tsv_file_count} />
+        <MetricTile label="BIDS roots" value={data.roots.length} />
+        <MetricTile label="Converted subjects" value={data.subject_count} tone={data.subject_count > 0 ? "green" : "neutral"} />
+        <MetricTile label="Sessions" value={data.session_count} />
+        <MetricTile
+          label="NIfTI files"
+          value={data.nifti_file_count}
+          tone={data.nifti_file_count > 0 ? "green" : "neutral"}
+        />
+        <MetricTile label="JSON sidecars" value={data.sidecar_json_count} />
+        <MetricTile label="TSV files" value={data.tsv_file_count} />
       </div>
+
+      {metadataOnlyNiftiInventory && (
+        <SafetyBanner tone="info">NIfTI inventory: metadata only</SafetyBanner>
+      )}
 
       {data.errors.length > 0 && <div className="errorBox" style={{ marginBottom: 10 }}>{data.errors.join("\n")}</div>}
       {data.warnings.length > 0 && <WarnList items={data.warnings} />}
 
       {data.issues.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <h4 style={subH}>Issues ({data.issues.length})</h4>
+        <CollapsibleDetails title="BIDS validation details" summary={`${data.issues.length} issue(s)`}>
           <div style={{ display: "grid", gap: 6 }}>
             {data.issues.map((issue, i) => (
               <IssueRow key={`${issue.code}-${i}`} issue={issue} />
             ))}
           </div>
-        </div>
+        </CollapsibleDetails>
       )}
 
       {data.repair_suggestions.length > 0 && (
-        <div style={{ marginBottom: 12 }}>
-          <h4 style={subH}>Repair Suggestions ({data.repair_suggestions.length})</h4>
+        <CollapsibleDetails title="Repair suggestions" summary={`${data.repair_suggestions.length} suggestion(s)`}>
           <div style={{ display: "grid", gap: 6 }}>
             {data.repair_suggestions.map((sug, i) => (
               <RepairRow key={`repair-${i}`} suggestion={sug} />
             ))}
           </div>
-        </div>
+        </CollapsibleDetails>
       )}
 
       {data.next_actions.length > 0 && (
-        <div>
+        <div style={{ marginTop: 12 }}>
           <h4 style={subH}>Next Actions</h4>
-          <div style={{ display: "grid", gap: 5 }}>
-            {data.next_actions.map((a, i) => <div key={i} style={{ padding: "6px 10px", border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6, background: "rgba(239, 246, 255, 0.82)", color: "#2450a6", fontSize: 12 }}>{i + 1}. {a}</div>)}
-          </div>
+          <ActionList actions={data.next_actions} rawDicom={rawDicomExpected} />
         </div>
       )}
     </section>

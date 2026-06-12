@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from src.backend.app.schemas.dicom_conversion_execution import (
@@ -58,6 +58,52 @@ def _detect_dcm2niix() -> tuple[bool, str | None, str | None]:
     if exe_path is None:
         return False, None, None
     return True, exe_path, None  # Version query deferred to Phase 4C
+
+
+def _mapping_preview_to_dict(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        dumped = value.model_dump()
+        return dumped if isinstance(dumped, dict) else {}
+    if hasattr(value, "dict"):
+        dumped = value.dict()
+        return dumped if isinstance(dumped, dict) else {}
+    return {}
+
+
+def _strip_nifti_extension(filename: str) -> str:
+    for suffix in (".nii.gz", ".nii"):
+        if filename.endswith(suffix):
+            return filename[: -len(suffix)]
+    return Path(filename).stem
+
+
+def _mapping_output_dir(output_root: str | None, suggested_relative_path: str | None) -> str:
+    if not output_root:
+        return ""
+    if not suggested_relative_path:
+        return output_root
+
+    rel = PurePosixPath(str(suggested_relative_path).replace("\\", "/"))
+    parent_parts = [
+        part for part in rel.parent.parts
+        if part not in ("", ".", "..")
+    ]
+    return str(Path(output_root, *parent_parts)) if parent_parts else output_root
+
+
+def _mapping_filename(mapping: DicomConversionMapping, fallback_index: int) -> str:
+    if mapping.subject_id and mapping.task and mapping.suffix:
+        return f"{mapping.subject_id}_task-{mapping.task}_{mapping.suffix}"
+    if mapping.subject_id and mapping.suffix:
+        return f"{mapping.subject_id}_{mapping.suffix}"
+    if mapping.suggested_relative_path:
+        rel = PurePosixPath(str(mapping.suggested_relative_path).replace("\\", "/"))
+        stem = _strip_nifti_extension(rel.name)
+        if stem:
+            return stem
+    return f"mapping_{fallback_index}"
 
 
 def run_conversion_preflight(
@@ -134,19 +180,21 @@ def run_conversion_preflight(
 
     # ── 4. Convert dry-run mappings to execution mappings ──
     mappings: list[DicomConversionMapping] = []
-    for i, md in enumerate(mappings_dicts):
-        if isinstance(md, dict):
-            mappings.append(DicomConversionMapping(
-                source_path=str(md.get("source_path", "")),
-                source_type=str(md.get("source_type", "dicom_series")),
-                subject_id=md.get("subject_id"),
-                session_id=md.get("session_id"),
-                modality=str(md.get("modality", "func")),
-                suffix=md.get("suffix"),
-                task=md.get("task"),
-                suggested_relative_path=md.get("suggested_relative_path"),
-                confidence=str(md.get("confidence", "high")),
-            ))
+    for md in mappings_dicts:
+        mapping_data = _mapping_preview_to_dict(md)
+        if not mapping_data:
+            continue
+        mappings.append(DicomConversionMapping(
+            source_path=str(mapping_data.get("source_path", "")),
+            source_type=str(mapping_data.get("source_type", "dicom_series")),
+            subject_id=mapping_data.get("subject_id"),
+            session_id=mapping_data.get("session_id"),
+            modality=str(mapping_data.get("modality", "func")),
+            suffix=mapping_data.get("suffix"),
+            task=mapping_data.get("task"),
+            suggested_relative_path=mapping_data.get("suggested_relative_path"),
+            confidence=str(mapping_data.get("confidence", "high")),
+        ))
 
     # ── 5. Output root safety ──
     output_root = (
@@ -176,16 +224,12 @@ def run_conversion_preflight(
 
     # ── 6. Build command templates ──
     command_templates: list[Dcm2niixCommandTemplate] = []
-    for i, mapping in enumerate(mappings):
+    for i, mapping in enumerate(mappings, start=1):
         if not mapping.enabled:
             continue
         input_dir = mapping.source_path
-        out_dir = str(Path(output_root or "") / mapping.suggested_relative_path).split("/" + (mapping.suffix or "unknown"))[0] if mapping.suggested_relative_path and output_root else (output_root or "")
-        filename = (
-            mapping.subject_id + "_task-" + mapping.task + "_" + mapping.suffix
-            if mapping.subject_id and mapping.task and mapping.suffix
-            else (mapping.suggested_relative_path or "").split("/")[-1].replace(".nii.gz", "")
-        )
+        out_dir = _mapping_output_dir(output_root, mapping.suggested_relative_path)
+        filename = _mapping_filename(mapping, i)
 
         template = build_dcm2niix_command_template(
             input_dir=input_dir,

@@ -170,6 +170,24 @@ def add_recent_project(project_id: str, project_name: str, project_dir: str) -> 
     save_desktop_config({"recent_projects": recent[:20]})
 
 
+def remove_recent_project(project_id: str) -> bool:
+    """Remove a project from recent_projects without touching project files."""
+    config = get_desktop_config(redacted=False)
+    raw_recent = config.get("recent_projects", [])
+    recent = [item for item in raw_recent if isinstance(item, dict)]
+    next_recent = [item for item in recent if item.get("project_id") != project_id]
+    removed = len(next_recent) != len(recent)
+    payload: dict[str, Any] = {"recent_projects": next_recent}
+    if config.get("active_project_id") == project_id:
+        next_project = next_recent[0] if next_recent else {}
+        payload["active_project_id"] = str(next_project.get("project_id") or "")
+        payload["project_dir"] = str(
+            next_project.get("project_dir") or DEFAULT_DESKTOP_CONFIG["project_dir"]
+        )
+    save_desktop_config(payload)
+    return removed
+
+
 def set_active_project(project_id: str, project_dir: str | None = None) -> None:
     """Update the active project in desktop config."""
     payload = {"active_project_id": project_id}

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { DEFAULT_API_BASE } from "../api";
+import { CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
-type Props = { projectId: string; preprocessingRunId: string };
+type Props = { projectId: string | null; preprocessingRunId: string | null };
 
 type StageInfo = { stage_id: string; name: string; dry_run: boolean; executed: boolean; registered: boolean; metadata_only: boolean; status: string };
 type PipelineValidation = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; stage_summary: StageInfo[]; completed_stages: string[]; dry_run_only_stages: string[]; sandbox_executed_stages: string[]; registered_outputs: string[]; metadata_only_stages: string[]; blocked_stages: string[]; warnings: string[]; errors: string[]; next_actions: string[]; safety_flags: Record<string, boolean> };
@@ -34,8 +35,10 @@ export default function AdvancedPreprocessingPipelinePanel({ projectId, preproce
   const [valError, setValError] = useState("");
   const [repResult, setRepResult] = useState<PipelineReport | null>(null);
   const [repLoading, setRepLoading] = useState(false);
+  const [showTechDetails, setShowTechDetails] = useState(false);
 
   async function handleValidation() {
+    if (!projectId || !preprocessingRunId) return;
     setValLoading(true); setValError(""); setValResult(null);
     try {
       const { getPreprocessingPipelineValidation } = await import("../api");
@@ -46,6 +49,7 @@ export default function AdvancedPreprocessingPipelinePanel({ projectId, preproce
   }
 
   async function handleReport() {
+    if (!projectId || !preprocessingRunId) return;
     setRepLoading(true); setRepResult(null);
     try {
       const { getPreprocessingPipelineReport } = await import("../api");
@@ -55,14 +59,31 @@ export default function AdvancedPreprocessingPipelinePanel({ projectId, preproce
     finally { setRepLoading(false); }
   }
 
+  if (!preprocessingRunId) {
+    return (
+      <section style={{ padding: 16, border: "1px solid rgba(137,150,171,0.28)", borderRadius: 8, background: "rgba(255,255,255,0.88)", marginTop: 12 }}>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Preprocessing validation</h3>
+        <span style={{ color: "#667085", fontSize: 12 }}>Create a preprocessing run after conversion or BIDS registration to inspect the full pipeline.</span>
+        <SafetyBanner tone="info">
+          This placeholder is informational only. It does not create runs, execute preprocessing, or modify rawdata.
+        </SafetyBanner>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
+          <MetricTile label="Pipeline validation" value="Not started" />
+          <MetricTile label="Preprocessing run" value={projectId ? "Required" : "Select project"} />
+          <MetricTile label="Execution" value="Disabled" tone="amber" />
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section style={{ padding: 16, border: "1px solid rgba(137,150,171,0.28)", borderRadius: 8, background: "rgba(255,255,255,0.88)", marginTop: 12 }}>
-      <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Preprocessing Pipeline Validation</h3>
+      <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Advanced Preprocessing Validation</h3>
       <span style={{ color: "#667085", fontSize: 12 }}>Check pipeline status, inspect stage summaries, and export reports.</span>
 
-      <div style={{ padding: 8, border: "1px solid rgba(242,153,74,0.22)", borderRadius: 4, background: "rgba(255,251,242,0.94)", fontSize: 11, color: "#9a5a15", margin: "8px 0" }}>
+      <SafetyBanner tone="warning">
         This is a metadata-only dashboard. No preprocessing is executed. Rawdata, converted_bids, and sandbox outputs remain unchanged.
-      </div>
+      </SafetyBanner>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <button onClick={handleValidation} disabled={valLoading}
@@ -82,25 +103,46 @@ export default function AdvancedPreprocessingPipelinePanel({ projectId, preproce
       {valResult && (
         <div style={{ marginBottom: 10, padding: 8, border: "1px solid rgba(137,150,171,0.18)", borderRadius: 4, background: "#f9f9fb", fontSize: 11 }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>
-            Status: <span style={badge(valResult.status)}>{valResult.status}</span>
+            Status: <StatusPill status={valResult.status}>{valResult.status}</StatusPill>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(60px, 1fr))", gap: 4, marginBottom: 4 }}>
-            <M label="Stages" value={valResult.stage_summary.length} />
-            <M label="Dry-run only" value={valResult.dry_run_only_stages.length} />
-            <M label="Sandbox exec" value={valResult.sandbox_executed_stages.length} />
-            <M label="Registered" value={valResult.registered_outputs.length} />
-            <M label="Metadata-only" value={valResult.metadata_only_stages.length} />
+            <MetricTile label="Stages" value={valResult.stage_summary.length} />
+            <MetricTile label="Dry-run only" value={valResult.dry_run_only_stages.length} />
+            <MetricTile label="Sandbox exec" value={valResult.sandbox_executed_stages.length} />
+            <MetricTile label="Registered" value={valResult.registered_outputs.length} />
+            <MetricTile label="Metadata-only" value={valResult.metadata_only_stages.length} />
           </div>
 
-          {valResult.stage_summary.length > 0 && (
-            <div style={{ display: "grid", gap: 2, marginBottom: 4, maxHeight: 180, overflow: "auto" }}>
-              {valResult.stage_summary.map((s, i) => (
-                <div key={i} style={{ display: "flex", gap: 4, alignItems: "center", padding: "2px 6px", border: "1px solid rgba(137,150,171,0.14)", borderRadius: 3, background: "#fff" }}>
-                  <span style={{ flex: 1, fontWeight: 600 }}>{s.name}</span>
-                  <span style={{ fontSize: 9, color: s.executed ? "#176b3b" : s.dry_run ? "#1976d2" : "#667085" }}>{s.dry_run ? "DR" : ""}{s.executed ? (s.metadata_only ? " EX(mo)" : " EX") : ""}{s.registered ? " REG" : ""}</span>
+          <div style={{ marginTop: 10, marginBottom: 10 }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "#667085", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={showTechDetails}
+                onChange={(e) => setShowTechDetails(e.target.checked)}
+              />
+              Show technical details
+            </label>
+          </div>
+
+          {showTechDetails && (
+            <>
+              {valResult.stage_summary.length > 0 && (
+                <CollapsibleDetails title="Advanced preprocessing stage table" summary={`${valResult.stage_summary.length} stage(s)`}>
+                <div style={{ display: "grid", gap: 2, maxHeight: 180, overflow: "auto" }}>
+                  {valResult.stage_summary.map((s, i) => (
+                    <div key={i} style={{ display: "flex", gap: 4, alignItems: "center", padding: "2px 6px", border: "1px solid rgba(137,150,171,0.14)", borderRadius: 3, background: "#fff" }}>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{s.name}</span>
+                      <span style={{ fontSize: 9, color: s.executed ? "#176b3b" : s.dry_run ? "#1976d2" : "#667085" }}>{s.dry_run ? "DR" : ""}{s.executed ? (s.metadata_only ? " EX(mo)" : " EX") : ""}{s.registered ? " REG" : ""}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+                </CollapsibleDetails>
+              )}
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 4 }}>
+                {Object.entries(valResult.safety_flags).map(([k, v]) => flagChip(k, v as boolean))}
+              </div>
+            </>
           )}
 
           {valResult.warnings.length > 0 && (
@@ -108,10 +150,6 @@ export default function AdvancedPreprocessingPipelinePanel({ projectId, preproce
               {valResult.warnings.map((w: string, i: number) => <div key={i} style={{ color: "#9a5a15" }}>{w}</div>)}
             </div>
           )}
-
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 4 }}>
-            {Object.entries(valResult.safety_flags).map(([k, v]) => flagChip(k, v as boolean))}
-          </div>
         </div>
       )}
 

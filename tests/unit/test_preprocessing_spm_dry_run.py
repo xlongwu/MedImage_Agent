@@ -57,7 +57,7 @@ def test_dry_run_writes_batch_preview(tmp_path, monkeypatch):
     _setup_store(tmp_path, monkeypatch); cb = _make_bold_input(tmp_path, subjects=1)
     req = SliceTimingRealignDryRunRequest(tr=2.0, preprocessing_input_dir=str(cb), confirm_dry_run_only=True)
     result = run_slice_timing_realign_dry_run("brain-tumor-study", "pp-test", req, project_dir=str(tmp_path))
-    batch = Path(result.batch_preview_paths[0]).read_text()
+    batch = Path(result.batch_preview_paths[0]).read_text(encoding="utf-8")
     assert "DRY_RUN_ONLY" in batch; assert "NOT EXECUTED" in batch
 
 

@@ -41,7 +41,7 @@ export default function SpmRealignWrapperSkeletonPanel({ baseUrl, projectId }: P
         {data && <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>}
       </div>
       <div style={{ padding: 8, border: "1px solid rgba(242, 153, 74, 0.28)", borderRadius: 6, background: "rgba(255, 251, 242, 0.94)", fontSize: 11, color: "#9a5a15", marginBottom: 12 }}>
-        Preview only. MATLAB/SPM is not executed. This batch template is not executable and must not be copied and run as a production command. Research-use only. Not for clinical diagnosis.
+        Preview only. MATLAB/SPM is not executed. This batch template is not executable and must not be copied and run as a production command. Research-use only. Not for clinical use.
       </div>
 
       <button onClick={handleGenerate} disabled={loading} style={{ marginBottom: 12, padding: "8px 18px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>

@@ -6,6 +6,9 @@ export interface DatasetSummary {
   scans: number;
   total_size: string;
   health_status: string;
+  dicom_subjects?: number;
+  dicom_series?: number;
+  dicom_files?: number;
 }
 
 export interface DatasetImportRequest {

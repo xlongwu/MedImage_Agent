@@ -96,15 +96,18 @@ def _run_data_readiness(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.data_readiness import build_data_readiness
     r = build_data_readiness(project_id)
     d = r.model_dump()
+    checks = d.get("checks", []) or []
+    checks_total = len(checks)
+    checks_passed = sum(1 for c in checks if c.get("status") == "pass")
     return {
         "status": _normalize_status(d.get("status", "unknown")),
         "ok": d.get("ok", False),
-        "summary": f"Images: {d.get('image_count', 0)}, Subjects: {d.get('subject_count', 0)}",
+        "summary": f"Images: {d.get('image_source_count', 0)}, Subjects: {d.get('subject_count', 0)}",
         "key_metrics": {
-            "image_count": d.get("image_count", 0),
+            "image_count": d.get("image_source_count", 0),
             "subject_count": d.get("subject_count", 0),
-            "checks_total": d.get("checks_total", 0),
-            "checks_passed": d.get("checks_passed", 0),
+            "checks_total": checks_total,
+            "checks_passed": checks_passed,
         },
         "warnings": d.get("warnings", [])[:10],
         "errors": d.get("errors", [])[:10],
@@ -120,7 +123,21 @@ def _normalize_status(raw: str) -> str:
 
 def _run_bids_validation(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.bids_validation import validate_bids
-    r = validate_bids(project_id)
+    project = mock_store.get_project(project_id)
+    roots: list[str] = []
+    if project:
+        metadata = project.metadata if isinstance(project.metadata, dict) else {}
+        rawdata = metadata.get("rawdata_dir")
+        if rawdata and isinstance(rawdata, str):
+            roots.append(rawdata)
+    try:
+        import_roots = mock_store.list_import_paths(project_id)
+        for r in import_roots:
+            if r not in roots:
+                roots.append(r)
+    except Exception:
+        pass
+    r = validate_bids(roots)
     d = r.model_dump()
     return {
         "status": _normalize_status(d.get("status", "unknown")),
@@ -138,8 +155,9 @@ def _run_bids_validation(project_id: str) -> dict[str, Any]:
 
 def _run_conversion_dry_run(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.conversion_planner import plan_conversion
+    from src.backend.app.schemas.desktop import ConversionDryRunRequest
     try:
-        r = plan_conversion(project_id, {"dry_run": True})
+        r = plan_conversion(project_id, ConversionDryRunRequest())
         d = r.model_dump()
         return {
             "status": d.get("status", "unknown"),
@@ -448,12 +466,44 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
     else:
         overall_status = "unknown"
 
+    # Deduplicate next actions while preserving order
+    seen_actions = set()
+    next_actions = []
+    for m in modules:
+        for a in m.get("next_actions", [])[:2]:
+            if a:
+                normalized = a.strip().lower()
+                if normalized not in seen_actions:
+                    seen_actions.add(normalized)
+                    next_actions.append(a)
+
+    _PRIORITY_TERMS = [
+        "dicom-to-bids",
+        "dicom-to-nifti",
+        "conversion dry-run",
+        "conversion preflight",
+        "run conversion",
+        "persist review package",
+        "register converted",
+        "create preprocessing run",
+    ]
+
+    def _action_priority(act: str) -> int:
+        act_lower = act.lower()
+        for idx, term in enumerate(_PRIORITY_TERMS):
+            if term in act_lower:
+                return idx
+        return len(_PRIORITY_TERMS)
+
+    next_actions.sort(key=_action_priority)
+    next_actions = next_actions[:5]
+
     # Build markdown
     markdown = _build_markdown(
         project_id, now, overall_status, modules,
         ready_count, warning_count, blocked_count, unknown_count,
         all_warnings, all_errors,
-        [a for m in modules for a in m.get("next_actions", [])[:2]][:15],
+        next_actions,
     )
 
     # Write report artifacts
@@ -508,7 +558,7 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
         unknown_count=unknown_count,
         overall_warnings=all_warnings[:30],
         overall_errors=all_errors[:30],
-        next_actions=[a for m in modules for a in m.get("next_actions", [])[:2]][:15],
+        next_actions=next_actions,
         safety_flags=_safety_flags(),
         report_markdown=markdown,
         cache=_build_cache_summary(

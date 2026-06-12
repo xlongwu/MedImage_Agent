@@ -205,3 +205,20 @@ def test_output_root_preview_is_scoped(tmp_path, monkeypatch):
     preview = body.get("output_root_preview")
     if preview is not None:
         assert "test_converted" in preview
+
+
+def test_plan_conversion_supports_dict_shaped_input(tmp_path, monkeypatch):
+    from src.backend.app.services.conversion_planner import plan_conversion
+    _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+    created = _create_project(client, tmp_path)
+    
+    # Call plan_conversion directly with a raw dict request
+    raw_dict = {
+        "output_root_name": "custom_root_dict",
+        "include_dicom": True,
+        "source_import_ids": []
+    }
+    res = plan_conversion(created["project_id"], raw_dict)
+    assert res.ok is True
+    assert res.output_root_name == "custom_root_dict"

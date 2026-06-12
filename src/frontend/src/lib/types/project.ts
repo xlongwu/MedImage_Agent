@@ -36,4 +36,7 @@ export interface StudyOverview {
   scans: number;
   total_size: string;
   date: string;
+  dicom_subjects?: number;
+  dicom_series?: number;
+  dicom_files?: number;
 }

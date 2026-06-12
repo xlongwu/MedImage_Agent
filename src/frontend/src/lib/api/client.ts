@@ -70,3 +70,9 @@ export function postJson<T>(path: string, payload: unknown): Promise<T> {
     body: JSON.stringify(payload),
   });
 }
+
+export function deleteJson<T>(path: string): Promise<T> {
+  return requestJson<T>(path, {
+    method: "DELETE",
+  });
+}

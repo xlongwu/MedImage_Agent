@@ -16,7 +16,7 @@ type Props = {
 
 const CONFIRMATIONS: { key: string; label: string }[] = [
   { key: "confirm_research_use_only", label: "I understand this is for research use only." },
-  { key: "confirm_no_clinical_use", label: "I understand this is not for clinical diagnosis." },
+  { key: "confirm_no_clinical_use", label: "I understand this is not for clinical use." },
   { key: "confirm_rawdata_readonly", label: "I confirm rawdata must remain read-only." },
   { key: "confirm_rollback_available", label: "I confirm rollback is available." },
   { key: "confirm_disk_space_checked", label: "I confirm disk space was checked." },
@@ -299,7 +299,7 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
       </div>
 
       <div style={{ padding: 8, border: "1px solid rgba(137, 150, 171, 0.18)", borderRadius: 4, background: "#f9f9fb", fontSize: 10, color: "#667085", marginTop: 12, lineHeight: 1.4 }}>
-        MedImage Agent is for research use only. It is not for clinical diagnosis or medical decision-making.
+        MedImage Agent is for research use only. It is not for clinical use or medical decision-making.
         Rawdata remains read-only. SPM/DPABI/MATLAB are not executed. Full preprocessing is not triggered.
       </div>
     </section>

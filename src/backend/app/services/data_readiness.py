@@ -325,6 +325,10 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
             )
             dicom_file_count = preflight.dicom_file_count
             dicom_series_count = preflight.series_count
+            if not subject_count:
+                dicom_subjects = {s.subject_id for s in preflight.series if s.subject_id}
+                if dicom_subjects:
+                    subject_count = len(dicom_subjects)
             checks.append(
                 _build_check(
                     "dicom_preflight",

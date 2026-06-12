@@ -1,6 +1,6 @@
 """Frontend source tests for Phase 5O-UIClosure — advanced preprocessing panel + dashboard polish."""
 from __future__ import annotations
-import os, pytest
+import os, re, pytest
 
 def _read_api():
     path = os.path.join(os.getcwd(), "src/frontend/src/api.ts")
@@ -25,6 +25,16 @@ def _read_bids_panel():
 def _read_app():
     path = os.path.join(os.getcwd(), "src/frontend/src/App.tsx")
     if not os.path.exists(path): pytest.skip("App.tsx not found")
+    return open(path, encoding="utf-8").read()
+
+def _read_api_client():
+    path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/client.ts")
+    if not os.path.exists(path): pytest.skip("lib/api/client.ts not found")
+    return open(path, encoding="utf-8").read()
+
+def _read_projects_api():
+    path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/projects.ts")
+    if not os.path.exists(path): pytest.skip("lib/api/projects.ts not found")
     return open(path, encoding="utf-8").read()
 
 def _read_styles():
@@ -142,6 +152,44 @@ def test_default_tab_selection_logic_exists():
     assert "setActiveWorkflow" in app, "Tab selection logic must set workflow state"
     assert "dataState" in app, "Tab selection must inspect dataState"
 
+def test_created_project_is_optimistically_merged_into_sidebar():
+    app = _read_app()
+    assert "mergeCreatedProjectIntoList" in app, "Created projects must be mergeable into the sidebar list"
+    assert "projectsBeforeReload" in app, "Upload flow must retain the pre-reload project list"
+    assert "projects.setData(mergeCreatedProjectIntoList(result, listSource))" in app, (
+        "Upload flow must show the created project in Recent projects immediately"
+    )
+    assert re.search(
+        r"return\s+\[\s*createdProject,\s*\.\.\.projects\.filter\(\(item\)\s*=>\s*item\.id\s*!==\s*result\.project_id\)",
+        app,
+        re.S,
+    ), "Created project must be placed before existing projects and de-duplicated"
+
+def test_recent_projects_can_be_removed_from_sidebar_without_file_delete():
+    app = _read_app()
+    projects_api = _read_projects_api()
+    client_api = _read_api_client()
+    styles = _read_styles()
+    assert "deleteProject" in app, "Recent project delete handler must call the project delete API"
+    assert "projectDeleteLoadingId" in app, "Recent project delete action must have a loading guard"
+    assert "project-delete-button" in app and "project-delete-button" in styles, "Recent project rows need a delete control"
+    assert "This will not delete rawdata or project files" in app, "Delete confirmation must preserve rawdata safety boundary"
+    assert "Rawdata and project files were not deleted" in app, "Delete success copy must state files are untouched"
+    assert "projects.setData(remainingProjects)" in app, "Sidebar must update immediately after deletion"
+    assert "deleteJson" in client_api and 'method: "DELETE"' in client_api, "API client must support DELETE"
+    assert 'deleteJson<ProjectDeleteResponse>(`/api/projects/${encodeURIComponent(projectId)}`)' in projects_api
+
+def test_upload_uses_unique_project_names_and_no_silent_overwrite():
+    app = _read_app()
+    upload_block = app[app.index("async function handleUploadData"):app.index("async function handleDeleteProject")]
+    assert "uniqueProjectName" in app, "Upload flow must have a project-name de-duplication helper"
+    assert "getApiBaseUrl" in app and "setBaseUrl(url)" in app, "Upload flow must use the runtime backend URL"
+    assert 'window.prompt("Project name"' not in upload_block, "Upload flow must not depend on a hidden project-name prompt"
+    assert "Creating project from selected data directory" in upload_block, "Upload flow must show visible progress after directory selection"
+    assert "overwrite: false" in upload_block, "Upload flow must not silently overwrite an existing project"
+    assert "overwrite: true" not in upload_block, "Upload flow must not hide duplicate-name uploads by overwriting"
+    assert "isProjectNameConflict" in upload_block, "Upload flow must handle duplicate-name conflicts"
+
 def test_converted_project_copy():
     app = _read_app()
     assert "Check preprocessing validation" in app or "Create preprocessing run" in app
@@ -190,6 +238,56 @@ def test_converted_bids_data_conversion_not_primary():
 def test_raw_dicom_bids_expected_before_conversion():
     bids = _read_bids_panel()
     assert "Expected before conversion" in bids, "raw_dicom must expect conversion"
+
+def test_demo_data_like_raw_dicom_priority_source():
+    """DICOM evidence with absent converted evidence must route to raw_dicom."""
+    app = _read_app()
+    assert "hasRawDicomEvidence" in app, "Classifier must have explicit raw DICOM evidence"
+    assert "convertedDataAbsent" in app, "Classifier must check converted evidence absence"
+    assert "dicom_file_count" in app and "dicom_series_count" in app, "DICOM count signals must be inspected"
+    assert "raw_dicom_candidate_subjects" in app, "Raw DICOM candidate subject signal must be preserved"
+    assert re.search(
+        r"if\s*\(\s*hasRawDicomEvidence\s*&&\s*convertedDataAbsent\s*\)\s*\{\s*return\s+\"raw_dicom\";",
+        app,
+        re.S,
+    ), "Raw DICOM evidence must take priority when NIfTI/BIDS evidence is absent"
+
+def test_metadata_only_does_not_prove_converted_bids():
+    app = _read_app()
+    assert "isMetadataOnlySignal" in app, "Metadata-only signals must be detected separately"
+    assert re.search(
+        r"const\s+hasConvertedSubjectEvidence\s*=\s*!metadataOnly",
+        app,
+    ), "Metadata-only inventory must not count as converted subject evidence"
+    assert "metadataOnlyNiftiInventory" in app, "Metadata-only state should be carried as a display note"
+
+def test_raw_dicom_primary_action_not_preprocessing_validation():
+    app = _read_app()
+    primary_block = app[app.index("const primary ="):app.index("const explanation =")]
+    raw_branch = primary_block.split(': inventory.dataState === "converted_bids"')[0]
+    assert "Generate conversion dry-run" in raw_branch, "raw_dicom primary action must be conversion dry-run"
+    assert "Check preprocessing validation" not in raw_branch, "raw_dicom primary action must not be preprocessing validation"
+
+def test_nifti_metric_stays_numeric_when_metadata_only():
+    app = _read_app()
+    bids = _read_bids_panel()
+    app_metric = app[app.index('label="NIfTI files"'):app.index('label="NIfTI files"') + 280]
+    bids_metric = bids[bids.index('label="NIfTI files"'):bids.index('label="NIfTI files"') + 220]
+    assert "Metadata-" not in app_metric and "Metadata-" not in bids_metric
+    assert "Metadata-only inventory" not in app
+    assert "Metadata-only inventory" not in bids
+    assert "NIfTI inventory: metadata only" in app
+    assert "NIfTI inventory: metadata only" in bids
+
+def test_real_converted_bids_evidence_still_classifies_converted():
+    app = _read_app()
+    assert "const hasRealConvertedData" in app
+    assert "niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence" in app
+    assert re.search(
+        r"if\s*\(\s*hasRealConvertedData\s*\)\s*\{\s*return\s+\"converted_bids\";",
+        app,
+        re.S,
+    ), "Real NIfTI/BIDS evidence must still route to converted_bids"
 
 def test_empty_project_recommended_action():
     app = _read_app()
@@ -294,3 +392,19 @@ def test_conversion_blocked_count_visible():
     review = _read_review_panel()
     assert "blocking_issues.length" in review, "Must show blocking issue count"
     assert "prerequisite(s) missing" in review, "Must show 'prerequisite(s) missing' text"
+
+def test_review_persist_requires_preflight_mappings():
+    """Review package persistence must not save an empty mapping package."""
+    review = _read_review_panel()
+    assert "canPersistReview" in review, "Review panel must compute whether mappings are available"
+    assert "data.mapping_count > 0" in review, "Persistence must require at least one mapping"
+    assert "disabled={persisting || !canPersistReview}" in review, \
+        "Persist review package button must be disabled when mappings are absent"
+    assert "Run conversion preflight and review at least one mapping before saving." in review, \
+        "Empty mapping persistence guard must explain the next step"
+
+def test_review_panel_has_no_mojibake_markers():
+    """Visible review text must not contain Windows mojibake markers."""
+    review = _read_review_panel()
+    for marker in ("璺", "鈿", "鈥", "閳", "路", "\ufffd"):
+        assert marker not in review, f"Mojibake marker {marker!r} must not appear in review panel"

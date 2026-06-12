@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_API_BASE, runConversionDryRun } from "../api";
 import type { ConversionDryRunResponse, ConversionMappingPreview, ConversionSourceSummary } from "../types";
+import { ActionList, CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
@@ -41,12 +42,12 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
     <Sect>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div><H3>Conversion Dry-Run</H3><Sub>Plan DICOM / loose NIfTI → BIDS conversion without writing files.</Sub></div>
-        {data && <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>}
+        {data && <StatusPill status={data.status} />}
       </div>
 
-      <div style={{ padding: 8, border: "1px solid rgba(56, 103, 214, 0.18)", borderRadius: 6, background: "rgba(239, 246, 255, 0.72)", fontSize: 11, color: "#2450a6", marginBottom: 12 }}>
+      <SafetyBanner tone="info">
         Dry-run only. No files are written. No rawdata is modified. No external tools are executed.
-      </div>
+      </SafetyBanner>
 
       <button onClick={handleGenerate} disabled={loading} style={{ marginBottom: 12, padding: "8px 18px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
         {loading ? "Generating..." : "Generate conversion dry-run"}
@@ -58,43 +59,43 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
       {data && (
         <>
           {data.safety_flags && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-              {Object.entries(data.safety_flags).map(([k, v]) => (
-                <span key={k} style={{ ...pill, background: v ? "#e8f5e9" : "#ffebee", color: v ? "#176b3b" : "#b53b3b", borderColor: v ? "rgba(33, 150, 83, 0.24)" : "rgba(235, 87, 87, 0.26)" }}>{k}: {String(v)}</span>
-              ))}
-            </div>
+            <CollapsibleDetails title="Conversion safety details" summary="Read-only dry-run gates">
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(data.safety_flags).map(([k, v]) => (
+                  <span key={k} style={{ ...pill, background: v ? "#e8f5e9" : "#ffebee", color: v ? "#176b3b" : "#b53b3b", borderColor: v ? "rgba(33, 150, 83, 0.24)" : "rgba(235, 87, 87, 0.26)" }}>{k}: {String(v)}</span>
+                ))}
+              </div>
+            </CollapsibleDetails>
           )}
 
           {data.blocking_issues.length > 0 && <div className="errorBox" style={{ marginBottom: 10 }}>{data.blocking_issues.join("\n")}</div>}
           {data.warnings.length > 0 && <Warn items={data.warnings} />}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8, marginBottom: 12 }}>
-            <M label="sources" value={data.source_summaries.length} />
-            <M label="mappings" value={data.mapping_preview.length} />
-            <M label="output root" value={data.output_root_preview || data.output_root_name} />
+            <MetricTile label="Sources" value={data.source_summaries.length} />
+            <MetricTile label="Mappings" value={data.mapping_preview.length} tone={data.mapping_preview.length > 0 ? "blue" : "neutral"} />
+            <MetricTile label="Output root" value={data.output_root_preview || data.output_root_name} mono />
           </div>
 
           {data.source_summaries.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <h4 style={subH}>Sources</h4>
+            <CollapsibleDetails title="DICOM and loose NIfTI sources" summary={`${data.source_summaries.length} source(s)`}>
               <div style={{ display: "grid", gap: 6 }}>
                 {data.source_summaries.map((s) => <SourceRow key={s.source_id} source={s} />)}
               </div>
-            </div>
+            </CollapsibleDetails>
           )}
 
           {data.mapping_preview.length > 0 && (
-            <div style={{ marginBottom: 12 }}>
-              <h4 style={subH}>Mapping Preview ({data.mapping_preview.length})</h4>
+            <CollapsibleDetails title="DICOM mapping preview" summary={`${data.mapping_preview.length} mapping(s)`}>
               <div style={{ display: "grid", gap: 6 }}>
                 {data.mapping_preview.slice(0, 30).map((m, i) => <MappingRow key={i} mapping={m} />)}
               </div>
-            </div>
+            </CollapsibleDetails>
           )}
 
           {data.next_actions.length > 0 && (
-            <div><h4 style={subH}>Next Actions</h4>
-              <div style={{ display: "grid", gap: 5 }}>{data.next_actions.map((a, i) => <div key={i} style={{ padding: "6px 10px", border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 6, background: "rgba(239, 246, 255, 0.82)", color: "#2450a6", fontSize: 12 }}>{i + 1}. {a}</div>)}</div>
+            <div style={{ marginTop: 12 }}><h4 style={subH}>Next Actions</h4>
+              <ActionList actions={data.next_actions} rawDicom />
             </div>
           )}
         </>
