@@ -9,6 +9,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from src.backend.app.api._errors import raise_api_error
 from src.backend.app.planner.reviewed_plan_store import (
     ReviewedPlanStoreError,
     artifact_warnings,
@@ -89,7 +90,7 @@ def save_project_reviewed_plan(
             warnings=request.warnings,
         )
     except ReviewedPlanStoreError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise_api_error(exc)
     return {"ok": True, "reviewed_plan": _reviewed_plan_payload(record)}
 
 

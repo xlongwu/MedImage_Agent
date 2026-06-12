@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.models import (
     AgentExecuteRequest,
     AgentPlanRequest,
@@ -44,6 +45,7 @@ from src.backend.app.api.models import (
     RsfmriReportValidationRequest,
     ReleaseReadinessRequest,
 )
+from src.backend.app.core.exceptions import ConfigError
 from src.backend.app.runtime.pipeline_executor import run_pipeline
 from src.backend.app.tools.report_exporter import get_latest_rsfmri_report_export, list_rsfmri_report_exports
 from src.backend.app.tools.report_package_validator import get_latest_rsfmri_report_validation, list_rsfmri_report_validations
@@ -139,7 +141,7 @@ def get_project_config(
             "config": parsed,
         }
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc, error_cls=ConfigError)
 
 
 def _load_project_config(path: str) -> dict[str, Any]:
@@ -147,7 +149,7 @@ def _load_project_config(path: str) -> dict[str, Any]:
 
     Uses ProjectSettings.from_yaml() to validate critical fields (work_dir,
     log_dir, spm_dir, dpabi_dir) before returning the raw dict.  Validation
-    errors are wrapped as HTTPException(400) to match API layer conventions.
+    errors are wrapped as ConfigError(400) to match the structured API model.
     """
     # ── structural validation (M1-T003 / M1-T005c) ──
     from src.backend.app.config import ProjectSettings  # noqa: E402
@@ -155,19 +157,19 @@ def _load_project_config(path: str) -> dict[str, Any]:
     try:
         ProjectSettings.from_yaml(path)
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise ConfigError(str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise ConfigError(str(exc)) from exc
 
     # ── return raw dict for backward compat ──
     import yaml
     p = Path(path)
     if not p.exists():
-        raise HTTPException(status_code=400, detail=f"Project config not found: {path}")
+        raise ConfigError(f"Project config not found: {path}")
     try:
         return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to parse project config: {exc}")
+        raise ConfigError(f"Failed to parse project config: {exc}") from exc
 
 
 @router.post("/api/dpabi/capability")
@@ -188,7 +190,7 @@ def api_dpabi_capability(payload: DpabiCapabilityRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/scaffold")
@@ -206,7 +208,7 @@ def api_dpabi_scaffold(payload: DpabiCapabilityRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/input-manifest")
@@ -220,7 +222,7 @@ def api_dpabi_input_manifest(payload: DpabiPreflightRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/preflight")
@@ -240,7 +242,7 @@ def api_dpabi_preflight(payload: DpabiPreflightRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/gpu/detect")
@@ -313,7 +315,7 @@ def get_pipeline(pipeline_name: str) -> dict[str, Any]:
             "raw": data["content"],
         }
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/agent/plan")
@@ -397,7 +399,7 @@ def read_file(path: str = Query(...)) -> dict[str, Any]:
     except PathSafetyError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/runs")
@@ -437,7 +439,7 @@ def api_read_log(path: str = Query(...)) -> dict[str, Any]:
     except PathSafetyError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/runs/{run_id}/diagnosis")
@@ -516,7 +518,7 @@ def api_scheduler_plan(request: SchedulerPlanRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/run-plan")
@@ -532,7 +534,7 @@ def api_dpabi_run_plan(request: DpabiRunPlanRequest) -> dict[str, Any]:
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/sandbox-smoke")
@@ -550,7 +552,7 @@ def api_dpabi_sandbox_smoke(request: DpabiSandboxSmokeRequest) -> dict[str, Any]
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/subject-smooth")
@@ -572,7 +574,7 @@ def api_dpabi_subject_smooth(request: DpabiSubjectSmoothRequest) -> dict[str, An
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/subject-wrapper-report")
@@ -585,7 +587,7 @@ def api_dpabi_subject_wrapper_report(request: DpabiSubjectWrapperReportRequest) 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/signature-probe")
@@ -601,7 +603,7 @@ def api_dpabi_signature_probe(request: DpabiSignatureProbeRequest) -> dict[str, 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/wrapper-contracts")
@@ -615,7 +617,7 @@ def api_dpabi_wrapper_contracts(request: DpabiSignatureProbeRequest) -> dict[str
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/single-function-sandbox")
@@ -634,7 +636,7 @@ def api_dpabi_single_function_sandbox(request: DpabiSingleFunctionRequest) -> di
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/wrapper-validation-matrix")
@@ -651,7 +653,7 @@ def api_dpabi_wrapper_validation_matrix(request: DpabiWrapperValidationRequest) 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/template-library")
@@ -665,7 +667,7 @@ def api_dpabi_template_library(request: DpabiWrapperValidationRequest) -> dict[s
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/dpabi/templates")
@@ -674,7 +676,7 @@ def api_dpabi_list_templates(work_dir: str = "./work") -> dict[str, Any]:
         result = list_dpabi_templates(work_dir=work_dir)
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/template-instantiate")
@@ -691,7 +693,7 @@ def api_dpabi_template_instantiate(request: DpabiTemplateInstantiateRequest) -> 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/template-execute")
@@ -706,7 +708,7 @@ def api_dpabi_template_execute(request: DpabiTemplateExecuteRequest) -> dict[str
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/dpabi/template-wizard/options")

@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from fastapi import HTTPException
 
+from src.backend.app.core.exceptions import ConfigError
 from src.backend.app.api.routes import _load_project_config
 
 
@@ -59,22 +59,22 @@ def test_returns_dict(tmp_path: Path):
     assert result["runtime"]["work_dir"] == str(tmp_path / "work")
 
 
-# ── Missing critical fields → HTTPException(400) ──
+# ── Missing critical fields → ConfigError(400) ──
 
 def test_missing_work_dir_raises_http_400(tmp_path: Path):
     cfg = _write_config(tmp_path, log_dir=str(tmp_path / "logs"))
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(ConfigError) as exc_info:
         _load_project_config(str(cfg))
     assert exc_info.value.status_code == 400
-    assert "work_dir" in exc_info.value.detail
+    assert "work_dir" in exc_info.value.message
 
 
 def test_missing_log_dir_raises_http_400(tmp_path: Path):
     cfg = _write_config(tmp_path, work_dir=str(tmp_path / "work"))
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(ConfigError) as exc_info:
         _load_project_config(str(cfg))
     assert exc_info.value.status_code == 400
-    assert "log_dir" in exc_info.value.detail
+    assert "log_dir" in exc_info.value.message
 
 
 def test_missing_spm_dir_raises_http_400(tmp_path: Path):
@@ -82,10 +82,10 @@ def test_missing_spm_dir_raises_http_400(tmp_path: Path):
                         work_dir=str(tmp_path / "work"),
                         log_dir=str(tmp_path / "logs"),
                         spm_dir=None)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(ConfigError) as exc_info:
         _load_project_config(str(cfg))
     assert exc_info.value.status_code == 400
-    assert "spm_dir" in exc_info.value.detail
+    assert "spm_dir" in exc_info.value.message
 
 
 def test_missing_dpabi_dir_raises_http_400(tmp_path: Path):
@@ -93,27 +93,27 @@ def test_missing_dpabi_dir_raises_http_400(tmp_path: Path):
                         work_dir=str(tmp_path / "work"),
                         log_dir=str(tmp_path / "logs"),
                         dpabi_dir=None)
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(ConfigError) as exc_info:
         _load_project_config(str(cfg))
     assert exc_info.value.status_code == 400
-    assert "dpabi_dir" in exc_info.value.detail
+    assert "dpabi_dir" in exc_info.value.message
 
 
-# ── File not found → HTTPException(400) ──
+# ── File not found → ConfigError(400) ──
 
 def test_file_not_found_raises_http_400():
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(ConfigError) as exc_info:
         _load_project_config("nonexistent/config.yaml")
     assert exc_info.value.status_code == 400
-    assert "not found" in exc_info.value.detail.lower()
+    assert "not found" in exc_info.value.message.lower()
 
 
-# ── Invalid YAML → HTTPException(400) ──
+# ── Invalid YAML → ConfigError(400) ──
 
 def test_invalid_yaml_raises_http_400(tmp_path: Path):
     p = tmp_path / "bad.yaml"
     p.write_text("runtime: [unclosed\n  work_dir: x\n", encoding="utf-8")
-    with pytest.raises(HTTPException) as exc_info:
+    with pytest.raises(ConfigError) as exc_info:
         _load_project_config(str(p))
     assert exc_info.value.status_code == 400
 

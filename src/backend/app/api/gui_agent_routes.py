@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.models import (
     GuiAgentSessionRequest,
     GuiAgentStepRequest,
@@ -94,7 +95,7 @@ def api_gui_agent_create_session(request: GuiAgentSessionRequest) -> dict[str, A
     try:
         return create_gui_agent_session(request.model_dump())
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 def _guard_action(request: GuiAgentStepRequest) -> None:
@@ -218,7 +219,7 @@ def api_gui_agent_step(session_id: str, request: GuiAgentStepRequest) -> dict[st
         detail = str(exc)
         raise HTTPException(status_code=_GUARD_HTTP_STATUS, detail=detail)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
     # Attach audit record to response
@@ -238,7 +239,7 @@ def api_gui_agent_screenshot(session_id: str) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=_GUARD_HTTP_STATUS, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
     return result
@@ -251,7 +252,7 @@ def api_gui_agent_abort(session_id: str) -> dict[str, Any]:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

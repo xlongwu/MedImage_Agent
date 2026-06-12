@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api._shared import (
     _load_project_config,
     _read_json_if_exists,
@@ -212,4 +213,4 @@ def api_scheduler_plan(request: SchedulerPlanRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)

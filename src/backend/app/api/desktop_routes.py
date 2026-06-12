@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
+from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.models import DesktopConfigSaveRequest
 from src.backend.app.runtime.desktop_config import (
     get_desktop_config,
@@ -29,7 +30,7 @@ def api_desktop_save_config(request: DesktopConfigSaveRequest) -> dict[str, Any]
         }
         return save_desktop_config(payload)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/desktop/health")

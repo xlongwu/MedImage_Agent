@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
+from pathlib import Path
+
+from src.backend.app.config.settings import ProjectSettings
+from src.backend.app.core.config_schema import AppConfig, ServerConfig
 
 
 @dataclass(frozen=True)
@@ -12,14 +15,47 @@ class BackendSettings:
     api_version: str = "0.1.0"
 
 
-def get_backend_settings() -> BackendSettings:
-    raw_port = os.environ.get("MEDIMAGE_BACKEND_PORT", "8000")
-    try:
-        port = int(raw_port)
-    except ValueError:
-        port = 8000
-    return BackendSettings(
-        host=os.environ.get("MEDIMAGE_BACKEND_HOST", "127.0.0.1"),
-        port=port,
-    )
+class ConfigService:
+    """Unified backend configuration loader with backwards-compatible sources."""
 
+    def __init__(self, project_config_path: str | Path | None = None) -> None:
+        self.server = ServerConfig.from_env()
+        self.project = (
+            ProjectSettings.from_yaml(project_config_path)
+            if project_config_path is not None
+            else None
+        )
+        self.project_config_path = (
+            str(Path(project_config_path).resolve())
+            if project_config_path is not None
+            else None
+        )
+
+    @classmethod
+    def from_yaml(cls, path: str | Path) -> "ConfigService":
+        return cls(project_config_path=path)
+
+    def snapshot(self) -> AppConfig:
+        project_payload = None
+        if self.project is not None:
+            project_payload = {
+                "runtime": self.project.runtime.__dict__,
+                "third_party": self.project.third_party.__dict__,
+                "safety": self.project.safety.__dict__,
+                "source_path": self.project.source_path,
+            }
+        return AppConfig(
+            server=self.server,
+            project=project_payload,
+            project_config_path=self.project_config_path,
+        )
+
+
+def get_backend_settings() -> BackendSettings:
+    server = ConfigService().server
+    return BackendSettings(
+        host=server.host,
+        port=server.port,
+        service_name=server.service_name,
+        api_version=server.api_version,
+    )

@@ -12,14 +12,18 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from src.backend.app.api._errors import raise_api_error
+from src.backend.app.core.exceptions import StateStoreError
 from src.backend.app.api.models import ProjectCreateRequest, ProjectCreateResponse
 from src.backend.app.runtime.desktop_config import (
     add_authorized_data_dir,
     add_recent_project,
     get_desktop_config,
+    remove_recent_project,
     set_active_project,
 )
 from src.backend.app.schemas.desktop import ProjectDetail
+from src.backend.app.services.funraw_t1raw_detector import detect_funraw_t1raw_layout
 from src.backend.app.services.mock_store import mock_store
 from src.backend.app.tools.data_inspector import inspect_dataset
 from src.backend.app.tools.project_config_writer import write_project_config
@@ -32,6 +36,7 @@ NEXT_ACTIONS = [
     "Review dataset diagnostics",
     "Configure MATLAB/SPM/DPABI if needed",
 ]
+_DICOM_EXTENSIONS = {".dcm", ".ima"}
 
 _POSIX_SYSTEM_TREES = ("/System", "/usr", "/bin", "/etc")
 _POSIX_EXACT_DANGEROUS = ("/", "/home", "/Users")
@@ -333,6 +338,77 @@ def _inspect_rawdata(
     return diagnostics, dataset_index_path, warnings
 
 
+def _is_dicom_inventory_file(path: Path) -> bool:
+    suffix = path.suffix.lower()
+    if suffix in _DICOM_EXTENSIONS:
+        return True
+    return not suffix and path.name.isdigit()
+
+
+def _subject_hint_from_dicom_path(path: Path) -> str:
+    for part in reversed(path.parts):
+        normalized = part.lower().replace("_", "-")
+        if normalized.startswith("sub-"):
+            return normalized
+        if normalized.startswith("subject-"):
+            return "sub-" + normalized.removeprefix("subject-")
+    parent = path.parent.name.strip().lower().replace("_", "-")
+    return parent or "dicom-series"
+
+
+def _inspect_dicom_inventory(rawdata_path: Path) -> dict[str, Any]:
+    """Count DICOM-like files for project classification without reading pixels."""
+    funraw = detect_funraw_t1raw_layout(rawdata_path)
+    dicom_file_count = int(funraw.get("dicom_file_count") or 0)
+    series_count = int(funraw.get("series_count") or 0)
+    subject_ids = {str(item) for item in funraw.get("subject_ids", []) if item}
+    series_dirs: set[str] = set()
+
+    try:
+        for child in rawdata_path.rglob("*"):
+            if not child.is_file() or not _is_dicom_inventory_file(child):
+                continue
+            dicom_file_count += 0 if funraw.get("dicom_file_count") else 1
+            series_dirs.add(str(child.parent.resolve()))
+            subject_ids.add(_subject_hint_from_dicom_path(child))
+    except (OSError, PermissionError):
+        pass
+
+    if not series_count:
+        series_count = len(series_dirs)
+    subject_candidates = sorted(subject_ids)
+    return {
+        "dicom_file_count": dicom_file_count,
+        "dicom_files": dicom_file_count,
+        "dicom_series_count": series_count,
+        "dicom_series": series_count,
+        "raw_dicom_candidate_subjects": len(subject_candidates),
+        "dicom_subject_count": len(subject_candidates),
+        "subject_candidates": subject_candidates,
+        "raw_dicom_layout": funraw.get("layout_type") or "generic_dicom",
+    }
+
+
+def _merge_dicom_inventory(
+    diagnostics: dict[str, Any],
+    inventory: dict[str, Any],
+) -> bool:
+    dicom_file_count = int(inventory.get("dicom_file_count") or 0)
+    if dicom_file_count <= 0:
+        return False
+
+    candidate_count = int(inventory.get("raw_dicom_candidate_subjects") or 0)
+    diagnostics.update(inventory)
+    if int(diagnostics.get("subjects_total") or 0) <= 0 and candidate_count > 0:
+        diagnostics["subjects_total"] = candidate_count
+        diagnostics["subjects_complete"] = 0
+        diagnostics["subjects_warning"] = candidate_count
+        diagnostics["subjects_incomplete"] = 0
+    if int(diagnostics.get("nifti_file_count") or diagnostics.get("nifti_files") or 0) <= 0:
+        diagnostics["status"] = "RAW_DICOM"
+    return True
+
+
 def _dashboard_dataset_profile(
     dataset_index_path: str | None,
 ) -> tuple[list[str], int]:
@@ -379,12 +455,15 @@ def _dashboard_project_from_create_response(
     created_at = str(existing_created_at or now)
     sequences, scans_count = _dashboard_dataset_profile(response.dataset_index_path)
     diagnostics = dict(response.diagnostics)
+    if diagnostics.get("dicom_file_count") and not sequences:
+        sequences = ["DICOM"]
+        scans_count = int(diagnostics.get("dicom_file_count") or 0)
 
     return ProjectDetail(
         id=response.project_id,
         name=response.project_name,
         study_id=response.project_id,
-        modality="rs-fMRI",
+        modality="MRI / DICOM" if diagnostics.get("dicom_file_count") else "rs-fMRI",
         created_date=created_at[:10],
         subjects_count=int(diagnostics.get("subjects_total", 0) or 0),
         current_pipeline_id="not-selected",
@@ -481,6 +560,12 @@ def create_project(request: ProjectCreateRequest) -> ProjectCreateResponse:
         dataset_index_path = None
         warnings.append("Dataset inspection was skipped.")
 
+    dicom_inventory = _inspect_dicom_inventory(rawdata_path)
+    if _merge_dicom_inventory(diagnostics, dicom_inventory):
+        warnings.append(
+            "DICOM files were detected. Project was added as raw DICOM for conversion planning."
+        )
+
     if diagnostics["status"] == "READY" and warnings:
         diagnostics["status"] = "WARNING"
 
@@ -500,10 +585,11 @@ def create_project(request: ProjectCreateRequest) -> ProjectCreateResponse:
             matlab_command=str(desktop_settings.get("matlab_command") or "matlab"),
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to write project_config.yaml: {exc}",
-        ) from exc
+        raise_api_error(
+            exc,
+            error_cls=StateStoreError,
+            message=f"Failed to write project_config.yaml: {exc}",
+        )
 
     try:
         add_recent_project(project_id, project_name, str(project_dir))
@@ -529,10 +615,17 @@ def create_project(request: ProjectCreateRequest) -> ProjectCreateResponse:
         existing_dashboard_project,
     )
     try:
+        dataset_type = (
+            "dicom"
+            if int(response.diagnostics.get("dicom_file_count") or 0) > 0
+            and int(response.diagnostics.get("nifti_file_count") or response.diagnostics.get("nifti_files") or 0) == 0
+            else "bids"
+        )
         mock_store.add_project(
             dashboard_project,
             health_status=str(response.diagnostics.get("status", "UNKNOWN")),
             rawdata_dir=response.rawdata_dir,
+            dataset_type=dataset_type,
             overwrite=request.overwrite,
         )
     except ValueError as exc:
@@ -543,3 +636,32 @@ def create_project(request: ProjectCreateRequest) -> ProjectCreateResponse:
         warnings.append(f"Dashboard project store update warning: {exc}")
 
     return response.model_copy(update={"warnings": _deduplicate(warnings)})
+
+
+@router.delete("/api/projects/{project_id}")
+def delete_project(project_id: str) -> dict[str, Any]:
+    """Remove a project from desktop dashboard indexes, leaving rawdata/project files intact."""
+    if not mock_store.get_project(project_id):
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    removed_from_store = mock_store.remove_project(project_id)
+    try:
+        removed_from_recent = remove_recent_project(project_id)
+    except Exception as exc:
+        return {
+            "ok": True,
+            "project_id": project_id,
+            "removed_from_store": removed_from_store,
+            "removed_from_recent": False,
+            "deleted_files": False,
+            "warning": f"Desktop recent-project cleanup warning: {exc}",
+            "message": "Project was removed from the dashboard. Rawdata and project files were not deleted.",
+        }
+    return {
+        "ok": True,
+        "project_id": project_id,
+        "removed_from_store": removed_from_store,
+        "removed_from_recent": removed_from_recent,
+        "deleted_files": False,
+        "message": "Project was removed from the dashboard. Rawdata and project files were not deleted.",
+    }

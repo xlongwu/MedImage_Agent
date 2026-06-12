@@ -67,6 +67,10 @@ class SQLiteDesktopStore:
         with self._lock, self._connect() as conn:
             conn.executescript(
                 """
+                CREATE TABLE IF NOT EXISTS store_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS projects (
                     id TEXT PRIMARY KEY,
                     payload TEXT NOT NULL,
@@ -146,6 +150,18 @@ class SQLiteDesktopStore:
         with self._lock, self._connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
             if count:
+                conn.execute(
+                    """
+                    INSERT INTO store_meta (key, value)
+                    VALUES ('seeded_once', '1')
+                    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                    """
+                )
+                return
+            seeded = conn.execute(
+                "SELECT value FROM store_meta WHERE key = 'seeded_once'"
+            ).fetchone()
+            if seeded:
                 return
 
             projects = [
@@ -284,6 +300,13 @@ class SQLiteDesktopStore:
                         "INSERT INTO task_events (task_id, payload, created_at) VALUES (?, ?, ?)",
                         (task.id, self._dump_model(event, exclude={"id"}), now),
                     )
+            conn.execute(
+                """
+                INSERT INTO store_meta (key, value)
+                VALUES ('seeded_once', '1')
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """
+            )
 
     def _seed_tasks(self) -> list[TaskDetail]:
         return [
@@ -388,6 +411,7 @@ class SQLiteDesktopStore:
         *,
         health_status: str,
         rawdata_dir: str,
+        dataset_type: str = "bids",
         overwrite: bool = False,
     ) -> ProjectDetail:
         """Persist a dashboard project and its referenced rawdata atomically."""
@@ -433,9 +457,43 @@ class SQLiteDesktopStore:
                     dataset_type = excluded.dataset_type,
                     created_at = excluded.created_at
                 """,
-                (dataset_id, project.id, rawdata_dir, "bids", created_at),
+                (dataset_id, project.id, rawdata_dir, dataset_type, created_at),
             )
         return project
+
+    def remove_project(self, project_id: str) -> bool:
+        """Remove dashboard records for a project without deleting filesystem data."""
+        with self._lock, self._connect() as conn:
+            existing = conn.execute(
+                "SELECT 1 FROM projects WHERE id = ?",
+                (project_id,),
+            ).fetchone()
+            if not existing:
+                return False
+
+            task_ids: list[str] = []
+            rows = conn.execute("SELECT id, payload FROM tasks").fetchall()
+            for row in rows:
+                try:
+                    payload = json.loads(row["payload"])
+                except json.JSONDecodeError:
+                    payload = {}
+                if payload.get("project_id") == project_id:
+                    task_ids.append(str(row["id"]))
+
+            for task_id in task_ids:
+                conn.execute("DELETE FROM approvals WHERE task_id = ?", (task_id,))
+                conn.execute("DELETE FROM task_events WHERE task_id = ?", (task_id,))
+                conn.execute("DELETE FROM task_artifacts WHERE task_id = ?", (task_id,))
+                conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+            conn.execute("DELETE FROM run_links WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM reviewed_plans WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM imports WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM dataset_health WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM models WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            return True
 
     def add_reviewed_plan(self, record: ReviewedPlanRecord) -> ReviewedPlanRecord:
         """Insert or refresh the index entry for a stable project/plan hash."""
@@ -642,16 +700,41 @@ class SQLiteDesktopStore:
         for row in rows:
             project = self._load_payload(row["payload"], ProjectDetail)
             if project.study_id == study_id:
+                subjects = project.subjects_count
+                scans = project.scans_count
+                dicom_subjects = 0
+                dicom_series = 0
+                dicom_files = 0
+                if project.metadata:
+                    try:
+                        from src.backend.app.services.data_readiness import build_data_readiness
+                        dr = build_data_readiness(project.id)
+                        if dr.image_source_count > 0:
+                            subjects = dr.subject_count
+                            scans = dr.image_source_count
+                        elif dr.dicom_file_count > 0 or dr.dicom_series_count > 0:
+                            subjects = 0
+                            scans = 0
+                            dicom_subjects = dr.subject_count
+                            dicom_series = dr.dicom_series_count
+                            dicom_files = dr.dicom_file_count
+                    except Exception:
+                        subjects = project.subjects_count
+                        scans = project.scans_count
+
                 return StudyOverview(
                     project_id=project.id,
                     study_id=project.study_id,
                     study_name=project.name,
                     modality=project.modality,
                     sequences=project.sequences,
-                    subjects=project.subjects_count,
-                    scans=project.scans_count,
+                    subjects=subjects,
+                    scans=scans,
                     total_size=project.total_size,
                     date=project.created_date,
+                    dicom_subjects=dicom_subjects,
+                    dicom_series=dicom_series,
+                    dicom_files=dicom_files,
                 )
         return None
 
@@ -661,12 +744,38 @@ class SQLiteDesktopStore:
             return None
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT health_status FROM dataset_health WHERE project_id = ?", (project_id,)).fetchone()
+
+        subjects = project.subjects_count
+        scans = project.scans_count
+        dicom_subjects = 0
+        dicom_series = 0
+        dicom_files = 0
+        if project.metadata:
+            try:
+                from src.backend.app.services.data_readiness import build_data_readiness
+                dr = build_data_readiness(project_id)
+                if dr.image_source_count > 0:
+                    subjects = dr.subject_count
+                    scans = dr.image_source_count
+                elif dr.dicom_file_count > 0 or dr.dicom_series_count > 0:
+                    subjects = 0
+                    scans = 0
+                    dicom_subjects = dr.subject_count
+                    dicom_series = dr.dicom_series_count
+                    dicom_files = dr.dicom_file_count
+            except Exception:
+                subjects = project.subjects_count
+                scans = project.scans_count
+
         return DatasetSummary(
             project_id=project.id,
-            subjects=project.subjects_count,
-            scans=project.scans_count,
+            subjects=subjects,
+            scans=scans,
             total_size=project.total_size,
             health_status=row["health_status"] if row else "Unknown",
+            dicom_subjects=dicom_subjects,
+            dicom_series=dicom_series,
+            dicom_files=dicom_files,
         )
 
     def get_model_status(self, project_id: str) -> ModelStatus | None:

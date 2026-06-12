@@ -3,6 +3,13 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.backend.app.api.middleware import (
+    APIVersionMiddleware,
+    RateLimitMiddleware,
+    RequestIDMiddleware,
+    RequestLoggingMiddleware,
+    register_exception_handlers,
+)
 from src.backend.app.api.routes import router
 # Domain-specific routers (extracted from routes.py — activate once old
 # endpoints are removed from routes.py to avoid route conflicts):
@@ -23,15 +30,19 @@ from src.backend.app.api.tool_catalog_routes import router as tool_catalog_route
 from src.backend.app.api.preset_routes import router as preset_router
 from src.backend.app.api.project_routes import router as project_router
 from src.backend.app.api.project_history_routes import router as project_history_router
+from src.backend.app.core.logging_config import setup_logging
 from src.backend.app.version import API_DESCRIPTION, API_TITLE, APP_VERSION
 
 
 def create_app() -> FastAPI:
+    setup_logging()
     app = FastAPI(
         title=API_TITLE,
         version=APP_VERSION,
         description=API_DESCRIPTION,
     )
+
+    register_exception_handlers(app)
 
     app.add_middleware(
         CORSMiddleware,
@@ -45,6 +56,10 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(APIVersionMiddleware)
 
     app.include_router(router)
     app.include_router(dashboard_router)

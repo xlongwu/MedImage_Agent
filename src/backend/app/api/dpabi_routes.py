@@ -9,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api._shared import (
     _load_project_config,
     _read_json_if_exists,
@@ -73,7 +74,7 @@ def api_dpabi_capability(payload: DpabiCapabilityRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/scaffold")
@@ -91,7 +92,7 @@ def api_dpabi_scaffold(payload: DpabiCapabilityRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/input-manifest")
@@ -105,7 +106,7 @@ def api_dpabi_input_manifest(payload: DpabiPreflightRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/preflight")
@@ -125,7 +126,7 @@ def api_dpabi_preflight(payload: DpabiPreflightRequest) -> dict[str, Any]:
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/run-plan")
@@ -141,7 +142,7 @@ def api_dpabi_run_plan(request: DpabiRunPlanRequest) -> dict[str, Any]:
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/sandbox-smoke")
@@ -159,7 +160,7 @@ def api_dpabi_sandbox_smoke(request: DpabiSandboxSmokeRequest) -> dict[str, Any]
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/subject-smooth")
@@ -181,7 +182,7 @@ def api_dpabi_subject_smooth(request: DpabiSubjectSmoothRequest) -> dict[str, An
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/subject-wrapper-report")
@@ -194,7 +195,7 @@ def api_dpabi_subject_wrapper_report(request: DpabiSubjectWrapperReportRequest) 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/signature-probe")
@@ -210,7 +211,7 @@ def api_dpabi_signature_probe(request: DpabiSignatureProbeRequest) -> dict[str, 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/wrapper-contracts")
@@ -224,7 +225,7 @@ def api_dpabi_wrapper_contracts(request: DpabiSignatureProbeRequest) -> dict[str
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/single-function-sandbox")
@@ -243,7 +244,7 @@ def api_dpabi_single_function_sandbox(request: DpabiSingleFunctionRequest) -> di
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/wrapper-validation-matrix")
@@ -260,7 +261,7 @@ def api_dpabi_wrapper_validation_matrix(request: DpabiWrapperValidationRequest) 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/template-library")
@@ -277,7 +278,7 @@ def api_dpabi_template_library(request: DpabiWrapperValidationRequest) -> dict[s
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/dpabi/templates")
@@ -286,7 +287,7 @@ def api_dpabi_list_templates(work_dir: str = "./work") -> dict[str, Any]:
         result = list_dpabi_templates(work_dir=work_dir)
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/template-instantiate")
@@ -303,7 +304,7 @@ def api_dpabi_template_instantiate(request: DpabiTemplateInstantiateRequest) -> 
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/dpabi/template-execute")
@@ -318,7 +319,7 @@ def api_dpabi_template_execute(request: DpabiTemplateExecuteRequest) -> dict[str
         )
         return result
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.get("/api/dpabi/template-wizard/options")

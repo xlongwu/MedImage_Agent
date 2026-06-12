@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.models import (
     PlannerDraftRequest,
     PlannerExecuteRequest,
@@ -24,7 +25,7 @@ def api_planner_draft(request: PlannerDraftRequest) -> dict[str, Any]:
     try:
         return draft_pipeline_plan(request.model_dump())
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
 
 
 @router.post("/api/planner/validate")
@@ -32,7 +33,7 @@ def api_planner_validate(request: PlannerValidateRequest) -> dict[str, Any]:
     try:
         result = validate_pipeline_plan(request.model_dump())
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
     if not result.get("ok"):
         raise HTTPException(status_code=400, detail=result)
     return result
@@ -43,7 +44,7 @@ def api_planner_execute(request: PlannerExecuteRequest) -> dict[str, Any]:
     try:
         result = execute_pipeline_plan(request.model_dump())
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise_api_error(exc)
     if result.get("status") == "APPROVAL_REQUIRED":
         raise HTTPException(status_code=403, detail=result)
     if not result.get("ok"):

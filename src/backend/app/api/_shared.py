@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import HTTPException
+from src.backend.app.core.exceptions import ConfigError
 
 
 def _read_json_if_exists(path: str | Path) -> dict[str, Any] | None:
@@ -36,8 +36,8 @@ def _load_project_config(path: str) -> dict[str, Any]:
     import yaml
     p = Path(path)
     if not p.exists():
-        raise HTTPException(status_code=400, detail=f"Project config not found: {path}")
+        raise ConfigError(f"Project config not found: {path}")
     try:
         return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Failed to parse project config: {exc}")
+        raise ConfigError(f"Failed to parse project config: {exc}") from exc

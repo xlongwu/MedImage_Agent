@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from src.backend.app.core.exceptions import StateStoreError
+from src.backend.app.runtime.atomic_file import atomic_write_json
+
+
+STATE_SCHEMA_VERSION = "state-store-v1"
 
 
 def now_iso() -> str:
@@ -12,6 +17,16 @@ def now_iso() -> str:
 
 def determine_status_from_result(result: dict[str, Any]) -> str:
     return "SUCCESS" if result.get("ok") else "FAILED"
+
+
+def _write_state_json(path: Path, data: dict[str, Any]) -> Path:
+    try:
+        return atomic_write_json(path, data, schema_version=STATE_SCHEMA_VERSION)
+    except Exception as exc:
+        raise StateStoreError(
+            "Failed to write runtime state file.",
+            details={"path": str(path)},
+        ) from exc
 
 
 def write_node_state(
@@ -49,8 +64,7 @@ def write_node_state(
     }
 
     state_path = state_dir / f"{node_id}.json"
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    return state_path
+    return _write_state_json(state_path, state)
 
 
 def write_pipeline_summary(
@@ -92,5 +106,4 @@ def write_pipeline_summary(
         summary["scheduler"] = scheduler
 
     summary_path = summary_dir / "summary.json"
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    return summary_path
+    return _write_state_json(summary_path, summary)

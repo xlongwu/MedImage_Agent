@@ -9,6 +9,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
+from src.backend.app.api._errors import raise_api_error
+from src.backend.app.core.exceptions import StateStoreError
+
 router = APIRouter()
 
 AUDIT_RECORD_DIR = Path("outputs/reports/audit_records")
@@ -67,6 +70,10 @@ def api_get_audit_record(audit_id: str) -> dict[str, Any]:
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to read audit record: {exc}")
+        raise_api_error(
+            exc,
+            error_cls=StateStoreError,
+            message=f"Failed to read audit record: {exc}",
+        )
 
     return {"ok": True, "record": data}
