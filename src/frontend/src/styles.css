@@ -572,6 +572,14 @@ button:disabled {
   font-size: 14px;
 }
 
+.project-hero-panel .project-state-sentence {
+  margin-bottom: 20px;
+}
+
+.panel-kicker-spaced {
+  margin-top: 10px;
+}
+
 .readiness-status-strip {
   display: grid;
   grid-template-columns: repeat(6, minmax(110px, 1fr));
@@ -620,6 +628,11 @@ button:disabled {
   color: var(--blue);
 }
 
+.workflow-tabs button:focus-visible {
+  outline: 3px solid rgba(10, 132, 255, 0.32);
+  outline-offset: 2px;
+}
+
 .workflow-tabs small {
   min-width: 0;
   overflow: hidden;
@@ -633,6 +646,28 @@ button:disabled {
 .workflow-workspace {
   min-width: 0;
   padding: 16px;
+}
+
+.workspace-suspense-fallback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 96px;
+  padding: 18px;
+  border: 1px dashed rgba(137, 150, 171, 0.32);
+  border-radius: var(--radius);
+  background: rgba(248, 250, 253, 0.82);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.loading-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--blue);
+  box-shadow: 0 0 0 6px rgba(10, 132, 255, 0.12);
 }
 
 .workspace-stack {
@@ -699,6 +734,21 @@ button:disabled {
   font-size: 13px;
 }
 
+.workspace-mode-note {
+  padding: 12px;
+  border: 1px solid rgba(10, 132, 255, 0.18);
+  border-radius: var(--radius);
+  background: rgba(239, 246, 255, 0.82);
+  color: #1557a5;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.workspace-mode-note-spaced {
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
 .workspace-panel-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -748,6 +798,47 @@ button:disabled {
   display: grid;
   gap: 12px;
   padding: 16px;
+}
+
+.compact-task-log-tight {
+  padding: 10px 16px;
+}
+
+.activity-details {
+  width: 100%;
+}
+
+.activity-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.activity-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.activity-summary-title h2 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.activity-summary-title small {
+  color: #667085;
+}
+
+.activity-body {
+  margin-top: 10px;
+}
+
+.compact-retry-button {
+  min-height: 24px;
+  padding: 2px 6px;
+  font-size: 10px;
 }
 
 .compact-task-list {
@@ -818,6 +909,11 @@ button:disabled {
   transform: translateY(-2px);
 }
 
+.drawer-toggle-icon {
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .vertical-text {
   writing-mode: vertical-lr;
   text-transform: uppercase;
@@ -859,6 +955,19 @@ button:disabled {
   font-weight: 750;
 }
 
+.drawer-summary,
+.drawer-section-summary {
+  cursor: pointer;
+}
+
+.drawer-summary-action {
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .secondary-tools-stack {
   display: grid;
   gap: 12px;
@@ -872,6 +981,18 @@ button:disabled {
 
 .quick-grid.compact {
   grid-template-columns: 1fr;
+}
+
+.drawer-planning-actions {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.drawer-planning-button {
+  min-height: 34px;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .project-command-center,
@@ -2331,6 +2452,19 @@ button:disabled {
   border: 1px dashed var(--border);
 }
 
+.section-spacer {
+  margin-block: 10px;
+}
+
+.tech-details-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #667085;
+  cursor: pointer;
+  font-size: 11px;
+}
+
 .codeBlock,
 .textViewer {
   background: #111827;
@@ -2452,6 +2586,63 @@ button:disabled {
   border-bottom: 1px solid var(--border);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  .nav-item,
+  .scan-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 12pt;
+  }
+
+  .topbar,
+  .side-rail,
+  .secondary-tools-drawer,
+  .viewer-tools,
+  .viewer-dock,
+  .scan-thumbs {
+    display: none !important;
+  }
+
+  .windows-workstation,
+  .dashboard-frame,
+  .workflow-main,
+  .workflow-workspace,
+  .workspace-grid {
+    display: block;
+    width: 100%;
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .viewer-card,
+  .task-detail-panel,
+  .compact-task-log,
+  .workspace-panel-grid > div {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}
+
 @media (max-width: 1320px) {
   .dashboard-frame {
     grid-template-columns: 220px minmax(0, 1fr);
@@ -2532,6 +2723,132 @@ button:disabled {
   }
 }
 
+.gap-6 {
+  gap: 6px;
+}
+
+.gap-8 {
+  gap: 8px;
+}
+
+.gap-10 {
+  gap: 10px;
+}
+
+.gap-12 {
+  gap: 12px;
+}
+
+.gap-14 {
+  gap: 14px;
+}
+
+.gap-16 {
+  gap: 16px;
+}
+
+.flex-row {
+  display: flex;
+  align-items: center;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-wrap {
+  flex-wrap: wrap;
+}
+
+.flex-1 {
+  flex: 1;
+  min-width: 0;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.grid-auto-120 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.grid-auto-160 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.grid-auto-240 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: white;
+}
+
+.card-muted {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.mb-8 {
+  margin-bottom: 8px;
+}
+
+.mb-12 {
+  margin-bottom: 12px;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+.mt-8 {
+  margin-top: 8px;
+}
+
+.mt-12 {
+  margin-top: 12px;
+}
+
+.p-12 {
+  padding: 12px;
+}
+
+.p-16 {
+  padding: 16px;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-danger {
+  color: #c62828;
+}
+
+.text-success {
+  color: #176b3b;
+}
+
+.mono-text {
+  font-family: "Cascadia Mono", "Consolas", monospace;
+}
+
+.scroll-x {
+  overflow-x: auto;
+}
+
 @media (max-width: 760px) {
   .workspace-grid {
     grid-template-columns: 1fr;
@@ -2555,7 +2872,7 @@ button:disabled {
   }
 
   .viewer-card {
-    min-height: 360px;
+    min-height: clamp(280px, 62vw, 360px);
   }
 
   .scan-thumbs {

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE } from "../../api";
+import { DEFAULT_API_BASE, inspectRealDataInventory } from "../../lib/api";
+import type { InventoryResult } from "../../lib/api";
 import type { WorkflowState, WorkflowAction } from "../../state/workflowTypes";
 
 interface Props {
@@ -7,12 +8,19 @@ interface Props {
   dispatch: React.Dispatch<WorkflowAction>;
 }
 
+type SelectableDataSource = "demo" | "directory";
+
+const sourceOptions: Array<{ key: SelectableDataSource; label: string; desc: string }> = [
+  { key: "demo", label: "Use Demo Data", desc: "Synthetic BIDS dataset, no MATLAB required" },
+  { key: "directory", label: "Local Directory", desc: "Path to BIDS / DICOM / NIfTI data on server" },
+];
+
 export function DataUploadStep({ state, dispatch }: Props) {
   const [pathInput, setPathInput] = useState(state.datasetPath || "");
   const [inspecting, setInspecting] = useState(false);
-  const [inspectResult, setInspectResult] = useState<any>(null);
+  const [inspectResult, setInspectResult] = useState<InventoryResult | null>(null);
 
-  const selectSource = (sourceType: "upload" | "directory" | "demo") => {
+  const selectSource = (sourceType: SelectableDataSource) => {
     if (sourceType === "demo") {
       dispatch({ type: "SET_DATA_SOURCE", sourceType: "demo", path: "examples/synthetic_bids/rawdata" });
     } else {
@@ -24,14 +32,9 @@ export function DataUploadStep({ state, dispatch }: Props) {
     setInspecting(true);
     try {
       const path = state.dataSource === "demo" ? "examples/synthetic_bids/rawdata" : state.datasetPath;
-      const res = await fetch(`${DEFAULT_API_BASE}/api/real-data/inventory`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rawdata_path: path }),
-      });
-      setInspectResult(await res.json());
-    } catch (e: any) {
-      setInspectResult({ error: e.message });
+      setInspectResult(await inspectRealDataInventory(DEFAULT_API_BASE, path));
+    } catch (error) {
+      setInspectResult({ error: error instanceof Error ? error.message : String(error) });
     }
     setInspecting(false);
   };
@@ -41,13 +44,10 @@ export function DataUploadStep({ state, dispatch }: Props) {
       <h2>Step 1: Select Data Source</h2>
 
       <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-        {[
-          { key: "demo", label: "Use Demo Data", desc: "Synthetic BIDS dataset, no MATLAB required" },
-          { key: "directory", label: "Local Directory", desc: "Path to BIDS / DICOM / NIfTI data on server" },
-        ].map((opt) => (
+        {sourceOptions.map((opt) => (
           <div
             key={opt.key}
-            onClick={() => selectSource(opt.key as any)}
+            onClick={() => selectSource(opt.key)}
             style={{
               flex: 1, padding: 20, borderRadius: 8, cursor: "pointer", border: "2px solid",
               borderColor: state.dataSource === opt.key ? "#1976d2" : "#e0e0e0",

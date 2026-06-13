@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectBidsValidation } from "../api";
+import { DEFAULT_API_BASE, getProjectBidsValidation } from "../lib/api/legacy";
 import type { BidsValidationIssue, BidsRepairSuggestion, BidsValidationResponse } from "../types";
 import { ActionList, CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 

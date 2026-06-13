@@ -7,7 +7,7 @@ import {
   getImageValidationReport,
   getLatestImportDiagnosticsPackage,
   verifyImportDiagnosticsPackage
-} from "../api";
+} from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { TextViewer } from "./TextViewer";
 

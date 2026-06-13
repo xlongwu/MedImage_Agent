@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getProjectRunStateTimeline } from "../../api";
+import { getProjectRunStateTimeline } from "../../lib/api/legacy";
 import type { ProjectRunStateTimelineResponse } from "../../types";
 import { statusPillStyle, subtitleStyle } from "./pathActions";
 

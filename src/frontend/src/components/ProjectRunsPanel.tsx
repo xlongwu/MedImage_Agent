@@ -4,7 +4,7 @@ import {
   getProjectRunArtifact,
   listProjectRunArtifacts,
   listProjectRuns,
-} from "../api";
+} from "../lib/api/legacy";
 import type {
   RunArtifactPreviewResponse,
   RunArtifactRecord,

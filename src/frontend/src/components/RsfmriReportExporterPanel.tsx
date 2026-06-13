@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getLatestRsfmriReportExport, listRsfmriReportExports, runRsfmriReportExport } from "../api";
+import { getLatestRsfmriReportExport, listRsfmriReportExports, runRsfmriReportExport } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock"; import { StatusBadge } from "./StatusBadge"; import { TextViewer } from "./TextViewer";
 type Props = { baseUrl: string };
 export function RsfmriReportExporterPanel({ baseUrl }: Props) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectNiftiQcSnapshot, getProjectNiftiThumbnail } from "../api";
+import { DEFAULT_API_BASE, getProjectNiftiQcSnapshot, getProjectNiftiThumbnail } from "../lib/api/legacy";
 import type { NiftiQcSnapshotResponse } from "../types";
 import { ActionList, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 

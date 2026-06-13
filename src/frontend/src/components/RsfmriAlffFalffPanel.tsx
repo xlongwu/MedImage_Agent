@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getRsfmriAlffFalff, runRsfmriAlffFalff } from "../api";
+import { getRsfmriAlffFalff, runRsfmriAlffFalff } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock"; import { StatusBadge } from "./StatusBadge"; import { TextViewer } from "./TextViewer";
 
 type Props = { baseUrl: string };

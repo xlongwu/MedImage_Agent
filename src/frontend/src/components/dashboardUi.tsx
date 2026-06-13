@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 export type DashboardStatus = "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown";
 
@@ -74,7 +74,7 @@ export function statusFromBackend(status?: string | null): DashboardStatus {
   return "unknown";
 }
 
-export function StatusPill({
+export const StatusPill = memo(function StatusPill({
   status,
   children,
 }: {
@@ -83,7 +83,7 @@ export function StatusPill({
 }) {
   const resolved = statusFromBackend(status);
   return <span className={`apple-status-pill ${statusClass[resolved]}`}>{children ?? statusLabel(resolved)}</span>;
-}
+});
 
 export function statusLabel(status: DashboardStatus): string {
   if (status === "not_applicable") return "Not applicable";
@@ -91,7 +91,7 @@ export function statusLabel(status: DashboardStatus): string {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-export function MetricTile({
+export const MetricTile = memo(function MetricTile({
   label,
   value,
   tone = "neutral",
@@ -108,9 +108,9 @@ export function MetricTile({
       <strong className={mono ? "mono-value" : undefined}>{value}</strong>
     </div>
   );
-}
+});
 
-export function SafetyBanner({
+export const SafetyBanner = memo(function SafetyBanner({
   tone = "info",
   children,
 }: {
@@ -118,9 +118,9 @@ export function SafetyBanner({
   children: ReactNode;
 }) {
   return <div className={`apple-safety-banner tone-${tone}`}>{children}</div>;
-}
+});
 
-export function CollapsibleDetails({
+export const CollapsibleDetails = memo(function CollapsibleDetails({
   title,
   summary,
   children,
@@ -140,9 +140,9 @@ export function CollapsibleDetails({
       <div className="apple-collapsible-body">{children}</div>
     </details>
   );
-}
+});
 
-export function ActionList({
+export const ActionList = memo(function ActionList({
   actions,
   rawDicom = false,
   maxVisible = 3,
@@ -177,7 +177,7 @@ export function ActionList({
       ) : null}
     </div>
   );
-}
+});
 
 export const appleCardStyle: CSSProperties = {
   padding: 18,

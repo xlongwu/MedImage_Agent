@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectDataReadiness } from "../api";
+import { DEFAULT_API_BASE, getProjectDataReadiness } from "../lib/api/legacy";
 import type { DataReadinessCheck, DataReadinessResponse } from "../types";
 import { ActionList, CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 

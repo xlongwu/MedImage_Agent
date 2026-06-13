@@ -5,7 +5,12 @@ import {
   compareExperimentRuns,
   getExperimentRecord,
   getExperimentComparison,
-} from "../api";
+} from "../lib/api/legacy";
+import styles from "./ExperimentTrackingDashboard.module.css";
+
+function cssVars(vars: Record<string, string>): React.CSSProperties {
+  return vars as React.CSSProperties;
+}
 
 interface RunItem {
   run_id?: string;
@@ -205,31 +210,31 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
   };
 
   return (
-    <div style={{ padding: 16, borderTop: "2px solid #9c27b0", marginTop: 24 }}>
+    <div className={styles.style001}>
       <h2>Experiment Tracking Dashboard</h2>
 
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.style002}>
         <button
           onClick={handleLoadRunIndex}
           disabled={loadingIndex}
-          style={{ marginRight: 8 }}
+          className={styles.style003}
         >
           {loadingIndex ? "Loading..." : "Refresh Run Index"}
         </button>
-        <button onClick={handleSelectAll} style={{ marginRight: 8 }}>
+        <button onClick={handleSelectAll} className={styles.style004}>
           Select All
         </button>
         <button onClick={handleDeselectAll}>Deselect All</button>
       </div>
 
       {runIndex && (
-        <div style={{ marginBottom: 24 }}>
+        <div className={styles.style005}>
           <h3>Run Index ({runIndex.runs_total || 0} runs)</h3>
 
           {runIndex.artifacts && runIndex.artifacts.length > 0 && (
-            <div style={{ marginBottom: 16, padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
+            <div className={styles.style006}>
               <h4>Report Artifacts</h4>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className={styles.style007}>
                 {runIndex.artifacts.map((artifact, idx) => (
                   <span
                     key={idx}
@@ -247,85 +252,75 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
             </div>
           )}
 
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <div className={styles.style008}>
+            <table className={styles.style009}>
               <thead>
-                <tr style={{ background: "#f5f5f5" }}>
-                  <th style={{ padding: 8, textAlign: "left" }}>Select</th>
-                  <th style={{ padding: 8, textAlign: "left" }}>Run ID</th>
-                  <th style={{ padding: 8, textAlign: "left" }}>Type</th>
-                  <th style={{ padding: 8, textAlign: "left" }}>Pipeline</th>
-                  <th style={{ padding: 8, textAlign: "left" }}>Status</th>
-                  <th style={{ padding: 8, textAlign: "right" }}>Duration</th>
-                  <th style={{ padding: 8, textAlign: "left" }}>Scheduler</th>
-                  <th style={{ padding: 8, textAlign: "center" }}>Nodes</th>
-                  <th style={{ padding: 8, textAlign: "center" }}>Outputs</th>
-                  <th style={{ padding: 8, textAlign: "center" }}>⚠️</th>
-                  <th style={{ padding: 8, textAlign: "center" }}>❌</th>
+                <tr className={styles.style010}>
+                  <th className={styles.style011}>Select</th>
+                  <th className={styles.style012}>Run ID</th>
+                  <th className={styles.style013}>Type</th>
+                  <th className={styles.style014}>Pipeline</th>
+                  <th className={styles.style015}>Status</th>
+                  <th className={styles.style016}>Duration</th>
+                  <th className={styles.style017}>Scheduler</th>
+                  <th className={styles.style018}>Nodes</th>
+                  <th className={styles.style019}>Outputs</th>
+                  <th className={styles.style020}>⚠️</th>
+                  <th className={styles.style021}>❌</th>
                 </tr>
               </thead>
               <tbody>
                 {runIndex.runs?.map((run, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
-                    <td style={{ padding: 8 }}>
+                  <tr key={idx} className={styles.style022}>
+                    <td className={styles.style023}>
                       <input
                         type="checkbox"
                         checked={selectedRunIds.includes(run.run_id || "")}
                         onChange={() => handleToggleRunSelection(run.run_id || "")}
                       />
                     </td>
-                    <td style={{ padding: 8, fontFamily: "monospace", fontSize: 12 }}>
+                    <td className={styles.style024}>
                       {run.run_id}
                     </td>
-                    <td style={{ padding: 8 }}>
+                    <td className={styles.style025}>
                       <span
-                        style={{
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          background: "#e3f2fd",
-                          fontSize: 11,
-                        }}
+                        className={styles.style026}
                       >
                         {run.run_type}
                       </span>
                     </td>
-                    <td style={{ padding: 8, fontSize: 12 }}>{run.pipeline_id}</td>
-                    <td style={{ padding: 8 }}>
+                    <td className={styles.style027}>{run.pipeline_id}</td>
+                    <td className={styles.style028}>
                       <span
-                        style={{
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          background: getStatusColor(run.status),
-                          color: "white",
-                          fontSize: 11,
-                        }}
+                        className={styles.style029}
+                        style={cssVars({ "--status-bg": getStatusColor(run.status) })}
                       >
                         {run.status}
                       </span>
                     </td>
-                    <td style={{ padding: 8, textAlign: "right" }}>
+                    <td className={styles.style030}>
                       {formatDuration(run.duration_seconds)}
                     </td>
-                    <td style={{ padding: 8, fontSize: 12 }}>
+                    <td className={styles.style031}>
                       {run.scheduler_mode} ({run.max_workers}/{run.matlab_max_workers})
                     </td>
-                    <td style={{ padding: 8, textAlign: "center" }}>
+                    <td className={styles.style032}>
                       {run.nodes_success}/{run.nodes_total}
                       {run.nodes_failed ? (
-                        <span style={{ color: "red" }}> ({run.nodes_failed} failed)</span>
+                        <span className={styles.style033}> ({run.nodes_failed} failed)</span>
                       ) : null}
                     </td>
-                    <td style={{ padding: 8, textAlign: "center" }}>{run.outputs_count}</td>
-                    <td style={{ padding: 8, textAlign: "center" }}>
+                    <td className={styles.style034}>{run.outputs_count}</td>
+                    <td className={styles.style035}>
                       {run.warnings_count ? (
-                        <span style={{ color: "orange" }}>{run.warnings_count}</span>
+                        <span className={styles.style036}>{run.warnings_count}</span>
                       ) : (
                         "0"
                       )}
                     </td>
-                    <td style={{ padding: 8, textAlign: "center" }}>
+                    <td className={styles.style037}>
                       {run.errors_count ? (
-                        <span style={{ color: "red" }}>{run.errors_count}</span>
+                        <span className={styles.style038}>{run.errors_count}</span>
                       ) : (
                         "0"
                       )}
@@ -338,13 +333,13 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
         </div>
       )}
 
-      <div style={{ marginBottom: 24, padding: 16, background: "#f5f5f5", borderRadius: 4 }}>
+      <div className={styles.style039}>
         <h3>Create Experiment Record</h3>
-        <p style={{ fontSize: 14, color: "#666" }}>
+        <p className={styles.style040}>
           Selected runs: {selectedRunIds.length}
         </p>
 
-        <label style={{ display: "block", marginBottom: 8 }}>
+        <label className={styles.style041}>
           Experiment ID:
           <input
             type="text"
@@ -354,7 +349,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
           />
         </label>
 
-        <label style={{ display: "block", marginBottom: 8 }}>
+        <label className={styles.style042}>
           Name:
           <input
             type="text"
@@ -364,7 +359,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
           />
         </label>
 
-        <label style={{ display: "block", marginBottom: 8 }}>
+        <label className={styles.style043}>
           Tags (comma-separated):
           <input
             type="text"
@@ -375,7 +370,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
           />
         </label>
 
-        <label style={{ display: "block", marginBottom: 8 }}>
+        <label className={styles.style044}>
           Notes:
           <textarea
             value={notes}
@@ -384,18 +379,18 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
           />
         </label>
 
-        <div style={{ marginTop: 12 }}>
+        <div className={styles.style045}>
           <button
             onClick={handleCreateExperiment}
             disabled={loadingCreate || selectedRunIds.length === 0}
-            style={{ backgroundColor: "#4caf50", color: "white", marginRight: 8 }}
+            className={styles.style046}
           >
             {loadingCreate ? "Creating..." : "Create Experiment Record"}
           </button>
           <button
             onClick={handleCompareRuns}
             disabled={loadingCompare}
-            style={{ backgroundColor: "#2196f3", color: "white" }}
+            className={styles.style047}
           >
             {loadingCompare ? "Comparing..." : "Compare Runs"}
           </button>
@@ -403,20 +398,20 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
       </div>
 
       {error && (
-        <div style={{ color: "red", marginBottom: 16, padding: 12, background: "#ffebee", borderRadius: 4 }}>
+        <div className={styles.style048}>
           <strong>Error:</strong> {error}
         </div>
       )}
 
       {experimentRecord && (
-        <div style={{ marginBottom: 24, padding: 12, background: "#e8f5e9", borderRadius: 4 }}>
+        <div className={styles.style049}>
           <h3>Experiment Record Created</h3>
           <p><strong>Experiment ID:</strong> {experimentRecord.experiment_id}</p>
           <p><strong>Name:</strong> {experimentRecord.name}</p>
           <p><strong>Runs:</strong> {experimentRecord.run_ids?.length || 0}</p>
           <p><strong>Tags:</strong> {experimentRecord.tags?.join(", ") || "None"}</p>
           {experimentRecord.missing_run_ids && experimentRecord.missing_run_ids.length > 0 && (
-            <p style={{ color: "orange" }}>
+            <p className={styles.style050}>
               <strong>Missing runs:</strong> {experimentRecord.missing_run_ids.join(", ")}
             </p>
           )}
@@ -424,73 +419,68 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
       )}
 
       {comparisonResult && (
-        <div style={{ marginBottom: 24, padding: 12, background: "#e3f2fd", borderRadius: 4 }}>
+        <div className={styles.style051}>
           <h3>Comparison Result</h3>
           <p><strong>Experiment ID:</strong> {comparisonResult.experiment_id}</p>
           <p><strong>Runs compared:</strong> {comparisonResult.runs_compared}</p>
 
           {comparisonResult.missing_run_ids && comparisonResult.missing_run_ids.length > 0 && (
-            <p style={{ color: "orange" }}>
+            <p className={styles.style052}>
               <strong>Missing runs:</strong> {comparisonResult.missing_run_ids.join(", ")}
             </p>
           )}
 
           {comparisonResult.rows && comparisonResult.rows.length > 0 && (
-            <div style={{ overflowX: "auto", marginTop: 16 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div className={styles.style053}>
+              <table className={styles.style054}>
                 <thead>
-                  <tr style={{ background: "#bbdefb" }}>
-                    <th style={{ padding: 8, textAlign: "left" }}>Run ID</th>
-                    <th style={{ padding: 8, textAlign: "left" }}>Type</th>
-                    <th style={{ padding: 8, textAlign: "left" }}>Pipeline</th>
-                    <th style={{ padding: 8, textAlign: "left" }}>Status</th>
-                    <th style={{ padding: 8, textAlign: "right" }}>Duration</th>
-                    <th style={{ padding: 8, textAlign: "left" }}>Scheduler</th>
-                    <th style={{ padding: 8, textAlign: "center" }}>Nodes OK/Total</th>
-                    <th style={{ padding: 8, textAlign: "center" }}>Errors</th>
-                    <th style={{ padding: 8, textAlign: "center" }}>Warnings</th>
+                  <tr className={styles.style055}>
+                    <th className={styles.style056}>Run ID</th>
+                    <th className={styles.style057}>Type</th>
+                    <th className={styles.style058}>Pipeline</th>
+                    <th className={styles.style059}>Status</th>
+                    <th className={styles.style060}>Duration</th>
+                    <th className={styles.style061}>Scheduler</th>
+                    <th className={styles.style062}>Nodes OK/Total</th>
+                    <th className={styles.style063}>Errors</th>
+                    <th className={styles.style064}>Warnings</th>
                   </tr>
                 </thead>
                 <tbody>
                   {comparisonResult.rows.map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom: "1px solid #90caf9" }}>
-                      <td style={{ padding: 8, fontFamily: "monospace", fontSize: 11 }}>
+                    <tr key={idx} className={styles.style065}>
+                      <td className={styles.style066}>
                         {row.run_id}
                       </td>
-                      <td style={{ padding: 8 }}>{row.run_type}</td>
-                      <td style={{ padding: 8 }}>{row.pipeline_id}</td>
-                      <td style={{ padding: 8 }}>
+                      <td className={styles.style067}>{row.run_type}</td>
+                      <td className={styles.style068}>{row.pipeline_id}</td>
+                      <td className={styles.style069}>
                         <span
-                          style={{
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            background: getStatusColor(row.status),
-                            color: "white",
-                            fontSize: 11,
-                          }}
+                          className={styles.style070}
+                          style={cssVars({ "--status-bg": getStatusColor(row.status) })}
                         >
                           {row.status}
                         </span>
                       </td>
-                      <td style={{ padding: 8, textAlign: "right" }}>
+                      <td className={styles.style071}>
                         {formatDuration(row.duration_seconds)}
                       </td>
-                      <td style={{ padding: 8, fontSize: 12 }}>
+                      <td className={styles.style072}>
                         {row.scheduler_mode} ({row.max_workers}/{row.matlab_max_workers})
                       </td>
-                      <td style={{ padding: 8, textAlign: "center" }}>
+                      <td className={styles.style073}>
                         {row.nodes_success}/{row.nodes_total}
                       </td>
-                      <td style={{ padding: 8, textAlign: "center" }}>
+                      <td className={styles.style074}>
                         {row.errors_count ? (
-                          <span style={{ color: "red" }}>{row.errors_count}</span>
+                          <span className={styles.style075}>{row.errors_count}</span>
                         ) : (
                           "0"
                         )}
                       </td>
-                      <td style={{ padding: 8, textAlign: "center" }}>
+                      <td className={styles.style076}>
                         {row.warnings_count ? (
-                          <span style={{ color: "orange" }}>{row.warnings_count}</span>
+                          <span className={styles.style077}>{row.warnings_count}</span>
                         ) : (
                           "0"
                         )}

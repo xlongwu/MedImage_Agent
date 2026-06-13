@@ -1,72 +1,76 @@
-import React, { useEffect, useState } from 'react';
-import { getSessionRuns, postSessionIndex, querySessions } from '../api';
+import { useCallback, useEffect, useState } from 'react';
+import { getSessionRuns, postSessionIndex, querySessions } from '../lib/api/sessions';
+import type { SessionRunSummary, SessionSearchResult, SessionStats } from '../lib/api/sessions';
+import styles from './SessionMemoryBrowserPanel.module.css';
 
 interface Props {
   baseUrl: string;
 }
 
 export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
-  const [stats, setStats] = useState<any>(null);
-  const [runs, setRuns] = useState<any[]>([]);
+  const [stats, setStats] = useState<SessionStats | null>(null);
+  const [runs, setRuns] = useState<SessionRunSummary[]>([]);
   const [search, setSearch] = useState('');
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<SessionSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    loadRuns();
-  }, []);
-
-  async function loadRuns() {
+  const loadRuns = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getSessionRuns(baseUrl) as any;
-      setStats(res.stats);
+      const res = await getSessionRuns(baseUrl);
+      setStats(res.stats ?? null);
       setRuns(res.runs || []);
-    } catch (e) {
-      console.error('Failed to load runs', e);
+    } catch (error) {
+      console.error('Failed to load runs', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }
+  }, [baseUrl]);
+
+  useEffect(() => {
+    void loadRuns();
+  }, [loadRuns]);
 
   async function doIndex() {
     setLoading(true);
     try {
       await postSessionIndex(baseUrl);
       await loadRuns();
-    } catch (e) {
-      console.error('Failed to index', e);
+    } catch (error) {
+      console.error('Failed to index', error);
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   async function doSearch() {
     if (!search.trim()) return;
     setLoading(true);
     try {
-      const res = await querySessions(baseUrl, search) as any;
+      const res = await querySessions(baseUrl, search);
       setResults(res.results || []);
-    } catch (e) {
-      console.error('Search failed', e);
+    } catch (error) {
+      console.error('Search failed', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
-    <div className="session-memory-panel" style={{ padding: 16 }}>
+    <div className={styles.panel}>
       <h2>Session Memory Browser</h2>
 
       {stats && (
-        <div className="stats-bar" style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-          <span style={statBadge}>Runs: <strong>{stats.total_runs}</strong></span>
-          <span style={statBadge}>Success: <strong>{stats.success_runs}</strong></span>
-          <span style={statBadge}>Nodes: <strong>{stats.total_nodes}</strong></span>
-          <span style={statBadge}>Failed: <strong style={{ color: 'red' }}>{stats.failed_nodes}</strong></span>
-          <span style={statBadge}>Errors: <strong>{stats.total_errors}</strong></span>
+        <div className={styles.statsBar}>
+          <span className={styles.statBadge}>Runs: <strong>{stats.total_runs}</strong></span>
+          <span className={styles.statBadge}>Success: <strong>{stats.success_runs}</strong></span>
+          <span className={styles.statBadge}>Nodes: <strong>{stats.total_nodes}</strong></span>
+          <span className={styles.statBadge}>Failed: <strong className={styles.statDanger}>{stats.failed_nodes}</strong></span>
+          <span className={styles.statBadge}>Errors: <strong>{stats.total_errors}</strong></span>
         </div>
       )}
 
-      <div className="toolbar" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button onClick={doIndex} disabled={loading} style={btnStyle}>
+      <div className={styles.toolbar}>
+        <button onClick={doIndex} disabled={loading} className={styles.actionButton}>
           {loading ? 'Indexing...' : 'Index All Runs'}
         </button>
         <input
@@ -75,94 +79,57 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && doSearch()}
-          style={{ flex: 1, padding: '6px 12px', borderRadius: 4, border: '1px solid #ccc' }}
+          className={styles.searchInput}
         />
-        <button onClick={doSearch} disabled={loading || !search.trim()} style={btnStyle}>
+        <button onClick={doSearch} disabled={loading || !search.trim()} className={styles.actionButton}>
           Search
         </button>
       </div>
 
       {results.length > 0 && (
-        <div className="search-results" style={{ marginBottom: 16 }}>
+        <div className={styles.searchResults}>
           <h3>Search Results ({results.length})</h3>
-          {results.map((r: any, i: number) => (
-            <div key={i} className="result-item" style={resultItemStyle}>
+          {results.map((r: SessionSearchResult, i: number) => (
+            <div key={i} className={styles.resultItem}>
               <strong>[{r.record_type}]</strong> {r.title}
-              {r.snippet && <p dangerouslySetInnerHTML={{ __html: r.snippet }} />}
+              {r.snippet && <p className={styles.resultSnippet} dangerouslySetInnerHTML={{ __html: r.snippet }} />}
             </div>
           ))}
         </div>
       )}
 
       <h3>Recent Runs</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <table className={styles.runsTable}>
         <thead>
-          <tr style={{ background: '#f5f5f5' }}>
-            <th style={thStyle}>Run ID</th>
-            <th style={thStyle}>Pipeline</th>
-            <th style={thStyle}>Status</th>
-            <th style={thStyle}>Started</th>
-            <th style={thStyle}>Duration (s)</th>
+          <tr className={styles.tableHead}>
+            <th className={styles.headerCell}>Run ID</th>
+            <th className={styles.headerCell}>Pipeline</th>
+            <th className={styles.headerCell}>Status</th>
+            <th className={styles.headerCell}>Started</th>
+            <th className={styles.headerCell}>Duration (s)</th>
           </tr>
         </thead>
         <tbody>
-          {runs.map((r: any) => (
-            <tr key={r.run_id} style={{ borderBottom: '1px solid #eee', background: r.status === 'FAILED' ? '#fff0f0' : undefined }}>
-              <td style={tdStyle}>{r.run_id}</td>
-              <td style={tdStyle}>{r.pipeline_id}</td>
-              <td style={tdStyle}>
-                <span style={{ color: r.status === 'SUCCESS' ? 'green' : r.status === 'FAILED' ? 'red' : '#666' }}>
+          {runs.map((r: SessionRunSummary) => (
+            <tr key={r.run_id} className={`${styles.tableRow} ${r.status === 'FAILED' ? styles.failedRow : ''}`}>
+              <td className={styles.cell}>{r.run_id}</td>
+              <td className={styles.cell}>{r.pipeline_id}</td>
+              <td className={styles.cell}>
+                <span className={r.status === 'SUCCESS' ? styles.statusSuccess : r.status === 'FAILED' ? styles.statusFailed : styles.statusMuted}>
                   {r.status}
                 </span>
               </td>
-              <td style={tdStyle}>{r.started_at?.slice(0, 19)}</td>
-              <td style={tdStyle}>{r.duration_seconds?.toFixed(1)}</td>
+              <td className={styles.cell}>{r.started_at?.slice(0, 19)}</td>
+              <td className={styles.cell}>{r.duration_seconds?.toFixed(1)}</td>
             </tr>
           ))}
           {runs.length === 0 && (
-            <tr><td colSpan={5} style={{ ...tdStyle, textAlign: 'center', color: '#999' }}>No runs indexed yet. Click "Index All Runs" to scan existing data.</td></tr>
+            <tr><td colSpan={5} className={`${styles.cell} ${styles.emptyCell}`}>No runs indexed yet. Click "Index All Runs" to scan existing data.</td></tr>
           )}
         </tbody>
       </table>
 
-      {loading && <div style={{ textAlign: 'center', padding: 16, color: '#666' }}>Loading...</div>}
+      {loading && <div className={styles.loadingState}>Loading...</div>}
     </div>
   );
 }
-
-const statBadge: React.CSSProperties = {
-  padding: '4px 12px',
-  background: '#e3f2fd',
-  borderRadius: 16,
-  fontSize: 13,
-};
-
-const btnStyle: React.CSSProperties = {
-  padding: '6px 16px',
-  border: '1px solid #2196f3',
-  borderRadius: 4,
-  background: '#2196f3',
-  color: 'white',
-  cursor: 'pointer',
-  fontWeight: 500,
-};
-
-const thStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  textAlign: 'left',
-  fontWeight: 600,
-  borderBottom: '2px solid #ddd',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '6px 12px',
-  fontSize: 13,
-};
-
-const resultItemStyle: React.CSSProperties = {
-  padding: '8px 12px',
-  marginBottom: 4,
-  background: '#f9f9f9',
-  borderRadius: 4,
-  border: '1px solid #eee',
-};

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, generateRsfmriQcPlanningReport } from "../api";
+import { DEFAULT_API_BASE, generateRsfmriQcPlanningReport } from "../lib/api/legacy";
 import type { RsfmriQcPlanningReportResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };

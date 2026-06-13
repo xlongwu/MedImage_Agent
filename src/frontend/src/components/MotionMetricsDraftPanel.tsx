@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, generateMotionMetricsDraft } from "../api";
+import { DEFAULT_API_BASE, generateMotionMetricsDraft } from "../lib/api/legacy";
 import type { MotionMetricsDraftResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };

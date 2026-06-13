@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { inspectRun, listRuns, readLog } from "../api";
+import { inspectRun, listRuns, readLog } from "../lib/api/legacy";
 import type { NodeStateSummary, RunInspection } from "../types";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";

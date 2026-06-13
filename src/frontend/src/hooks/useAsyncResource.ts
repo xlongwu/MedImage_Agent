@@ -11,7 +11,7 @@ export interface AsyncResource<T> {
 }
 
 export function useAsyncResource<T>(
-  loader: () => Promise<T>,
+  loader: (() => Promise<T>) | null,
   fallback: T,
   deps: DependencyList
 ): AsyncResource<T> {
@@ -23,6 +23,12 @@ export function useAsyncResource<T>(
   const reload = useCallback(async (): Promise<T | null> => {
     setLoading(true);
     setError("");
+    if (!loader) {
+      setData(fallback);
+      setFromFallback(true);
+      setLoading(false);
+      return null;
+    }
     try {
       const next = await loader();
       setData(next);

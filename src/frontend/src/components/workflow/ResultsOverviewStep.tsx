@@ -1,37 +1,44 @@
 import React, { useEffect, useState } from "react";
-import { DEFAULT_API_BASE } from "../../api";
-import type { WorkflowState, WorkflowAction } from "../../state/workflowTypes";
+import { DEFAULT_API_BASE, getInsights, getLatestQuickstartDemo } from "../../lib/api";
+import type { InsightsDashboard } from "../../lib/api";
+import type { WorkflowAction, WorkflowRunResult, WorkflowState } from "../../state/workflowTypes";
 
 interface Props { state: WorkflowState; dispatch: React.Dispatch<WorkflowAction>; }
 
 export function ResultsOverviewStep({ state, dispatch }: Props) {
-  const [demoData, setDemoData] = useState<any>(null);
-  const [insights, setInsights] = useState<any>(null);
+  const [demoData, setDemoData] = useState<WorkflowRunResult | null>(null);
+  const [insights, setInsights] = useState<InsightsDashboard | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadResults();
+    void loadResults();
   }, []);
 
   const loadResults = async () => {
     setLoading(true);
     try {
       // Use workflow result if available, otherwise fallback to latest demo
-      const stored = (window as any).__workflowResult;
+      const stored = window.__workflowResult;
       if (stored) {
         setDemoData(stored);
       } else {
-        const demoRes = await fetch(`${DEFAULT_API_BASE}/api/quickstart-demo/latest`).then(r => r.ok ? r.json() : null);
-        setDemoData(demoRes);
+        try {
+          setDemoData(await getLatestQuickstartDemo(DEFAULT_API_BASE));
+        } catch {
+          setDemoData(null);
+        }
       }
-      const insRes = await fetch(`${DEFAULT_API_BASE}/api/insights`).then(r => r.ok ? r.json() : null);
-      setInsights(insRes);
+      try {
+        setInsights(await getInsights(DEFAULT_API_BASE));
+      } catch {
+        setInsights(null);
+      }
     } catch {}
     setLoading(false);
   };
 
   const steps = demoData?.steps || [];
-  const passed = steps.filter((s: any) => s.ok).length;
+  const passed = steps.filter((s) => s.ok).length;
 
   return (
     <div>
@@ -57,7 +64,7 @@ export function ResultsOverviewStep({ state, dispatch }: Props) {
                   <th style={th}>FC |r|</th><th style={th}>Shape</th><th style={th}>Time</th>
                 </tr></thead>
                 <tbody>
-                  {Object.entries(demoData.metrics).map(([sid, m]: any) => (
+                  {Object.entries(demoData.metrics).map(([sid, m]) => (
                     <tr key={sid} style={{ borderBottom: "1px solid #eee" }}>
                       <td style={td}>{sid}</td>
                       <td style={td}>{m.alff_mean}</td>
@@ -78,7 +85,7 @@ export function ResultsOverviewStep({ state, dispatch }: Props) {
               <th style={th}>Step</th><th style={th}>Status</th>
             </tr></thead>
             <tbody>
-              {steps.map((s: any, i: number) => (
+              {steps.map((s, i: number) => (
                 <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
                   <td style={td}>{s.step}</td>
                   <td style={{ ...td, color: s.ok ? "#4caf50" : "#f44336", fontWeight: 600 }}>{s.ok ? "PASS" : "FAIL"}</td>
@@ -89,7 +96,7 @@ export function ResultsOverviewStep({ state, dispatch }: Props) {
 
           {demoData.outputs && (
             <div style={{ marginTop: 12, padding: 8, background: "#e8f5e9", borderRadius: 4, fontSize: 12 }}>
-              <strong>Output directories:</strong> {Object.entries(demoData.outputs).map(([k, v]) => `${k}=${v}`).join(", ")}
+              <strong>Output directories:</strong> {Object.entries(demoData.outputs).map(([k, v]) => `${k}=${String(v)}`).join(", ")}
             </div>
           )}
         </div>

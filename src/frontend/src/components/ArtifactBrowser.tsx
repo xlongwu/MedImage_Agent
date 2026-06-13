@@ -3,7 +3,7 @@ import {
   getArtifacts,
   previewArtifact,
   refreshArtifacts
-} from "../api";
+} from "../lib/api/legacy";
 import { TextViewer } from "./TextViewer";
 
 type Props = {
@@ -20,6 +20,11 @@ type ArtifactRecord = {
   preview_supported: boolean;
   preview_type: string;
   run_id_guess?: string | null;
+};
+
+type ArtifactIndexMeta = {
+  artifacts_total?: number | string;
+  generated_at?: string;
 };
 
 function asArtifacts(payload: Record<string, unknown> | null): ArtifactRecord[] {
@@ -107,7 +112,7 @@ export function ArtifactBrowser({ baseUrl }: Props) {
     });
   }, [allArtifacts, categoryFilter, extensionFilter, search]);
 
-  const indexMeta = payload?.index as Record<string, any> | undefined;
+  const indexMeta = payload?.index as ArtifactIndexMeta | undefined;
 
   return (
     <div style={{ padding: 16, borderTop: "2px solid #9c27b0", marginTop: 24 }}>

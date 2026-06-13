@@ -1,5 +1,5 @@
 import React from "react";
-import { DEFAULT_API_BASE } from "../../api";
+import { DEFAULT_API_BASE } from "../../lib/api/legacy";
 
 export function IntroCard({ onStart }: { onStart: () => void }) {
   return (

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, generateSpmRealignWrapperSkeleton } from "../api";
+import { DEFAULT_API_BASE, generateSpmRealignWrapperSkeleton } from "../lib/api/legacy";
 import type { SpmRealignWrapperSkeletonResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };

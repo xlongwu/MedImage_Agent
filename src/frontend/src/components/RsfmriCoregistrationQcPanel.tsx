@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   getRsfmriCoregistrationQc,
   runRsfmriCoregistrationQc
-} from "../api";
+} from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";

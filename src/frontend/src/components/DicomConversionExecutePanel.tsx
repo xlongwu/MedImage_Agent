@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { runProjectDicomConversionExecute } from "../api";
+import { runProjectDicomConversionExecute } from "../lib/api/legacy";
 import type {
   DicomConversionExecutionUiState,
   DicomConversionPublicExecutionResponse,
   DicomConversionPublicExecutionSafetyFlags,
   DicomConversionReleaseReadinessReport,
 } from "../types";
+import styles from "./DicomConversionExecutePanel.module.css";
 
 type Props = {
   baseUrl: string;
@@ -114,17 +115,17 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
     if (!gatesFull) missing.push(`Safety gates: ${readiness?.gates_met ?? 0}/${readiness?.gates_total ?? 32}.`);
 
     return (
-      <section style={{ padding: 16, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(255, 255, 255, 0.88)", marginTop: 12 }}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>DICOM Conversion Execution</h3>
-        <div style={{ padding: 10, border: "1px solid rgba(242, 153, 74, 0.28)", borderRadius: 6, background: "rgba(255, 251, 242, 0.94)", fontSize: 11, color: "#9a5a15", marginBottom: 12, lineHeight: 1.5 }}>
+      <section className={styles.style001}>
+        <h3 className={styles.style002}>DICOM Conversion Execution</h3>
+        <div className={styles.style003}>
           <strong>DICOM conversion execution UI is disabled in this build.</strong>{" "}
           Conversion execution requires maintainer release approval, runtime flags, release readiness, and operator confirmations.
         </div>
         {missing.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <h4 style={{ margin: "0 0 6px", fontSize: 13, color: "#b53b3b" }}>Blocking conditions</h4>
+          <div className={styles.style004}>
+            <h4 className={styles.style005}>Blocking conditions</h4>
             {missing.map((m, i) => (
-              <div key={i} style={{ padding: "4px 8px", border: "1px solid rgba(235, 87, 87, 0.22)", borderRadius: 4, background: "#fff", fontSize: 11, color: "#b53b3b", marginBottom: 3 }}>{m}</div>
+              <div key={i} className={styles.style006}>{m}</div>
             ))}
           </div>
         )}
@@ -144,16 +145,16 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
   if (uiState === "blocked") {
     const safety = response?.safety_flags as DicomConversionPublicExecutionSafetyFlags | undefined;
     return (
-      <section style={{ padding: 16, border: "1px solid rgba(235, 87, 87, 0.26)", borderRadius: 8, background: "rgba(255, 245, 245, 0.88)", marginTop: 12 }}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 15, color: "#b53b3b" }}>Conversion blocked</h3>
-        <div style={{ fontSize: 11, color: "#b53b3b", marginBottom: 10 }}>
+      <section className={styles.style007}>
+        <h3 className={styles.style008}>Conversion blocked</h3>
+        <div className={styles.style009}>
           The backend blocked this conversion request. Review the blocking issues below.
         </div>
         {(response?.blocking_issues ?? []).map((b, i) => (
-          <div key={i} style={{ padding: "4px 8px", border: "1px solid rgba(235, 87, 87, 0.22)", borderRadius: 4, background: "#fff", fontSize: 11, color: "#b53b3b", marginBottom: 3 }}>{b}</div>
+          <div key={i} className={styles.style010}>{b}</div>
         ))}
         {safety && (
-          <div style={{ marginTop: 10, display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <div className={styles.style011}>
             {Object.entries(safety).map(([k, v]) => (
               <span key={k} style={{ ...pill, background: v ? "#e8f5e9" : "#ffebee", color: v ? "#176b3b" : "#b53b3b", borderColor: v ? "rgba(33, 150, 83, 0.24)" : "rgba(235, 87, 87, 0.26)" }}>
                 {k.replace(/_/g, " ")}: {String(v)}
@@ -171,26 +172,26 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
   // ── Failed response ──
   if (uiState === "failed") {
     return (
-      <section style={{ padding: 16, border: "1px solid rgba(235, 87, 87, 0.26)", borderRadius: 8, background: "rgba(255, 245, 245, 0.88)", marginTop: 12 }}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 15, color: "#b53b3b" }}>Conversion failed</h3>
-        {error && <div style={{ padding: 8, border: "1px solid rgba(235, 87, 87, 0.22)", borderRadius: 4, background: "#fff", fontSize: 11, color: "#b53b3b", marginBottom: 8 }}>{error}</div>}
+      <section className={styles.style012}>
+        <h3 className={styles.style013}>Conversion failed</h3>
+        {error && <div className={styles.style014}>{error}</div>}
         {(response?.errors ?? []).map((e, i) => (
-          <div key={i} style={{ padding: "4px 8px", border: "1px solid rgba(235, 87, 87, 0.22)", borderRadius: 4, background: "#fff", fontSize: 11, color: "#b53b3b", marginBottom: 3 }}>{e}</div>
+          <div key={i} className={styles.style015}>{e}</div>
         ))}
         {response?.warnings && response.warnings.length > 0 && (
-          <div style={{ marginTop: 8 }}>
+          <div className={styles.style016}>
             {response.warnings.map((w, i) => (
-              <div key={i} style={{ padding: "4px 8px", border: "1px solid rgba(242, 153, 74, 0.18)", borderRadius: 4, background: "#fff", fontSize: 11, color: "#9a5a15", marginBottom: 3 }}>{w}</div>
+              <div key={i} className={styles.style017}>{w}</div>
             ))}
           </div>
         )}
         {response?.rollback_result_path && (
-          <div style={{ marginTop: 8, fontSize: 11 }}>
-            <strong style={{ color: "#667085" }}>Rollback result:</strong>{" "}
+          <div className={styles.style018}>
+            <strong className={styles.style019}>Rollback result:</strong>{" "}
             <span style={mono}>{response.rollback_result_path}</span>
           </div>
         )}
-        <div style={{ padding: 8, border: "1px solid rgba(137, 150, 171, 0.18)", borderRadius: 4, background: "#f9f9fb", fontSize: 11, color: "#667085", marginTop: 8 }}>
+        <div className={styles.style020}>
           Rawdata remains unchanged. Review the rollback evidence above before retrying.
         </div>
         <button onClick={() => { setUiState("disabled_info"); setResponse(null); setConfirmChecks({}); }} style={{ marginTop: 12, padding: "6px 14px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
@@ -203,18 +204,18 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
   // ── Submitting / progress ──
   if (uiState === "submitting") {
     return (
-      <section style={{ padding: 16, border: "1px solid rgba(56, 103, 214, 0.22)", borderRadius: 8, background: "rgba(239, 246, 255, 0.88)", marginTop: 12 }}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 15, color: "#2450a6" }}>Converting DICOM to NIfTI...</h3>
-        <div style={{ fontSize: 12, color: "#667085" }}>
+      <section className={styles.style021}>
+        <h3 className={styles.style022}>Converting DICOM to NIfTI...</h3>
+        <div className={styles.style023}>
           The backend is executing dcm2niix. This may take several minutes for large datasets.
           Do not close this page.
         </div>
-        <div style={{ marginTop: 10 }}>
-          <div style={{ height: 4, background: "#e3e8f0", borderRadius: 2, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: "60%", background: "#1976d2", borderRadius: 2, animation: "pulse 1.5s infinite" }} />
+        <div className={styles.style024}>
+          <div className={styles.style025}>
+            <div className={styles.style026} />
           </div>
         </div>
-        <div style={{ marginTop: 8, fontSize: 11, color: "#667085" }}>
+        <div className={styles.style027}>
           Status: {response?.status ?? "requesting execution..."}
         </div>
       </section>
@@ -224,9 +225,9 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
   // ── Succeeded response ──
   if (uiState === "succeeded" && response) {
     return (
-      <section style={{ padding: 16, border: "1px solid rgba(33, 150, 83, 0.24)", borderRadius: 8, background: "rgba(245, 255, 248, 0.88)", marginTop: 12 }}>
-        <h3 style={{ margin: "0 0 8px", fontSize: 15, color: "#176b3b" }}>Conversion complete</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginBottom: 12 }}>
+      <section className={styles.style028}>
+        <h3 className={styles.style029}>Conversion complete</h3>
+        <div className={styles.style030}>
           <KV label="status" value={response.status} />
           <KV label="execution ID" value={response.execution_id} />
           <KV label="started" value={response.started_at ?? ""} />
@@ -242,7 +243,7 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
         {response.checksum_comparison_path && <PathRow label="Checksum comparison" path={response.checksum_comparison_path} />}
         {response.rollback_plan_path && <PathRow label="Rollback plan" path={response.rollback_plan_path} />}
 
-        <div style={{ padding: 8, border: "1px solid rgba(33, 150, 83, 0.18)", borderRadius: 4, background: "#fff", fontSize: 11, color: "#176b3b", marginTop: 10 }}>
+        <div className={styles.style031}>
           Rawdata checksum verified — rawdata is unchanged. SPM/DPABI/MATLAB were not executed.
         </div>
         <button onClick={() => { setUiState("disabled_info"); setResponse(null); setConfirmChecks({}); }} style={{ marginTop: 12, padding: "6px 14px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
@@ -254,18 +255,18 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
 
   // ── Confirmation dialog ──
   return (
-    <section style={{ padding: 16, border: "1px solid rgba(242, 153, 74, 0.28)", borderRadius: 8, background: "rgba(255, 251, 242, 0.94)", marginTop: 12 }}>
-      <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>
-        <span role="img" aria-label="warning" style={{ marginRight: 6 }}>&#9888;</span>
+    <section className={styles.style032}>
+      <h3 className={styles.style033}>
+        <span role="img" aria-label="warning" className={styles.style034}>&#9888;</span>
         Approve &amp; Execute DICOM Conversion
       </h3>
-      <div style={{ fontSize: 11, color: "#9a5a15", marginBottom: 12, lineHeight: 1.5 }}>
+      <div className={styles.style035}>
         You are about to execute DICOM-to-NIfTI conversion using dcm2niix.
         This is a one-way operation. Confirm each statement below before proceeding.
       </div>
 
       {CONFIRMATIONS.map(c => (
-        <label key={c.key} style={{ display: "flex", gap: 8, alignItems: "center", padding: "6px 8px", marginBottom: 4, border: "1px solid rgba(137, 150, 171, 0.18)", borderRadius: 4, background: "#fff", cursor: "pointer", fontSize: 12 }}>
+        <label key={c.key} className={styles.style036}>
           <input
             type="checkbox"
             checked={confirmChecks[c.key] ?? false}
@@ -275,7 +276,7 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
         </label>
       ))}
 
-      <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+      <div className={styles.style037}>
         <button
           onClick={() => { setUiState("disabled_info"); setConfirmChecks({}); }}
           style={{ padding: "8px 18px", background: "#667085", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 12 }}
@@ -298,7 +299,7 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
         </button>
       </div>
 
-      <div style={{ padding: 8, border: "1px solid rgba(137, 150, 171, 0.18)", borderRadius: 4, background: "#f9f9fb", fontSize: 10, color: "#667085", marginTop: 12, lineHeight: 1.4 }}>
+      <div className={styles.style038}>
         MedImage Agent is for research use only. It is not for clinical use or medical decision-making.
         Rawdata remains read-only. SPM/DPABI/MATLAB are not executed. Full preprocessing is not triggered.
       </div>
@@ -308,18 +309,18 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
 
 function KV({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ padding: "6px 8px", border: "1px solid rgba(137, 150, 171, 0.2)", borderRadius: 4, background: "#fff", fontSize: 11 }}>
-      <div style={{ color: "#667085", fontWeight: 700 }}>{label}</div>
-      <div style={{ fontFamily: "monospace", overflowWrap: "anywhere" }}>{value || "—"}</div>
+    <div className={styles.style039}>
+      <div className={styles.style040}>{label}</div>
+      <div className={styles.style041}>{value || "—"}</div>
     </div>
   );
 }
 
 function PathRow({ label, path }: { label: string; path: string }) {
   return (
-    <div style={{ padding: "4px 8px", border: "1px solid rgba(137, 150, 171, 0.14)", borderRadius: 4, background: "#fff", fontSize: 11, marginBottom: 3 }}>
-      <span style={{ color: "#667085", fontWeight: 600 }}>{label}:</span>{" "}
-      <span style={{ fontFamily: "monospace", fontSize: 10, color: "#888" }}>{path}</span>
+    <div className={styles.style042}>
+      <span className={styles.style043}>{label}:</span>{" "}
+      <span className={styles.style044}>{path}</span>
     </div>
   );
 }

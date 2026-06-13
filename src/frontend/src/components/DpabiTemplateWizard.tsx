@@ -4,7 +4,7 @@ import {
   previewDpabiTemplateWizard,
   createDpabiTemplateWizardInstance,
   executeDpabiTemplate,
-} from "../api";
+} from "../lib/api/legacy";
 
 interface TemplateItem {
   template_id?: string;

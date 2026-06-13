@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getRsfmriTemporalFiltering, runRsfmriTemporalFiltering } from "../api";
+import { getRsfmriTemporalFiltering, runRsfmriTemporalFiltering } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock"; import { StatusBadge } from "./StatusBadge"; import { TextViewer } from "./TextViewer";
 
 type Props = { baseUrl: string };

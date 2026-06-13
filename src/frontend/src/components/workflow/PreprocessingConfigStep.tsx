@@ -17,9 +17,10 @@ const steps: { key: keyof PreprocessingConfig; label: string; desc: string }[] =
 export function PreprocessingConfigStep({ state, dispatch }: Props) {
   const toggle = (key: keyof PreprocessingConfig) => {
     const step = state.preprocessing[key];
-    if (typeof (step as any).enabled === "boolean") {
-      dispatch({ type: "SET_PREPROCESSING", config: { [key]: { ...(step as any), enabled: !(step as any).enabled } } });
-    }
+    dispatch({
+      type: "SET_PREPROCESSING",
+      config: { [key]: { ...step, enabled: !step.enabled } } as Partial<PreprocessingConfig>,
+    });
   };
 
   return (
@@ -28,8 +29,8 @@ export function PreprocessingConfigStep({ state, dispatch }: Props) {
       <p style={{ color: "#666", marginBottom: 16 }}>Select preprocessing steps. Default settings are recommended for rs-fMRI.</p>
 
       {steps.map((item) => {
-        const cfg = state.preprocessing[item.key] as any;
-        const enabled = cfg?.enabled ?? true;
+        const cfg = state.preprocessing[item.key];
+        const enabled = cfg.enabled;
         return (
           <div key={item.key} onClick={() => toggle(item.key)} style={{
             display: "flex", alignItems: "center", padding: "12px 16px", marginBottom: 8, cursor: "pointer",

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getDatasetEvaluationReport } from "../api";
+import { getDatasetEvaluationReport } from "../lib/api/legacy";
 import type { DatasetEvaluationReport } from "../types";
 import { JsonBlock } from "./JsonBlock";
 import { TextViewer } from "./TextViewer";

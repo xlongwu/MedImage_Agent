@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createSchedulerPlan } from "../api";
+import { createSchedulerPlan } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 

@@ -1,36 +1,36 @@
 import React, { useState } from "react";
-import { DEFAULT_API_BASE } from "../../api";
-import type { WorkflowState, WorkflowAction } from "../../state/workflowTypes";
+import { buildInsights, DEFAULT_API_BASE, runWorkflow } from "../../lib/api";
+import type { AnalysisConfig, WorkflowAction, WorkflowState } from "../../state/workflowTypes";
 
 interface Props { state: WorkflowState; dispatch: React.Dispatch<WorkflowAction>; }
+
+type EnabledAnalysisConfig = { enabled: boolean };
+
+function hasEnabledFlag(value: AnalysisConfig[keyof AnalysisConfig]): value is EnabledAnalysisConfig {
+  return typeof value === "object" && value !== null && "enabled" in value;
+}
 
 export function RunConfirmStep({ state, dispatch }: Props) {
   const [running, setRunning] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
-  const preSteps = Object.entries(state.preprocessing).filter(([, v]: any) => v.enabled);
-  const anaSteps = Object.entries(state.analysis).filter(([, v]: any) => v.enabled && typeof v.enabled === "boolean" || (v as any).enabled === true);
+  const preSteps = Object.entries(state.preprocessing).filter(([, value]) => value.enabled);
+  const analysisEntries = Object.entries(state.analysis) as Array<[keyof AnalysisConfig, AnalysisConfig[keyof AnalysisConfig]]>;
+  const enabledAnalysisSteps = analysisEntries.filter(
+    ([key, value]) => key !== "enabled" && hasEnabledFlag(value) && value.enabled
+  );
 
   const startRun = async () => {
     setRunning(true);
     dispatch({ type: "SET_RUN_STATUS", runId: "running", status: "RUNNING" });
     try {
-      const res = await fetch(`${DEFAULT_API_BASE}/api/workflow/run`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          data_source: state.dataSource,
-          dataset_path: state.datasetPath,
-        }),
+      const data = await runWorkflow(DEFAULT_API_BASE, {
+        data_source: state.dataSource,
+        dataset_path: state.datasetPath,
       });
-      if (res.ok) {
-        const data = await res.json();
-        dispatch({ type: "SET_RUN_STATUS", runId: data.demo_id || "run", status: data.ok ? "SUCCESS" : "FAILED" });
-        // Store result for Step 5
-        (window as any).__workflowResult = data;
-      }
-      // Also trigger insights build
-      await fetch(`${DEFAULT_API_BASE}/api/insights/build`, { method: "POST" });
+      dispatch({ type: "SET_RUN_STATUS", runId: data.demo_id || "run", status: data.ok ? "SUCCESS" : "FAILED" });
+      window.__workflowResult = data;
+      await buildInsights(DEFAULT_API_BASE);
     } catch {
       dispatch({ type: "SET_RUN_STATUS", runId: "error", status: "FAILED" });
     }
@@ -57,8 +57,7 @@ export function RunConfirmStep({ state, dispatch }: Props) {
         {state.analysis.enabled && (
           <div style={{ marginBottom: 12 }}>
             <strong>Analysis:</strong>{" "}
-            {Object.entries(state.analysis)
-              .filter(([k, v]: any) => k !== "enabled" && v.enabled)
+            {enabledAnalysisSteps
               .map(([k]) => k).join(", ")}
           </div>
         )}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getPipelinePreset, instantiatePipelinePreset } from "../api";
+import { DEFAULT_API_BASE, getPipelinePreset, instantiatePipelinePreset } from "../lib/api/legacy";
 import { buildPresetPlanDraft } from "../lib/presetPlanHandoff";
 import type { PipelinePreset, PipelinePresetInstantiateResponse, PresetPlanDraft } from "../types";
 

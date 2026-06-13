@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, listProjectRunEvents } from "../../api";
+import { DEFAULT_API_BASE, listProjectRunEvents } from "../../lib/api/legacy";
 import type { ProjectRunEventRecord } from "../../types";
 import {
   formatDate,

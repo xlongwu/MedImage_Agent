@@ -1,4 +1,5 @@
-import { deleteJson, getJson } from "./client";
+import { deleteJson, getJson, postJson } from "./client";
+import type { ProjectCreateRequest, ProjectCreateResponse } from "../../types";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "../types/project";
 
 export interface ProjectDeleteResponse {
@@ -25,4 +26,11 @@ export function getStudyOverview(studyId: string): Promise<StudyOverview> {
 
 export function deleteProject(projectId: string): Promise<ProjectDeleteResponse> {
   return deleteJson<ProjectDeleteResponse>(`/api/projects/${encodeURIComponent(projectId)}`);
+}
+
+export function createProjectFromDirectory(
+  _baseUrl: string,
+  payload: ProjectCreateRequest,
+): Promise<ProjectCreateResponse> {
+  return postJson<ProjectCreateResponse>("/api/projects/create", payload);
 }

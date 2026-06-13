@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, listProjectRunLogs } from "../../api";
+import { DEFAULT_API_BASE, listProjectRunLogs } from "../../lib/api/legacy";
 import type { ProjectRunLogRecord } from "../../types";
 import {
   formatDate,

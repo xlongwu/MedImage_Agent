@@ -1,26 +1,17 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { createProjectFromDirectory, DEFAULT_API_BASE, getHealth } from "./api";
-import AdvancedModePanel from "./components/workflow/AdvancedModePanel";
-import BidsValidationPanel from "./components/BidsValidationPanel";
-import ConversionDryRunPanel from "./components/ConversionDryRunPanel";
-import DicomConversionReviewPanel from "./components/DicomConversionReviewPanel";
-import DataReadinessPanel from "./components/DataReadinessPanel";
-import AdvancedPreprocessingPipelinePanel from "./components/AdvancedPreprocessingPipelinePanel";
-const AdvancedPreprocessingPipelineCard = AdvancedPreprocessingPipelinePanel;
-import BoldReferenceReadinessPanel from "./components/BoldReferenceReadinessPanel";
-import EnvironmentHealthPanel from "./components/EnvironmentHealthPanel";
-import SpmRealignDryRunPanel from "./components/SpmRealignDryRunPanel";
-import SpmRealignWrapperSkeletonPanel from "./components/SpmRealignWrapperSkeletonPanel";
-import MotionMetricsDraftPanel from "./components/MotionMetricsDraftPanel";
-import NiftiQcSnapshotPanel from "./components/NiftiQcSnapshotPanel";
-import QcDashboardSummaryPanel from "./components/QcDashboardSummaryPanel";
-import MotionQcReadinessPanel from "./components/MotionQcReadinessPanel";
-import RsfmriQcPlanningReportPanel from "./components/RsfmriQcPlanningReportPanel";
-import RsfmriPresetPanel from "./components/RsfmriPresetPanel";
-import { ActionList, MetricTile, StatusPill as DashboardStatusPill, cleanupNextActions } from "./components/dashboardUi";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { ActionList, cleanupNextActions } from "./components/dashboardUi";
+import {
+  ProjectHeroPanel,
+  ProjectList,
+  ReadinessStatusStrip,
+  RecommendedNextStepCard,
+  TopBar,
+  WorkflowTabs,
+  WorkspaceHeader,
+  WorkspaceSuspenseFallback,
+} from "./features/dashboard/DashboardChrome";
 import type { PresetPlanDraft } from "./types";
-import PlanReviewConsole from "./components/PlanReviewConsole";
-import ProjectRunsPanel from "./components/ProjectRunsPanel";
 import { useDatasetSummary } from "./hooks/useDatasetSummary";
 import { useImagePreview } from "./hooks/useImagePreview";
 import { useImageSources } from "./hooks/useImageSources";
@@ -33,8 +24,29 @@ import { useTaskDiagnostics } from "./hooks/useTaskDiagnostics";
 import { useTaskEvents } from "./hooks/useTaskEvents";
 import { useTasks } from "./hooks/useTasks";
 import { useTaskStream } from "./hooks/useTaskStream";
-import { approveTask, deleteProject, generateTaskAuditPackage, getApiBaseUrl, getTask, sendAssistantMessage } from "./lib/api";
+import {
+  approveTask,
+  createProjectFromDirectory,
+  DEFAULT_API_BASE,
+  deleteProject,
+  generateTaskAuditPackage,
+  getApiBaseUrl,
+  getHealth,
+  getTask,
+  sendAssistantMessage,
+} from "./lib/api";
 import { fallbackChat } from "./lib/mockData";
+import {
+  buildProjectInventory,
+  diagnosticArrayLength,
+  diagnosticNumber,
+  directoryBasename,
+  firstDiagnosticNumber,
+  isProjectNameConflict,
+  mergeCreatedProjectIntoList,
+  uniqueProjectName,
+} from "./lib/projectWorkflow";
+import type { ProjectDataState, ProjectInventory, WorkflowTab } from "./lib/projectWorkflow";
 import type { ChatMessage } from "./lib/types/assistant";
 import type { DatasetSummary } from "./lib/types/dataset";
 import type { ImagePlane, ImagePreview, ImageSourceFile, ImageSources, ImageValidationReport } from "./lib/types/image";
@@ -43,6 +55,28 @@ import type { ExecutionMode } from "./lib/types/pipeline";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "./lib/types/project";
 import type { TaskAuditPackage, TaskDiagnostics, TaskEvent, TaskLogEntry, TaskStatus, TaskStreamMessage } from "./lib/types/task";
 import type { ProjectCreateResponse } from "./types";
+
+export { deriveProjectWorkflowState } from "./lib/projectWorkflow";
+
+const AdvancedModePanel = lazy(() => import("./components/workflow/AdvancedModePanel"));
+const BidsValidationPanel = lazy(() => import("./components/BidsValidationPanel"));
+const ConversionDryRunPanel = lazy(() => import("./components/ConversionDryRunPanel"));
+const DicomConversionReviewPanel = lazy(() => import("./components/DicomConversionReviewPanel"));
+const DataReadinessPanel = lazy(() => import("./components/DataReadinessPanel"));
+const AdvancedPreprocessingPipelinePanel = lazy(() => import("./components/AdvancedPreprocessingPipelinePanel"));
+const AdvancedPreprocessingPipelineCard = AdvancedPreprocessingPipelinePanel;
+const BoldReferenceReadinessPanel = lazy(() => import("./components/BoldReferenceReadinessPanel"));
+const EnvironmentHealthPanel = lazy(() => import("./components/EnvironmentHealthPanel"));
+const SpmRealignDryRunPanel = lazy(() => import("./components/SpmRealignDryRunPanel"));
+const SpmRealignWrapperSkeletonPanel = lazy(() => import("./components/SpmRealignWrapperSkeletonPanel"));
+const MotionMetricsDraftPanel = lazy(() => import("./components/MotionMetricsDraftPanel"));
+const NiftiQcSnapshotPanel = lazy(() => import("./components/NiftiQcSnapshotPanel"));
+const QcDashboardSummaryPanel = lazy(() => import("./components/QcDashboardSummaryPanel"));
+const MotionQcReadinessPanel = lazy(() => import("./components/MotionQcReadinessPanel"));
+const RsfmriQcPlanningReportPanel = lazy(() => import("./components/RsfmriQcPlanningReportPanel"));
+const RsfmriPresetPanel = lazy(() => import("./components/RsfmriPresetPanel"));
+const PlanReviewConsole = lazy(() => import("./components/PlanReviewConsole"));
+const ProjectRunsPanel = lazy(() => import("./components/ProjectRunsPanel"));
 
 const navItems = [
   ["Dashboard", "D"],
@@ -59,347 +93,6 @@ const quickActions = [
   { title: "Run Pipeline", subtitle: "Start analysis", kind: "play", action: "run-pipeline" },
   { title: "View Results", subtitle: "Open latest report", kind: "chart", action: "view-results" },
 ];
-
-type WorkflowTab = "data" | "preprocessing" | "reports" | "environment";
-
-type ProjectDataState = "raw_dicom" | "converted_bids" | "empty" | "mixed" | "unknown";
-
-type ProjectInventory = {
-  projectName: string;
-  modality: string;
-  dataState: ProjectDataState;
-  dataStateLabel: string;
-  stateSentence: string;
-  rawDicomCandidates: number;
-  dicomSeriesCount: number;
-  dicomFileCount: number;
-  convertedSubjects: number;
-  niftiFileCount: number;
-  hasRawDicom: boolean;
-  hasConvertedData: boolean;
-  metadataOnlyNiftiInventory: boolean;
-};
-
-function maxNumericSignal(...values: unknown[]): number {
-  let max = 0;
-  for (const value of values) {
-    if (Array.isArray(value)) {
-      max = Math.max(max, value.length);
-      continue;
-    }
-    const numeric = Number(value);
-    if (Number.isFinite(numeric) && numeric > max) {
-      max = numeric;
-    }
-  }
-  return max;
-}
-
-function countSignal(...values: unknown[]): number {
-  return maxNumericSignal(...values);
-}
-
-function textSignal(value: unknown): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map(textSignal).filter(Boolean).join(" ");
-  }
-  if (value && typeof value === "object") {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return "";
-    }
-  }
-  return "";
-}
-
-function isMetadataOnlySignal(...values: unknown[]): boolean {
-  return /metadata[-_\s]?only|Metadata-/.test(values.map(textSignal).join(" "));
-}
-
-export function deriveProjectWorkflowState(
-  project: any,
-  readiness: any,
-  bidsValidation: any,
-  dicomPreflight: any
-): ProjectDataState {
-  if (!project) return "unknown";
-
-  const projectMetadata = project?.metadata || {};
-  const projectDiagnostics = projectMetadata.diagnostics || {};
-
-  const dicomFileCount = maxNumericSignal(
-    dicomPreflight?.dicom_file_count,
-    dicomPreflight?.dicom_files,
-    readiness?.dicom_file_count,
-    readiness?.dicom_files,
-    readiness?.dicom_preflight?.dicom_file_count,
-    readiness?.dicomPreflight?.dicom_file_count,
-    projectDiagnostics.dicom_file_count,
-    projectDiagnostics.dicom_files,
-    projectDiagnostics.raw_dicom_file_count,
-  );
-
-  const dicomSeriesCount = maxNumericSignal(
-    dicomPreflight?.dicom_series_count,
-    dicomPreflight?.series_count,
-    readiness?.dicom_series_count,
-    readiness?.dicom_series,
-    readiness?.series_count,
-    readiness?.dicom_preflight?.series_count,
-    readiness?.dicomPreflight?.series_count,
-    projectDiagnostics.dicom_series_count,
-    projectDiagnostics.dicom_series,
-    projectDiagnostics.series_count,
-  );
-
-  const niftiCount = maxNumericSignal(
-    bidsValidation?.nifti_file_count,
-    readiness?.nifti_file_count,
-    readiness?.nifti_files,
-    readiness?.image_source_count,
-    projectDiagnostics.nifti_file_count,
-    projectDiagnostics.nifti_files,
-    projectDiagnostics.image_source_count,
-  );
-
-  const bidsRootCount = countSignal(
-    bidsValidation?.roots,
-    bidsValidation?.bids_roots,
-    readiness?.bids_roots,
-    readiness?.bids_root_count,
-    projectDiagnostics.bids_roots,
-    projectDiagnostics.bids_root_count,
-  );
-
-  const metadataOnly = isMetadataOnlySignal(projectDiagnostics, readiness, bidsValidation);
-  const rawText = textSignal([
-    projectDiagnostics,
-    readiness?.warnings,
-    readiness?.errors,
-    readiness?.next_actions,
-    readiness?.checks,
-    bidsValidation?.warnings,
-    bidsValidation?.errors,
-    bidsValidation?.issues,
-  ]);
-  const readinessIndicatesRawDicom =
-    /funraw|t1raw|raw dicom|dicom rawdata|dicom layout detected|dicom files are present/i.test(rawText);
-  const dicomPreflightSucceeded =
-    Boolean(dicomPreflight?.ok) &&
-    (dicomFileCount > 0 || dicomSeriesCount > 0 || countSignal(dicomPreflight?.series) > 0);
-
-  const hasRawDicomEvidence =
-    dicomFileCount > 0 ||
-    dicomSeriesCount > 0 ||
-    dicomPreflightSucceeded ||
-    readinessIndicatesRawDicom;
-
-  const bidsValidationSubjects = maxNumericSignal(bidsValidation?.subject_count);
-  const explicitConvertedSubjects = maxNumericSignal(
-    hasRawDicomEvidence && niftiCount === 0 ? 0 : bidsValidationSubjects,
-    readiness?.converted_subject_count,
-    readiness?.converted_subjects,
-    readiness?.nifti_subject_count,
-    readiness?.image_subject_count,
-    projectDiagnostics.converted_subject_count,
-    projectDiagnostics.converted_subjects,
-    projectDiagnostics.nifti_subject_count,
-    projectDiagnostics.image_subject_count,
-  );
-
-  const overviewSubjectCount = maxNumericSignal(readiness?.subjects);
-  const projectSubjectCount = maxNumericSignal(project?.subjects_count);
-  const hasConvertedSubjectEvidence =
-    !metadataOnly &&
-    (explicitConvertedSubjects > 0 ||
-      (!hasRawDicomEvidence && (overviewSubjectCount > 0 || projectSubjectCount > 0)));
-
-  const hasRealBidsRoots =
-    bidsRootCount > 0 && (!hasRawDicomEvidence || niftiCount > 0 || explicitConvertedSubjects > 0);
-  const hasRealConvertedData =
-    niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence;
-  const convertedDataAbsent =
-    niftiCount === 0 && !hasRealBidsRoots && !hasConvertedSubjectEvidence;
-
-  const importCount = readiness?.import_count ?? projectDiagnostics.import_count ?? 0;
-  const rawdataDir = projectMetadata.rawdata_dir ?? bidsValidation?.roots?.[0] ?? "";
-
-  if (hasRawDicomEvidence && hasRealConvertedData) {
-    return "mixed";
-  }
-  if (hasRawDicomEvidence && convertedDataAbsent) {
-    return "raw_dicom";
-  }
-  if (hasRealConvertedData) {
-    return "converted_bids";
-  }
-  if (!rawdataDir && !hasRawDicomEvidence && !hasRealConvertedData && importCount === 0) {
-    return "empty";
-  }
-
-  // fallback logic
-  if (hasRawDicomEvidence) {
-    return "raw_dicom";
-  }
-  return "empty";
-}
-
-function directoryBasename(path: string): string {
-  const normalized = path.trim().replace(/[\\/]+$/, "");
-  const parts = normalized.split(/[\\/]/).filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : "New Project";
-}
-
-function diagnosticNumber(
-  diagnostics: Record<string, unknown>,
-  key: string
-): number {
-  const value = Number(diagnostics[key]);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function firstDiagnosticNumber(
-  diagnostics: Record<string, unknown>,
-  keys: string[],
-  fallback = 0
-): number {
-  for (const key of keys) {
-    const value = Number(diagnostics[key]);
-    if (Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return fallback;
-}
-
-function diagnosticArrayLength(
-  diagnostics: Record<string, unknown>,
-  key: string
-): number {
-  const value = diagnostics[key];
-  return Array.isArray(value) ? value.length : 0;
-}
-
-function buildProjectInventory(
-  project: ProjectDetail,
-  overview: StudyOverview,
-  diagnostics: Record<string, unknown>
-): ProjectInventory {
-  const dicomFileCount = firstDiagnosticNumber(diagnostics, ["dicom_file_count", "dicom_files"], overview.dicom_files ?? 0);
-  const dicomSeriesCount = firstDiagnosticNumber(diagnostics, ["dicom_series_count", "series_count"], overview.dicom_series ?? 0);
-  const niftiFileCount = firstDiagnosticNumber(diagnostics, ["nifti_file_count", "nifti_files", "image_source_count"]);
-  const convertedSubjectInventory = firstDiagnosticNumber(
-    diagnostics,
-    ["converted_subject_count", "nifti_subject_count", "image_subject_count"],
-    project.subjects_count,
-  );
-  const rawDicomCandidates = firstDiagnosticNumber(
-    diagnostics,
-    ["raw_dicom_candidate_subjects", "dicom_candidate_subjects", "dicom_subject_count"],
-    diagnosticArrayLength(diagnostics, "subject_candidates") ||
-      overview.dicom_subjects ||
-      (dicomFileCount > 0 || dicomSeriesCount > 0 ? project.subjects_count : 0),
-  );
-  const hasRawDicom = dicomFileCount > 0 || dicomSeriesCount > 0 || rawDicomCandidates > 0;
-  const convertedSubjects = hasRawDicom
-    ? firstDiagnosticNumber(diagnostics, ["converted_subject_count", "nifti_subject_count", "image_subject_count"])
-    : convertedSubjectInventory;
-  const metadataOnlyNiftiInventory = niftiFileCount === 0 && isMetadataOnlySignal(diagnostics);
-  const workflowSignals = {
-    ...overview,
-    ...diagnostics,
-    dicom_file_count: dicomFileCount,
-    dicom_files: dicomFileCount,
-    dicom_series_count: dicomSeriesCount,
-    dicom_series: dicomSeriesCount,
-    raw_dicom_candidate_subjects: rawDicomCandidates,
-    nifti_file_count: niftiFileCount,
-    nifti_files: niftiFileCount,
-    converted_subject_count: convertedSubjects,
-    image_subject_count: convertedSubjects,
-  };
-  const dataState = deriveProjectWorkflowState(project, workflowSignals, null, null);
-  const hasConvertedData = dataState === "converted_bids" || dataState === "mixed";
-  const dataStateLabel =
-    dataState === "raw_dicom"
-      ? "Raw DICOM"
-      : dataState === "mixed"
-        ? "Mixed"
-        : dataState === "converted_bids"
-          ? "Converted BIDS/NIfTI"
-          : "Empty project";
-  const stateSentence =
-    dataState === "raw_dicom"
-      ? "Raw DICOM data detected. Convert to BIDS/NIfTI before NIfTI QC or preprocessing."
-      : dataState === "mixed"
-        ? "Raw DICOM and converted imaging outputs are both present. Review conversion state before preprocessing."
-        : dataState === "converted_bids"
-          ? "Converted BIDS/NIfTI data is available for QC and preprocessing validation."
-          : "Import a BIDS/NIfTI dataset or raw DICOM directory to begin.";
-
-  return {
-    projectName: overview.study_name || project.name,
-    modality: project.modality || overview.modality || "rs-fMRI",
-    dataState,
-    dataStateLabel,
-    stateSentence,
-    rawDicomCandidates,
-    dicomSeriesCount,
-    dicomFileCount,
-    convertedSubjects,
-    niftiFileCount,
-    hasRawDicom,
-    hasConvertedData,
-    metadataOnlyNiftiInventory,
-  };
-}
-
-function projectSummaryFromCreateResult(result: ProjectCreateResponse): ProjectSummary {
-  return {
-    id: result.project_id,
-    name: result.project_name,
-    study_id: result.project_id,
-    modality: "rs-fMRI",
-    created_date: new Date().toLocaleDateString(),
-    subjects_count: diagnosticNumber(result.diagnostics, "subjects_total"),
-    current_pipeline_id: "not-selected",
-  };
-}
-
-function mergeCreatedProjectIntoList(
-  result: ProjectCreateResponse,
-  projects: ProjectSummary[],
-): ProjectSummary[] {
-  const createdProject = projectSummaryFromCreateResult(result);
-  return [
-    createdProject,
-    ...projects.filter((item) => item.id !== result.project_id),
-  ];
-}
-
-function uniqueProjectName(baseName: string, projects: ProjectSummary[]): string {
-  const trimmed = baseName.trim() || "DICOM Project";
-  const existingNames = new Set(projects.map((item) => item.name.trim().toLowerCase()));
-  if (!existingNames.has(trimmed.toLowerCase())) {
-    return trimmed;
-  }
-  for (let index = 2; index < 1000; index += 1) {
-    const candidate = `${trimmed} ${index}`;
-    if (!existingNames.has(candidate.toLowerCase())) {
-      return candidate;
-    }
-  }
-  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
-  return `${trimmed} ${stamp}`;
-}
-
-function isProjectNameConflict(message: string): boolean {
-  return /already exists|Set overwrite=true|Project directory already exists/i.test(message);
-}
 
 export default function App() {
   const [baseUrl, setBaseUrl] = useState(DEFAULT_API_BASE);
@@ -890,7 +583,9 @@ export default function App() {
           onToggleMode={() => setMode("dashboard")}
           modeLabel="Dashboard"
         />
-        <AdvancedModePanel baseUrl={baseUrl} />
+        <Suspense fallback={<WorkspaceSuspenseFallback label="Loading advanced console..." />}>
+          <AdvancedModePanel baseUrl={baseUrl} />
+        </Suspense>
       </div>
     );
   }
@@ -905,23 +600,25 @@ export default function App() {
           onToggleMode={() => setMode("dashboard")}
           modeLabel="Dashboard"
         />
-        <PlanReviewConsole
-          selectedProjectId={selectedProjectId}
-          selectedProject={selectedProjectForPlanReview}
-          projectConfigPath={selectedProjectMetadata?.project_config_path}
-          datasetIndexPath={selectedProjectMetadata?.dataset_index_path}
-          rawdataDir={selectedProjectMetadata?.rawdata_dir}
-          initialPresetDraft={presetPlanDraft}
-        />
-        <ProjectRunsPanel
-          baseUrl={baseUrl}
-          projectId={selectedProjectId}
-          projectDir={
-            typeof selectedProjectMetadata?.project_dir === "string"
-              ? selectedProjectMetadata.project_dir
-              : null
-          }
-        />
+        <Suspense fallback={<WorkspaceSuspenseFallback label="Loading planning tools..." />}>
+          <PlanReviewConsole
+            selectedProjectId={selectedProjectId}
+            selectedProject={selectedProjectForPlanReview}
+            projectConfigPath={selectedProjectMetadata?.project_config_path}
+            datasetIndexPath={selectedProjectMetadata?.dataset_index_path}
+            rawdataDir={selectedProjectMetadata?.rawdata_dir}
+            initialPresetDraft={presetPlanDraft}
+          />
+          <ProjectRunsPanel
+            baseUrl={baseUrl}
+            projectId={selectedProjectId}
+            projectDir={
+              typeof selectedProjectMetadata?.project_dir === "string"
+                ? selectedProjectMetadata.project_dir
+                : null
+            }
+          />
+        </Suspense>
       </div>
     );
   }
@@ -967,6 +664,7 @@ export default function App() {
                 key={label}
                 className={`nav-item ${index === 0 ? "active" : ""}`}
                 onClick={() => (label === "Settings" ? setMode("advanced") : setNotice(`${label} view is connected to the dashboard shell.`))}
+                aria-current={index === 0 ? "page" : undefined}
               >
                 <span>{glyph}</span>
                 {label}
@@ -1029,31 +727,39 @@ export default function App() {
 
           <WorkflowTabs activeTab={activeWorkflow} onChange={setActiveWorkflow} />
 
-          <section id="workflow-workspace" className="workflow-workspace" aria-live="polite">
-            {activeWorkflow === "data" ? (
-              <DataConversionWorkspace baseUrl={baseUrl} projectId={selectedProjectId} inventory={projectInventory} />
-            ) : activeWorkflow === "preprocessing" ? (
-              <PreprocessingWorkspace
-                projectId={selectedProjectId}
-                dataState={projectInventory.dataState}
-                inventory={projectInventory}
-                hasPreprocessingRun={hasPreprocessingRun}
-                onOpenDataConversion={() => setActiveWorkflow("data")}
-                onOpenToolsDrawer={() => setDrawerOpen(true)}
-              />
-            ) : activeWorkflow === "reports" ? (
-              <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
-            ) : (
-              <SettingsEnvironmentWorkspace
-                baseUrl={baseUrl}
-                projectId={selectedProjectId}
-                onReviewDraft={(draft) => {
-                  setPresetPlanDraft(draft);
-                  setMode("planner");
-                  setNotice("Preset draft loaded into Plan Review Console. Review and save before dry-run.");
-                }}
-              />
-            )}
+          <section
+            id="workflow-workspace"
+            className="workflow-workspace"
+            role="tabpanel"
+            aria-live="polite"
+            aria-labelledby={`workflow-tab-${activeWorkflow}`}
+          >
+            <Suspense fallback={<WorkspaceSuspenseFallback label="Loading workspace..." />}>
+              {activeWorkflow === "data" ? (
+                <DataConversionWorkspace baseUrl={baseUrl} projectId={selectedProjectId} inventory={projectInventory} />
+              ) : activeWorkflow === "preprocessing" ? (
+                <PreprocessingWorkspace
+                  projectId={selectedProjectId}
+                  dataState={projectInventory.dataState}
+                  inventory={projectInventory}
+                  hasPreprocessingRun={hasPreprocessingRun}
+                  onOpenDataConversion={() => setActiveWorkflow("data")}
+                  onOpenToolsDrawer={() => setDrawerOpen(true)}
+                />
+              ) : activeWorkflow === "reports" ? (
+                <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
+              ) : (
+                <SettingsEnvironmentWorkspace
+                  baseUrl={baseUrl}
+                  projectId={selectedProjectId}
+                  onReviewDraft={(draft) => {
+                    setPresetPlanDraft(draft);
+                    setMode("planner");
+                    setNotice("Preset draft loaded into Plan Review Console. Review and save before dry-run.");
+                  }}
+                />
+              )}
+            </Suspense>
           </section>
 
           <CompactTaskLog
@@ -1111,339 +817,6 @@ export default function App() {
   );
 }
 
-function TopBar({
-  health,
-  apiError,
-  onRetry,
-  onToggleMode,
-  modeLabel,
-}: {
-  health: boolean | null;
-  apiError: string;
-  onRetry: () => void;
-  onToggleMode: () => void;
-  modeLabel: string;
-}) {
-  return (
-    <>
-      <header className="topbar">
-        <div className="window-caption">
-          <span className="app-spark">M</span>
-          <strong>MedImage Agent</strong>
-        </div>
-        <label className="search-box">
-          <span>Search</span>
-          <input aria-label="Search" placeholder="projects, datasets, studies..." />
-          <kbd>Ctrl K</kbd>
-        </label>
-        <div className="top-actions">
-          <span className={`backend-chip ${health ? "online" : health === false ? "offline" : ""}`}>
-            {health === null ? "Checking" : health ? "Backend Connected" : "Backend Offline"}
-          </span>
-          {!health ? <button onClick={onRetry}>Retry</button> : null}
-          <button onClick={onToggleMode}>{modeLabel}</button>
-          <div className="profile-chip">
-            <span>AM</span>
-            <div><strong>Dr. Alex Morgan</strong><small>Local lab desktop</small></div>
-          </div>
-        </div>
-      </header>
-      {apiError ? <div className="api-banner">{apiError}</div> : null}
-    </>
-  );
-}
-
-function ProjectList({
-  projects,
-  selectedProjectId,
-  loading,
-  error,
-  deletingProjectId,
-  onSelect,
-  onDelete,
-}: {
-  projects: ProjectSummary[];
-  selectedProjectId: string;
-  loading: boolean;
-  error: string;
-  deletingProjectId: string | null;
-  onSelect: (id: string) => void;
-  onDelete: (id: string, name: string) => void;
-}) {
-  return (
-    <div className="project-stack">
-      <div className="panel-kicker">Recent projects {loading ? "(loading)" : error ? "(fallback)" : ""}</div>
-      {projects.map((item) => (
-        <div key={item.id} className="project-pill-row">
-          <button
-            className={`project-pill ${item.id === selectedProjectId ? "selected" : ""}`}
-            onClick={() => onSelect(item.id)}
-            title={item.name}
-          >
-            <span className="project-pill-name">{item.name}</span>
-            {item.id === selectedProjectId ? <span className="project-pill-dot" /> : null}
-          </button>
-          <button
-            type="button"
-            className="project-delete-button"
-            title={`Remove ${item.name}`}
-            aria-label={`Remove ${item.name} from Recent projects`}
-            disabled={deletingProjectId === item.id}
-            onClick={() => onDelete(item.id, item.name)}
-          >
-            {deletingProjectId === item.id ? "..." : "x"}
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ProjectHeroPanel({ inventory }: { inventory: ProjectInventory }) {
-  return (
-    <section className="project-hero-panel" aria-label="Project summary">
-      <div className="summary-meta-row">
-        <DashboardStatusPill status={inventory.dataState === "converted_bids" ? "ready" : inventory.dataState === "empty" ? "not_started" : "warning"}>
-          {inventory.dataStateLabel}
-        </DashboardStatusPill>
-        <span className="panel-kicker">{inventory.modality}</span>
-      </div>
-      <h1>{inventory.projectName}</h1>
-      <p style={{ marginBottom: "20px" }}>{inventory.stateSentence}</p>
-
-      <ProjectInventorySummary inventory={inventory} />
-      {inventory.metadataOnlyNiftiInventory ? (
-        <div className="panel-kicker" style={{ marginTop: 10 }}>NIfTI inventory: metadata only</div>
-      ) : null}
-    </section>
-  );
-}
-
-function ProjectInventorySummary({ inventory }: { inventory: ProjectInventory }) {
-  return (
-    <div className="hero-metrics-grid">
-      <MetricTile label="Raw DICOM candidates" value={inventory.rawDicomCandidates} tone={inventory.hasRawDicom ? "blue" : "neutral"} />
-      <MetricTile label="DICOM series" value={inventory.dicomSeriesCount} />
-      <MetricTile label="DICOM files" value={inventory.dicomFileCount.toLocaleString()} />
-      <MetricTile label="Converted subjects" value={inventory.convertedSubjects} tone={inventory.convertedSubjects > 0 ? "green" : "neutral"} />
-      <MetricTile label="NIfTI files" value={inventory.niftiFileCount.toLocaleString()} tone={inventory.niftiFileCount > 0 ? "green" : "neutral"} />
-    </div>
-  );
-}
-
-function RecommendedNextStepCard({
-  inventory,
-  hasPreprocessingRun,
-  onPrimaryAction,
-  onSecondaryAction,
-}: {
-  inventory: ProjectInventory;
-  hasPreprocessingRun: boolean;
-  onPrimaryAction: () => void;
-  onSecondaryAction: () => void;
-}) {
-  const primary =
-    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
-      ? "Generate conversion dry-run"
-      : inventory.dataState === "converted_bids"
-        ? (hasPreprocessingRun ? "Check preprocessing validation" : "Create preprocessing run")
-        : "Import dataset";
-  const explanation =
-    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
-      ? "Create a read-only conversion plan before NIfTI QC or preprocessing."
-      : inventory.dataState === "converted_bids"
-        ? "Inspect preprocessing readiness before creating or reviewing a run."
-        : "Import a BIDS/NIfTI dataset or raw DICOM directory to begin.";
-  const secondary =
-    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
-      ? "Review conversion readiness"
-      : inventory.dataState === "converted_bids"
-        ? "Review QC report status"
-        : "";
-  const steps =
-    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
-      ? ["Generate conversion dry-run", "Review conversion readiness", "Persist review package"]
-      : inventory.dataState === "converted_bids"
-        ? [
-            hasPreprocessingRun ? "Check preprocessing validation" : "Create preprocessing run",
-            "Review QC report status",
-            "Open Plan Review when ready"
-          ]
-        : ["Import dataset", "Review data readiness", "Check environment health"];
-
-  return (
-    <aside className="recommended-card" aria-label="Recommended next step">
-      <div>
-        <h2>Recommended Next Step</h2>
-        <p>{explanation}</p>
-      </div>
-      <ol className="recommended-steps">
-        {steps.slice(0, 3).map((step, index) => (
-          <li key={step}><span>{index + 1}</span>{step}</li>
-        ))}
-      </ol>
-      <div className="recommended-actions">
-        <button type="button" className="primary-scroll-button" onClick={onPrimaryAction}>
-          {primary}
-        </button>
-        {secondary ? (
-          <button type="button" className="secondary-scroll-button" onClick={onSecondaryAction}>
-            {secondary}
-          </button>
-        ) : null}
-      </div>
-    </aside>
-  );
-}
-
-function ReadinessStatusStrip({
-  inventory,
-  health,
-  hasPreprocessingRun,
-}: {
-  inventory: ProjectInventory;
-  health: boolean | null;
-  hasPreprocessingRun: boolean;
-}) {
-  const isConverted = inventory.dataState === "converted_bids";
-  const isRawDicom = inventory.dataState === "raw_dicom";
-  const isMixed = inventory.dataState === "mixed";
-  const isEmpty = inventory.dataState === "empty";
-
-  // Data status
-  let dataStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
-  if (isConverted) {
-    dataStatus = "ready";
-  } else if (isRawDicom || isMixed) {
-    dataStatus = inventory.rawDicomCandidates > 0 ? "ready" : "warning";
-  } else if (isEmpty) {
-    dataStatus = "not_started";
-  }
-
-  // DICOM status
-  const dicomStatus = inventory.dicomFileCount > 0 ? "ready" : "not_applicable";
-
-  // BIDS/NIfTI status
-  let bidsStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
-  if (isConverted) {
-    bidsStatus = "ready";
-  } else if (isRawDicom) {
-    bidsStatus = "warning";
-  } else if (isMixed) {
-    bidsStatus = "ready";
-  } else if (isEmpty) {
-    bidsStatus = "not_started";
-  }
-
-  // Conversion Safety status
-  let safetyStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
-  if (isConverted) {
-    safetyStatus = "not_applicable";
-  } else if (isRawDicom || isMixed) {
-    safetyStatus = "warning";
-  } else {
-    safetyStatus = "not_applicable";
-  }
-
-  // Preprocessing status
-  let prepStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
-  if (isConverted || isMixed) {
-    prepStatus = hasPreprocessingRun ? "ready" : "not_started";
-  } else if (isRawDicom) {
-    prepStatus = "not_applicable";
-  } else {
-    prepStatus = "not_started";
-  }
-
-  // Environment status
-  const envStatus = health === false ? "blocked" : health ? "ready" : "unknown";
-
-  return (
-    <section className="readiness-status-strip" aria-label="Readiness status strip">
-      <StatusStripItem label="Data" status={dataStatus} />
-      <StatusStripItem label="DICOM" status={dicomStatus} />
-      <StatusStripItem label="BIDS/NIfTI" status={bidsStatus} projectState={inventory.dataState} />
-      <StatusStripItem label="Conversion Safety" status={safetyStatus} projectState={inventory.dataState} />
-      <StatusStripItem label="Preprocessing" status={prepStatus} />
-      <StatusStripItem label="Environment" status={envStatus} />
-    </section>
-  );
-}
-
-function StatusStripItem({
-  label,
-  status,
-  projectState,
-}: {
-  label: string;
-  status: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown";
-  projectState?: string;
-}) {
-  let copy: string | undefined = undefined;
-  if (label === "BIDS/NIfTI" && status === "warning" && projectState === "raw_dicom") {
-    copy = "Expected before conversion";
-  } else if (label === "Conversion Safety" && status === "warning" && projectState === "raw_dicom") {
-    copy = "Review required";
-  }
-  return (
-    <div className="status-strip-item">
-      <small>{label}</small>
-      <DashboardStatusPill status={status}>{copy}</DashboardStatusPill>
-    </div>
-  );
-}
-
-function WorkflowTabs({
-  activeTab,
-  onChange,
-}: {
-  activeTab: WorkflowTab;
-  onChange: (tab: WorkflowTab) => void;
-}) {
-  const tabs: Array<{ id: WorkflowTab; label: string; description: string }> = [
-    { id: "data", label: "Data & Conversion", description: "DICOM, BIDS, dry-run" },
-    { id: "preprocessing", label: "Preprocessing", description: "Validation and reports" },
-    { id: "reports", label: "QC & Reports", description: "Artifacts and warnings" },
-    { id: "environment", label: "Settings / Environment", description: "Planning tools" },
-  ];
-
-  return (
-    <nav className="workflow-tabs" aria-label="Workflow stages">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          className={activeTab === tab.id ? "active" : ""}
-          onClick={() => onChange(tab.id)}
-        >
-          <span>{tab.label}</span>
-          <small>{tab.description}</small>
-        </button>
-      ))}
-    </nav>
-  );
-}
-
-function WorkspaceHeader({
-  title,
-  subtitle,
-  status,
-}: {
-  title: string;
-  subtitle: string;
-  status?: string;
-}) {
-  return (
-    <div className="workspace-header">
-      <div>
-        <h2>{title}</h2>
-        <p>{subtitle}</p>
-      </div>
-      {status ? <DashboardStatusPill status={status}>{status}</DashboardStatusPill> : null}
-    </div>
-  );
-}
-
 function DataConversionWorkspace({
   baseUrl,
   projectId,
@@ -1463,7 +836,7 @@ function DataConversionWorkspace({
           subtitle="Converted BIDS/NIfTI project overview."
           status="Ready"
         />
-        <div style={{ padding: 12, border: "1px solid rgba(10, 132, 255, 0.18)", borderRadius: 8, background: "rgba(239, 246, 255, 0.82)", color: "#1557a5", fontSize: 12 }}>
+        <div className="workspace-mode-note">
           This project is already in converted BIDS/NIfTI mode. DICOM conversion is not the primary workflow.
         </div>
         <div className="workspace-summary-row">
@@ -1493,7 +866,7 @@ function DataConversionWorkspace({
         status={inventory.hasRawDicom ? "Expected before conversion" : inventory.hasConvertedData ? "Ready" : "Not started"}
       />
       {inventory.dataState === "mixed" && (
-        <div style={{ padding: 10, border: "1px solid rgba(10, 132, 255, 0.18)", borderRadius: 8, background: "rgba(239, 246, 255, 0.82)", color: "#1557a5", fontSize: 12, marginBottom: 10 }}>
+        <div className="workspace-mode-note workspace-mode-note-spaced">
           <strong>Notice:</strong> Converted BIDS/NIfTI outputs are already present in this project, but raw DICOM files have also been detected. Review the conversion state before preprocessing.
         </div>
       )}
@@ -1656,16 +1029,16 @@ function CompactTaskLog({
 }) {
   const visibleTasks = tasks.slice(0, 2);
   return (
-    <section className="compact-task-log" aria-label="Compact task log" style={{ padding: "10px 16px" }}>
-      <details className="activity-details" style={{ width: "100%" }}>
-        <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <h2 style={{ margin: 0, fontSize: "14px" }}>Recent Activity</h2>
-            <small style={{ color: "#667085" }}>(Click to view recent task logs / demo runs)</small>
+    <section className="compact-task-log compact-task-log-tight" aria-label="Compact task log">
+      <details className="activity-details">
+        <summary className="activity-summary">
+          <div className="activity-summary-title">
+            <h2>Recent Activity</h2>
+            <small>(Click to view recent task logs / demo runs)</small>
           </div>
-          {error ? <button type="button" onClick={(e) => { e.stopPropagation(); onRetry(); }} style={{ fontSize: 10, minHeight: 20, padding: "2px 6px" }}>Retry</button> : null}
+          {error ? <button type="button" className="compact-retry-button" onClick={(e) => { e.stopPropagation(); onRetry(); }}>Retry</button> : null}
         </summary>
-        <div style={{ marginTop: 10 }}>
+        <div className="activity-body">
           {visibleTasks.length ? (
             <div className="compact-task-list">
               {visibleTasks.map((task) => (
@@ -1747,7 +1120,7 @@ function SecondaryToolsDrawer({
           title="Open Tools Drawer"
           aria-label="Open Tools Drawer"
         >
-          <span style={{ fontSize: 16 }}>🛠️</span>
+          <span className="drawer-toggle-icon">Open</span>
           <div className="vertical-text">Tools</div>
         </button>
       </aside>
@@ -1757,9 +1130,9 @@ function SecondaryToolsDrawer({
   return (
     <aside className="secondary-tools-drawer open" aria-label="Secondary tools drawer">
       <details open>
-        <summary onClick={(e) => { e.preventDefault(); onToggle(); }} style={{ cursor: "pointer" }}>
+        <summary className="drawer-summary" onClick={(e) => { e.preventDefault(); onToggle(); }}>
           <span>Tools Drawer</span>
-          <span style={{ fontSize: 14, fontWeight: "bold", padding: "0 6px" }}>✕</span>
+          <span className="drawer-summary-action">Close</span>
         </summary>
         <div className="secondary-tools-stack">
           <PipelineSettingsCard
@@ -1776,7 +1149,7 @@ function SecondaryToolsDrawer({
           />
 
           <details className="drawer-section">
-            <summary style={{ cursor: "pointer" }}>Assistant</summary>
+            <summary className="drawer-section-summary">Assistant</summary>
             <AssistantPanel
               messages={assistantMessages}
               input={assistantInput}
@@ -1789,7 +1162,7 @@ function SecondaryToolsDrawer({
           </details>
 
           <details className="drawer-section">
-            <summary style={{ cursor: "pointer" }}>Legacy Actions</summary>
+            <summary className="drawer-section-summary">Legacy Actions</summary>
             <div className="quick-grid compact">
               {quickActions.map((item) => (
                 <button
@@ -1807,21 +1180,19 @@ function SecondaryToolsDrawer({
           </details>
 
           <details className="drawer-section">
-            <summary style={{ cursor: "pointer" }}>Planning Tools</summary>
-            <div style={{ display: "grid", gap: 8, paddingTop: 8 }}>
+            <summary className="drawer-section-summary">Planning Tools</summary>
+            <div className="drawer-planning-actions">
               <button
                 type="button"
-                className="soft-button"
+                className="soft-button drawer-planning-button"
                 onClick={() => onSetMode("planner")}
-                style={{ width: "100%", minHeight: 34, fontSize: 12, fontWeight: 800 }}
               >
                 Plan Review Console
               </button>
               <button
                 type="button"
-                className="soft-button"
+                className="soft-button drawer-planning-button"
                 onClick={() => onSetMode("advanced")}
-                style={{ width: "100%", minHeight: 34, fontSize: 12, fontWeight: 800 }}
               >
                 Advanced Console
               </button>
@@ -1888,8 +1259,8 @@ function ProjectCreateResultPanel({
             <div><span>Incomplete</span><strong>{diagnosticNumber(diagnostics, "subjects_incomplete")}</strong></div>
           </div>
 
-          <div style={{ marginTop: 10, marginBottom: 10 }}>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "#667085", cursor: "pointer" }}>
+          <div className="section-spacer">
+            <label className="tech-details-toggle">
               <input
                 type="checkbox"
                 checked={showTechDetails}
@@ -1992,7 +1363,12 @@ function MedicalImageViewer({
             <option value="">No sources</option>
           )}
         </select>
-        <select className="scan-select" value={sequence} onChange={(event) => onSequenceChange(event.target.value)}>
+        <select
+          className="scan-select"
+          value={sequence}
+          onChange={(event) => onSequenceChange(event.target.value)}
+          aria-label="Sequence"
+        >
           {(sequenceOptions.length ? sequenceOptions : project.sequences).map((item) => (
             <option key={item} value={item}>{item}</option>
           ))}
@@ -2017,7 +1393,13 @@ function MedicalImageViewer({
       </div>
       <div className="scan-canvas">
         {preview.preview_url ? (
-          <img className="brain-preview-img" src={preview.preview_url} alt={`${sequence} preview`} />
+          <img
+            className="brain-preview-img"
+            src={preview.preview_url}
+            alt={`${project.name} ${subjectId ?? "selected subject"} ${sequence} ${planeLabel} medical image preview`}
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
           <BrainScan />
         )}
@@ -2367,8 +1749,8 @@ function TaskDetailsPanel({
         </div>
       ) : null}
 
-      <div style={{ marginTop: 10, marginBottom: 10 }}>
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, color: "#667085", cursor: "pointer" }}>
+      <div className="section-spacer">
+        <label className="tech-details-toggle">
           <input
             type="checkbox"
             checked={showTechDetails}

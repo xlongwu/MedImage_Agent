@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { runDpabiCapability, runDpabiScaffold, runDpabiInputManifest, runDpabiPreflight, runDpabiRunPlan, runDpabiSandboxSmoke, runDpabiSignatureProbe, generateDpabiWrapperContracts, runDpabiSingleFunctionSandbox, runDpabiSubjectSmooth, generateDpabiSubjectWrapperReport, generateDpabiWrapperValidationMatrix, generateDpabiTemplateLibrary, listDpabiTemplates, instantiateDpabiTemplate, executeDpabiTemplate } from "../api";
+import { runDpabiCapability, runDpabiScaffold, runDpabiInputManifest, runDpabiPreflight, runDpabiRunPlan, runDpabiSandboxSmoke, runDpabiSignatureProbe, generateDpabiWrapperContracts, runDpabiSingleFunctionSandbox, runDpabiSubjectSmooth, generateDpabiSubjectWrapperReport, generateDpabiWrapperValidationMatrix, generateDpabiTemplateLibrary, listDpabiTemplates, instantiateDpabiTemplate, executeDpabiTemplate } from "../lib/api/legacy";
 
 interface FunctionItem {
   name: string;

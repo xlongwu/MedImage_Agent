@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DEFAULT_API_BASE } from "../api";
+import { DEFAULT_API_BASE } from "../lib/api/legacy";
 import { CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = { projectId: string | null; preprocessingRunId: string | null };
@@ -41,10 +41,10 @@ export default function AdvancedPreprocessingPipelinePanel({ projectId, preproce
     if (!projectId || !preprocessingRunId) return;
     setValLoading(true); setValError(""); setValResult(null);
     try {
-      const { getPreprocessingPipelineValidation } = await import("../api");
+      const { getPreprocessingPipelineValidation } = await import("../lib/api/legacy");
       const res = await getPreprocessingPipelineValidation(DEFAULT_API_BASE, projectId, preprocessingRunId);
       setValResult(res as PipelineValidation);
-    } catch (e: any) { setValError(e?.message || String(e)); }
+    } catch (error) { setValError(error instanceof Error ? error.message : String(error)); }
     finally { setValLoading(false); }
   }
 
@@ -52,7 +52,7 @@ export default function AdvancedPreprocessingPipelinePanel({ projectId, preproce
     if (!projectId || !preprocessingRunId) return;
     setRepLoading(true); setRepResult(null);
     try {
-      const { getPreprocessingPipelineReport } = await import("../api");
+      const { getPreprocessingPipelineReport } = await import("../lib/api/legacy");
       const res = await getPreprocessingPipelineReport(DEFAULT_API_BASE, projectId, preprocessingRunId);
       setRepResult(res as PipelineReport);
     } catch (e) { /* ignore */ }

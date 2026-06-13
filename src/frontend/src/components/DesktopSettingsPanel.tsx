@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getDesktopConfig, getDesktopHealth, saveDesktopConfig } from "../api";
+import { getDesktopConfig, getDesktopHealth, saveDesktopConfig } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 
 type Props = {

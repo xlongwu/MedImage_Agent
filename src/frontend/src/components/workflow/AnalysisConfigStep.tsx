@@ -12,11 +12,29 @@ const items: { key: keyof AnalysisConfig; label: string; desc: string; dependsOn
   { key: "reportExport", label: "Report Export + Validation", desc: "Generate ZIP package with checksums", dependsOn: "enabled" },
 ];
 
+type AnalysisStepKey = Exclude<keyof AnalysisConfig, "enabled">;
+
+function isAnalysisStepKey(key: keyof AnalysisConfig): key is AnalysisStepKey {
+  return key !== "enabled";
+}
+
+function analysisEnabled(value: AnalysisConfig[keyof AnalysisConfig]): boolean {
+  return typeof value === "boolean" ? value : value.enabled;
+}
+
 export function AnalysisConfigStep({ state, dispatch }: Props) {
   const toggle = (key: keyof AnalysisConfig) => {
-    const item = state.analysis[key];
-    if (typeof (item as any).enabled === "boolean") {
-      dispatch({ type: "SET_ANALYSIS", config: { [key]: { ...(item as any), enabled: !(item as any).enabled } } });
+    if (key === "enabled") {
+      dispatch({ type: "SET_ANALYSIS", config: { enabled: !state.analysis.enabled } });
+      return;
+    }
+
+    if (isAnalysisStepKey(key)) {
+      const item = state.analysis[key];
+      dispatch({
+        type: "SET_ANALYSIS",
+        config: { [key]: { ...item, enabled: !item.enabled } } as Partial<AnalysisConfig>,
+      });
     }
   };
 
@@ -26,9 +44,9 @@ export function AnalysisConfigStep({ state, dispatch }: Props) {
       <p style={{ color: "#666", marginBottom: 16 }}>Optional post-processing analysis steps. Skip if you only need preprocessed data.</p>
 
       {items.map((item) => {
-        const cfg = state.analysis[item.key] as any;
-        const enabled = cfg?.enabled ?? (item.key === "enabled");
-        const disabled = item.dependsOn && !(state.analysis[item.dependsOn] as any)?.enabled;
+        const cfg = state.analysis[item.key];
+        const enabled = analysisEnabled(cfg);
+        const disabled = item.dependsOn ? !analysisEnabled(state.analysis[item.dependsOn]) : false;
         return (
           <div key={item.key} onClick={() => !disabled && toggle(item.key)} style={{
             display: "flex", alignItems: "center", padding: "12px 16px", marginBottom: 8,

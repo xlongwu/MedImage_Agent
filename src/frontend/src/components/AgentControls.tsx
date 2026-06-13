@@ -3,7 +3,7 @@ import {
   createAgentPlan,
   executeAgentPlan,
   getAgentRun
-} from "../api";
+} from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 

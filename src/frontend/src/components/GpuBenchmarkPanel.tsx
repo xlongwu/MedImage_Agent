@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { detectGpu, runGpuBenchmark } from "../api";
+import { detectGpu, runGpuBenchmark } from "../lib/api/legacy";
 
 interface GpuBenchmarkPanelProps {
   baseUrl: string;

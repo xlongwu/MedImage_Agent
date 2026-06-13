@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { getAdvisorStatus, runAdvisor as runAdvisorRequest } from '../lib/api/advisor';
+import type { AdvisorResult, AdvisorStatus } from '../lib/api/advisor';
 
 interface Props {
   baseUrl: string;
@@ -7,14 +9,13 @@ interface Props {
 export default function AdvisorCenterPanel({ baseUrl }: Props) {
   const [advisorType, setAdvisorType] = useState('protocol');
   const [inputJson, setInputJson] = useState('{}');
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<AdvisorResult | null>(null);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<AdvisorStatus | null>(null);
 
   async function loadStatus() {
     try {
-      const res = await fetch(`${baseUrl}/api/advisor/status`);
-      setStatus(await res.json());
+      setStatus(await getAdvisorStatus(baseUrl));
     } catch (e) {
       console.error(e);
     }
@@ -34,14 +35,9 @@ export default function AdvisorCenterPanel({ baseUrl }: Props) {
     setLoading(true);
     try {
       const body = JSON.parse(inputJson);
-      const res = await fetch(`${baseUrl}/api/advisor/${advisorType}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      setResult(await res.json());
-    } catch (e: any) {
-      setResult({ error: e.message });
+      setResult(await runAdvisorRequest(baseUrl, advisorType, body));
+    } catch (error) {
+      setResult({ error: error instanceof Error ? error.message : String(error) });
     }
     setLoading(false);
   }

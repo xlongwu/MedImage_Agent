@@ -1,10 +1,15 @@
 import React, { useMemo, useRef, useState } from "react";
-import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, executeReviewedPlan, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, listProjectReviewedPlans, saveReviewedPlan, validatePlan } from "../api";
+import { DEFAULT_API_BASE, checkApprovalGate, executeReviewedDryRun, executeReviewedPlan, fetchAuditRecord, fetchToolCatalog, generatePlanFromGoal, listProjectReviewedPlans, saveReviewedPlan, validatePlan } from "../lib/api/legacy";
 import { describeExecuteReviewedStatus } from "../lib/executeReviewedStatus";
 import { detectExternalToolNodes, isExternalToolApprovalComplete } from "../lib/externalToolApproval";
 import type { ExecuteReviewedSeverity } from "../lib/executeReviewedStatus";
 import type { ProjectDetail } from "../lib/types/project";
 import type { ExecuteReviewedResponse, PresetPlanDraft, ReviewedPlanRecord } from "../types";
+import styles from "./PlanReviewConsole.module.css";
+
+function cssVars(vars: Record<string, string>): React.CSSProperties {
+  return vars as React.CSSProperties;
+}
 
 type PlanData = Record<string, unknown> | null;
 
@@ -588,18 +593,18 @@ export default function PlanReviewConsole({
   }
 
   return (
-    <div style={{ padding: 20, maxWidth: 1020, margin: "0 auto" }}>
+    <div className={styles.style001}>
       <h2>Plan Review Console</h2>
 
       {loadedPresetBanner ? (
-        <div style={{ marginBottom: 16, padding: 12, background: "rgba(106, 27, 154, 0.08)", border: "1px solid rgba(106, 27, 154, 0.24)", borderRadius: 4, fontSize: 12, color: "#6a1b9a" }}>
+        <div className={styles.style002}>
           {loadedPresetBanner}
         </div>
       ) : null}
 
-      <div style={{ marginBottom: 16, padding: 12, background: "#eef4fb", border: "1px solid #b7c9dd", borderRadius: 4, fontSize: 12 }}>
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>Project Context</div>
-        <label style={{ display: "block", marginBottom: 8 }}>
+      <div className={styles.style003}>
+        <div className={styles.style004}>Project Context</div>
+        <label className={styles.style005}>
           <input
             type="checkbox"
             checked={explicitDemoMode}
@@ -614,11 +619,11 @@ export default function PlanReviewConsole({
               type="text"
               value={demoProjectConfigPath}
               onChange={(event) => setDemoProjectConfigPath(event.target.value)}
-              style={{ width: 360, padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }}
+              className={styles.demoConfigInput}
             />
           </label>
         ) : (
-          <div style={{ display: "grid", gap: 3 }}>
+          <div className={styles.style006}>
             <div><b>Project:</b> {selectedProject ? `${selectedProject.name} (${selectedProject.id})` : "Unavailable"}</div>
             <div><b>Config:</b> {selectedProjectConfigPath || "Unavailable"}</div>
             <div><b>Rawdata:</b> {rawdataDir || "Unavailable"}</div>
@@ -626,39 +631,39 @@ export default function PlanReviewConsole({
           </div>
         )}
         {projectContextError && (
-          <div style={{ color: "#c62828", marginTop: 8, fontWeight: 600 }}>{projectContextError}</div>
+          <div className={styles.style007}>{projectContextError}</div>
         )}
       </div>
 
       {!explicitDemoMode && selectedProjectId && (
-        <div style={{ marginBottom: 16, padding: 12, background: "#f8fafc", border: "1px solid #d6dee8", borderRadius: 4, fontSize: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div className={styles.style008}>
+          <div className={styles.style009}>
             <strong>Recent Plans</strong>
             <button
               onClick={() => void refreshRecentPlans()}
               disabled={planHistoryLoading}
-              style={{ padding: "3px 9px", border: "1px solid #bbb", borderRadius: 3, background: "#fff", cursor: "pointer", fontSize: 11 }}>
+              className={styles.compactWhiteButton}>
               {planHistoryLoading ? "Loading..." : "Refresh"}
             </button>
-            {reviewedPlanId && <span style={{ color: "#2e7d32" }}>Active: {reviewedPlanId}</span>}
-            {planSaveStatus && <span style={{ color: "#555" }}>{planSaveStatus}</span>}
+            {reviewedPlanId && <span className={styles.style010}>Active: {reviewedPlanId}</span>}
+            {planSaveStatus && <span className={styles.style011}>{planSaveStatus}</span>}
           </div>
-          {planHistoryError && <div style={{ color: "#c62828", marginBottom: 6 }}>{planHistoryError}</div>}
+          {planHistoryError && <div className={styles.style012}>{planHistoryError}</div>}
           {recentPlans.length === 0 && !planHistoryLoading ? (
-            <div style={{ color: "#777" }}>No persisted reviewed plans for this project yet.</div>
+            <div className={styles.style013}>No persisted reviewed plans for this project yet.</div>
           ) : (
-            <div style={{ display: "grid", gap: 5 }}>
+            <div className={styles.style014}>
               {recentPlans.slice(0, 8).map((record) => (
-                <div key={record.reviewed_plan_id} style={{ display: "flex", gap: 8, alignItems: "center", padding: 6, background: "#fff", border: "1px solid #e0e0e0", borderRadius: 3 }}>
+                <div key={record.reviewed_plan_id} className={styles.style015}>
                   <button
                     onClick={() => restoreReviewedPlan(record)}
-                    style={{ padding: "3px 9px", border: "1px solid #90a4ae", borderRadius: 3, background: "#eceff1", cursor: "pointer", fontSize: 11 }}>
+                    className={styles.restorePlanButton}>
                     Restore
                   </button>
-                  <span style={{ fontFamily: "monospace" }}>{record.reviewed_plan_id}</span>
+                  <span className={styles.style016}>{record.reviewed_plan_id}</span>
                   <span>Status: {record.status}</span>
                   <span>Execution: {record.execution_status}</span>
-                  <span style={{ color: "#777" }}>{record.updated_at}</span>
+                  <span className={styles.style017}>{record.updated_at}</span>
                 </div>
               ))}
             </div>
@@ -667,24 +672,24 @@ export default function PlanReviewConsole({
       )}
 
       {/* ── Input ── */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ fontWeight: 600, display: "block", marginBottom: 4 }}>Goal</label>
+      <div className={styles.style018}>
+        <label className={styles.style019}>Goal</label>
         <input type="text" value={goal} onChange={(e) => setGoal(e.target.value)}
           placeholder="e.g. 对 rs-fMRI 数据做 realign 和 motion QC"
-          style={{ width: "100%", padding: "8px 12px", borderRadius: 4, border: "1px solid #ccc", fontSize: 14 }}
+          className={styles.goalInput}
           onKeyDown={(e) => e.key === "Enter" && handleGenerate()} />
       </div>
 
-      <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ fontWeight: 600 }}>Provider:</label>
+      <div className={styles.style020}>
+        <label className={styles.style021}>Provider:</label>
         <select value={provider} onChange={(e) => setProvider(e.target.value)}
-          style={{ padding: "6px 10px", borderRadius: 4, border: "1px solid #ccc" }}>
+          className={styles.providerSelect}>
           <option value="mock">mock</option>
           <option value="rule_based">rule_based</option>
           <option value="openai_compatible">openai_compatible</option>
         </select>
         <button onClick={handleGenerate} disabled={loading || Boolean(projectContextError)}
-          style={{ padding: "8px 20px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}>
+          className={styles.style022}>
           {loading ? "Generating..." : "Generate Plan"}
         </button>
         {/* Summary chips */}
@@ -699,31 +704,31 @@ export default function PlanReviewConsole({
         )}
       </div>
 
-      {catalogError && <div style={{ padding: 8, background: "#fff3e0", borderRadius: 4, marginBottom: 12, fontSize: 13, color: "#e65100" }}>⚠️ {catalogError}</div>}
+      {catalogError && <div className={styles.style023}>⚠️ {catalogError}</div>}
 
-      {error && <div style={{ padding: 12, background: "#ffebee", borderRadius: 4, marginBottom: 16, color: "#c62828", fontSize: 14 }}>{error}</div>}
+      {error && <div className={styles.style024}>{error}</div>}
 
       {/* ── Plan JSON Editor ── */}
       {result && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <h4 style={{ margin: 0 }}>Candidate Plan JSON</h4>
+        <div className={styles.style025}>
+          <div className={styles.style026}>
+            <h4 className={styles.style027}>Candidate Plan JSON</h4>
             <button onClick={handleRevalidate} disabled={validateLoading}
-              style={{ padding: "6px 14px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              className={styles.style028}>
               {validateLoading ? "Validating..." : "Re-validate"}
             </button>
             <button onClick={handleExport} disabled={!result}
-              style={{ padding: "6px 14px", background: "#0288d1", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              className={styles.style029}>
               Export JSON
             </button>
             <button onClick={handleCopy} disabled={!result}
-              style={{ padding: "6px 14px", background: "#6a1b9a", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              className={styles.style030}>
               Copy JSON
             </button>
-            {copyStatus && <span style={{ fontSize: 12, color: "#2e7d32" }}>{copyStatus}</span>}
-            {reValidated && <span style={{ fontSize: 12, color: "#777" }}>(using re-validation result)</span>}
+            {copyStatus && <span className={styles.style031}>{copyStatus}</span>}
+            {reValidated && <span className={styles.style032}>(using re-validation result)</span>}
           </div>
-          {jsonError && <div style={{ padding: 8, background: "#ffebee", borderRadius: 4, marginBottom: 8, color: "#c62828", fontSize: 13 }}>JSON Parse Error: {jsonError}</div>}
+          {jsonError && <div className={styles.style033}>JSON Parse Error: {jsonError}</div>}
           <textarea value={planJson}
             onChange={(e) => {
               setPlanJson(e.target.value);
@@ -733,16 +738,16 @@ export default function PlanReviewConsole({
               setJsonError("");
             }}
             rows={14}
-            style={{ width: "100%", fontFamily: "monospace", fontSize: 12, padding: 8, borderRadius: 4, border: "1px solid #ccc" }}
+            className={styles.planTextarea}
             spellCheck={false} />
         </div>
       )}
 
       {/* ── Approval Gate ── */}
       {result && (
-        <div style={{ marginBottom: 16, padding: 12, background: "#fafafa", borderRadius: 4, border: "1px solid #e0e0e0" }}>
-          <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Approval Gate Check</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 16px", fontSize: 13, marginBottom: 8 }}>
+        <div className={styles.style034}>
+          <h4 className={styles.style035}>Approval Gate Check</h4>
+          <div className={styles.style036}>
             <label>
               <input type="checkbox" checked={approvalApproved} onChange={(e) => setApprovalApproved(e.target.checked)} />
               {" "}Approved
@@ -750,48 +755,48 @@ export default function PlanReviewConsole({
             <label>
               Approved by:{" "}
               <input type="text" value={approvalBy} onChange={(e) => setApprovalBy(e.target.value)}
-                placeholder="reviewer" style={{ width: 100, padding: "2px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }} />
+                placeholder="reviewer" className={styles.approvalByInput} />
             </label>
-            <label style={{ gridColumn: "span 2" }}>
+            <label className={styles.style037}>
               Approved nodes (comma-separated, or *):
               <input type="text" value={approvalNodesInput} onChange={(e) => setApprovalNodesInput(e.target.value)}
-                placeholder="spm_realign_subject, motion_qc_subject" style={{ width: "100%", padding: "2px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12, marginTop: 2 }} />
+                placeholder="spm_realign_subject, motion_qc_subject" className={styles.fullCompactInput} />
             </label>
-            <label style={{ gridColumn: "span 2" }}>
+            <label className={styles.style038}>
               Rejected nodes:
               <input type="text" value={rejectedNodesInput} onChange={(e) => setRejectedNodesInput(e.target.value)}
-                placeholder="optional" style={{ width: "100%", padding: "2px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12, marginTop: 2 }} />
+                placeholder="optional" className={styles.fullCompactInput} />
             </label>
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <div className={styles.style039}>
             <button onClick={handleCheckApproval} disabled={approvalLoading}
-              style={{ padding: "6px 14px", background: "#e65100", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+              className={styles.style040}>
               {approvalLoading ? "Checking..." : "Check Approval Gate"}
             </button>
             <button onClick={handleApproveAllRequired}
-              style={{ padding: "6px 14px", background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>
+              className={styles.style041}>
               Approve all required nodes
             </button>
           </div>
-          {approvalError && <div style={{ color: "#c62828", fontSize: 13, marginBottom: 6 }}>❌ {approvalError}</div>}
+          {approvalError && <div className={styles.style042}>❌ {approvalError}</div>}
           {approvalResult && (
             <div style={{ padding: 8, background: approvalResult.execution_allowed ? "#e8f5e9" : "#ffebee", borderRadius: 4, fontSize: 13 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>
+              <div className={styles.style043}>
                 {approvalResult.execution_allowed ? "✅ Execution allowed by approval gate" : "🚫 Execution blocked by approval gate"}
               </div>
               <div>Approval required: <b>{String(approvalResult.approval_required)}</b></div>
               <div>Approved: <b>{String(approvalResult.approved)}</b></div>
               {((approvalResult.missing_approval_nodes as string[]) || []).length > 0 && (
-                <div style={{ color: "#c62828" }}>Missing: {(approvalResult.missing_approval_nodes as string[]).join(", ")}</div>
+                <div className={styles.style044}>Missing: {(approvalResult.missing_approval_nodes as string[]).join(", ")}</div>
               )}
               {((approvalResult.rejected_nodes as string[]) || []).length > 0 && (
-                <div style={{ color: "#c62828" }}>Rejected: {(approvalResult.rejected_nodes as string[]).join(", ")}</div>
+                <div className={styles.style045}>Rejected: {(approvalResult.rejected_nodes as string[]).join(", ")}</div>
               )}
               {((approvalResult.errors as Array<Record<string,unknown>>) || []).map((e, i) => (
-                <div key={`ae-${i}`} style={{ color: "#c62828" }}>❌ [{String(e.code)}] {String(e.message)}</div>
+                <div key={`ae-${i}`} className={styles.style046}>❌ [{String(e.code)}] {String(e.message)}</div>
               ))}
               {((approvalResult.warnings as Array<Record<string,unknown>>) || []).map((w, i) => (
-                <div key={`aw-${i}`} style={{ color: "#e65100" }}>⚠️ [{String(w.code)}] {String(w.message)}</div>
+                <div key={`aw-${i}`} className={styles.style047}>⚠️ [{String(w.code)}] {String(w.message)}</div>
               ))}
             </div>
           )}
@@ -800,13 +805,13 @@ export default function PlanReviewConsole({
 
       {/* ── External Tool Safety Acknowledgement ── */}
       {result && externalToolReq.required && (
-        <div style={{ marginBottom: 16, padding: 12, background: "#fff3e0", borderRadius: 4, border: "1px solid rgba(235, 87, 87, 0.26)" }}>
-          <h4 style={{ margin: "0 0 4px 0", fontSize: 14, color: "#c62828" }}>External Tool Safety Acknowledgement</h4>
-          <p style={{ fontSize: 12, color: "#b53b3b", margin: "0 0 8px 0" }}>
+        <div className={styles.style048}>
+          <h4 className={styles.style049}>External Tool Safety Acknowledgement</h4>
+          <p className={styles.style050}>
             This plan contains high-risk external-tool nodes: {externalToolReq.nodeIds.join(", ")}.
             These acknowledgements are required before future execution.
           </p>
-          <div style={{ display: "grid", gap: 6, fontSize: 12 }}>
+          <div className={styles.style051}>
             <label>
               <input type="checkbox" checked={externalToolAcknowledgement} onChange={(e) => setExternalToolAcknowledgement(e.target.checked)} />
               {" "}I understand this may call external MATLAB/SPM/DPABI tools in future execution.
@@ -827,7 +832,7 @@ export default function PlanReviewConsole({
               <input type="checkbox" checked={subjectScopeConfirmed} onChange={(e) => setSubjectScopeConfirmed(e.target.checked)} />
               {" "}I confirm the subject/session scope has been reviewed.
             </label>
-            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <label className={styles.style052}>
               <span>Overwrite policy:</span>
               <select value={overwritePolicy} onChange={(e) => setOverwritePolicy(e.target.value as "fail_if_exists" | "require_explicit_overwrite_approval")}
                 style={{ padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }}>
@@ -837,7 +842,7 @@ export default function PlanReviewConsole({
             </label>
           </div>
           {(!externalToolAcknowledgement || !rawdataReadOnlyConfirmed || !outputDirectoryConfirmed || !riskAcknowledgement || !subjectScopeConfirmed) && (
-            <div style={{ marginTop: 8, padding: 6, background: "#ffebee", borderRadius: 4, color: "#c62828", fontSize: 12 }}>
+            <div className={styles.style053}>
               All checkboxes must be checked for the approval gate to pass.
             </div>
           )}
@@ -846,9 +851,9 @@ export default function PlanReviewConsole({
 
       {/* ── Dry-run Execution Readiness ── */}
       {result && (
-        <div style={{ marginBottom: 16, padding: 12, background: "#f3e5f5", borderRadius: 4, border: "1px solid #ce93d8" }}>
-          <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Dry-run Execution Readiness</h4>
-          <p style={{ fontSize: 12, color: "#777", margin: "0 0 8px 0" }}>
+        <div className={styles.style054}>
+          <h4 className={styles.style055}>Dry-run Execution Readiness</h4>
+          <p className={styles.style056}>
             Backend re-runs Plan Validator + Approval Gate. No pipeline is executed.
           </p>
           <button onClick={handleDryRunCheck} disabled={dryRunLoading || Boolean(projectContextError) || (externalToolReq.required && !externalToolApprovalComplete)}
@@ -857,48 +862,48 @@ export default function PlanReviewConsole({
                 ? "Complete the External Tool Safety Acknowledgement before dry-run."
                 : ""
             }
-            style={{ padding: "6px 14px", background: "#7b1fa2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 13, marginBottom: 8 }}>
+            className={styles.style057}>
             {dryRunLoading ? "Checking..." : "Dry-run Execution Check"}
           </button>
-          <label style={{ fontSize: 12, marginLeft: 8 }}>
+          <label className={styles.style058}>
             <input type="checkbox" checked={persistAudit} onChange={(e) => setPersistAudit(e.target.checked)} />
             {" "}Persist audit record
           </label>
-          {dryRunError && <div style={{ color: "#c62828", fontSize: 13, marginBottom: 6 }}>❌ {dryRunError}</div>}
+          {dryRunError && <div className={styles.style059}>❌ {dryRunError}</div>}
           {dryRunResult && (
-            <div style={{ padding: 8, background: severityBg(dryRunResult.status), borderRadius: 4, fontSize: 13 }}>
+            <div className={styles.style060} style={cssVars({ "--severity-bg": severityBg(dryRunResult.status) })}>
               <ExecuteReviewedStatusCard status={dryRunResult.status} />
-              <div style={{ marginTop: 6, fontSize: 11, color: "#777" }}>
+              <div className={styles.style061}>
                 executor_called: {String(dryRunResult.execution?.executor_called ?? "false")}
                 {" | "}submitted: {String(dryRunResult.execution?.submitted ?? "false")}
                 {" | "}run_id: {String(dryRunResult.execution?.run_id ?? "null")}
               </div>
               {dryRunResult.status !== "DRY_RUN_OK" && (
-                <div style={{ marginTop: 4, fontSize: 11, color: "#e65100" }}>
+                <div className={styles.style062}>
                   ⚠️ No pipeline was executed. This is a dry-run check only.
                 </div>
               )}
               {dryRunResult.audit?.persisted ? (
-                <div style={{ marginTop: 4, fontSize: 11 }}>
-                  <div style={{ color: "#2e7d32" }}>
+                <div className={styles.style063}>
+                  <div className={styles.style064}>
                     📝 Audit: {String(dryRunResult.audit.audit_id)} ({String(dryRunResult.audit.event_type)})
                   </div>
-                  <div style={{ color: "#777" }}>Path: {String(dryRunResult.audit.audit_path)}</div>
+                  <div className={styles.style065}>Path: {String(dryRunResult.audit.audit_path)}</div>
                   <button
                     onClick={() => handleViewAudit(String(dryRunResult.audit?.audit_id))}
                     disabled={auditLoading}
                     style={{ marginTop: 4, padding: "3px 10px", fontSize: 11, background: "#e0e0e0", border: "1px solid #ccc", borderRadius: 3, cursor: "pointer" }}>
                     {auditLoading ? "Loading..." : "View Audit Record"}
                   </button>
-                  {auditFetchError && <div style={{ color: "#c62828", marginTop: 2 }}>❌ {auditFetchError}</div>}
+                  {auditFetchError && <div className={styles.style066}>❌ {auditFetchError}</div>}
                 </div>
               ) : (
-                <div style={{ marginTop: 4, fontSize: 11, color: "#777" }}>
+                <div className={styles.style067}>
                   📝 Audit was not persisted for this dry-run.
                 </div>
               )}
               {auditDetail && (
-                <div style={{ marginTop: 6, padding: 6, background: "#f5f5f5", borderRadius: 3, fontSize: 11 }}>
+                <div className={styles.style068}>
                   <div><b>audit_id:</b> {String(auditDetail.audit_id)}</div>
                   <div><b>created_at:</b> {String(auditDetail.created_at)}</div>
                   <div><b>event_type:</b> {String(auditDetail.event_type)}</div>
@@ -919,22 +924,22 @@ export default function PlanReviewConsole({
 
       {/* ── Reviewed Execution ── */}
       {result && (
-        <div style={{ marginBottom: 16, padding: 12, background: "#e8eaf6", borderRadius: 4, border: "1px solid #9fa8da" }}>
-          <h4 style={{ margin: "0 0 4px 0", fontSize: 14 }}>🚀 Reviewed Execution</h4>
-          <p style={{ fontSize: 11, color: "#555", margin: "0 0 8px 0", lineHeight: 1.5 }}>
+        <div className={styles.style069}>
+          <h4 className={styles.style070}>🚀 Reviewed Execution</h4>
+          <p className={styles.style071}>
             Backend gated execution only. The backend will re-run validation, approval gate,
             adapter policy, pipeline writer, audit, and safe allowlist checks.<br />
             SPM / DPABI / GUI / GPU nodes remain blocked.
           </p>
 
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-            <label style={{ fontSize: 12 }}>
+          <div className={styles.style072}>
+            <label className={styles.style073}>
               Project config:{" "}
               <input type="text" value={effectiveProjectConfigPath}
                 readOnly
-                style={{ width: 260, padding: "3px 6px", borderRadius: 3, border: "1px solid #ccc", fontSize: 12 }} />
+                className={styles.style074} />
             </label>
-            <label style={{ fontSize: 12 }}>
+            <label className={styles.style075}>
               Actor:{" "}
               <input type="text" value={actorName}
                 onChange={(e) => setActorName(e.target.value)}
@@ -942,8 +947,8 @@ export default function PlanReviewConsole({
             </label>
           </div>
 
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ fontSize: 12 }}>
+          <div className={styles.style076}>
+            <label className={styles.style077}>
               <input type="checkbox" checked={confirmExecution}
                 onChange={(e) => setConfirmExecution(e.target.checked)} />
               {" "}I understand this will request backend gated execution for the reviewed plan.
@@ -951,11 +956,11 @@ export default function PlanReviewConsole({
           </div>
 
           {!effectiveProjectConfigPath && (
-            <div style={{ fontSize: 11, color: "#e65100", marginBottom: 6 }}>⚠️ Project config path is required.</div>
+            <div className={styles.style078}>⚠️ Project config path is required.</div>
           )}
 
           {dryRunResult?.status !== "DRY_RUN_OK" && (
-            <div style={{ fontSize: 11, color: "#e65100", marginBottom: 6, fontWeight: 600 }}>
+            <div className={styles.style079}>
               ⚠️ Run Dry-run Execution Check first — status is not DRY_RUN_OK.
             </div>
           )}
@@ -995,45 +1000,45 @@ export default function PlanReviewConsole({
             }}>
             {executionLoading ? "Requesting..." : "Execute Reviewed Plan"}
           </button>
-          <span style={{ fontSize: 10, color: "#999", marginLeft: 8 }}>
+          <span className={styles.style080}>
             (dry_run=false, confirm_execution=true, persist_audit=true, write_pipeline_yaml=true)
           </span>
 
-          {executionError && <div style={{ color: "#c62828", fontSize: 13, marginTop: 8 }}>❌ {executionError}</div>}
+          {executionError && <div className={styles.style081}>❌ {executionError}</div>}
 
           {executionResult && (
-            <div style={{ marginTop: 8, padding: 8, background: severityBg(executionResult.status), borderRadius: 4, fontSize: 13 }}>
+            <div className={styles.style082} style={cssVars({ "--severity-bg": severityBg(executionResult.status) })}>
               <ExecuteReviewedStatusCard status={executionResult.status} />
-              <div style={{ marginTop: 6, fontSize: 12 }}>
+              <div className={styles.style083}>
                 <div>Reviewed plan: <b>{String(executionResult.reviewed_plan_id ?? "null")}</b></div>
                 <div>Run link: <b>{String(executionResult.run_link_id ?? "null")}</b></div>
                 <div>Pipeline path: <b>{String(executionResult.pipeline_path ?? "null")}</b></div>
                 <div>Summary path: <b>{String(executionResult.summary_path ?? "null")}</b></div>
               </div>
-              <div style={{ marginTop: 4, fontSize: 11, color: "#555" }}>
+              <div className={styles.style084}>
                 executor_called: <b>{String(executionResult.execution?.executor_called ?? "false")}</b>
                 {" | "}submitted: <b>{String(executionResult.execution?.submitted ?? "false")}</b>
                 {" | "}run_id: <b>{String(executionResult.execution?.run_id ?? "null")}</b>
               </div>
               {executionResult.audit?.audit_id ? (
-                <div style={{ marginTop: 4, fontSize: 11 }}>
-                  <span style={{ color: "#2e7d32" }}>📝 Audit: {executionResult.audit.audit_id}</span>
+                <div className={styles.style085}>
+                  <span className={styles.style086}>📝 Audit: {executionResult.audit.audit_id}</span>
                 </div>
               ) : null}
               {executionResult.pipeline_yaml &&
                typeof executionResult.pipeline_yaml === "object" &&
                "path" in executionResult.pipeline_yaml ? (
-                <div style={{ marginTop: 2, fontSize: 11 }}>
+                <div className={styles.style087}>
                   <span>📄 Pipeline YAML: {String(executionResult.pipeline_yaml.path)}</span>
                 </div>
               ) : null}
               {(executionResult.errors ?? []).length > 0 && (
-                <div style={{ marginTop: 4, color: "#c62828", fontSize: 12 }}>
+                <div className={styles.style088}>
                   Errors: {JSON.stringify(executionResult.errors)}
                 </div>
               )}
               {(executionResult.warnings ?? []).length > 0 && (
-                <div style={{ marginTop: 4, color: "#e65100", fontSize: 12 }}>
+                <div className={styles.style089}>
                   Warnings: {JSON.stringify(executionResult.warnings)}
                 </div>
               )}
@@ -1044,9 +1049,9 @@ export default function PlanReviewConsole({
 
       {/* ── Result ── */}
       {result && (
-        <div style={{ display: "flex", gap: 16 }}>
+        <div className={styles.style090}>
           {/* Left: plan table + validation */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className={styles.style091}>
             {/* Status */}
             <div style={{ padding: 12, borderRadius: 4, marginBottom: 12, fontSize: 14,
               background: result.ok ? "#e8f5e9" : "#fff3e0", color: result.ok ? "#2e7d32" : "#e65100" }}>
@@ -1055,16 +1060,16 @@ export default function PlanReviewConsole({
             </div>
 
             {(errors.length > 0 || warnings.length > 0) && (
-              <div style={{ marginBottom: 12 }}>
-                {errors.map((e, i) => <div key={`e-${i}`} style={{ color: "#c62828", fontSize: 13 }}>❌ {e}</div>)}
-                {warnings.map((w, i) => <div key={`w-${i}`} style={{ color: "#e65100", fontSize: 13 }}>⚠️ {w}</div>)}
+              <div className={styles.style092}>
+                {errors.map((e, i) => <div key={`e-${i}`} className={styles.style093}>❌ {e}</div>)}
+                {warnings.map((w, i) => <div key={`w-${i}`} className={styles.style094}>⚠️ {w}</div>)}
               </div>
             )}
 
             {/* Risk Summary */}
-            <div style={{ marginBottom: 12, padding: 10, background: "#f5f5f5", borderRadius: 4 }}>
-              <h4 style={{ margin: "0 0 6px 0", fontSize: 14 }}>Risk Summary{reValidated ? " (re-validated)" : ""}</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 16px", fontSize: 12 }}>
+            <div className={styles.style095}>
+              <h4 className={styles.style096}>Risk Summary{reValidated ? " (re-validated)" : ""}</h4>
+              <div className={styles.style097}>
                 <span>Total nodes: <b>{String(riskSummary.nodes_total ?? "?")}</b></span>
                 <span>Requires approval: <b style={{ color: riskSummary.requires_approval ? "#c62828" : "#2e7d32" }}>{String(riskSummary.requires_approval ?? "?")}</b></span>
                 <span>Approval count: <b>{String(riskSummary.approval_required_count ?? "?")}</b></span>
@@ -1072,7 +1077,7 @@ export default function PlanReviewConsole({
                 <span>Manual required: <b>{String(riskSummary.manual_required ?? "?")}</b></span>
                 <span>Unknown nodes: <b>{String(riskSummary.unknown_nodes_count ?? "?")}</b></span>
               </div>
-              <div style={{ marginTop: 6, fontSize: 11, color: "#777", lineHeight: 1.6 }}>
+              <div className={styles.style098}>
                 <div>🔴 <b>High risk</b> — requires careful manual review before execution</div>
                 <div>🟠 <b>Requires approval</b> — must pass approval gate before pipeline runs</div>
                 <div>🟣 <b>Uncataloged</b> — metadata not yet complete; treat as unknown risk</div>
@@ -1080,29 +1085,29 @@ export default function PlanReviewConsole({
             </div>
 
             {/* Validation */}
-            <div style={{ marginBottom: 12 }}>
-              <h4 style={{ margin: "0 0 6px 0", fontSize: 14 }}>Validation{reValidated ? " (re-validated)" : ""}</h4>
+            <div className={styles.style099}>
+              <h4 className={styles.style100}>Validation{reValidated ? " (re-validated)" : ""}</h4>
               {valErrors.length > 0 && valErrors.map((e, i) => (
-                <div key={`ve-${i}`} style={{ color: "#c62828", fontSize: 12 }}>❌ [{String(e.code ?? "?")}] {String(e.message ?? "")}</div>))}
+                <div key={`ve-${i}`} className={styles.style101}>❌ [{String(e.code ?? "?")}] {String(e.message ?? "")}</div>))}
               {valWarnings.length > 0 && valWarnings.map((w, i) => (
-                <div key={`vw-${i}`} style={{ color: "#e65100", fontSize: 12 }}>⚠️ [{String(w.code ?? "?")}] {String(w.message ?? "")}</div>))}
-              {approvalNodes.length > 0 && <div style={{ fontSize: 12, color: "#c62828" }}>🔒 Approval required: {approvalNodes.join(", ")}</div>}
-              {highRiskNodes.length > 0 && <div style={{ fontSize: 12, color: "#e65100" }}>⚡ High risk: {highRiskNodes.join(", ")}</div>}
-              {unknownNodes.length > 0 && <div style={{ fontSize: 12, color: "#7b1fa2" }}>❓ Unknown: {unknownNodes.join(", ")}</div>}
-              {topoOrder.length > 0 && <div style={{ fontSize: 12, color: "#555" }}>→ {topoOrder.join(" → ")}</div>}
+                <div key={`vw-${i}`} className={styles.style102}>⚠️ [{String(w.code ?? "?")}] {String(w.message ?? "")}</div>))}
+              {approvalNodes.length > 0 && <div className={styles.style103}>🔒 Approval required: {approvalNodes.join(", ")}</div>}
+              {highRiskNodes.length > 0 && <div className={styles.style104}>⚡ High risk: {highRiskNodes.join(", ")}</div>}
+              {unknownNodes.length > 0 && <div className={styles.style105}>❓ Unknown: {unknownNodes.join(", ")}</div>}
+              {topoOrder.length > 0 && <div className={styles.style106}>→ {topoOrder.join(" → ")}</div>}
             </div>
 
             {/* Nodes table */}
-            <h4 style={{ margin: "0 0 6px 0", fontSize: 14 }}>Candidate Plan: {String(plan.pipeline_id ?? "?")} ({nodes.length} nodes)</h4>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <h4 className={styles.style107}>Candidate Plan: {String(plan.pipeline_id ?? "?")} ({nodes.length} nodes)</h4>
+            <table className={styles.style108}>
               <thead>
-                <tr style={{ background: "#eee", textAlign: "left" }}>
-                  <th style={{ padding: "3px 6px", border: "1px solid #ddd" }}>#</th>
-                  <th style={{ padding: "3px 6px", border: "1px solid #ddd" }}>Node ID</th>
-                  <th style={{ padding: "3px 6px", border: "1px solid #ddd" }}>Name</th>
-                  <th style={{ padding: "3px 6px", border: "1px solid #ddd" }}>Risk</th>
-                  <th style={{ padding: "3px 6px", border: "1px solid #ddd" }}>Appr</th>
-                  <th style={{ padding: "3px 6px", border: "1px solid #ddd" }}>Tags</th>
+                <tr className={styles.style109}>
+                  <th className={styles.style110}>#</th>
+                  <th className={styles.style111}>Node ID</th>
+                  <th className={styles.style112}>Name</th>
+                  <th className={styles.style113}>Risk</th>
+                  <th className={styles.style114}>Appr</th>
+                  <th className={styles.style115}>Tags</th>
                 </tr>
               </thead>
               <tbody>
@@ -1118,16 +1123,16 @@ export default function PlanReviewConsole({
                         background: sel ? "#e3f2fd" : (cat?.risk_level === "high" ? "#fff5f5" : "transparent"),
                         borderBottom: "1px solid #eee",
                       }}>
-                      <td style={{ padding: "3px 6px", border: "1px solid #ddd" }}>{i + 1}</td>
-                      <td style={{ padding: "3px 6px", border: "1px solid #ddd", fontWeight: 600 }}>{nid}</td>
+                      <td className={styles.style116}>{i + 1}</td>
+                      <td className={styles.style117}>{nid}</td>
                       <td style={{ padding: "3px 6px", border: "1px solid #ddd", color: cat ? "#333" : "#999", fontStyle: cat ? "normal" : "italic" }}>
                         {cat?.name ?? <span title="Not in Tool Catalog">Unknown metadata ⚠️</span>}
                       </td>
-                      <td style={{ padding: "3px 6px", border: "1px solid #ddd" }}>{cat ? riskBadge(cat.risk_level) : "—"}</td>
-                      <td style={{ padding: "3px 6px", border: "1px solid #ddd" }}>
+                      <td className={styles.style118}>{cat ? riskBadge(cat.risk_level) : "—"}</td>
+                      <td className={styles.style119}>
                         {cat?.requires_approval ? "🔒" : "—"}
                       </td>
-                      <td style={{ padding: "3px 6px", border: "1px solid #ddd" }}>{(cat?.tags ?? []).slice(0, 3).join(", ") || "—"}</td>
+                      <td className={styles.style120}>{(cat?.tags ?? []).slice(0, 3).join(", ") || "—"}</td>
                     </tr>
                   );
                 })}
@@ -1136,33 +1141,33 @@ export default function PlanReviewConsole({
 
             {/* Depends-on detail row for selected */}
             {selectedNodeId && (
-              <div style={{ marginTop: 6, fontSize: 12, color: "#555" }}>
+              <div className={styles.style121}>
                 Depends on: {getNodeDependsOnText(selectedNodeId)}
               </div>
             )}
           </div>
 
           {/* Right: node detail panel */}
-          <div style={{ width: 260, flexShrink: 0 }}>
+          <div className={styles.style122}>
             {selectedNodeId && (
-              <div style={{ padding: 12, background: "#fafafa", borderRadius: 4, border: "1px solid #e0e0e0", fontSize: 13 }}>
-                <h4 style={{ margin: "0 0 8px 0", fontSize: 14 }}>Node Detail</h4>
+              <div className={styles.style123}>
+                <h4 className={styles.style124}>Node Detail</h4>
                 {selectedCatalog ? (
                   <>
-                    <div style={{ marginBottom: 4 }}><b>ID:</b> {selectedCatalog.id}</div>
-                    <div style={{ marginBottom: 4 }}><b>Name:</b> {selectedCatalog.name}</div>
-                    <div style={{ marginBottom: 4 }}><b>Description:</b> {selectedCatalog.description || "—"}</div>
-                    <div style={{ marginBottom: 4 }}><b>Backend:</b> {selectedCatalog.backend}</div>
-                    <div style={{ marginBottom: 4 }}><b>Parallel:</b> {selectedCatalog.parallel_level}</div>
-                    <div style={{ marginBottom: 4 }}><b>Risk:</b> {riskBadge(selectedCatalog.risk_level)}</div>
-                    <div style={{ marginBottom: 4 }}><b>Approval:</b> {selectedCatalog.requires_approval ? "🔒 Required" : "✅ Not required"}</div>
-                    <div style={{ marginBottom: 4 }}><b>Manual:</b> {selectedCatalog.manual_required ? "👤 Required" : "—"}</div>
-                    <div style={{ marginBottom: 4 }}><b>Inputs:</b> {selectedCatalog.inputs.join(", ") || "—"}</div>
-                    <div style={{ marginBottom: 4 }}><b>Outputs:</b> {selectedCatalog.outputs.join(", ") || "—"}</div>
+                    <div className={styles.style125}><b>ID:</b> {selectedCatalog.id}</div>
+                    <div className={styles.style126}><b>Name:</b> {selectedCatalog.name}</div>
+                    <div className={styles.style127}><b>Description:</b> {selectedCatalog.description || "—"}</div>
+                    <div className={styles.style128}><b>Backend:</b> {selectedCatalog.backend}</div>
+                    <div className={styles.style129}><b>Parallel:</b> {selectedCatalog.parallel_level}</div>
+                    <div className={styles.style130}><b>Risk:</b> {riskBadge(selectedCatalog.risk_level)}</div>
+                    <div className={styles.style131}><b>Approval:</b> {selectedCatalog.requires_approval ? "🔒 Required" : "✅ Not required"}</div>
+                    <div className={styles.style132}><b>Manual:</b> {selectedCatalog.manual_required ? "👤 Required" : "—"}</div>
+                    <div className={styles.style133}><b>Inputs:</b> {selectedCatalog.inputs.join(", ") || "—"}</div>
+                    <div className={styles.style134}><b>Outputs:</b> {selectedCatalog.outputs.join(", ") || "—"}</div>
                     <div><b>Tags:</b> {selectedCatalog.tags.join(", ") || "—"}</div>
                   </>
                 ) : (
-                  <div style={{ color: "#c62828" }}>
+                  <div className={styles.style135}>
                     ⚠️ Unknown node — not found in Tool Catalog.<br/>
                     This node cannot be validated and should not be executed.
                   </div>
@@ -1213,20 +1218,20 @@ function severityEmoji(severity: ExecuteReviewedSeverity): string {
 function ExecuteReviewedStatusCard({ status }: { status: string | undefined }) {
   const view = describeExecuteReviewedStatus(status);
   return (
-    <div style={{ marginBottom: 4 }}>
-      <div style={{ fontWeight: 700, marginBottom: 4, color: severityColor(view.severity) }}>
+    <div className={styles.style136}>
+      <div className={styles.style137} style={cssVars({ "--severity-color": severityColor(view.severity) })}>
         {severityEmoji(view.severity)} {view.title}
       </div>
-      <div style={{ fontSize: 12, color: "#555", lineHeight: 1.5, marginBottom: 4 }}>
+      <div className={styles.style138}>
         {view.explanation}
       </div>
       {view.nextAction && (
-        <div style={{ fontSize: 12, fontWeight: 600, color: severityColor(view.severity), marginBottom: 4 }}>
+        <div className={styles.style139} style={cssVars({ "--severity-color": severityColor(view.severity) })}>
           Next: {view.nextAction}
         </div>
       )}
       {view.safetyNote && (
-        <div style={{ fontSize: 11, color: "#888", fontStyle: "italic" }}>
+        <div className={styles.style140}>
           ⓘ {view.safetyNote}
         </div>
       )}

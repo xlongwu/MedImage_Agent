@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectBoldReferenceReadiness } from "../api";
+import { DEFAULT_API_BASE, getProjectBoldReferenceReadiness } from "../lib/api/legacy";
 import type { BoldReferenceCandidate, BoldReferenceReadinessResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE } from "../api";
+import { DEFAULT_API_BASE, getDesktopHealth } from "../lib/api";
 
 type Props = { baseUrl?: string };
 
@@ -15,8 +15,7 @@ export default function EnvironmentHealthPanel({ baseUrl }: Props) {
   useEffect(() => {
     const id = reqRef.current + 1; reqRef.current = id;
     setLoading(true); setError("");
-    fetch(`${effectiveBase}/api/desktop/health`)
-      .then((r) => r.json())
+    getDesktopHealth(effectiveBase)
       .then((d) => { if (id === reqRef.current) setData(d); })
       .catch((e) => { if (id === reqRef.current) setError(e instanceof Error ? e.message : String(e)); })
       .finally(() => { if (id === reqRef.current) setLoading(false); });

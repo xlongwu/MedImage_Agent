@@ -27,7 +27,7 @@ export default function SpmSandboxExecutionPanel({ projectId, preprocessingRunId
     if (!allChecked) return;
     setLoading(true); setError(""); setResult(null);
     try {
-      const { executeSpmSandboxSliceTimingRealign } = await import("../api");
+      const { executeSpmSandboxSliceTimingRealign } = await import("../lib/api/legacy");
       const res = await executeSpmSandboxSliceTimingRealign("", projectId, preprocessingRunId, {
         dry_run_id: dryRunId,
         confirm_sandbox_copy: true,
@@ -45,7 +45,7 @@ export default function SpmSandboxExecutionPanel({ projectId, preprocessingRunId
     if (!result?.execution_id) return;
     setRegLoading(true); setRegResult(null);
     try {
-      const { registerSandboxSpmOutputs } = await import("../api");
+      const { registerSandboxSpmOutputs } = await import("../lib/api/legacy");
       const res = await registerSandboxSpmOutputs("", projectId, preprocessingRunId, {
         execution_id: result.execution_id,
         confirm_sandbox_outputs: true,

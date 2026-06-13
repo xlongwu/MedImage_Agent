@@ -1,5 +1,9 @@
 let cachedBaseUrl: string | null = null;
 
+export type ApiRequestOptions = RequestInit & {
+  baseUrl?: string;
+};
+
 export async function getApiBaseUrl(): Promise<string> {
   if (cachedBaseUrl) {
     return cachedBaseUrl;
@@ -28,20 +32,23 @@ export function getFallbackApiBaseUrl(): string {
   );
 }
 
+export const DEFAULT_API_BASE = getFallbackApiBaseUrl();
+
 export function toWebSocketUrl(baseUrl: string, path: string): string {
   const url = new URL(path, baseUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
 }
 
-async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
-  const baseUrl = await getApiBaseUrl();
+export async function requestJson<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+  const { baseUrl: explicitBaseUrl, headers, ...requestOptions } = options ?? {};
+  const baseUrl = explicitBaseUrl ?? await getApiBaseUrl();
   const response = await fetch(`${baseUrl}${path}`, {
     headers: {
       "Content-Type": "application/json",
-      ...(options?.headers || {}),
+      ...(headers || {}),
     },
-    ...options,
+    ...requestOptions,
   });
   const text = await response.text();
   let payload: unknown = {};
@@ -60,19 +67,25 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export function getJson<T>(path: string): Promise<T> {
-  return requestJson<T>(path);
+export function getJson<T>(path: string, options?: ApiRequestOptions): Promise<T> {
+  return requestJson<T>(path, options);
 }
 
-export function postJson<T>(path: string, payload: unknown): Promise<T> {
+export function getHealth(baseUrl = getFallbackApiBaseUrl()): Promise<Record<string, unknown>> {
+  return getJson<Record<string, unknown>>("/api/health", { baseUrl });
+}
+
+export function postJson<T>(path: string, payload: unknown, options?: ApiRequestOptions): Promise<T> {
   return requestJson<T>(path, {
+    ...options,
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function deleteJson<T>(path: string): Promise<T> {
+export function deleteJson<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   return requestJson<T>(path, {
+    ...options,
     method: "DELETE",
   });
 }

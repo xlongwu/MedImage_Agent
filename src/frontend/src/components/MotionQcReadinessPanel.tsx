@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectMotionQcReadiness } from "../api";
+import { DEFAULT_API_BASE, getProjectMotionQcReadiness } from "../lib/api/legacy";
 import type { MotionQcInputCandidate, MotionQcReadinessResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };

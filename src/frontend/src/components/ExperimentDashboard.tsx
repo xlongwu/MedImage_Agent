@@ -2,12 +2,17 @@ import React, { useState, useEffect } from "react";
 import {
   getExperimentDashboard,
   refreshExperimentDashboard,
-} from "../api";
+} from "../lib/api/legacy";
 import {
   SimpleBarChart,
   SimpleLineChart,
   SimplePieChart,
 } from "./SimpleCharts";
+import styles from "./ExperimentDashboard.module.css";
+
+function cssVars(vars: Record<string, string>): React.CSSProperties {
+  return vars as React.CSSProperties;
+}
 
 interface DashboardData {
   ok?: boolean;
@@ -136,20 +141,20 @@ export function ExperimentDashboard({ baseUrl }: ExperimentDashboardProps) {
   };
 
   return (
-    <div style={{ padding: 16, borderTop: "2px solid #ff5722", marginTop: 24 }}>
+    <div className={styles.style001}>
       <h2>Experiment Dashboard</h2>
 
-      <div style={{ marginBottom: 16 }}>
-        <button onClick={handleLoadDashboard} disabled={loading} style={{ marginRight: 8 }}>
+      <div className={styles.style002}>
+        <button onClick={handleLoadDashboard} disabled={loading} className={styles.style003}>
           {loading ? "Loading..." : "Load Dashboard"}
         </button>
-        <button onClick={handleRefresh} disabled={loading} style={{ backgroundColor: "#2196f3", color: "white" }}>
+        <button onClick={handleRefresh} disabled={loading} className={styles.style004}>
           {loading ? "Refreshing..." : "Refresh Data"}
         </button>
       </div>
 
       {error && (
-        <div style={{ color: "red", marginBottom: 16, padding: 12, background: "#ffebee", borderRadius: 4 }}>
+        <div className={styles.style005}>
           <strong>Error:</strong> {error}
         </div>
       )}
@@ -157,37 +162,37 @@ export function ExperimentDashboard({ baseUrl }: ExperimentDashboardProps) {
       {dashboard && (
         <>
           {/* Summary Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 24 }}>
-            <div style={{ padding: 16, background: "#e3f2fd", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Total Runs</div>
-              <div style={{ fontSize: 24, fontWeight: "bold" }}>{dashboard.runs_total || 0}</div>
+          <div className={styles.style006}>
+            <div className={styles.style007}>
+              <div className={styles.style008}>Total Runs</div>
+              <div className={styles.style009}>{dashboard.runs_total || 0}</div>
             </div>
-            <div style={{ padding: 16, background: "#e8f5e9", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Success</div>
-              <div style={{ fontSize: 24, fontWeight: "bold", color: "#4caf50" }}>{dashboard.success_total || 0}</div>
+            <div className={styles.style010}>
+              <div className={styles.style011}>Success</div>
+              <div className={styles.style012}>{dashboard.success_total || 0}</div>
             </div>
-            <div style={{ padding: 16, background: "#ffebee", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Failed</div>
-              <div style={{ fontSize: 24, fontWeight: "bold", color: "#f44336" }}>{dashboard.failed_total || 0}</div>
+            <div className={styles.style013}>
+              <div className={styles.style014}>Failed</div>
+              <div className={styles.style015}>{dashboard.failed_total || 0}</div>
             </div>
-            <div style={{ padding: 16, background: "#fff3e0", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Partial</div>
-              <div style={{ fontSize: 24, fontWeight: "bold", color: "#ff9800" }}>{dashboard.partial_total || 0}</div>
+            <div className={styles.style016}>
+              <div className={styles.style017}>Partial</div>
+              <div className={styles.style018}>{dashboard.partial_total || 0}</div>
             </div>
-            <div style={{ padding: 16, background: "#f3e5f5", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Mean Duration</div>
-              <div style={{ fontSize: 18, fontWeight: "bold" }}>
+            <div className={styles.style019}>
+              <div className={styles.style020}>Mean Duration</div>
+              <div className={styles.style021}>
                 {formatDuration(dashboard.mean_duration_seconds)}
               </div>
             </div>
-            <div style={{ padding: 16, background: "#fce4ec", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Total Outputs</div>
-              <div style={{ fontSize: 24, fontWeight: "bold" }}>{dashboard.total_outputs || 0}</div>
+            <div className={styles.style022}>
+              <div className={styles.style023}>Total Outputs</div>
+              <div className={styles.style024}>{dashboard.total_outputs || 0}</div>
             </div>
           </div>
 
           {/* Charts */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginBottom: 24 }}>
+          <div className={styles.style025}>
             {dashboard.status_distribution && (
               <SimplePieChart title="Status Distribution" data={toBarData(dashboard.status_distribution)} />
             )}
@@ -207,65 +212,60 @@ export function ExperimentDashboard({ baseUrl }: ExperimentDashboardProps) {
 
           {/* Latest Runs Table */}
           {dashboard.runs && dashboard.runs.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
+            <div className={styles.style026}>
               <h3>Latest Runs</h3>
-              <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <div className={styles.style027}>
+                <table className={styles.style028}>
                   <thead>
-                    <tr style={{ background: "#f5f5f5" }}>
-                      <th style={{ padding: 8, textAlign: "left" }}>#</th>
-                      <th style={{ padding: 8, textAlign: "left" }}>Run ID</th>
-                      <th style={{ padding: 8, textAlign: "left" }}>Type</th>
-                      <th style={{ padding: 8, textAlign: "left" }}>Pipeline</th>
-                      <th style={{ padding: 8, textAlign: "left" }}>Status</th>
-                      <th style={{ padding: 8, textAlign: "right" }}>Duration</th>
-                      <th style={{ padding: 8, textAlign: "center" }}>Nodes</th>
-                      <th style={{ padding: 8, textAlign: "center" }}>Outputs</th>
-                      <th style={{ padding: 8, textAlign: "center" }}>⚠️</th>
-                      <th style={{ padding: 8, textAlign: "center" }}>❌</th>
+                    <tr className={styles.style029}>
+                      <th className={styles.style030}>#</th>
+                      <th className={styles.style031}>Run ID</th>
+                      <th className={styles.style032}>Type</th>
+                      <th className={styles.style033}>Pipeline</th>
+                      <th className={styles.style034}>Status</th>
+                      <th className={styles.style035}>Duration</th>
+                      <th className={styles.style036}>Nodes</th>
+                      <th className={styles.style037}>Outputs</th>
+                      <th className={styles.style038}>⚠️</th>
+                      <th className={styles.style039}>❌</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dashboard.runs.slice(-10).reverse().map((run, idx) => (
-                      <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: 8 }}>{run.index}</td>
-                        <td style={{ padding: 8, fontFamily: "monospace", fontSize: 11 }}>{run.run_id}</td>
-                        <td style={{ padding: 8 }}>
-                          <span style={{ padding: "2px 6px", borderRadius: 4, background: "#e3f2fd", fontSize: 11 }}>
+                      <tr key={idx} className={styles.style040}>
+                        <td className={styles.style041}>{run.index}</td>
+                        <td className={styles.style042}>{run.run_id}</td>
+                        <td className={styles.style043}>
+                          <span className={styles.style044}>
                             {run.run_type}
                           </span>
                         </td>
-                        <td style={{ padding: 8, fontSize: 12 }}>{run.pipeline_id}</td>
-                        <td style={{ padding: 8 }}>
+                        <td className={styles.style045}>{run.pipeline_id}</td>
+                        <td className={styles.style046}>
                           <span
-                            style={{
-                              padding: "2px 6px",
-                              borderRadius: 4,
-                              background: getStatusColor(run.status),
-                              color: "white",
-                              fontSize: 11,
-                            }}
+                            className={styles.style047}
+                            style={cssVars({ "--status-bg": getStatusColor(run.status) })}
                           >
                             {run.status}
                           </span>
                         </td>
-                        <td style={{ padding: 8, textAlign: "right" }}>
+                        <td className={styles.style048}>
                           {formatDuration(run.duration_seconds)}
                         </td>
-                        <td style={{ padding: 8, textAlign: "center" }}>
+                        <td className={styles.style049}>
                           {run.nodes_success}/{run.nodes_total}
                         </td>
-                        <td style={{ padding: 8, textAlign: "center" }}>{run.outputs_count}</td>
-                        <td style={{ padding: 8, textAlign: "center" }}>
+                        <td className={styles.style050}>{run.outputs_count}</td>
+                        <td className={styles.style051}>
                           {run.warnings_count ? (
-                            <span style={{ color: "orange" }}>{run.warnings_count}</span>
+                            <span className={styles.style052}>{run.warnings_count}</span>
                           ) : (
                             "0"
                           )}
                         </td>
-                        <td style={{ padding: 8, textAlign: "center" }}>
+                        <td className={styles.style053}>
                           {run.errors_count ? (
-                            <span style={{ color: "red" }}>{run.errors_count}</span>
+                            <span className={styles.style054}>{run.errors_count}</span>
                           ) : (
                             "0"
                           )}
@@ -279,9 +279,9 @@ export function ExperimentDashboard({ baseUrl }: ExperimentDashboardProps) {
           )}
 
           {/* Metrics Summary */}
-          <div style={{ padding: 16, background: "#f5f5f5", borderRadius: 4 }}>
+          <div className={styles.style055}>
             <h3>Metrics Summary</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+            <div className={styles.style056}>
               <div>
                 <strong>Duration:</strong> Mean {formatDuration(dashboard.mean_duration_seconds)}, Median{" "}
                 {formatDuration(dashboard.median_duration_seconds)}, Max {formatDuration(dashboard.max_duration_seconds)}

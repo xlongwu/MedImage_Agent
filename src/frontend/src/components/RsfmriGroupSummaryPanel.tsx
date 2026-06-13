@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getRsfmriGroupSummary, runRsfmriGroupSummary } from "../api";
+import { getRsfmriGroupSummary, runRsfmriGroupSummary } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock"; import { StatusBadge } from "./StatusBadge"; import { TextViewer } from "./TextViewer";
 type Props = { baseUrl: string };
 function fmt(v: unknown, d=4) { if (v===null||v===undefined) return "-"; const n=Number(v); return Number.isFinite(n)?n.toFixed(d):String(v); }

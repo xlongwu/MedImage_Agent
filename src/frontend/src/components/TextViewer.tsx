@@ -15,7 +15,7 @@ export function TextViewer({
   maxHeight = "400px"
 }: TextViewerProps) {
   if (previewType === "nifti_metadata" && parsed && typeof parsed === "object") {
-    const metadata = parsed as Record<string, any>;
+    const metadata = parsed as Record<string, unknown>;
     return (
       <div style={{ padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
         <div style={{ marginBottom: 8, fontWeight: "bold" }}>NIfTI Metadata</div>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getExternalSmokeStatus, runExternalSmoke } from "../api";
+import { getExternalSmokeStatus, runExternalSmoke } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { TextViewer } from "./TextViewer";
 

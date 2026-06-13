@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { diagnoseRun, retryDryRun, retryExecute, getRetryRun } from "../api";
+import { diagnoseRun, retryDryRun, retryExecute, getRetryRun } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 

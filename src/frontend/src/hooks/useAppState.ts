@@ -5,7 +5,7 @@
  * Extracted from App.tsx (~70 lines of hook calls reduced to one).
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DEFAULT_API_BASE, getHealth } from "../api";
+import { DEFAULT_API_BASE, getHealth } from "../lib/api/legacy";
 import { useDatasetSummary } from "./useDatasetSummary";
 import { useImagePreview } from "./useImagePreview";
 import { useImageSources } from "./useImageSources";

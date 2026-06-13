@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, runConversionDryRun } from "../api";
+import { DEFAULT_API_BASE, runConversionDryRun } from "../lib/api/legacy";
 import type { ConversionDryRunResponse, ConversionMappingPreview, ConversionSourceSummary } from "../types";
 import { ActionList, CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 

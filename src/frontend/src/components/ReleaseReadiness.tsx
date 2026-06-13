@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getReleaseReadiness } from "../api";
+import { getReleaseReadiness } from "../lib/api/legacy";
 
 type Props = {
   baseUrl: string;

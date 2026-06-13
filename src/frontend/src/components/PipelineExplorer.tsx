@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getPipeline, listPipelines } from "../api";
+import { getPipeline, listPipelines } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 

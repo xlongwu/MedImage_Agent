@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getRsfmriNuisanceRegression, runRsfmriNuisanceRegression } from "../api";
+import { getRsfmriNuisanceRegression, runRsfmriNuisanceRegression } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";

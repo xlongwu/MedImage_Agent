@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { getDeploymentProfile } from "../api";
+import type { CSSProperties } from "react";
+import { getDeploymentProfile } from "../lib/api/legacy";
+import styles from "./DeploymentProfile.module.css";
+
+function cssVars(vars: Record<string, string>): CSSProperties {
+  return vars as CSSProperties;
+}
 
 interface Props {
   baseUrl: string;
@@ -52,10 +58,10 @@ export function DeploymentProfile({ baseUrl }: Props) {
   }
 
   return (
-    <div style={{ padding: 16, borderTop: "2px solid #2196f3", marginTop: 24 }}>
+    <div className={styles.style001}>
       <h2>Deployment Profile</h2>
       
-      <div style={{ marginBottom: 16 }}>
+      <div className={styles.style002}>
         <button 
           onClick={handleCheck} 
           disabled={loading}
@@ -73,7 +79,7 @@ export function DeploymentProfile({ baseUrl }: Props) {
       </div>
       
       {error && (
-        <div style={{ color: "#f44336", marginBottom: 16, padding: 12, background: "#ffebee", borderRadius: 4 }}>
+        <div className={styles.style003}>
           {error}
         </div>
       )}
@@ -81,43 +87,32 @@ export function DeploymentProfile({ baseUrl }: Props) {
       {profile && (
         <>
           {/* Status Summary */}
-          <div style={{ 
-            marginBottom: 24, 
-            padding: 16, 
-            background: getStatusColor(status), 
-            borderRadius: 4, 
-            color: "white" 
-          }}>
-            <div style={{ fontSize: 32, fontWeight: "bold" }}>
+          <div className={styles.style004} style={cssVars({ "--status-bg": getStatusColor(status) })}>
+            <div className={styles.style005}>
               {status || "UNKNOWN"}
             </div>
-            <div style={{ marginTop: 8, opacity: 0.9 }}>
+            <div className={styles.style006}>
               Checks: {checksPassed} / {checksTotal} passed
             </div>
           </div>
           
           {/* Stats Grid */}
-          <div style={{ 
-            display: "grid", 
-            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", 
-            gap: 12, 
-            marginBottom: 24 
-          }}>
-            <div style={{ padding: 12, background: "#e8f5e9", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Passed</div>
-              <div style={{ fontSize: 20, fontWeight: "bold", color: "#4caf50" }}>
+          <div className={styles.style007}>
+            <div className={styles.style008}>
+              <div className={styles.style009}>Passed</div>
+              <div className={styles.style010}>
                 {checksPassed}/{checksTotal}
               </div>
             </div>
-            <div style={{ padding: 12, background: "#ffebee", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Blockers</div>
-              <div style={{ fontSize: 20, fontWeight: "bold", color: "#f44336" }}>
+            <div className={styles.style011}>
+              <div className={styles.style012}>Blockers</div>
+              <div className={styles.style013}>
                 {blockers.length}
               </div>
             </div>
-            <div style={{ padding: 12, background: "#fff3e0", borderRadius: 4 }}>
-              <div style={{ fontSize: 12, color: "#666" }}>Warnings</div>
-              <div style={{ fontSize: 20, fontWeight: "bold", color: "#ff9800" }}>
+            <div className={styles.style014}>
+              <div className={styles.style015}>Warnings</div>
+              <div className={styles.style016}>
                 {warnings.length}
               </div>
             </div>
@@ -125,27 +120,27 @@ export function DeploymentProfile({ baseUrl }: Props) {
           
           {/* Profiles */}
           {profiles && (
-            <div style={{ marginBottom: 24 }}>
+            <div className={styles.style017}>
               <h3>Deployment Profiles</h3>
-              <div style={{ display: "grid", gap: 12 }}>
+              <div className={styles.style018}>
                 {profiles.local_dev && (
-                  <div style={{ padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
-                    <div style={{ fontWeight: "bold", marginBottom: 8 }}>Local Dev</div>
-                    <div style={{ fontSize: 12, color: "#666", fontFamily: "monospace" }}>
+                  <div className={styles.style019}>
+                    <div className={styles.style020}>Local Dev</div>
+                    <div className={styles.style021}>
                       {(profiles.local_dev as Record<string, string>).backend}
                     </div>
-                    <div style={{ fontSize: 12, color: "#666", fontFamily: "monospace" }}>
+                    <div className={styles.style022}>
                       {(profiles.local_dev as Record<string, string>).frontend}
                     </div>
                   </div>
                 )}
                 {profiles.docker_demo && (
-                  <div style={{ padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
-                    <div style={{ fontWeight: "bold", marginBottom: 8 }}>Docker Demo</div>
-                    <div style={{ fontSize: 12, color: "#666" }}>
+                  <div className={styles.style023}>
+                    <div className={styles.style024}>Docker Demo</div>
+                    <div className={styles.style025}>
                       Compose: {(profiles.docker_demo as Record<string, string>).compose_file}
                     </div>
-                    <div style={{ fontSize: 12, color: "#666" }}>
+                    <div className={styles.style026}>
                       MATLAB: {(profiles.docker_demo as Record<string, boolean>).matlab_enabled_by_default ? "enabled" : "disabled"}
                     </div>
                   </div>
@@ -156,11 +151,11 @@ export function DeploymentProfile({ baseUrl }: Props) {
           
           {/* Blockers */}
           {blockers.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <h3 style={{ color: "#f44336" }}>Blockers ({blockers.length})</h3>
-              <div style={{ background: "#ffebee", borderRadius: 4, padding: 12 }}>
+            <div className={styles.style027}>
+              <h3 className={styles.style028}>Blockers ({blockers.length})</h3>
+              <div className={styles.style029}>
                 {blockers.map((b, idx) => (
-                  <div key={idx} style={{ padding: "4px 0", color: "#c62828" }}>
+                  <div key={idx} className={styles.style030}>
                     ❌ {b}
                   </div>
                 ))}
@@ -170,11 +165,11 @@ export function DeploymentProfile({ baseUrl }: Props) {
           
           {/* Warnings */}
           {warnings.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <h3 style={{ color: "#ff9800" }}>Warnings ({warnings.length})</h3>
-              <div style={{ background: "#fff3e0", borderRadius: 4, padding: 12 }}>
+            <div className={styles.style031}>
+              <h3 className={styles.style032}>Warnings ({warnings.length})</h3>
+              <div className={styles.style033}>
                 {warnings.map((w, idx) => (
-                  <div key={idx} style={{ padding: "4px 0", color: "#e65100" }}>
+                  <div key={idx} className={styles.style034}>
                     ⚠️ {w}
                   </div>
                 ))}
@@ -183,14 +178,9 @@ export function DeploymentProfile({ baseUrl }: Props) {
           )}
           
           {/* All Checks */}
-          <div style={{ marginBottom: 24 }}>
+          <div className={styles.style035}>
             <h3>All Checks ({checks.length})</h3>
-            <div style={{ 
-              maxHeight: "400px", 
-              overflow: "auto", 
-              border: "1px solid #e0e0e0", 
-              borderRadius: 4 
-            }}>
+            <div className={styles.style036}>
               {checks.map((check, idx) => (
                 <div
                   key={idx}
@@ -203,11 +193,11 @@ export function DeploymentProfile({ baseUrl }: Props) {
                     background: check.ok ? "#f5f5f5" : "#ffebee",
                   }}
                 >
-                  <span style={{ fontSize: 16 }}>{check.ok ? "✅" : "❌"}</span>
-                  <span style={{ flex: 1, fontSize: 13 }}>
+                  <span className={styles.style037}>{check.ok ? "✅" : "❌"}</span>
+                  <span className={styles.style038}>
                     <strong>{check.name}</strong>
                   </span>
-                  <span style={{ fontSize: 12, color: "#666" }}>{check.message}</span>
+                  <span className={styles.style039}>{check.message}</span>
                 </div>
               ))}
             </div>
@@ -215,9 +205,9 @@ export function DeploymentProfile({ baseUrl }: Props) {
           
           {/* Environment */}
           {environment && (
-            <div style={{ marginBottom: 24 }}>
+            <div className={styles.style040}>
               <h3>Environment</h3>
-              <div style={{ padding: 12, background: "#f5f5f5", borderRadius: 4, fontSize: 12, fontFamily: "monospace" }}>
+              <div className={styles.style041}>
                 <div>Platform: {environment.platform as string}</div>
                 <div>CWD: {environment.cwd as string}</div>
                 <div>Docker: {(environment.docker_version as Record<string, unknown>)?.ok ? "available" : "not available"}</div>
@@ -230,7 +220,7 @@ export function DeploymentProfile({ baseUrl }: Props) {
           {(profile?.safety as Record<string, boolean> | undefined) && (
             <div>
               <h3>Safety Guarantees</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+              <div className={styles.style042}>
                 {Object.entries(profile.safety as Record<string, boolean>).map(([key, value]) => (
                   <div 
                     key={key} 
