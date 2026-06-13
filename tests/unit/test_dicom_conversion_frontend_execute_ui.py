@@ -123,12 +123,12 @@ class TestConfirmationDialog:
 
     def test_api_wrapper_posts_to_conversion_execute(self):
         """API wrapper references /conversion/execute endpoint path."""
-        api_path = os.path.join(os.getcwd(), "src/frontend/src/api.ts")
+        api_path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/dicom.ts")
         if not os.path.exists(api_path):
-            pytest.skip("api.ts not found")
+            pytest.skip("lib/api/dicom.ts not found")
         content = open(api_path, encoding="utf-8").read()
         assert "/conversion/execute" in content, (
-            "api.ts must reference /conversion/execute for Phase 4L-4"
+            "dicom.ts must reference /conversion/execute for Phase 4L-4"
         )
 
 

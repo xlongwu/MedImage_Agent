@@ -133,13 +133,11 @@ def test_desktop_launcher_contract():
 
 
 def test_frontend_runtime_config_contract():
-    api = read("src/frontend/src/api.ts")
     client = read("src/frontend/src/lib/api/client.ts")
     vite = read("src/frontend/vite.config.ts")
 
-    assert "__MEDIMAGE_DESKTOP_CONFIG__" in api
-    assert "MEDIMAGE_API_BASE_URL" in api
     assert "__MEDIMAGE_DESKTOP_CONFIG__" in client
+    assert "MEDIMAGE_API_BASE_URL" in client
     assert 'base: "./"' in vite
 
 

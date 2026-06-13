@@ -3,9 +3,17 @@ from __future__ import annotations
 import os, pytest
 
 def _read_api():
-    path = os.path.join(os.getcwd(), "src/frontend/src/api.ts")
-    if not os.path.exists(path): pytest.skip("api.ts not found")
-    return open(path, encoding="utf-8").read()
+    # Read combined content from legacy re-exports and domain files
+    legacy_path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/legacy_re_exports.ts")
+    preprocessing_path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/preprocessing.ts")
+    content = ""
+    if os.path.exists(legacy_path):
+        content += open(legacy_path, encoding="utf-8").read()
+    if os.path.exists(preprocessing_path):
+        content += open(preprocessing_path, encoding="utf-8").read()
+    if not content:
+        pytest.skip("No API source files found")
+    return content
 
 def _read_types():
     path = os.path.join(os.getcwd(), "src/frontend/src/types.ts")

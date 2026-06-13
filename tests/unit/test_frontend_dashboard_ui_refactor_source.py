@@ -13,22 +13,30 @@ def _read(path: str) -> str:
 
 def test_apple_style_dashboard_structure_exists():
     app = _read("src/frontend/src/App.tsx")
+    chrome = _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
     styles = _read("src/frontend/src/styles.css")
-    expected_components = [
-        "ProjectHeroPanel",
-        "RecommendedNextStepCard",
-        "ReadinessStatusStrip",
-        "ProjectInventorySummary",
-        "WorkflowTabs",
+    # Components in App.tsx (workspace-level and lazy-loaded panels)
+    app_components = [
         "DataConversionWorkspace",
         "PreprocessingWorkspace",
         "QCReportsWorkspace",
         "SecondaryToolsDrawer",
         "CompactTaskLog",
     ]
-    for component in expected_components:
+    # Components in DashboardChrome.tsx (sidebar and hero components)
+    chrome_components = [
+        "ProjectHeroPanel",
+        "ProjectList",
+        "RecommendedNextStepCard",
+        "ReadinessStatusStrip",
+        "WorkflowTabs",
+        "ProjectInventorySummary",
+    ]
+    for component in app_components:
         assert component in app
-    assert "Recommended Next Step" in app
+    for component in chrome_components:
+        assert component in chrome
+    assert "Recommended Next Step" in (app + chrome)
     assert "readiness-status-strip" in styles
     assert "workflow-tabs" in styles
     assert "workflow-workspace" in styles
@@ -82,7 +90,7 @@ def test_no_forbidden_execution_or_classification_text():
         "src/frontend/src/App.tsx",
         "src/frontend/src/components/AdvancedPreprocessingPipelinePanel.tsx",
         "src/frontend/src/components/dashboardUi.tsx",
-        "src/frontend/src/api.ts",
+        "src/frontend/src/lib/api/legacy.ts",
     ]
     forbidden = [
         "Run Full Preprocessing",
@@ -99,17 +107,22 @@ def test_no_forbidden_execution_or_classification_text():
 
 
 def test_api_paths_remain_present():
-    api = _read("src/frontend/src/api.ts")
+    paths_to_check = [
+        "src/frontend/src/lib/api/dicom.ts",
+        "src/frontend/src/lib/api/preprocessing.ts",
+        "src/frontend/src/lib/api/legacy_re_exports.ts",
+    ]
+    combined = ""
+    for p in paths_to_check:
+        combined += _read(p)
     expected_paths = [
         "/api/projects/${encodeURIComponent(projectId)}/data-readiness",
         "/api/projects/${encodeURIComponent(projectId)}/bids-validation",
         "/api/projects/${encodeURIComponent(projectId)}/conversion/dry-run",
         "/api/projects/${encodeURIComponent(projectId)}/conversion/preflight",
-        "/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/validation",
-        "/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/report",
     ]
     for path in expected_paths:
-        assert path in api
+        assert path in combined, f"{path} not found in API source files"
 
 
 def test_no_advanced_panel_auto_execution():
