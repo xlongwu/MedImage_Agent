@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from src.backend.app.api import planner_routes
@@ -49,6 +50,62 @@ def test_api_v1_prefix_preserves_legacy_route_contract():
     assert legacy.status_code == 200
     assert versioned.status_code == 200
     assert versioned.json() == legacy.json()
+
+
+def test_domain_split_legacy_routes_remain_registered():
+    app = create_app()
+    registered_paths = {
+        route.path
+        for route in app.routes
+        if isinstance(route, APIRoute)
+    }
+
+    expected_paths = {
+        "/health",
+        "/api/project-config",
+        "/api/dpabi/capability",
+        "/api/dpabi/function-list",
+        "/api/rsfmri/preprocessing-plan",
+        "/api/agent/plan",
+        "/api/gpu/detect",
+        "/api/gpu/synthetic-benchmark",
+        "/api/pipelines",
+        "/api/files/read",
+        "/api/logs/read",
+        "/api/sessions/index",
+        "/api/history/runs",
+        "/api/advisor/protocol",
+        "/api/kb/errors",
+        "/api/experiments/run-index",
+        "/api/artifacts/preview",
+        "/api/bundle/create",
+        "/api/docs/inventory",
+        "/api/real-data/inspect",
+        "/api/sandbox/status",
+        "/api/workflow/run",
+        "/api/deployment/profile",
+    }
+
+    assert expected_paths <= registered_paths
+
+
+def test_domain_split_routes_do_not_register_duplicate_method_paths():
+    app = create_app()
+    seen: set[tuple[str, str]] = set()
+    duplicates: list[tuple[str, str]] = []
+
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        for method in route.methods or set():
+            if method in {"HEAD", "OPTIONS"}:
+                continue
+            key = (method, route.path)
+            if key in seen:
+                duplicates.append(key)
+            seen.add(key)
+
+    assert duplicates == []
 
 
 def test_rate_limiter_returns_structured_429(monkeypatch):

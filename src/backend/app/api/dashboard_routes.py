@@ -8,8 +8,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
+from src.backend.app.api.dependencies import ProjectStore
 from src.backend.app.core.config import get_backend_settings
 from src.backend.app.schemas.desktop import (
     AssistantChatRequest,
@@ -81,6 +82,10 @@ from src.backend.app.services.pipeline_runner import run_pipeline_task
 from src.backend.app.services.task_manager import task_manager
 
 router = APIRouter()
+
+
+def get_dashboard_store() -> ProjectStore:
+    return mock_store
 
 
 def _safe_artifact_part(value: str) -> str:
@@ -174,39 +179,51 @@ def api_health() -> HealthResponse:
 
 
 @router.get("/api/projects", response_model=list[ProjectSummary])
-def list_projects() -> list[ProjectSummary]:
-    return mock_store.list_projects()
+def list_projects(store: ProjectStore = Depends(get_dashboard_store)) -> list[ProjectSummary]:
+    return store.list_projects()
 
 
 @router.get("/api/projects/{project_id}", response_model=ProjectDetail)
-def get_project(project_id: str) -> ProjectDetail:
-    project = mock_store.get_project(project_id)
+def get_project(
+    project_id: str,
+    store: ProjectStore = Depends(get_dashboard_store),
+) -> ProjectDetail:
+    project = store.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return project
 
 
 @router.get("/api/studies/{study_id}/overview", response_model=StudyOverview)
-def get_study_overview(study_id: str) -> StudyOverview:
-    overview = mock_store.get_study_overview(study_id)
+def get_study_overview(
+    study_id: str,
+    store: ProjectStore = Depends(get_dashboard_store),
+) -> StudyOverview:
+    overview = store.get_study_overview(study_id)
     if not overview:
         raise HTTPException(status_code=404, detail=f"Study not found: {study_id}")
     return overview
 
 
 @router.get("/api/datasets/summary", response_model=DatasetSummary)
-def get_dataset_summary(project_id: str = Query(...)) -> DatasetSummary:
-    summary = mock_store.get_dataset_summary(project_id)
+def get_dataset_summary(
+    project_id: str = Query(...),
+    store: ProjectStore = Depends(get_dashboard_store),
+) -> DatasetSummary:
+    summary = store.get_dataset_summary(project_id)
     if not summary:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return summary
 
 
 @router.get("/api/datasets/imports", response_model=DatasetImportHistoryResponse)
-def get_dataset_imports(project_id: str = Query(...)) -> DatasetImportHistoryResponse:
-    if not mock_store.get_project(project_id):
+def get_dataset_imports(
+    project_id: str = Query(...),
+    store: ProjectStore = Depends(get_dashboard_store),
+) -> DatasetImportHistoryResponse:
+    if not store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    records = [DatasetImportRecord(**item) for item in mock_store.list_import_records(project_id)]
+    records = [DatasetImportRecord(**item) for item in store.list_import_records(project_id)]
     return DatasetImportHistoryResponse(ok=True, project_id=project_id, imports=records)
 
 
@@ -215,10 +232,11 @@ def get_dicom_preflight(
     project_id: str = Query(...),
     path: str | None = Query(default=None),
     max_files: int = Query(default=2000, ge=1, le=10000),
+    store: ProjectStore = Depends(get_dashboard_store),
 ) -> DicomPreflightResponse:
-    if not mock_store.get_project(project_id):
+    if not store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    roots = [path] if path else list(mock_store.list_import_paths(project_id))
+    roots = [path] if path else list(store.list_import_paths(project_id))
     demo_data = Path("data/DemoData")
     if not path and demo_data.exists() and str(demo_data) not in roots:
         roots.append(str(demo_data))

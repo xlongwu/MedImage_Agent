@@ -13,13 +13,19 @@ or clinical decision product.
 
 Current handoff state:
 
-- Desktop real-project execution and run artifact inspection loop is complete.
-- Real BIDS/rawdata project creation, `project_config.yaml`, `dataset_index.json`,
-  project persistence, Plan Review project context, reviewed plan/run
-  persistence, run history UI, run summary preview, run-scoped artifacts, and
-  QC/Error summary are implemented.
-- Current P0 work is delivery-state repair only: no new features, no broad
-  refactor, and no external data execution.
+- Backend architecture optimization Phase 1-3 complete: 5-layer middleware stack,
+  unified exception hierarchy, atomic state storage, structured logging, API
+  version compatibility layer, rate limiting, ConfigService, and dependency
+  injection foundation (ProjectStore Protocol) are in place.
+- Phase 1/3 delivery preserved existing test coverage (3685 passed, +1259 from
+  baseline) without touching `pipeline_executor.py`, the Approval Gate, node
+  runners, or `data/`/`rawdata/`.
+- Current work allows structured refactoring of the API routing layer (routes.py
+  domain-split) and node registration layer (plugin-based node registry),
+  provided each change is scoped, test-verified, and does not alter
+  pipeline-execution semantics or safety boundaries.
+- External data execution remains off by default; no new external execution paths
+  may be introduced without explicit approval.
 
 ## Required Workflow
 
@@ -133,7 +139,7 @@ del outputs\work\desktop\desktop_state.sqlite
 ## Current Validation Baseline
 
 - Full backend baseline: `D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short`
-  -> `2426 passed, 8 skipped, 1 warning`.
+  -> `3685 passed, 20 skipped, 3 warnings`.
 - Expected skips are optional `pydicom`, optional `cupy`, and missing
   `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
 - Frontend delivery should include the ProjectRunsPanel smoke check,

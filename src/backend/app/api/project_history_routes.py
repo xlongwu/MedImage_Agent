@@ -6,10 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from src.backend.app.api._errors import raise_api_error
+from src.backend.app.api.dependencies import ProjectStore
 from src.backend.app.planner.reviewed_plan_store import (
     ReviewedPlanStoreError,
     artifact_warnings,
@@ -34,6 +35,10 @@ from src.backend.app.tools.artifact_utils import is_safe_artifact_id
 router = APIRouter()
 
 
+def get_project_history_store() -> ProjectStore:
+    return mock_store
+
+
 class ReviewedPlanSaveRequest(BaseModel):
     plan: dict[str, Any]
     project_config_path: str | None = None
@@ -44,13 +49,13 @@ class ReviewedPlanSaveRequest(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-def _ensure_project(project_id: str) -> None:
-    if mock_store.get_project(project_id) is None:
+def _ensure_project(project_id: str, store: ProjectStore) -> None:
+    if store.get_project(project_id) is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
 
-def _get_project(project_id: str) -> ProjectDetail:
-    project = mock_store.get_project(project_id)
+def _get_project(project_id: str, store: ProjectStore) -> ProjectDetail:
+    project = store.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return project
@@ -76,8 +81,9 @@ def _dedupe(messages: list[str]) -> list[str]:
 def save_project_reviewed_plan(
     project_id: str,
     request: ReviewedPlanSaveRequest,
+    store: ProjectStore = Depends(get_project_history_store),
 ) -> dict[str, Any]:
-    _ensure_project(project_id)
+    _ensure_project(project_id, store)
     try:
         record = save_reviewed_plan(
             project_id=project_id,
@@ -95,14 +101,17 @@ def save_project_reviewed_plan(
 
 
 @router.get("/api/projects/{project_id}/plans")
-def list_project_reviewed_plans(project_id: str) -> dict[str, Any]:
-    _ensure_project(project_id)
+def list_project_reviewed_plans(
+    project_id: str,
+    store: ProjectStore = Depends(get_project_history_store),
+) -> dict[str, Any]:
+    _ensure_project(project_id, store)
     return {
         "ok": True,
         "project_id": project_id,
         "reviewed_plans": [
             _reviewed_plan_payload(record)
-            for record in mock_store.list_reviewed_plans(project_id)
+            for record in store.list_reviewed_plans(project_id)
         ],
     }
 
@@ -111,9 +120,10 @@ def list_project_reviewed_plans(project_id: str) -> dict[str, Any]:
 def get_project_reviewed_plan(
     project_id: str,
     reviewed_plan_id: str,
+    store: ProjectStore = Depends(get_project_history_store),
 ) -> dict[str, Any]:
-    _ensure_project(project_id)
-    record = mock_store.get_reviewed_plan(reviewed_plan_id)
+    _ensure_project(project_id, store)
+    record = store.get_reviewed_plan(reviewed_plan_id)
     if record is None or record.project_id != project_id:
         raise HTTPException(status_code=404, detail="Reviewed plan not found")
     return {"ok": True, "reviewed_plan": _reviewed_plan_payload(record)}
@@ -123,22 +133,27 @@ def get_project_reviewed_plan(
 def list_project_run_links(
     project_id: str,
     reviewed_plan_id: str | None = Query(default=None),
+    store: ProjectStore = Depends(get_project_history_store),
 ) -> dict[str, Any]:
-    _ensure_project(project_id)
+    _ensure_project(project_id, store)
     return {
         "ok": True,
         "project_id": project_id,
         "runs": [
             _run_link_payload(record)
-            for record in mock_store.list_run_links(project_id, reviewed_plan_id)
+            for record in store.list_run_links(project_id, reviewed_plan_id)
         ],
     }
 
 
 @router.get("/api/projects/{project_id}/runs/{run_id}")
-def get_project_run_link(project_id: str, run_id: str) -> dict[str, Any]:
-    project = _get_project(project_id)
-    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+def get_project_run_link(
+    project_id: str,
+    run_id: str,
+    store: ProjectStore = Depends(get_project_history_store),
+) -> dict[str, Any]:
+    project = _get_project(project_id, store)
+    record = store.get_run_link_by_run_id(project_id, run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run link not found")
     run_link = _run_link_payload(record)
@@ -163,9 +178,13 @@ def get_project_run_link(project_id: str, run_id: str) -> dict[str, Any]:
 
 
 @router.get("/api/projects/{project_id}/runs/{run_id}/artifacts")
-def list_project_run_artifacts(project_id: str, run_id: str) -> dict[str, Any]:
-    project = _get_project(project_id)
-    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+def list_project_run_artifacts(
+    project_id: str,
+    run_id: str,
+    store: ProjectStore = Depends(get_project_history_store),
+) -> dict[str, Any]:
+    project = _get_project(project_id, store)
+    record = store.get_run_link_by_run_id(project_id, run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run link not found")
     artifacts, warnings = discover_run_artifacts(project, record)
@@ -183,11 +202,12 @@ def get_project_run_artifact(
     project_id: str,
     run_id: str,
     artifact_id: str,
+    store: ProjectStore = Depends(get_project_history_store),
 ) -> dict[str, Any]:
     if not is_safe_artifact_id(artifact_id):
         raise HTTPException(status_code=400, detail="Invalid artifact_id")
-    project = _get_project(project_id)
-    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+    project = _get_project(project_id, store)
+    record = store.get_run_link_by_run_id(project_id, run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run link not found")
     artifact, warnings = find_run_artifact(project, record, artifact_id)
@@ -201,9 +221,13 @@ def get_project_run_artifact(
 
 
 @router.get("/api/projects/{project_id}/runs/{run_id}/events")
-def list_project_run_events(project_id: str, run_id: str) -> dict[str, Any]:
-    project = _get_project(project_id)
-    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+def list_project_run_events(
+    project_id: str,
+    run_id: str,
+    store: ProjectStore = Depends(get_project_history_store),
+) -> dict[str, Any]:
+    project = _get_project(project_id, store)
+    record = store.get_run_link_by_run_id(project_id, run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run link not found")
     events, warnings = discover_run_events(project, record)
@@ -223,9 +247,10 @@ def list_project_run_logs(
     run_id: str,
     max_bytes: int = Query(default=20000, ge=1000, le=200000),
     include_content: bool = Query(default=True),
+    store: ProjectStore = Depends(get_project_history_store),
 ) -> dict[str, Any]:
-    project = _get_project(project_id)
-    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+    project = _get_project(project_id, store)
+    record = store.get_run_link_by_run_id(project_id, run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run link not found")
     logs, warnings, errors = discover_run_logs(
@@ -248,14 +273,15 @@ def list_project_run_logs(
 def get_project_run_state_timeline(
     project_id: str,
     run_id: str,
+    store: ProjectStore = Depends(get_project_history_store),
 ) -> dict[str, Any]:
     """Return a standardized run-state timeline using Phase 3 state model.
 
     Read-only — never modifies executor state, writes files, or calls
     external tools.
     """
-    project = _get_project(project_id)
-    record = mock_store.get_run_link_by_run_id(project_id, run_id)
+    project = _get_project(project_id, store)
+    record = store.get_run_link_by_run_id(project_id, run_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Run link not found")
 

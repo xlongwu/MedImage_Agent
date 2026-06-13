@@ -8,11 +8,92 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from src.backend.app.main import app
-from src.backend.app.schemas.desktop import PipelineRunRequest, TaskDetail
+from src.backend.app.api.dashboard_routes import get_dashboard_store
+from src.backend.app.main import app, create_app
+from src.backend.app.schemas.desktop import (
+    DatasetSummary,
+    PipelineRunRequest,
+    ProjectDetail,
+    ProjectSummary,
+    StudyOverview,
+    TaskDetail,
+)
 from src.backend.app.services.mock_store import SQLiteDesktopStore, mock_store, utc_now_iso
 from src.backend.app.services.pipeline_runner import run_external_smoke_package
 from src.backend.app.services.task_manager import task_manager
+
+
+class _DashboardStoreOverride:
+    def list_projects(self) -> list[ProjectSummary]:
+        return [
+            ProjectSummary(
+                id="override-project",
+                name="Override Project",
+                study_id="override-study",
+                modality="rs-fMRI",
+                created_date="2026-06-12",
+                subjects_count=3,
+                current_pipeline_id="override-pipeline",
+            )
+        ]
+
+    def get_project(self, project_id: str) -> ProjectDetail | None:
+        if project_id != "override-project":
+            return None
+        return ProjectDetail(
+            id=project_id,
+            name="Override Project",
+            study_id="override-study",
+            modality="rs-fMRI",
+            created_date="2026-06-12",
+            subjects_count=3,
+            current_pipeline_id="override-pipeline",
+            sequences=["BOLD"],
+            scans_count=9,
+            total_size="9 MB",
+            current_model_id="override-model",
+        )
+
+    def get_study_overview(self, study_id: str) -> StudyOverview | None:
+        if study_id != "override-study":
+            return None
+        return StudyOverview(
+            project_id="override-project",
+            study_id=study_id,
+            study_name="Override Study",
+            modality="rs-fMRI",
+            sequences=["BOLD"],
+            subjects=3,
+            scans=9,
+            total_size="9 MB",
+            date="2026-06-12",
+        )
+
+    def get_dataset_summary(self, project_id: str) -> DatasetSummary | None:
+        if project_id != "override-project":
+            return None
+        return DatasetSummary(
+            project_id=project_id,
+            subjects=3,
+            scans=9,
+            total_size="9 MB",
+            health_status="ready",
+        )
+
+    def list_import_records(self, project_id: str) -> list[dict[str, object]]:
+        return [
+            {
+                "dataset_id": "override-import",
+                "project_id": project_id,
+                "path": "D:/virtual/rawdata",
+                "dataset_type": "bids",
+                "created_at": "2026-06-12T00:00:00Z",
+                "exists": False,
+            }
+        ]
+
+    def list_import_paths(self, project_id: str) -> list[str]:
+        return ["D:/virtual/rawdata"]
 
 
 def test_desktop_dashboard_health_and_projects():
@@ -30,6 +111,32 @@ def test_desktop_dashboard_health_and_projects():
     payload = projects.json()
     assert payload
     assert payload[0]["id"] == "brain-tumor-study"
+
+
+def test_dashboard_read_endpoints_accept_store_dependency_override():
+    test_app = create_app()
+    test_app.dependency_overrides[get_dashboard_store] = lambda: _DashboardStoreOverride()
+    client = TestClient(test_app)
+
+    projects = client.get("/api/projects")
+    assert projects.status_code == 200
+    assert projects.json()[0]["id"] == "override-project"
+
+    project = client.get("/api/projects/override-project")
+    assert project.status_code == 200
+    assert project.json()["current_model_id"] == "override-model"
+
+    overview = client.get("/api/studies/override-study/overview")
+    assert overview.status_code == 200
+    assert overview.json()["study_name"] == "Override Study"
+
+    summary = client.get("/api/datasets/summary", params={"project_id": "override-project"})
+    assert summary.status_code == 200
+    assert summary.json()["subjects"] == 3
+
+    imports = client.get("/api/datasets/imports", params={"project_id": "override-project"})
+    assert imports.status_code == 200
+    assert imports.json()["imports"][0]["dataset_id"] == "override-import"
 
 
 def test_desktop_dashboard_cards_and_tasks():
@@ -53,7 +160,12 @@ def test_desktop_dashboard_cards_and_tasks():
     assert any(task["status"] == "running" for task in tasks.json())
 
 
-def test_dataset_import_and_pipeline_run_create_task(tmp_path):
+def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
+    store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
+    monkeypatch.setattr("src.backend.app.api.dashboard_routes.mock_store", store)
+    monkeypatch.setattr("src.backend.app.services.task_manager.mock_store", store)
+    monkeypatch.setattr("src.backend.app.services.pipeline_runner.mock_store", store)
+
     client = TestClient(app)
     import nibabel as nib
     import numpy as np

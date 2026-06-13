@@ -1,21 +1,23 @@
-"""DPABI route handlers — MATLAB/DPABI capability, sandbox, templates.
+"""Domain route handlers extracted from src.backend.app.api.routes.
 
-Extracted from routes.py for domain cohesion.
+Endpoint paths and handler bodies are preserved for compatibility.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from src.backend.app.api._errors import raise_api_error
-from src.backend.app.api._shared import (
-    _load_project_config,
-    _read_json_if_exists,
-    _read_text_if_exists,
-)
 from src.backend.app.api.models import (
+    AgentExecuteRequest,
+    AgentPlanRequest,
+    RetryDryRunRequest,
+    RetryExecuteRequest,
+    SchedulerPlanRequest,
+    GpuBenchmarkRequest,
     DpabiCapabilityRequest,
     DpabiPreflightRequest,
     DpabiRunPlanRequest,
@@ -28,33 +30,121 @@ from src.backend.app.api.models import (
     DpabiTemplateInstantiateRequest,
     DpabiTemplateExecuteRequest,
     DpabiTemplateWizardRequest,
+    ArtifactPreviewRequest,
+    BundleCreateRequest,
+    RsfmriSpmRealignMotionQcRequest,
+    RsfmriSpmSliceTimingRequest,
+    RsfmriStRealignMotionQcRequest,
+    RsfmriCoregistrationQcRequest,
+    RsfmriSegmentationTissueQcRequest,
+    RsfmriNormalizationQcRequest,
+    RsfmriSmoothingQcRequest,
+    RsfmriNuisanceRegressionRequest,
+    RsfmriTemporalFilteringRequest,
+    RsfmriAlffFalffRequest,
+    RsfmriRehoRequest,
+    RsfmriFunctionalConnectivityRequest,
+    RsfmriGroupSummaryRequest,
+    RsfmriReportExportRequest,
+    RsfmriReportValidationRequest,
+    ReleaseReadinessRequest,
 )
-from src.backend.app.tools.dpabi_adapter import build_dpabi_input_manifest
+from src.backend.app.core.exceptions import ConfigError
+from src.backend.app.runtime.pipeline_executor import run_pipeline
+from src.backend.app.tools.report_exporter import get_latest_rsfmri_report_export, list_rsfmri_report_exports
+from src.backend.app.tools.report_package_validator import get_latest_rsfmri_report_validation, list_rsfmri_report_validations
+from src.backend.app.runtime.agent_runtime import (
+    run_orchestrator_execute,
+    run_orchestrator_plan,
+)
+from src.backend.app.runtime.path_safety import PathSafetyError, read_safe_text_file
+from src.backend.app.runtime.run_inspector import (
+    inspect_run,
+    list_available_runs,
+    read_state_detail,
+)
+from src.backend.app.runtime.error_diagnoser import diagnose_run
+from src.backend.app.runtime.retry_runtime import (
+    dry_run_retry_plan,
+    execute_retry_plan,
+)
+from src.backend.app.runtime.scheduler import create_scheduler_plan
+from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
+from src.backend.app.tools.gpu_utils import detect_gpu
+from src.backend.app.tools.gpu_alff_runner import run_alff_subject
+from src.backend.app.tools.dpabi_runner import run_dpabi_capability_inspection
 from src.backend.app.tools.dpabi_config import write_dpabi_wrapper_scaffold
-from src.backend.app.tools.dpabi_contract_registry import write_dpabi_wrapper_contracts
+from src.backend.app.tools.dpabi_adapter import build_dpabi_input_manifest
 from src.backend.app.tools.dpabi_preflight import run_dpabi_preflight
 from src.backend.app.tools.dpabi_run_plan import create_dpabi_run_plan
-from src.backend.app.tools.dpabi_runner import run_dpabi_capability_inspection
 from src.backend.app.tools.dpabi_sandbox_runner import run_dpabi_sandbox_smoke
 from src.backend.app.tools.dpabi_signature_runner import run_dpabi_signature_probe
+from src.backend.app.tools.dpabi_contract_registry import write_dpabi_wrapper_contracts
 from src.backend.app.tools.dpabi_single_function_runner import run_dpabi_single_function_sandbox
 from src.backend.app.tools.dpabi_subject_wrapper import run_dpabi_subject_smooth
 from src.backend.app.tools.dpabi_subject_wrapper_report import write_dpabi_subject_wrapper_report
+from src.backend.app.tools.dpabi_wrapper_validation import write_dpabi_wrapper_validation_matrix
+from src.backend.app.tools.dpabi_template_library import write_dpabi_template_library
 from src.backend.app.tools.dpabi_template_instantiator import (
-    execute_dpabi_template_instance,
     instantiate_dpabi_template,
+    execute_dpabi_template_instance,
     list_dpabi_templates,
 )
-from src.backend.app.tools.dpabi_template_library import write_dpabi_template_library
 from src.backend.app.tools.dpabi_template_wizard import (
-    create_dpabi_template_instance_from_wizard,
     get_dpabi_template_wizard_options,
     preview_dpabi_template_instance,
+    create_dpabi_template_instance_from_wizard,
 )
-from src.backend.app.tools.dpabi_wrapper_validation import write_dpabi_wrapper_validation_matrix
+from src.backend.app.tools.rsfmri_plan_tool import write_rsfmri_preprocessing_plan
+from src.backend.app.version import APP_VERSION
 
 router = APIRouter()
 
+
+def _read_json_if_exists(path: str | Path) -> dict[str, Any] | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+def _read_text_if_exists(path: str | Path) -> str | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    try:
+        return p.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+
+def _load_project_config(path: str) -> dict[str, Any]:
+    """Load and validate a project config YAML file.
+
+    Uses ProjectSettings.from_yaml() to validate critical fields (work_dir,
+    log_dir, spm_dir, dpabi_dir) before returning the raw dict.  Validation
+    errors are wrapped as ConfigError(400) to match the structured API model.
+    """
+    # ── structural validation (M1-T003 / M1-T005c) ──
+    from src.backend.app.config import ProjectSettings  # noqa: E402
+
+    try:
+        ProjectSettings.from_yaml(path)
+    except FileNotFoundError as exc:
+        raise ConfigError(str(exc)) from exc
+    except ValueError as exc:
+        raise ConfigError(str(exc)) from exc
+
+    # ── return raw dict for backward compat ──
+    import yaml
+    p = Path(path)
+    if not p.exists():
+        raise ConfigError(f"Project config not found: {path}")
+    try:
+        return yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception as exc:
+        raise ConfigError(f"Failed to parse project config: {exc}") from exc
 
 @router.post("/api/dpabi/capability")
 def api_dpabi_capability(payload: DpabiCapabilityRequest) -> dict[str, Any]:
@@ -76,7 +166,6 @@ def api_dpabi_capability(payload: DpabiCapabilityRequest) -> dict[str, Any]:
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/scaffold")
 def api_dpabi_scaffold(payload: DpabiCapabilityRequest) -> dict[str, Any]:
     try:
@@ -94,7 +183,6 @@ def api_dpabi_scaffold(payload: DpabiCapabilityRequest) -> dict[str, Any]:
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/input-manifest")
 def api_dpabi_input_manifest(payload: DpabiPreflightRequest) -> dict[str, Any]:
     try:
@@ -107,7 +195,6 @@ def api_dpabi_input_manifest(payload: DpabiPreflightRequest) -> dict[str, Any]:
         raise
     except Exception as exc:
         raise_api_error(exc)
-
 
 @router.post("/api/dpabi/preflight")
 def api_dpabi_preflight(payload: DpabiPreflightRequest) -> dict[str, Any]:
@@ -128,7 +215,6 @@ def api_dpabi_preflight(payload: DpabiPreflightRequest) -> dict[str, Any]:
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/run-plan")
 def api_dpabi_run_plan(request: DpabiRunPlanRequest) -> dict[str, Any]:
     try:
@@ -143,7 +229,6 @@ def api_dpabi_run_plan(request: DpabiRunPlanRequest) -> dict[str, Any]:
         return result
     except Exception as exc:
         raise_api_error(exc)
-
 
 @router.post("/api/dpabi/sandbox-smoke")
 def api_dpabi_sandbox_smoke(request: DpabiSandboxSmokeRequest) -> dict[str, Any]:
@@ -161,7 +246,6 @@ def api_dpabi_sandbox_smoke(request: DpabiSandboxSmokeRequest) -> dict[str, Any]
         return result
     except Exception as exc:
         raise_api_error(exc)
-
 
 @router.post("/api/dpabi/subject-smooth")
 def api_dpabi_subject_smooth(request: DpabiSubjectSmoothRequest) -> dict[str, Any]:
@@ -184,7 +268,6 @@ def api_dpabi_subject_smooth(request: DpabiSubjectSmoothRequest) -> dict[str, An
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/subject-wrapper-report")
 def api_dpabi_subject_wrapper_report(request: DpabiSubjectWrapperReportRequest) -> dict[str, Any]:
     try:
@@ -196,7 +279,6 @@ def api_dpabi_subject_wrapper_report(request: DpabiSubjectWrapperReportRequest) 
         return result
     except Exception as exc:
         raise_api_error(exc)
-
 
 @router.post("/api/dpabi/signature-probe")
 def api_dpabi_signature_probe(request: DpabiSignatureProbeRequest) -> dict[str, Any]:
@@ -213,7 +295,6 @@ def api_dpabi_signature_probe(request: DpabiSignatureProbeRequest) -> dict[str, 
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/wrapper-contracts")
 def api_dpabi_wrapper_contracts(request: DpabiSignatureProbeRequest) -> dict[str, Any]:
     try:
@@ -226,7 +307,6 @@ def api_dpabi_wrapper_contracts(request: DpabiSignatureProbeRequest) -> dict[str
         return result
     except Exception as exc:
         raise_api_error(exc)
-
 
 @router.post("/api/dpabi/single-function-sandbox")
 def api_dpabi_single_function_sandbox(request: DpabiSingleFunctionRequest) -> dict[str, Any]:
@@ -246,7 +326,6 @@ def api_dpabi_single_function_sandbox(request: DpabiSingleFunctionRequest) -> di
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/wrapper-validation-matrix")
 def api_dpabi_wrapper_validation_matrix(request: DpabiWrapperValidationRequest) -> dict[str, Any]:
     try:
@@ -263,7 +342,6 @@ def api_dpabi_wrapper_validation_matrix(request: DpabiWrapperValidationRequest) 
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/template-library")
 def api_dpabi_template_library(request: DpabiWrapperValidationRequest) -> dict[str, Any]:
     try:
@@ -271,15 +349,11 @@ def api_dpabi_template_library(request: DpabiWrapperValidationRequest) -> dict[s
         result = write_dpabi_template_library(
             work_dir=request.work_dir,
             report_dir=project_config.get("runtime", {}).get("report_dir", "./reports"),
-            matrix_path=request.signatures_path.replace(
-                "dpabi_function_signatures.json",
-                "dpabi_wrapper_compatibility_matrix.json",
-            ),
+            matrix_path=request.signatures_path.replace("dpabi_function_signatures.json", "dpabi_wrapper_compatibility_matrix.json"),
         )
         return result
     except Exception as exc:
         raise_api_error(exc)
-
 
 @router.get("/api/dpabi/templates")
 def api_dpabi_list_templates(work_dir: str = "./work") -> dict[str, Any]:
@@ -288,7 +362,6 @@ def api_dpabi_list_templates(work_dir: str = "./work") -> dict[str, Any]:
         return result
     except Exception as exc:
         raise_api_error(exc)
-
 
 @router.post("/api/dpabi/template-instantiate")
 def api_dpabi_template_instantiate(request: DpabiTemplateInstantiateRequest) -> dict[str, Any]:
@@ -306,7 +379,6 @@ def api_dpabi_template_instantiate(request: DpabiTemplateInstantiateRequest) -> 
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.post("/api/dpabi/template-execute")
 def api_dpabi_template_execute(request: DpabiTemplateExecuteRequest) -> dict[str, Any]:
     try:
@@ -321,14 +393,12 @@ def api_dpabi_template_execute(request: DpabiTemplateExecuteRequest) -> dict[str
     except Exception as exc:
         raise_api_error(exc)
 
-
 @router.get("/api/dpabi/template-wizard/options")
 def api_dpabi_template_wizard_options() -> dict[str, Any]:
     result = get_dpabi_template_wizard_options("./work")
     if not result.get("ok"):
         return result
     return result
-
 
 @router.post("/api/dpabi/template-wizard/preview")
 def api_dpabi_template_wizard_preview(
@@ -342,7 +412,6 @@ def api_dpabi_template_wizard_preview(
         raise HTTPException(status_code=400, detail=result)
     return result
 
-
 @router.post("/api/dpabi/template-wizard/create")
 def api_dpabi_template_wizard_create(
     request: DpabiTemplateWizardRequest,
@@ -355,7 +424,6 @@ def api_dpabi_template_wizard_create(
         raise HTTPException(status_code=400, detail=result)
     return result
 
-
 @router.get("/api/dpabi/template-wizard/latest")
 def api_dpabi_template_wizard_latest() -> dict[str, Any]:
     base = Path("outputs/work") / "dpabi" / "template_wizard"
@@ -365,3 +433,56 @@ def api_dpabi_template_wizard_latest() -> dict[str, Any]:
         "latest_preview": _read_json_if_exists(base / "latest_preview.json"),
         "latest_preview_markdown": _read_text_if_exists(base / "latest_preview.md"),
     }
+
+@router.get("/api/dpabi/template-library")
+async def dpabi_template_library_view():
+    """View the DPABI template library report."""
+    path = Path("outputs/reports") / "dpabi" / "dpabi_template_library.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Template library not found. POST /api/dpabi/template-library to generate.")
+    return {"ok": True, "report": path.read_text(encoding="utf-8")}
+
+
+# ── DPABI smoke test / validation endpoints ───────────────────────────────
+
+@router.post("/api/dpabi/smoke-test")
+async def dpabi_smoke_test(request: dict[str, Any]):
+    """Run DPABI environment smoke test."""
+    from src.backend.app.tools.dpabi_wrapper import run_dpabi_smoke_test
+
+    return run_dpabi_smoke_test(
+        dpabi_dir=request.get("dpabi_dir", "./third_party/DPABI_V8.2_240510"),
+        matlab_command=request.get("matlab_command", "matlab"),
+        work_dir=request.get("work_dir", "./work"),
+        log_dir=request.get("log_dir", "./logs"),
+        approved=request.get("approved", False),
+    )
+
+@router.post("/api/dpabi/run-single-function")
+async def dpabi_run_single_function(request: dict[str, Any]):
+    """Run a single DPABI function."""
+    from src.backend.app.tools.dpabi_wrapper import run_dpabi_single_function
+
+    return run_dpabi_single_function(
+        function_name=request.get("function_name", "y_Smooth"),
+        input_bold=request.get("input_bold", ""),
+        subject_id=request.get("subject_id", "sub-001"),
+        derivatives_dir=request.get("derivatives_dir", "./derivatives"),
+        work_dir=request.get("work_dir", "./work"),
+        log_dir=request.get("log_dir", "./logs"),
+        dpabi_dir=request.get("dpabi_dir", "./third_party/DPABI_V8.2_240510"),
+        matlab_command=request.get("matlab_command", "matlab"),
+        mode=request.get("mode", "contract_only"),
+        approved=request.get("approved", False),
+        params=request.get("params"),
+    )
+
+@router.get("/api/dpabi/function-list")
+async def dpabi_function_list():
+    """List allowed DPABI functions."""
+    from src.backend.app.tools.dpabi_safety import list_allowed_functions
+
+    return {"ok": True, "functions": list_allowed_functions()}
+
+
+# ── GPU endpoints ─────────────────────────────────────────────────────────

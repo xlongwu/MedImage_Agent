@@ -42,9 +42,21 @@ def build_release_readiness():
 
     nr = Path("src/backend/app/runtime/node_registry.py")
     if nr.is_file():
-        content = nr.read_text(encoding="utf-8")
+        try:
+            from src.backend.app.runtime.node_registry import NODE_REGISTRY
+            registered_nodes = set(NODE_REGISTRY)
+        except Exception:
+            plugin_dir = Path("src/backend/app/runtime/node_registry_plugins")
+            plugin_text = "\n".join(
+                p.read_text(encoding="utf-8")
+                for p in plugin_dir.glob("*.py")
+                if p.is_file()
+            ) if plugin_dir.is_dir() else ""
+            content = nr.read_text(encoding="utf-8") + "\n" + plugin_text
+            registered_nodes = set()
         for nid in ["group_dataset_summary","rsfmri_report_exporter","rsfmri_report_package_validator"]:
-            chk("runtime_registry", f"node:{nid}", f'"{nid}"' in content)
+            ok = nid in registered_nodes if registered_nodes else f'"{nid}"' in content
+            chk("runtime_registry", f"node:{nid}", ok)
 
     ed = Path("examples")
     if ed.is_dir():
@@ -54,6 +66,16 @@ def build_release_readiness():
     api_files = [
         Path("src/backend/app/api/dashboard_routes.py"),
         Path("src/backend/app/api/routes.py"),
+        Path("src/backend/app/api/dpabi_routes.py"),
+        Path("src/backend/app/api/rsfmri_routes.py"),
+        Path("src/backend/app/api/agent_routes.py"),
+        Path("src/backend/app/api/gpu_routes.py"),
+        Path("src/backend/app/api/pipeline_routes.py"),
+        Path("src/backend/app/api/session_routes.py"),
+        Path("src/backend/app/api/advisor_routes.py"),
+        Path("src/backend/app/api/experiment_routes.py"),
+        Path("src/backend/app/api/artifact_routes.py"),
+        Path("src/backend/app/api/realdata_routes.py"),
         Path("src/backend/app/api/planner_routes.py"),
         Path("src/backend/app/api/gui_agent_routes.py"),
         Path("src/backend/app/api/desktop_routes.py"),
