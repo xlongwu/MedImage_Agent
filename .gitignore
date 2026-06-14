@@ -10,8 +10,10 @@ build/
 *.egg
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp*/
 .mypy_cache/
 .ruff_cache/
+_MEI*/
 
 # Virtual environments
 venv/
@@ -48,6 +50,7 @@ outputs/memory/
 # Node / Frontend
 node_modules/
 src/frontend/dist/
+src/frontend/coverage/
 src/frontend/.vite/
 src/frontend/dist-electron/
 src/frontend/release/
@@ -59,6 +62,8 @@ desktop/electron/.npm-cache/
 desktop/electron/.electron-cache/
 desktop/electron/.electron-builder-cache/
 desktop/electron/dist/
+desktop/electron/dist-codex/
+desktop/electron/dist-installer/
 desktop/electron/.tmp/
 desktop/packaging/build/
 desktop/packaging/dist/
@@ -66,7 +71,14 @@ desktop/packaging/dist/
 
 # Local agent/worktree state
 .agents/
+.reasonix/
+.workbuddy/
+.claude/settings.local.json
 .claude/worktrees/
+docs/tasks/
+
+# Local logs
+debug.log
 
 # OS
 .DS_Store
