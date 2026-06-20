@@ -141,12 +141,12 @@ def test_version_consistency_across_surfaces():
             f"Version mismatch: {path} = {ver}, expected {APP_VERSION}"
         )
 
-    # README badge versions should match
+    # README badge versions should match (shield.io uses -- for -rc suffix)
     for readme in ("README.md", "README_CN.md"):
         text = (ROOT / readme).read_text(encoding="utf-8")
-        badge = re.search(r"version-v?([^-]+)-", text)
+        badge = re.search(r"version-v?([0-9.]+(?:--[a-z0-9]+)?)-", text)
         if badge:
-            badge_ver = badge.group(1)
+            badge_ver = badge.group(1).replace("--", "-")
             assert badge_ver == APP_VERSION, (
                 f"README badge version mismatch in {readme}: "
                 f"{badge_ver} != {APP_VERSION}"
