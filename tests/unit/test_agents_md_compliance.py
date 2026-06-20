@@ -23,7 +23,7 @@ from pathlib import Path
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _read_version_file(path: str) -> str:
