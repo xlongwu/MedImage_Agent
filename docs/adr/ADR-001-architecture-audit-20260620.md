@@ -29,6 +29,8 @@ The audit covered:
    - `src/frontend/package-lock.json`: `0.5.0-rc1` → `0.6.0-rc1`
    - `desktop/electron/package.json`: `0.5.0-rc1` → `0.6.0-rc1`
    - `pyproject.toml`: `0.3.0-alpha` → `0.6.0-rc1`
+   - `README.md` shield + references: `v0.5.0-rc1` → `v0.6.0-rc1`
+   - `README_CN.md` shield + references: `v0.5.0-rc1` → `v0.6.0-rc1`
 
 2. **Dead import cleanup** — Removed 38 unused imports from
    `src/backend/app/api/agent_routes.py`:
@@ -66,9 +68,14 @@ The audit covered:
 ### Compliance Enforcement Gaps
 
 The compliance test file referenced in AGENTS.md §16.1
-(`tests/test_agents_md_compliance.py`) was not found in the repository. This is
-a gap — the CI enforcement mechanism must be created or the AGENTS.md reference
-must be corrected.
+(`tests/test_agents_md_compliance.py`) has been created with a baseline
+compliance suite covering:
+- Duplicate node ID detection
+- Large binary artifact tracking
+- Referenced stable document existence
+- Version consistency across all package surfaces
+- agent_routes.py import hygiene
+- Compliance debt budget monitoring (Tier 2)
 
 ## Consequences
 
@@ -111,11 +118,12 @@ must be corrected.
 
 ### Recommended Next Steps
 
-1. Create `tests/test_agents_md_compliance.py` to enforce §6.1 and §6.6 rules
-   via CI
-2. Begin v0.7.0 `atomic_write_json` migration, prioritizing the 28 service
+1. ~~Create `tests/test_agents_md_compliance.py` to enforce §6.1 and §6.6 rules
+   via CI~~ **DONE** — baseline compliance suite created 2026-06-20
+2. Add compliance tests to CI workflow (`.github/workflows/ci.yml`)
+3. Begin v0.7.0 `atomic_write_json` migration, prioritizing the 28 service
    files
-3. Extract `gpu_routes.py` numerical logic into a dedicated service
-4. Deprecate and remove `useAppState.ts` after all consumers migrate to
+4. Extract `gpu_routes.py` numerical logic into a dedicated service
+5. Deprecate and remove `useAppState.ts` after all consumers migrate to
    controllers
-5. Plan `dashboard_routes.py` demolition into domain routers for v0.8.0
+6. Plan `dashboard_routes.py` demolition into domain routers for v0.8.0

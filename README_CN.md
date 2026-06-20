@@ -1,7 +1,7 @@
 # MedImage Agent
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.5.0--rc1-1976d2)](docs/releases/v0.5.0-rc1.md)
+[![Version](https://img.shields.io/badge/version-v0.5.0--rc1-1976d2)](docs/releases/v0.6.0-rc1.md)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.136%2B-green)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18%2B-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6)](https://www.typescriptlang.org/)
@@ -14,8 +14,8 @@ Pipeline Runtime 和注册节点 runner 内。
 
 本项目是研究工程平台，不用于临床诊断或医疗决策。
 
-当前发布线：**v0.5.0-rc1**。详见
-[发布说明](docs/releases/v0.5.0-rc1.md)。
+当前发布线：**v0.6.0-rc1**。详见
+[发布说明](docs/releases/v0.6.0-rc1.md)。
 
 ## 快速开始
 
@@ -171,7 +171,7 @@ tests/
 
 - [当前项目状态](PROJECT_STATE.md)
 - [架构文档](docs/architecture.md)
-- [发布说明 v0.5.0-rc1](docs/releases/v0.5.0-rc1.md)
+- [发布说明 v0.6.0-rc1](docs/releases/v0.6.0-rc1.md)
 - [发布说明 v0.4.0-rc1](docs/releases/v0.4.0-rc1.md)
 - [发布说明 v0.3.0-rc1](docs/releases/v0.3.0-rc1.md)
 - [桌面应用打包](docs/DESKTOP_APP_PACKAGING.md)
