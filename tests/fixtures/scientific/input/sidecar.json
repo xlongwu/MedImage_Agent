@@ -1,0 +1,30 @@
+{
+  "RepetitionTime": 2.0,
+  "TaskName": "rest",
+  "freq_band": [
+    0.01,
+    0.08
+  ],
+  "seed": 42,
+  "shapes": {
+    "bold": [
+      10,
+      10,
+      8,
+      50
+    ],
+    "reho": [
+      8,
+      8,
+      8,
+      40
+    ],
+    "fc": [
+      16,
+      16,
+      12,
+      60
+    ],
+    "atlas_roi": 5
+  }
+}

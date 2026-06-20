@@ -77,7 +77,7 @@ def append_run_history(
 
 def read_error_kb(root_dir: str = ".") -> dict[str, Any]:
     ensure_memory_layout(root_dir)
-    return _load_yaml(Path(root_dir) / "memory" / "global" / "ERROR_KB.yaml")
+    return _load_yaml(Path(root_dir) / "src" / "backend" / "app" / "resources" / "error_kb.yaml")
 
 
 def match_error_patterns(

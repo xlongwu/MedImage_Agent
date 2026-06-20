@@ -106,7 +106,7 @@ class TestPublicE2ESmoke:
         from src.backend.app.schemas.desktop import ProjectDetail
 
         # ── 1. Create project ─────────────────────────────────────────
-        project_id = "e2e-public-smoke"
+        project_id = f"e2e-public-smoke-{abs(hash(str(tmp_path))) & 0xffffffff:x}"
         project_dir = str(tmp_path / "project")
         Path(project_dir).mkdir(parents=True, exist_ok=True)
 
@@ -136,6 +136,17 @@ class TestPublicE2ESmoke:
         from src.backend.app.schemas.dicom_conversion_approval import (
             DicomConversionApprovalRecord,
         )
+        from src.backend.app.services.dicom_conversion_execution import (
+            run_conversion_preflight,
+        )
+
+        preflight = run_conversion_preflight(project_id)
+        assert preflight.status == "ready", (
+            f"Preflight must be ready: status={preflight.status} "
+            f"blocking={preflight.blocking_issues}"
+        )
+        assert len(preflight.mappings) == 6
+        assert len(preflight.command_templates) == 6
 
         approval = DicomConversionApprovalRecord(
             approval_id="e2e-public-test",
@@ -144,6 +155,7 @@ class TestPublicE2ESmoke:
             approved=True,
             approved_by="e2e-smoke-maintainer",
             mappings_reviewed=True,
+            output_root=preflight.output_root_preview,
             output_root_confirmed=True,
             output_root_under_project=True,
             output_root_not_rawdata=True,
@@ -152,6 +164,7 @@ class TestPublicE2ESmoke:
             command_templates_reviewed=True,
             no_shell_string_confirmed=True,
             dcm2niix_availability_confirmed=True,
+            dcm2niix_version=preflight.executable_path,
             env_flags_confirmed=True,
             rollback_policy_acknowledged=True,
             clinical_use_prohibited_acknowledged=True,
@@ -163,8 +176,12 @@ class TestPublicE2ESmoke:
         persist_result = persist_conversion_plan(
             project_id=project_id,
             approval_record=approval,
+            preflight_snapshot=preflight.model_dump(),
+            mappings=[m.model_dump() for m in preflight.mappings],
+            command_templates=[t.model_dump() for t in preflight.command_templates],
             project_dir=project_dir,
             rawdata_dir=rawdata_dir,
+            preflight_ok=True,
         )
         assert persist_result.ok, f"Persist failed: {persist_result.errors}"
         conversion_run_id = persist_result.conversion_run_id
@@ -242,6 +259,9 @@ class TestPublicE2ESmoke:
         assert sf["no_shell_execution"] is True
         assert sf["human_release_approval_required"] is True
 
+        assert data["ok"] is True, data
+        assert data["status"] == "succeeded", data
+
         status = data["status"]
         if status in ("blocked", "disabled"):
             # Endpoint blocked — verify blocking issues are informative
@@ -274,6 +294,23 @@ class TestPublicE2ESmoke:
                             assert not str(p).startswith(rawdata_dir), (
                                 f"Output leaked to rawdata: {p}"
                             )
+
+        out_root = Path(data["output_root"])
+        nifti_files = list(out_root.rglob("*.nii*"))
+        sidecar_files = list(out_root.rglob("*.json"))
+        assert len(nifti_files) == 6
+        assert len(sidecar_files) >= 6
+
+        manifest = json.loads(Path(data["output_manifest_path"]).read_text(encoding="utf-8"))
+        assert manifest["output_root"] == str(out_root)
+        assert sum(1 for item in manifest["items"] if item["kind"] == "nifti") == 6
+
+        provenance = json.loads(Path(data["execution_provenance_path"]).read_text(encoding="utf-8"))
+        meta = provenance["metadata"]
+        assert meta["dcm2niix_command_count"] == 6
+        assert meta["mapping_success_count"] == 6
+        assert meta["mapping_failure_count"] == 0
+        assert len(provenance["output_paths"]) == 6
 
     def test_public_endpoint_blocked_without_env_flags(self, tmp_path):
         """Public endpoint returns blocked when env flags are not all set."""

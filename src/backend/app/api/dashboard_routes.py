@@ -496,12 +496,12 @@ def get_model_status(project_id: str = Query(...)) -> ModelStatus:
     return status
 
 
-@router.get("/api/tasks", response_model=list[TaskLogEntry])
+@router.get("/api/tasks", response_model=list[TaskLogEntry], deprecated=True)
 def list_tasks() -> list[TaskLogEntry]:
     return mock_store.list_tasks()
 
 
-@router.get("/api/tasks/{task_id}", response_model=TaskDetail)
+@router.get("/api/tasks/{task_id}", response_model=TaskDetail, deprecated=True)
 def get_task(task_id: str) -> TaskDetail:
     task = mock_store.get_task(task_id)
     if not task:
@@ -509,14 +509,14 @@ def get_task(task_id: str) -> TaskDetail:
     return task
 
 
-@router.get("/api/tasks/{task_id}/events", response_model=list[TaskEvent])
+@router.get("/api/tasks/{task_id}/events", response_model=list[TaskEvent], deprecated=True)
 def get_task_events(task_id: str) -> list[TaskEvent]:
     if not mock_store.get_task(task_id):
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
     return task_manager.list_events(task_id)
 
 
-@router.post("/api/tasks/{task_id}/approve", response_model=TaskApprovalResponse)
+@router.post("/api/tasks/{task_id}/approve", response_model=TaskApprovalResponse, deprecated=True)
 async def approve_task(task_id: str, request: TaskApprovalRequest) -> TaskApprovalResponse:
     task = mock_store.get_task(task_id)
     if not task:
@@ -558,7 +558,7 @@ async def approve_task(task_id: str, request: TaskApprovalRequest) -> TaskApprov
     return TaskApprovalResponse(ok=True, approval=approval, message="Approved smoke run queued")
 
 
-@router.get("/api/tasks/{task_id}/diagnostics", response_model=TaskDiagnosticsResponse)
+@router.get("/api/tasks/{task_id}/diagnostics", response_model=TaskDiagnosticsResponse, deprecated=True)
 def get_task_diagnostics(task_id: str) -> TaskDiagnosticsResponse:
     task = mock_store.get_task(task_id)
     if not task:
@@ -566,7 +566,7 @@ def get_task_diagnostics(task_id: str) -> TaskDiagnosticsResponse:
     return _build_task_diagnostics(task)
 
 
-@router.get("/api/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse)
+@router.get("/api/tasks/{task_id}/artifacts", response_model=TaskArtifactsResponse, deprecated=True)
 def get_task_artifacts(task_id: str) -> TaskArtifactsResponse:
     task = mock_store.get_task(task_id)
     if not task:
@@ -582,7 +582,7 @@ def get_task_artifacts(task_id: str) -> TaskArtifactsResponse:
     )
 
 
-@router.post("/api/tasks/{task_id}/audit-package", response_model=TaskAuditPackageResponse)
+@router.post("/api/tasks/{task_id}/audit-package", response_model=TaskAuditPackageResponse, deprecated=True)
 def generate_task_audit_package(task_id: str) -> TaskAuditPackageResponse:
     task = mock_store.get_task(task_id)
     if not task:
@@ -599,7 +599,7 @@ def generate_task_audit_package(task_id: str) -> TaskAuditPackageResponse:
     return _write_task_audit_package(task, diagnostics, artifact_response)
 
 
-@router.post("/api/pipelines/run", response_model=PipelineRunResponse)
+@router.post("/api/pipelines/run", response_model=PipelineRunResponse, deprecated=True)
 async def run_pipeline(request: PipelineRunRequest) -> PipelineRunResponse:
     if not request.input_sequences:
         raise HTTPException(status_code=400, detail="input_sequences must not be empty")
@@ -665,7 +665,7 @@ async def task_stream(websocket: WebSocket, task_id: str) -> None:
         task_manager.unsubscribe(task_id, queue)
 
 
-@router.post("/api/assistant/chat", response_model=AssistantChatResponse)
+@router.post("/api/assistant/chat", response_model=AssistantChatResponse, deprecated=True)
 def assistant_chat(request: AssistantChatRequest) -> AssistantChatResponse:
     project = mock_store.get_project(request.project_id)
     if not project:
@@ -699,7 +699,7 @@ def assistant_chat(request: AssistantChatRequest) -> AssistantChatResponse:
     return AssistantChatResponse(reply=reply)
 
 
-@router.get("/api/images/preview", response_model=ImagePreviewResponse)
+@router.get("/api/images/preview", response_model=ImagePreviewResponse, deprecated=True)
 def image_preview(
     project_id: str = Query(...),
     subject_id: str | None = Query(default=None),
@@ -720,21 +720,21 @@ def image_preview(
     )
 
 
-@router.get("/api/images/sources", response_model=ImageSourcesResponse)
+@router.get("/api/images/sources", response_model=ImageSourcesResponse, deprecated=True)
 def image_sources(project_id: str = Query(...)) -> ImageSourcesResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return list_image_sources(project_id=project_id, search_roots=mock_store.list_import_paths(project_id))
 
 
-@router.get("/api/images/manifest", response_model=ImageSourcesResponse)
+@router.get("/api/images/manifest", response_model=ImageSourcesResponse, deprecated=True)
 def image_manifest(project_id: str = Query(...)) -> ImageSourcesResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return list_image_sources(project_id=project_id, search_roots=mock_store.list_import_paths(project_id))
 
 
-@router.get("/api/images/validation", response_model=ImageValidationReport)
+@router.get("/api/images/validation", response_model=ImageValidationReport, deprecated=True)
 def image_validation(project_id: str = Query(...)) -> ImageValidationReport:
     project = mock_store.get_project(project_id)
     if not project:
@@ -746,7 +746,7 @@ def image_validation(project_id: str = Query(...)) -> ImageValidationReport:
     )
 
 
-@router.post("/api/projects/{project_id}/qc-dashboard/report", response_model=QcDashboardReportResponse)
+@router.post("/api/projects/{project_id}/qc-dashboard/report", response_model=QcDashboardReportResponse, deprecated=True)
 def post_qc_dashboard_report(
     project_id: str,
     cache: str = "off",
@@ -758,7 +758,7 @@ def post_qc_dashboard_report(
     return build_qc_dashboard_report(project_id, cache_mode=cache)
 
 
-@router.get("/api/projects/{project_id}/qc-dashboard/report/latest", response_model=QcDashboardReportResponse)
+@router.get("/api/projects/{project_id}/qc-dashboard/report/latest", response_model=QcDashboardReportResponse, deprecated=True)
 def get_latest_qc_dashboard_report(project_id: str) -> QcDashboardReportResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -768,7 +768,7 @@ def get_latest_qc_dashboard_report(project_id: str) -> QcDashboardReportResponse
     return result
 
 
-@router.get("/api/projects/{project_id}/qc-dashboard/fingerprint", response_model=QcDashboardFingerprintResponse)
+@router.get("/api/projects/{project_id}/qc-dashboard/fingerprint", response_model=QcDashboardFingerprintResponse, deprecated=True)
 def get_qc_dashboard_fingerprint(project_id: str) -> QcDashboardFingerprintResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -791,14 +791,14 @@ def get_qc_dashboard_fingerprint(project_id: str) -> QcDashboardFingerprintRespo
     )
 
 
-@router.get("/api/projects/{project_id}/data-readiness", response_model=DataReadinessResponse)
+@router.get("/api/projects/{project_id}/data-readiness", response_model=DataReadinessResponse, deprecated=True)
 def get_project_data_readiness(project_id: str) -> DataReadinessResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_data_readiness(project_id)
 
 
-@router.get("/api/projects/{project_id}/bids-validation", response_model=BidsValidationResponse)
+@router.get("/api/projects/{project_id}/bids-validation", response_model=BidsValidationResponse, deprecated=True)
 def get_project_bids_validation(project_id: str) -> BidsValidationResponse:
     project = mock_store.get_project(project_id)
     if not project:
@@ -820,49 +820,49 @@ def get_project_bids_validation(project_id: str) -> BidsValidationResponse:
     return result
 
 
-@router.get("/api/projects/{project_id}/bold-reference/readiness", response_model=BoldReferenceReadinessResponse)
+@router.get("/api/projects/{project_id}/bold-reference/readiness", response_model=BoldReferenceReadinessResponse, deprecated=True)
 def get_project_bold_reference_readiness(project_id: str) -> BoldReferenceReadinessResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_bold_reference_readiness(project_id)
 
 
-@router.post("/api/projects/{project_id}/rsfmri-qc/planning-report", response_model=RsfmriQcPlanningReportResponse)
+@router.post("/api/projects/{project_id}/rsfmri-qc/planning-report", response_model=RsfmriQcPlanningReportResponse, deprecated=True)
 def post_rsfmri_qc_planning_report(project_id: str) -> RsfmriQcPlanningReportResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_rsfmri_qc_planning_report(project_id)
 
 
-@router.post("/api/projects/{project_id}/motion-qc/metrics-draft", response_model=MotionMetricsDraftResponse)
+@router.post("/api/projects/{project_id}/motion-qc/metrics-draft", response_model=MotionMetricsDraftResponse, deprecated=True)
 def post_motion_metrics_draft(project_id: str) -> MotionMetricsDraftResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_motion_metrics_draft(project_id)
 
 
-@router.post("/api/projects/{project_id}/spm-realign/dry-run", response_model=SpmRealignDryRunResponse)
+@router.post("/api/projects/{project_id}/spm-realign/dry-run", response_model=SpmRealignDryRunResponse, deprecated=True)
 def post_spm_realign_dry_run(project_id: str) -> SpmRealignDryRunResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_spm_realign_dry_run(project_id)
 
 
-@router.post("/api/projects/{project_id}/spm-realign/wrapper-skeleton", response_model=SpmRealignWrapperSkeletonResponse)
+@router.post("/api/projects/{project_id}/spm-realign/wrapper-skeleton", response_model=SpmRealignWrapperSkeletonResponse, deprecated=True)
 def post_spm_realign_wrapper_skeleton(project_id: str) -> SpmRealignWrapperSkeletonResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_spm_realign_wrapper_skeleton(project_id)
 
 
-@router.get("/api/projects/{project_id}/nifti-qc/snapshot", response_model=NiftiQcSnapshotResponse)
+@router.get("/api/projects/{project_id}/nifti-qc/snapshot", response_model=NiftiQcSnapshotResponse, deprecated=True)
 def get_project_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_nifti_qc_snapshot(project_id)
 
 
-@router.get("/api/projects/{project_id}/nifti-qc/images/{image_id}/thumbnail", response_model=NiftiThumbnailResponse)
+@router.get("/api/projects/{project_id}/nifti-qc/images/{image_id}/thumbnail", response_model=NiftiThumbnailResponse, deprecated=True)
 def get_project_nifti_thumbnail(
     project_id: str, image_id: str,
     view: str = "all", volume_index: int | None = None, size: int | None = None,
@@ -882,14 +882,14 @@ def get_project_nifti_thumbnail(
         raise
 
 
-@router.get("/api/projects/{project_id}/motion-qc/readiness", response_model=MotionQcReadinessResponse)
+@router.get("/api/projects/{project_id}/motion-qc/readiness", response_model=MotionQcReadinessResponse, deprecated=True)
 def get_project_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_motion_qc_readiness(project_id)
 
 
-@router.post("/api/projects/{project_id}/conversion/dry-run", response_model=ConversionDryRunResponse)
+@router.post("/api/projects/{project_id}/conversion/dry-run", response_model=ConversionDryRunResponse, deprecated=True)
 def post_conversion_dry_run(
     project_id: str,
     request: ConversionDryRunRequest = ConversionDryRunRequest(),
@@ -899,7 +899,7 @@ def post_conversion_dry_run(
     return plan_conversion(project_id, request)
 
 
-@router.post("/api/projects/{project_id}/conversion/preflight")
+@router.post("/api/projects/{project_id}/conversion/preflight", deprecated=True)
 def post_conversion_preflight(
     project_id: str,
 ) -> dict[str, Any]:
@@ -982,7 +982,7 @@ def post_conversion_preflight(
     }
 
 
-@router.post("/api/projects/{project_id}/conversion/approval/persist-plan")
+@router.post("/api/projects/{project_id}/conversion/approval/persist-plan", deprecated=True)
 def post_conversion_persist_plan(
     project_id: str,
     body: dict[str, Any],
@@ -1055,7 +1055,7 @@ def post_conversion_persist_plan(
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}")
+@router.get("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}", deprecated=True)
 def get_conversion_review_package(
     project_id: str,
     conversion_run_id: str,
@@ -1086,7 +1086,7 @@ def get_conversion_review_package(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}/export")
+@router.post("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}/export", deprecated=True)
 def post_conversion_review_package_export(
     project_id: str,
     conversion_run_id: str,
@@ -1119,7 +1119,7 @@ def post_conversion_review_package_export(
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/conversion/release-readiness/{conversion_run_id}")
+@router.get("/api/projects/{project_id}/conversion/release-readiness/{conversion_run_id}", deprecated=True)
 def get_conversion_release_readiness(
     project_id: str,
     conversion_run_id: str,
@@ -1156,7 +1156,7 @@ def get_conversion_release_readiness(
 # DICOM conversion public execute endpoint — Phase 4L-2
 # ═══════════════════════════════════════════════════════════════════════
 
-@router.post("/api/projects/{project_id}/conversion/execute")
+@router.post("/api/projects/{project_id}/conversion/execute", deprecated=True)
 def post_conversion_execute(
     project_id: str,
     request_raw: dict[str, Any] | None = None,
@@ -1599,7 +1599,7 @@ def post_conversion_execute(
 # Preprocessing handoff — Phase 5A
 # ═══════════════════════════════════════════════════════════════════════
 
-@router.post("/api/projects/{project_id}/preprocessing/input/register-converted")
+@router.post("/api/projects/{project_id}/preprocessing/input/register-converted", deprecated=True)
 def post_register_converted_preprocessing_input(
     project_id: str,
     body: dict[str, Any],
@@ -1643,7 +1643,7 @@ def post_register_converted_preprocessing_input(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/plan/preview")
+@router.post("/api/projects/{project_id}/preprocessing/plan/preview", deprecated=True)
 def post_preprocessing_plan_preview(
     project_id: str,
 ) -> dict[str, Any]:
@@ -1677,7 +1677,7 @@ def post_preprocessing_plan_preview(
 # Preprocessing run workspace — Phase 5B
 # ═══════════════════════════════════════════════════════════════════════
 
-@router.post("/api/projects/{project_id}/preprocessing/runs")
+@router.post("/api/projects/{project_id}/preprocessing/runs", deprecated=True)
 def post_create_preprocessing_run(
     project_id: str,
     body: dict[str, Any],
@@ -1710,7 +1710,7 @@ def post_create_preprocessing_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/execute-python-preflight")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/execute-python-preflight", deprecated=True)
 def post_execute_python_preflight(
     project_id: str,
     preprocessing_run_id: str,
@@ -1733,7 +1733,7 @@ def post_execute_python_preflight(
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}")
+@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}", deprecated=True)
 def get_preprocessing_run(
     project_id: str,
     preprocessing_run_id: str,
@@ -1756,7 +1756,7 @@ def get_preprocessing_run(
 # SPM/MATLAB runtime preflight — Phase 5C
 # ═══════════════════════════════════════════════════════════════════════
 
-@router.get("/api/projects/{project_id}/preprocessing/spm-runtime/preflight")
+@router.get("/api/projects/{project_id}/preprocessing/spm-runtime/preflight", deprecated=True)
 def get_spm_runtime_preflight(project_id: str) -> dict[str, Any]:
     """Check MATLAB/SPM availability for synthetic smoke."""
     if not mock_store.get_project(project_id):
@@ -1766,7 +1766,7 @@ def get_spm_runtime_preflight(project_id: str) -> dict[str, Any]:
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/spm-runtime/synthetic-smoke")
+@router.post("/api/projects/{project_id}/preprocessing/spm-runtime/synthetic-smoke", deprecated=True)
 def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
     """Generate synthetic SPM Slice Timing + Realign smoke artifacts."""
     if not mock_store.get_project(project_id):
@@ -1787,7 +1787,7 @@ def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str,
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/dry-run")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/dry-run", deprecated=True)
 def post_spm_slice_timing_realign_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1810,7 +1810,7 @@ def post_spm_slice_timing_realign_dry_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/execute-sandbox")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/execute-sandbox", deprecated=True)
 def post_spm_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1836,7 +1836,7 @@ def post_spm_sandbox_execution(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-sandbox-spm")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-sandbox-spm", deprecated=True)
 def post_register_sandbox_spm_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1859,7 +1859,7 @@ def post_register_sandbox_spm_outputs(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/dry-run")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/dry-run", deprecated=True)
 def post_coreg_norm_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1886,7 +1886,7 @@ def post_coreg_norm_dry_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/execute-sandbox")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/execute-sandbox", deprecated=True)
 def post_coreg_norm_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1914,7 +1914,7 @@ def post_coreg_norm_sandbox_execution(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-coreg-norm")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-coreg-norm", deprecated=True)
 def post_register_coreg_norm_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1937,7 +1937,7 @@ def post_register_coreg_norm_outputs(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/dry-run")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/dry-run", deprecated=True)
 def post_smoothing_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1962,7 +1962,7 @@ def post_smoothing_dry_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/execute-sandbox")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/execute-sandbox", deprecated=True)
 def post_smoothing_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1990,7 +1990,7 @@ def post_smoothing_sandbox_execution(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-smoothing")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-smoothing", deprecated=True)
 def post_register_smoothing_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2013,7 +2013,7 @@ def post_register_smoothing_outputs(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/dry-run")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/dry-run", deprecated=True)
 def post_nuisance_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2041,7 +2041,7 @@ def post_nuisance_dry_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/execute-sandbox")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/execute-sandbox", deprecated=True)
 def post_nuisance_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2066,7 +2066,7 @@ def post_nuisance_sandbox_execution(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-nuisance")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-nuisance", deprecated=True)
 def post_register_nuisance_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2089,7 +2089,7 @@ def post_register_nuisance_outputs(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/dry-run")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/dry-run", deprecated=True)
 def post_filtering_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2113,7 +2113,7 @@ def post_filtering_dry_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/execute-sandbox")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/execute-sandbox", deprecated=True)
 def post_filtering_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2138,7 +2138,7 @@ def post_filtering_sandbox_execution(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-filtering")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-filtering", deprecated=True)
 def post_register_filtering_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2161,7 +2161,7 @@ def post_register_filtering_outputs(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/dry-run")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/dry-run", deprecated=True)
 def post_alff_reho_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2186,7 +2186,7 @@ def post_alff_reho_dry_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/execute-sandbox")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/execute-sandbox", deprecated=True)
 def post_alff_reho_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2212,7 +2212,7 @@ def post_alff_reho_sandbox_execution(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-alff-reho")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-alff-reho", deprecated=True)
 def post_register_alff_reho_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2235,7 +2235,7 @@ def post_register_alff_reho_outputs(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/dry-run")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/dry-run", deprecated=True)
 def post_fc_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2261,7 +2261,7 @@ def post_fc_dry_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/execute-sandbox")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/execute-sandbox", deprecated=True)
 def post_fc_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2288,7 +2288,7 @@ def post_fc_sandbox_execution(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-fc")
+@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-fc", deprecated=True)
 def post_register_fc_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2311,7 +2311,7 @@ def post_register_fc_outputs(
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/report")
+@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/report", deprecated=True)
 def get_pipeline_report(project_id: str, preprocessing_run_id: str) -> dict[str, Any]:
     """Export preprocessing pipeline report."""
     if not mock_store.get_project(project_id):
@@ -2323,7 +2323,7 @@ def get_pipeline_report(project_id: str, preprocessing_run_id: str) -> dict[str,
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/validation")
+@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/validation", deprecated=True)
 def get_pipeline_validation(project_id: str, preprocessing_run_id: str) -> dict[str, Any]:
     """End-to-end preprocessing pipeline validation."""
     if not mock_store.get_project(project_id):

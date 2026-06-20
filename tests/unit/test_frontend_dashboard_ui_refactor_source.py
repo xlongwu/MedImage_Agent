@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 
-
 ROOT = os.getcwd()
 
 
@@ -13,9 +12,9 @@ def _read(path: str) -> str:
 
 def test_apple_style_dashboard_structure_exists():
     app = _read("src/frontend/src/App.tsx")
+    shell = _read("src/frontend/src/features/app/AppShellView.tsx")
     chrome = _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
     styles = _read("src/frontend/src/styles.css")
-    # Components in App.tsx (workspace-level and lazy-loaded panels)
     app_components = [
         "DataConversionWorkspace",
         "PreprocessingWorkspace",
@@ -23,20 +22,19 @@ def test_apple_style_dashboard_structure_exists():
         "SecondaryToolsDrawer",
         "CompactTaskLog",
     ]
-    # Components in DashboardChrome.tsx (sidebar and hero components)
     chrome_components = [
         "ProjectHeroPanel",
         "ProjectList",
         "RecommendedNextStepCard",
         "ReadinessStatusStrip",
         "WorkflowTabs",
-        "ProjectInventorySummary",
     ]
     for component in app_components:
-        assert component in app
+        assert component in shell, f"{component} must exist in AppShellView"
     for component in chrome_components:
-        assert component in chrome
-    assert "Recommended Next Step" in (app + chrome)
+        assert component in shell or component in chrome, f"{component} must exist in AppShellView or DashboardChrome"
+    assert "ProjectInventorySummary" in chrome, "ProjectInventorySummary must exist in DashboardChrome"
+    assert "Recommended Next Step" in (app + shell + chrome)
     assert "readiness-status-strip" in styles
     assert "workflow-tabs" in styles
     assert "workflow-workspace" in styles
@@ -49,13 +47,15 @@ def test_advanced_preprocessing_placeholder_text_exists():
 
 
 def test_raw_dicom_and_bids_expected_wording_exists():
-    app = _read("src/frontend/src/App.tsx")
-    data_readiness = _read("src/frontend/src/components/DataReadinessPanel.tsx")
+    workspace = _read("src/frontend/src/features/workspaces/DataConversionWorkspace.tsx")
     bids = _read("src/frontend/src/components/BidsValidationPanel.tsx")
     nifti = _read("src/frontend/src/components/NiftiQcSnapshotPanel.tsx")
-    assert "Raw DICOM candidates" in app
-    assert "Raw DICOM candidates" in data_readiness
-    assert "Converted subjects" in app
+    data_readiness = _read("src/frontend/src/components/DataReadinessPanel.tsx")
+    dashboard_chrome = _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
+    project_create_panel = _read("src/frontend/src/features/app/ProjectCreateResultPanel.tsx")
+    combined = workspace + bids + nifti + data_readiness + dashboard_chrome + project_create_panel
+    assert "Raw DICOM candidates" in combined
+    assert "Converted subjects" in combined
     assert "BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion." in bids
     assert "NIfTI QC is not applicable until DICOM data is converted." in nifti
 
@@ -68,10 +68,10 @@ def test_next_actions_cleanup_helper_exists():
 
 
 def test_default_dashboard_does_not_render_planning_tools_as_full_cards():
-    app = _read("src/frontend/src/App.tsx")
-    start = app.index('<main className="workflow-main">')
-    end = app.index("<SecondaryToolsDrawer", start)
-    default_main = app[start:end]
+    shell = _read("src/frontend/src/features/app/AppShellView.tsx")
+    start = shell.index('<main className="workflow-main">')
+    end = shell.index("<SecondaryToolsDrawer", start)
+    default_main = shell[start:end]
     assert "DashboardGroup" not in default_main
     assert "SpmRealignDryRunPanel" not in default_main
     assert "SpmRealignWrapperSkeletonPanel" not in default_main
@@ -79,9 +79,9 @@ def test_default_dashboard_does_not_render_planning_tools_as_full_cards():
 
 
 def test_advanced_preprocessing_mounts_once_and_not_in_review_panel():
-    app = _read("src/frontend/src/App.tsx")
+    workspace = _read("src/frontend/src/features/workspaces/PreprocessingWorkspace.tsx")
     review = _read("src/frontend/src/components/DicomConversionReviewPanel.tsx")
-    assert app.count("<AdvancedPreprocessingPipelinePanel") == 1
+    assert workspace.count("<AdvancedPreprocessingPipelinePanel") == 1
     assert "AdvancedPreprocessingPipelinePanel" not in review
 
 

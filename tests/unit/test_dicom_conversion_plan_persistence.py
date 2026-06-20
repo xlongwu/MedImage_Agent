@@ -216,6 +216,28 @@ def test_writes_command_templates(tmp_path):
     assert Path(result.reservation.command_templates_path).exists()
 
 
+def test_writes_executable_audit_preview(tmp_path):
+    from src.backend.app.services.dicom_conversion_plan_persistence import (
+        persist_conversion_plan,
+    )
+
+    record = _make_approved_record()
+    record.dcm2niix_version = "v1.0.20260416"
+    result = persist_conversion_plan(
+        project_id="test",
+        approval_record=record,
+        project_dir=str(tmp_path / "project"),
+    )
+
+    audit = json.loads(Path(result.reservation.audit_preview_path).read_text(encoding="utf-8"))
+    assert audit["audit_id"] == f"audit-{result.conversion_run_id}"
+    assert audit["approval_id"] == record.approval_id
+    assert audit["project_id"] == "test"
+    assert audit["output_root"] == result.reservation.output_root
+    assert audit["dcm2niix_version"] == "v1.0.20260416"
+    assert audit["persisted_at"]
+
+
 def test_writes_planned_manifest_and_provenance(tmp_path):
     from src.backend.app.services.dicom_conversion_plan_persistence import (
         persist_conversion_plan,

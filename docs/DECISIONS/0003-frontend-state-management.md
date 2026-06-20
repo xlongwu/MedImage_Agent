@@ -1,7 +1,7 @@
 # ADR-003: 前端状态管理策略
 
 ## Status
-Proposed (2026-06-14)
+Accepted (2026-06-14) — previously Proposed. Frontend state management follows React Context + hooks pattern with API-driven state, feature flags control UI visibility only, and new features are organized under `features/` as specified in AGENTS.md.
 
 ## Context
 当前前端（75+ 组件）使用 React 本地 state + props 传递状态。随着功能增加：

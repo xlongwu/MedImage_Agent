@@ -17,6 +17,7 @@ from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import bids_validation
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -35,6 +36,7 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
         reviewed_plan_store,
         project_history_routes,
         execute_reviewed_routes,
+        mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
     desktop_config.DESKTOP_CONFIG_PATH.write_text(

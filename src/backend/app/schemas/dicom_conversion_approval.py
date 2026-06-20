@@ -547,6 +547,10 @@ class DicomConversionExecutionAuditUpdate(BaseModel):
     stdout_log_path: str | None = None
     stderr_log_path: str | None = None
     dcm2niix_version: str | None = None
+    dcm2niix_expected_version: str | None = None
+    dcm2niix_executable_path: str | None = None
+    dcm2niix_binary_sha256: str | None = None
+    dcm2niix_detection_strategy: str | None = None
     return_code: int | None = None
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

@@ -1,8 +1,7 @@
 # ADR-001: Agent Runtime 边界 — LLM 不直接执行工具
 
-## 状态
-
-✅ 已采纳（2025-07-18）
+## Status
+Accepted (2025-07-18)
 
 ## 上下文
 

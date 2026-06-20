@@ -25,6 +25,7 @@ from src.backend.app.services import (
     spm_realign_dry_run,
     spm_realign_wrapper_skeleton,
 )
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 from src.backend.app.services.qc_dashboard_fingerprint import collect_qc_dashboard_fingerprint_roots
 
@@ -33,7 +34,9 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, spm_realign_dry_run, spm_realign_wrapper_skeleton, qc_dashboard_report):
+    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, spm_realign_dry_run, spm_realign_wrapper_skeleton, qc_dashboard_report,
+        mock_store_module,
+    ):
         monkeypatch.setattr(module, "mock_store", store)
     monkeypatch.setattr(qc_dashboard_report, "_REPORT_DIR", tmp_path / "outputs" / "reports" / "qc_dashboard")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")

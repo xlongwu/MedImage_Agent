@@ -233,7 +233,7 @@ def read_conversion_review_package(
         # Extract summary data
         if kind == "approval_record" and exists:
             try:
-                data = json.loads(Path(full_path).read_text())
+                data = json.loads(Path(full_path).read_text(encoding="utf-8"))
                 approval_summary = {
                     "status": data.get("status", "unknown"),
                     "approved": data.get("approved", False),
@@ -243,19 +243,19 @@ def read_conversion_review_package(
                 pass
         if kind == "mapping_snapshot" and exists:
             try:
-                data = json.loads(Path(full_path).read_text())
+                data = json.loads(Path(full_path).read_text(encoding="utf-8"))
                 mapping_count = len(data.get("mappings", []))
             except Exception:
                 pass
         if kind == "command_templates" and exists:
             try:
-                data = json.loads(Path(full_path).read_text())
+                data = json.loads(Path(full_path).read_text(encoding="utf-8"))
                 template_count = len(data.get("templates", []))
             except Exception:
                 pass
         if kind == "rawdata_checksum_before" and exists:
             try:
-                data = json.loads(Path(full_path).read_text())
+                data = json.loads(Path(full_path).read_text(encoding="utf-8"))
                 approval_summary["rawdata_fingerprint"] = data.get("fingerprint", "")
                 approval_summary["rawdata_file_count"] = data.get("file_count", 0)
             except Exception:

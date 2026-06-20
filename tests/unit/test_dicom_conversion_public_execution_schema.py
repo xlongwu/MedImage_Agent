@@ -217,11 +217,12 @@ class TestReleaseReadinessNotReady:
         assert not decision.ok
         assert any("blocked" in b.lower() for b in decision.blocking_issues)
 
-    def test_warning_readiness_blocks(self):
+    def test_warning_readiness_allows_execution(self):
         decision = evaluate_public_execution_preconditions(
             **_all_preconditions(release_readiness_status="warning")
         )
-        assert not decision.ok
+        assert decision.ok
+        assert decision.decision == "proceed"
 
     def test_unknown_readiness_blocks(self):
         decision = evaluate_public_execution_preconditions(

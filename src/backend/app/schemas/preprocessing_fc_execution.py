@@ -19,6 +19,12 @@ class FcSandboxExecutionResponse(BaseModel):
     subjects_total: int = 0; subjects_succeeded: int = 0; subjects_failed: int = 0
     fc_plan_path: str = ""; stdout_log_path: str = ""; stderr_log_path: str = ""
     manifest_path: str = ""; provenance_path: str = ""; subject_status_path: str = ""
+    # Per-metric status so callers can distinguish "sandbox prepared" from
+    # "real matrix produced". ``fc_status`` is one of the ExecutionStatus values
+    # (see preprocessing_common). A false ``fc_computed`` means no real matrix.
+    fc_computed: bool = False
+    fc_status: str = "metadata_only"
+    fc_matrix_count: int = 0
     warnings: list[str] = Field(default_factory=list); errors: list[str] = Field(default_factory=list)
     blocking_issues: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)

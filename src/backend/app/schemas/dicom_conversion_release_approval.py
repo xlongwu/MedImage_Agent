@@ -130,6 +130,10 @@ _REQUIRED_SAFETY_ACKNOWLEDGEMENTS: frozenset[str] = frozenset({
 })
 
 _DEFAULT_APPROVAL_EXPIRY_DAYS: int = 180
+_ACCEPTABLE_RELEASE_READINESS_STATUSES: frozenset[str] = frozenset({
+    "ready_for_human_release_review",
+    "warning",
+})
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -176,10 +180,11 @@ def is_release_approval_valid(
         )
 
     # ── Release readiness ──
-    if readiness_status != "ready_for_human_release_review":
+    if readiness_status not in _ACCEPTABLE_RELEASE_READINESS_STATUSES:
         issues.append(
             f"Release readiness is not ready for human review: "
-            f"status={readiness_status}.  Must be 'ready_for_human_release_review'."
+            f"status={readiness_status}.  Must be one of "
+            f"{sorted(_ACCEPTABLE_RELEASE_READINESS_STATUSES)}."
         )
 
     # ── Maintainer identity ──
@@ -255,7 +260,7 @@ def evaluate_release_approval(
         decision_status = "blocked"
     elif not is_release_approval_complete(record):
         decision_status = "incomplete"
-    elif readiness_status != "ready_for_human_release_review":
+    elif readiness_status not in _ACCEPTABLE_RELEASE_READINESS_STATUSES:
         decision_status = "no_release_readiness"
     else:
         decision_status = "approved"

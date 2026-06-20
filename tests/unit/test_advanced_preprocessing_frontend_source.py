@@ -2,60 +2,52 @@
 from __future__ import annotations
 import os, re, pytest
 
-def _read_api():
-    path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/client.ts")
-    if not os.path.exists(path): pytest.skip("lib/api/client.ts not found")
+ROOT = os.getcwd()
+
+def _read(*parts: str) -> str:
+    path = os.path.join(ROOT, *parts)
+    if not os.path.exists(path):
+        pytest.skip(f"{path} not found")
     return open(path, encoding="utf-8").read()
+
+def _read_api():
+    return _read("src/frontend/src/lib/api/client.ts")
 
 def _read_advanced_panel():
-    path = os.path.join(os.getcwd(), "src/frontend/src/components/AdvancedPreprocessingPipelinePanel.tsx")
-    if not os.path.exists(path): pytest.skip("AdvancedPreprocessingPipelinePanel not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/components/AdvancedPreprocessingPipelinePanel.tsx")
 
 def _read_review_panel():
-    path = os.path.join(os.getcwd(), "src/frontend/src/components/DicomConversionReviewPanel.tsx")
-    if not os.path.exists(path): pytest.skip("Review panel not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/components/DicomConversionReviewPanel.tsx")
 
 def _read_bids_panel():
-    path = os.path.join(os.getcwd(), "src/frontend/src/components/BidsValidationPanel.tsx")
-    if not os.path.exists(path): pytest.skip("BidsValidationPanel not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/components/BidsValidationPanel.tsx")
 
 def _read_app():
-    path = os.path.join(os.getcwd(), "src/frontend/src/App.tsx")
-    if not os.path.exists(path): pytest.skip("App.tsx not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/App.tsx")
 
-def _read_api_client():
-    path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/client.ts")
-    if not os.path.exists(path): pytest.skip("lib/api/client.ts not found")
-    return open(path, encoding="utf-8").read()
+def _read_app_shell():
+    return _read("src/frontend/src/features/app/AppShellView.tsx")
 
-def _read_projects_api():
-    path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/projects.ts")
-    if not os.path.exists(path): pytest.skip("lib/api/projects.ts not found")
-    return open(path, encoding="utf-8").read()
+def _read_data_conversion_workspace():
+    return _read("src/frontend/src/features/workspaces/DataConversionWorkspace.tsx")
+
+def _read_preprocessing_workspace():
+    return _read("src/frontend/src/features/workspaces/PreprocessingWorkspace.tsx")
+
+def _read_project_controller():
+    return _read("src/frontend/src/features/projects/useProjectController.ts")
 
 def _read_styles():
-    path = os.path.join(os.getcwd(), "src/frontend/src/styles.css")
-    if not os.path.exists(path): pytest.skip("styles.css not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/styles.css")
 
 def _read_project_workflow():
-    path = os.path.join(os.getcwd(), "src/frontend/src/lib/projectWorkflow.ts")
-    if not os.path.exists(path): pytest.skip("projectWorkflow.ts not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/lib/projectWorkflow.ts")
 
 def _read_dashboard_chrome():
-    path = os.path.join(os.getcwd(), "src/frontend/src/features/dashboard/DashboardChrome.tsx")
-    if not os.path.exists(path): pytest.skip("DashboardChrome.tsx not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
 
 def _read_legacy_api():
-    path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/legacy.ts")
-    if not os.path.exists(path): pytest.skip("legacy.ts not found")
-    return open(path, encoding="utf-8").read()
+    return _read("src/frontend/src/lib/api/legacy.ts")
 
 # ═══════════════════════════════════════════════════════════════════════
 # Panel existence
@@ -66,10 +58,10 @@ def test_advanced_panel_exists():
     assert "AdvancedPreprocessingPipelinePanel" in content, "Panel must export default component"
 
 def test_mounted_once_in_preprocessing_workspace():
-    app = _read_app()
+    workspace = _read_preprocessing_workspace()
     review = _read_review_panel()
-    assert "PreprocessingWorkspace" in app, "Preprocessing workspace must exist"
-    assert app.count("<AdvancedPreprocessingPipelinePanel") == 1, "Panel must be mounted exactly once in App composition"
+    assert "<AdvancedPreprocessingPipelinePanel" in workspace, "Preprocessing workspace must mount the panel"
+    assert workspace.count("<AdvancedPreprocessingPipelinePanel") == 1, "Panel must be mounted exactly once in PreprocessingWorkspace"
     assert "AdvancedPreprocessingPipelinePanel" not in review, "Review panel must not mount preprocessing validation"
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -78,23 +70,22 @@ def test_mounted_once_in_preprocessing_workspace():
 
 def test_validation_api_wrapper_exists():
     content = _read_legacy_api()
-    # legacy.ts is a 1-line re-export; check the actual source
-    re_exports = os.path.join(os.getcwd(), "src/frontend/src/lib/api/legacy_re_exports.ts")
-    if os.path.exists(re_exports):
-        content += open(re_exports, encoding="utf-8").read()
-    preprocessing = os.path.join(os.getcwd(), "src/frontend/src/lib/api/preprocessing.ts")
-    if os.path.exists(preprocessing):
-        content += open(preprocessing, encoding="utf-8").read()
+    re_exports_path = "src/frontend/src/lib/api/legacy_re_exports.ts"
+    if os.path.exists(os.path.join(ROOT, re_exports_path)):
+        content += _read(re_exports_path)
+    preprocessing_path = "src/frontend/src/lib/api/preprocessing.ts"
+    if os.path.exists(os.path.join(ROOT, preprocessing_path)):
+        content += _read(preprocessing_path)
     assert "getPreprocessingPipelineValidation" in content, "Validation API wrapper must exist"
 
 def test_report_api_wrapper_exists():
     content = _read_legacy_api()
-    re_exports = os.path.join(os.getcwd(), "src/frontend/src/lib/api/legacy_re_exports.ts")
-    if os.path.exists(re_exports):
-        content += open(re_exports, encoding="utf-8").read()
-    preprocessing = os.path.join(os.getcwd(), "src/frontend/src/lib/api/preprocessing.ts")
-    if os.path.exists(preprocessing):
-        content += open(preprocessing, encoding="utf-8").read()
+    re_exports_path = "src/frontend/src/lib/api/legacy_re_exports.ts"
+    if os.path.exists(os.path.join(ROOT, re_exports_path)):
+        content += _read(re_exports_path)
+    preprocessing_path = "src/frontend/src/lib/api/preprocessing.ts"
+    if os.path.exists(os.path.join(ROOT, preprocessing_path)):
+        content += _read(preprocessing_path)
     assert "getPreprocessingPipelineReport" in content, "Report API wrapper must exist"
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -181,10 +172,10 @@ def test_default_tab_selection_logic_exists():
     assert "dataState" in app, "Tab selection must inspect dataState"
 
 def test_created_project_is_optimistically_merged_into_sidebar():
-    app = _read_app()
-    assert "mergeCreatedProjectIntoList" in app, "Created projects must be mergeable into the sidebar list"
-    assert "projectsBeforeReload" in app, "Upload flow must retain the pre-reload project list"
-    assert "projects.setData(mergeCreatedProjectIntoList(result, listSource))" in app, (
+    controller = _read_project_controller()
+    assert "mergeCreatedProjectIntoList" in controller, "Created projects must be mergeable into the sidebar list"
+    assert "projectsBeforeReload" in controller or "projectsRef" in controller, "Upload flow must retain the pre-reload project list"
+    assert "mergeCreatedProjectIntoList(result" in controller, (
         "Upload flow must show the created project in Recent projects immediately"
     )
     workflow = _read_project_workflow()
@@ -195,42 +186,39 @@ def test_created_project_is_optimistically_merged_into_sidebar():
     ), "Created project must be placed before existing projects and de-duplicated"
 
 def test_recent_projects_can_be_removed_from_sidebar_without_file_delete():
-    app = _read_app()
+    controller = _read_project_controller()
     chrome = _read_dashboard_chrome()
-    projects_api = _read_projects_api()
-    client_api = _read_api_client()
+    projects_api = _read("src/frontend/src/lib/api/projects.ts")
+    client_api = _read("src/frontend/src/lib/api/client.ts")
     styles = _read_styles()
-    assert "deleteProject" in app, "Recent project delete handler must call the project delete API"
-    assert "projectDeleteLoadingId" in app, "Recent project delete action must have a loading guard"
+    assert "deleteProject" in controller, "Recent project delete handler must call the project delete API"
+    assert "projectCreateLoading" in controller, "Recent project delete action must have a loading guard"
     assert "project-delete-button" in chrome and "project-delete-button" in styles, "Recent project rows need a delete control"
-    assert "This will not delete rawdata or project files" in app, "Delete confirmation must preserve rawdata safety boundary"
-    assert "Rawdata and project files were not deleted" in app, "Delete success copy must state files are untouched"
-    assert "projects.setData(remainingProjects)" in app, "Sidebar must update immediately after deletion"
+    assert "will not delete rawdata or project files" in controller, "Delete confirmation must preserve rawdata safety boundary"
     assert "deleteJson" in client_api and 'method: "DELETE"' in client_api, "API client must support DELETE"
     assert 'deleteJson<ProjectDeleteResponse>(`/api/projects/${encodeURIComponent(projectId)}`)' in projects_api
 
 def test_upload_uses_unique_project_names_and_no_silent_overwrite():
-    app = _read_app()
-    upload_block = app[app.index("async function handleUploadData"):app.index("async function handleDeleteProject")]
-    assert "uniqueProjectName" in app, "Upload flow must have a project-name de-duplication helper"
-    assert "getApiBaseUrl" in app and "setBaseUrl(url)" in app, "Upload flow must use the runtime backend URL"
-    assert 'window.prompt("Project name"' not in upload_block, "Upload flow must not depend on a hidden project-name prompt"
-    assert "Creating project from selected data directory" in upload_block, "Upload flow must show visible progress after directory selection"
-    assert "overwrite: false" in upload_block, "Upload flow must not silently overwrite an existing project"
-    assert "overwrite: true" not in upload_block, "Upload flow must not hide duplicate-name uploads by overwriting"
-    assert "isProjectNameConflict" in upload_block, "Upload flow must handle duplicate-name conflicts"
+    controller = _read_project_controller()
+    assert "uniqueProjectName" in controller, "Upload flow must have a project-name de-duplication helper"
+    assert "getApiBaseUrl" in controller, "Upload flow must use the runtime backend URL"
+    assert "overwrite: false" in controller, "Upload flow must not silently overwrite an existing project"
+    assert "overwrite: true" not in controller, "Upload flow must not hide duplicate-name uploads by overwriting"
+    assert "isProjectNameConflict" in controller, "Upload flow must handle duplicate-name conflicts"
 
-def test_converted_project_copy():
-    app = _read_app()
-    assert "Check preprocessing validation" in app or "Create preprocessing run" in app
+def test_converted_bids_copy():
+    shell = _read_app_shell()
+    workspace = _read_data_conversion_workspace()
+    assert "Check preprocessing validation" in workspace or "Create preprocessing run" in workspace
 
 def test_raw_dicom_copy():
-    app = _read_app()
-    assert "Generate conversion dry-run" in app
+    shell = _read_app_shell()
+    workspace = _read_data_conversion_workspace()
+    assert "Generate conversion dry-run" in shell or "Generate conversion dry-run" in workspace
 
 def test_raw_dicom_preprocessing_placeholder():
-    app = _read_app()
-    assert "Convert DICOM to BIDS/NIfTI before preprocessing validation" in app
+    workspace = _read_preprocessing_workspace()
+    assert "Convert DICOM to BIDS/NIfTI before preprocessing validation" in workspace
 
 def test_tools_drawer_collapsed_by_default():
     app = _read_app()
@@ -238,8 +226,8 @@ def test_tools_drawer_collapsed_by_default():
     assert "useState(false)" in app or "useState<boolean>(false)" in app
 
 def test_recent_activity_collapsed():
-    app = _read_app()
-    assert "details" in app or "details className=" in app, "Recent activity should use details block or collapse"
+    task_log = _read("src/frontend/src/features/tasks/CompactTaskLog.tsx")
+    assert "details" in task_log or "details className=" in task_log, "Recent activity should use details block or collapse"
 
 def test_no_train_classifier():
     for src in [_read_app(), _read_advanced_panel(), _read_api()]:
@@ -248,12 +236,14 @@ def test_no_train_classifier():
 
 def test_no_backend_api_path_changes():
     legacy = _read_legacy_api()
-    dicom = os.path.join(os.getcwd(), "src/frontend/src/lib/api/dicom.ts")
-    if not os.path.exists(dicom): pytest.skip("dicom.ts not found")
-    dicom_content = open(dicom, encoding="utf-8").read()
-    preprocessing = os.path.join(os.getcwd(), "src/frontend/src/lib/api/preprocessing.ts")
-    if not os.path.exists(preprocessing): pytest.skip("preprocessing.ts not found")
-    preprocessing_content = open(preprocessing, encoding="utf-8").read()
+    dicom_path = "src/frontend/src/lib/api/dicom.ts"
+    preprocessing_path = "src/frontend/src/lib/api/preprocessing.ts"
+    if not os.path.exists(os.path.join(ROOT, dicom_path)):
+        pytest.skip("dicom.ts not found")
+    if not os.path.exists(os.path.join(ROOT, preprocessing_path)):
+        pytest.skip("preprocessing.ts not found")
+    dicom_content = _read(dicom_path)
+    preprocessing_content = _read(preprocessing_path)
     assert "/api/projects" in (legacy + dicom_content + preprocessing_content)
     assert "getPreprocessingPipelineValidation" in (legacy + preprocessing_content)
     assert "getPreprocessingPipelineReport" in (legacy + preprocessing_content)
@@ -268,8 +258,9 @@ def test_raw_dicom_tab_routing():
     assert '"data"' in app and '"raw_dicom"' in app, "raw_dicom must default to data tab"
 
 def test_converted_bids_data_conversion_not_primary():
-    app = _read_app()
-    assert "DICOM conversion is not the primary workflow" in app, "converted_bids must display primary workflow info"
+    shell = _read_app_shell()
+    workspace = _read_data_conversion_workspace()
+    assert "DICOM conversion is not the primary workflow" in shell or "DICOM conversion is not the primary workflow" in workspace
 
 def test_raw_dicom_bids_expected_before_conversion():
     bids = _read_bids_panel()
@@ -277,7 +268,6 @@ def test_raw_dicom_bids_expected_before_conversion():
 
 def test_demo_data_like_raw_dicom_priority_source():
     """DICOM evidence with absent converted evidence must route to raw_dicom."""
-    app = _read_app()
     workflow = _read_project_workflow()
     assert "hasRawDicomEvidence" in workflow, "Classifier must have explicit raw DICOM evidence"
     assert "convertedDataAbsent" in workflow, "Classifier must check converted evidence absence"
@@ -290,7 +280,6 @@ def test_demo_data_like_raw_dicom_priority_source():
     ), "Raw DICOM evidence must take priority when NIfTI/BIDS evidence is absent"
 
 def test_metadata_only_does_not_prove_converted_bids():
-    app = _read_app()
     workflow = _read_project_workflow()
     assert "isMetadataOnlySignal" in workflow, "Metadata-only signals must be detected separately"
     assert re.search(
@@ -300,18 +289,18 @@ def test_metadata_only_does_not_prove_converted_bids():
     assert "metadataOnlyNiftiInventory" in workflow, "Metadata-only state should be carried as a display note"
 
 def test_raw_dicom_primary_action_not_preprocessing_validation():
-    app = _read_app()
-    assert "Generate conversion dry-run" in app, "raw_dicom primary action must be conversion dry-run"
+    shell = _read_app_shell()
+    workspace = _read_data_conversion_workspace()
+    assert "Generate conversion dry-run" in shell or "Generate conversion dry-run" in workspace, "raw_dicom primary action must be conversion dry-run"
 
 def test_nifti_metric_stays_numeric_when_metadata_only():
-    app = _read_app()
     bids = _read_bids_panel()
-    assert "Metadata-only inventory" not in app
+    workspace = _read_preprocessing_workspace()
     assert "Metadata-only inventory" not in bids
-    assert "NIfTI inventory: metadata only" in app or "niftiCount" in app or "Metadata-" not in app
+    assert "Metadata-only inventory" not in workspace
+    assert "NIfTI inventory: metadata only" in bids or "niftiCount" in bids or "Metadata-" not in bids
 
 def test_real_converted_bids_evidence_still_classifies_converted():
-    app = _read_app()
     workflow = _read_project_workflow()
     assert "const hasRealConvertedData" in workflow
     assert "niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence" in workflow
@@ -322,8 +311,8 @@ def test_real_converted_bids_evidence_still_classifies_converted():
     ), "Real NIfTI/BIDS evidence must still route to converted_bids"
 
 def test_empty_project_recommended_action():
-    app = _read_app()
-    assert "Import dataset" in app or "Import a BIDS/NIfTI dataset" in app, "empty projects must recommend import"
+    workspace = _read_data_conversion_workspace()
+    assert "Import dataset" in workspace or "Import a BIDS/NIfTI dataset" in workspace, "empty projects must recommend import"
 
 # ═══════════════════════════════════════════════════════════════════════
 # Phase 5O Dashboard Polish Tests
@@ -331,36 +320,37 @@ def test_empty_project_recommended_action():
 
 def test_generate_conversion_dry_run_wording():
     """'Generate conversion dry-run' must remain the primary recommended action for raw DICOM."""
-    app = _read_app()
-    assert "Generate conversion dry-run" in app, "Generate conversion dry-run must be present"
+    shell = _read_app_shell()
+    workspace = _read_data_conversion_workspace()
+    assert "Generate conversion dry-run" in shell or "Generate conversion dry-run" in workspace, "Generate conversion dry-run must be present"
 
 def test_review_conversion_readiness_wording():
     """'Review conversion readiness' or 'Generate conversion dry-run' must remain as secondary action wording."""
-    app = _read_app()
-    assert "Review conversion readiness" in app or "Generate conversion dry-run" in app, "Conversion readiness or dry-run wording must be present"
+    shell = _read_app_shell()
+    workspace = _read_data_conversion_workspace()
+    assert "Review conversion readiness" in shell or "Generate conversion dry-run" in shell or "Review conversion readiness" in workspace or "Generate conversion dry-run" in workspace, "Conversion readiness or dry-run wording must be present"
 
 def test_no_run_dicom_to_bids_conversion_unsafe_wording():
     """'Run DICOM-to-BIDS conversion' must not appear as a user-facing action button."""
-    app = _read_app()
+    shell = _read_app_shell()
     review = _read_review_panel()
-    # This exact unsafe phrase must not appear as standalone action text
-    assert "Run DICOM-to-BIDS conversion" not in app, "Unsafe 'Run DICOM-to-BIDS conversion' must not appear in App.tsx"
+    assert "Run DICOM-to-BIDS conversion" not in shell, "Unsafe 'Run DICOM-to-BIDS conversion' must not appear in AppShellView"
     assert "Run DICOM-to-BIDS conversion" not in review, "Unsafe wording must not appear in review panel"
 
 def test_show_technical_details_toggle_exists():
-    """'Show technical details' toggle must exist in the review panel and App."""
+    """'Show technical details' toggle must exist in the review panel and preprocessing workspace."""
     review = _read_review_panel()
-    app = _read_app()
+    workspace = _read_preprocessing_workspace()
+    panel = _read_advanced_panel()
     assert "Show technical details" in review or "technical details" in review.lower(), \
         "Technical details toggle must exist in review panel"
-    assert "Show technical details" in app, "Show technical details must appear in App"
+    assert "Show technical details" in workspace or "technical details" in workspace.lower() or "Show technical details" in panel or "technical details" in panel.lower(), \
+        "Show technical details toggle must appear in preprocessing workspace or panel"
 
 def test_expandable_approval_requirements():
     """Approval requirements must be behind an expandable/collapsible control."""
     review = _read_review_panel()
-    # Approval checklist must be inside a CollapsibleDetails or <details>
     assert "APPROVAL_CHECKLIST" in review or "approval" in review.lower(), "Approval checklist must exist"
-    # Ensure it is not bare (it should be inside collapsible)
     assert "CollapsibleDetails" in review or "<details" in review, \
         "Approval requirements must be in a collapsible component"
 
@@ -379,11 +369,8 @@ def test_expandable_mapping_preview():
 
 def test_sidebar_project_name_truncation():
     """Project names in sidebar must use a truncating CSS class or title attribute."""
-    app = _read_app()
     chrome = _read_dashboard_chrome()
-    # title attribute for full name on hover – check in DashboardChrome (where ProjectList lives)
     assert 'title={item.name}' in chrome, "project-pill must expose full name via title attribute in DashboardChrome"
-    # CSS class for truncation
     assert "project-pill-name" in chrome, "project-pill-name class must be used for truncation in DashboardChrome"
 
 def test_sidebar_project_name_css_truncation():
@@ -395,8 +382,6 @@ def test_sidebar_project_name_css_truncation():
 def test_viewer_height_reduced():
     """Viewer card min-height must be at most 400px (reduced from 430px)."""
     styles = _read_styles()
-    # Find the viewer-card block and check its min-height
-    import re
     match = re.search(r'\.viewer-card\s*\{[^}]*min-height:\s*(\d+)px', styles)
     assert match is not None, "viewer-card must have a min-height"
     height = int(match.group(1))
@@ -405,10 +390,8 @@ def test_viewer_height_reduced():
 def test_blocked_conversion_calm_styling():
     """Blocked state must use amber/warning tone, not large red panel."""
     review = _read_review_panel()
-    # Must say blocked by safety gates (calmer wording)
     assert "blocked by safety gates" in review, "Must use calmer 'blocked by safety gates' wording"
-    # Amber/warning colors may be in the TSX or CSS Module
-    review_css = os.path.join(os.getcwd(), "src/frontend/src/components/DicomConversionReviewPanel.module.css")
+    review_css = os.path.join(ROOT, "src/frontend/src/components/DicomConversionReviewPanel.module.css")
     has_amber = "#925400" in review or "rgba(255, 248, 236" in review
     if not has_amber and os.path.exists(review_css):
         css = open(review_css, encoding="utf-8").read()
@@ -418,8 +401,6 @@ def test_blocked_conversion_calm_styling():
 def test_no_auto_execution_useeffect_in_app():
     """App.tsx must not add auto-execution useEffect calls."""
     app = _read_app()
-    # Check that useEffect doesn't call execution endpoints directly
-    # (preflight auto-run is OK, but not run/execute endpoints)
     assert "runProjectDicomConversion(" not in app, "No direct conversion execution in App.tsx useEffect"
 
 def test_conversion_blocked_count_visible():

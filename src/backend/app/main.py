@@ -21,6 +21,11 @@ from src.backend.app.api.pipeline_routes import router as pipeline_router
 from src.backend.app.api.realdata_routes import router as realdata_router
 from src.backend.app.api.rsfmri_routes import router as rsfmri_router
 from src.backend.app.api.session_routes import router as session_router
+from src.backend.app.api.conversion_routes import router as conversion_router
+from src.backend.app.api.preprocessing_routes import router as preprocessing_router
+from src.backend.app.api.qc_routes import router as qc_router
+from src.backend.app.api.task_routes import router as task_router
+from src.backend.app.api.image_routes import router as image_router
 from src.backend.app.api.dashboard_routes import router as dashboard_router
 from src.backend.app.api.desktop_routes import router as desktop_router
 from src.backend.app.api.external_smoke_routes import router as external_smoke_router
@@ -77,6 +82,11 @@ def create_app() -> FastAPI:
     app.include_router(experiment_router)
     app.include_router(artifact_router)
     app.include_router(realdata_router)
+    app.include_router(conversion_router)
+    app.include_router(preprocessing_router)
+    app.include_router(qc_router)
+    app.include_router(task_router)
+    app.include_router(image_router)
     app.include_router(dashboard_router)
     app.include_router(planner_router)
     app.include_router(tool_catalog_router)

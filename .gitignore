@@ -75,7 +75,7 @@ desktop/packaging/dist/
 .workbuddy/
 .claude/settings.local.json
 .claude/worktrees/
-docs/tasks/
+docs/tasks/TASK_*.md
 
 # Local logs
 debug.log

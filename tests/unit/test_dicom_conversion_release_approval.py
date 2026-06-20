@@ -223,6 +223,20 @@ def test_approval_valid_when_all_met():
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def test_approval_valid_when_readiness_has_nonblocking_warnings():
+    """Phase 6B: non-blocking readiness warnings do not invalidate approval."""
+    from src.backend.app.schemas.dicom_conversion_release_approval import (
+        DicomConversionReleaseApprovalRecord,
+        is_release_approval_valid,
+    )
+    record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
+    ok, issues = is_release_approval_valid(
+        record, readiness_status="warning", gates_met=32, gates_total=32,
+    )
+    assert ok
+    assert len(issues) == 0
+
+
 def test_evaluate_approval_returns_approved():
     from src.backend.app.schemas.dicom_conversion_release_approval import (
         DicomConversionReleaseApprovalRecord,

@@ -34,6 +34,7 @@ from src.backend.app.services.funraw_t1raw_detector import (
     _normalize_subject_id,
     detect_funraw_t1raw_layout,
 )
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -75,7 +76,7 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
                 execute_reviewed_routes, bold_reference_readiness,
                 motion_qc_readiness, conversion_planner,
                 data_readiness, dicom_conversion_execution,
-                nifti_qc_snapshot):
+                nifti_qc_snapshot, mock_store_module):
         monkeypatch.setattr(mod, "mock_store", store)
     monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
                         tmp_path / "audit")

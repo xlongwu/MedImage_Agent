@@ -1193,6 +1193,8 @@ export type DicomConversionPublicExecutionResponse = {
   checksum_verified: boolean;
   rollback_plan_path: string | null;
   rollback_result_path: string | null;
+  manifest_path: string | null;
+  provenance_path: string | null;
   warnings: string[];
   errors: string[];
   blocking_issues: string[];
@@ -1207,6 +1209,7 @@ export type DicomConversionExecutionUiState =
   | "confirming"
   | "submitting"
   | "succeeded"
+  | "partial"
   | "failed"
   | "blocked";
 

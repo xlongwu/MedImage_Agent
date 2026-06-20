@@ -25,6 +25,7 @@ DicomConversionPublicExecutionStatus = Literal[
     "blocked",
     "ready",
     "succeeded",
+    "partial",
     "warning",
     "failed",
     "safety_violation",
@@ -231,6 +232,10 @@ _CONFIRMATION_LABELS: dict[str, str] = {
 
 _RELEASE_APPROVAL_VALID_STATUSES: frozenset[str] = frozenset({"approved"})
 _APPROVAL_EXPIRY_DAYS: int = 180
+_RELEASE_READINESS_EXECUTABLE_STATUSES: frozenset[str] = frozenset({
+    "ready_for_human_release_review",
+    "warning",
+})
 
 
 # ── 4. Pure helper functions ──────────────────────────────────────────────
@@ -343,10 +348,10 @@ def evaluate_public_execution_preconditions(
         blocking.append("Release approval is expired or has no valid timestamp.")
 
     # ── Release readiness ──
-    if release_readiness_status != "ready_for_human_release_review":
+    if release_readiness_status not in _RELEASE_READINESS_EXECUTABLE_STATUSES:
         blocking.append(
             f"Release readiness is '{release_readiness_status}', "
-            f"must be 'ready_for_human_release_review'."
+            f"must be one of {sorted(_RELEASE_READINESS_EXECUTABLE_STATUSES)}."
         )
 
     # ── Gates ──
@@ -389,7 +394,7 @@ def evaluate_public_execution_preconditions(
         and request_confirmations_ok
         and release_approval_status in _RELEASE_APPROVAL_VALID_STATUSES
         and release_approval_not_expired
-        and release_readiness_status == "ready_for_human_release_review"
+        and release_readiness_status in _RELEASE_READINESS_EXECUTABLE_STATUSES
         and all_gates
         and approval_audit_package_present
         and rawdata_checksum_before_exists
@@ -410,7 +415,7 @@ def evaluate_public_execution_preconditions(
         release_approval_not_expired=release_approval_not_expired,
         release_readiness_status=release_readiness_status,
         release_readiness_ready=(
-            release_readiness_status == "ready_for_human_release_review"
+            release_readiness_status in _RELEASE_READINESS_EXECUTABLE_STATUSES
         ),
         gates_met=gates_met,
         gates_total=gates_total,
@@ -444,7 +449,7 @@ def evaluate_public_execution_preconditions(
                 release_approval_status in _RELEASE_APPROVAL_VALID_STATUSES
             ),
             release_readiness_ready=(
-                release_readiness_status == "ready_for_human_release_review"
+                release_readiness_status in _RELEASE_READINESS_EXECUTABLE_STATUSES
             ),
             gates_32_of_32=all_gates,
             approval_audit_package_present=approval_audit_package_present,

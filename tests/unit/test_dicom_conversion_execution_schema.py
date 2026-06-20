@@ -81,6 +81,8 @@ def test_build_command_template_funraw_bold() -> None:
     assert template.command_preview != ""
     assert "dcm2niix" in template.command_preview
     assert "sub-001_task-rest_bold" in template.command_preview
+    assert "-b y" in template.command_preview
+    assert "-ba y" in template.command_preview
 
 
 def test_build_command_template_t1raw_t1w() -> None:

@@ -63,7 +63,7 @@ def _make_approved_approval_record() -> dict:
     }
 
 
-def _make_audit_preview() -> dict:
+def _make_audit_preview(output_root: str = "/tmp/test-output") -> dict:
     return {
         "audit_id": "audit-test-001",
         "approval_id": "approval-test-001",
@@ -71,18 +71,23 @@ def _make_audit_preview() -> dict:
         "reviewed_plan_id": "rp-test",
         "preflight_hash": "abc123",
         "input_dicom_checksum": "def456",
-        "output_root": "/tmp/test-output",
+        "output_root": output_root,
         "persisted_at": "2026-01-01T00:00:00Z",
     }
 
 
-def _make_command_templates(count: int = 1) -> dict:
+def _make_command_templates(
+    count: int = 1,
+    *,
+    input_dir: str = "/tmp/test-input",
+    output_dir: str = "/tmp/test-output/sub-001",
+) -> dict:
     return {
         "templates": [
             {
                 "executable": "dcm2niix",
-                "input_dir": "/tmp/test-input",
-                "output_dir": "/tmp/test-output/sub-001",
+                "input_dir": input_dir,
+                "output_dir": output_dir,
                 "filename_pattern": "sub-001_task-rest_bold",
                 "compress": "y",
                 "bids_sidecar": True,
@@ -132,12 +137,15 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
     run_dir.mkdir(parents=True)
     logs_dir = run_dir / "logs"
     logs_dir.mkdir(parents=True)
+    input_dir = project_dir / "test-input" / "sub-001"
+    input_dir.mkdir(parents=True)
+    output_dir = project_dir / "converted_bids" / "sub-001" / "func"
 
     (run_dir / "approval_record.json").write_text(
         json.dumps(_make_approved_approval_record())
     )
     (run_dir / "audit_preview.json").write_text(
-        json.dumps(_make_audit_preview())
+        json.dumps(_make_audit_preview(str(project_dir / "converted_bids")))
     )
     (run_dir / "preflight_snapshot.json").write_text(
         json.dumps({"status": "ready", "ok": True})
@@ -146,7 +154,13 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
         json.dumps(_make_mapping_snapshot(1))
     )
     (run_dir / "command_templates.json").write_text(
-        json.dumps(_make_command_templates(1))
+        json.dumps(
+            _make_command_templates(
+                1,
+                input_dir=str(input_dir),
+                output_dir=str(output_dir),
+            )
+        )
     )
     (run_dir / "rawdata_checksum_before.json").write_text(
         json.dumps(_make_checksum_snapshot())
@@ -164,6 +178,13 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
 
 def _fake_successful_runner(argv):
     """Fake dcm2niix runner that always succeeds."""
+    if "-o" in argv and "-f" in argv:
+        output_dir = Path(argv[argv.index("-o") + 1])
+        filename = argv[argv.index("-f") + 1]
+        compress = argv[argv.index("-z") + 1] if "-z" in argv else "y"
+        suffix = ".nii" if str(compress).lower() in {"n", "3"} else ".nii.gz"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / f"{filename}{suffix}").write_bytes(b"FAKE_NIFTI")
     return type("R", (), {
         "returncode": 0,
         "stdout": "dcm2niix v1.0 — OK",
@@ -447,6 +468,58 @@ def test_audit_final_file_written_on_failure(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def test_stdout_error_with_zero_return_code_fails_execution(tmp_path, monkeypatch):
+    """Phase 6B: dcm2niix stdout errors fail even when return code is 0."""
+    _monkeypatch_dcm2niix_available(monkeypatch, tmp_path)
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_internal_user_dicom_conversion_from_persisted_package,
+    )
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _setup_complete_review_package(project_dir, "conv-test")
+
+    def stdout_error_runner(argv):
+        return type("R", (), {
+            "returncode": 0,
+            "stdout": "Error: invalid option '-b -ba'",
+            "stderr": "",
+        })()
+
+    _patch_subprocess_with(monkeypatch, stdout_error_runner)
+    result = run_internal_user_dicom_conversion_from_persisted_package(
+        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+    )
+
+    assert result.status == "failed"
+    assert any("reported_error=True" in err for err in result.errors)
+
+
+def test_missing_expected_nifti_fails_execution(tmp_path, monkeypatch):
+    """Phase 6B: a zero-return dcm2niix run without NIfTI output fails."""
+    _monkeypatch_dcm2niix_available(monkeypatch, tmp_path)
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_internal_user_dicom_conversion_from_persisted_package,
+    )
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _setup_complete_review_package(project_dir, "conv-test")
+
+    def no_output_runner(argv):
+        return type("R", (), {
+            "returncode": 0,
+            "stdout": "Conversion ok",
+            "stderr": "",
+        })()
+
+    _patch_subprocess_with(monkeypatch, no_output_runner)
+    result = run_internal_user_dicom_conversion_from_persisted_package(
+        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+    )
+
+    assert result.status == "failed"
+    assert any("expected_nifti_exists=False" in err for err in result.errors)
+
+
 def test_provenance_references_approval_record(tmp_path, monkeypatch):
     """Gate 9: Execution provenance references approval record path."""
     _monkeypatch_dcm2niix_available(monkeypatch, tmp_path)
@@ -528,6 +601,39 @@ def test_provenance_references_checksum_snapshots(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 # Group 12 — Provenance references rollback plan
 # ═══════════════════════════════════════════════════════════════════════
+
+
+def test_provenance_records_dcm2niix_binary_and_commands(tmp_path, monkeypatch):
+    """Phase 6B: provenance records dcm2niix binary SHA, strategy, argv, and duration."""
+    _monkeypatch_dcm2niix_available(monkeypatch, tmp_path)
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_internal_user_dicom_conversion_from_persisted_package,
+    )
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _setup_complete_review_package(project_dir, "conv-test")
+
+    _patch_subprocess_with(monkeypatch, _fake_successful_runner)
+    result = run_internal_user_dicom_conversion_from_persisted_package(
+        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+    )
+    assert result.status == "succeeded"
+
+    provenance_path = project_dir / "conversion_runs" / "conv-test" / "execution_provenance.json"
+    data = json.loads(provenance_path.read_text())
+    meta = data.get("metadata", {})
+
+    assert meta["dcm2niix_version"] == "v1.0.20260416"
+    assert meta["dcm2niix_expected_version"] == "v1.0.20260416"
+    assert meta["dcm2niix_executable_path"]
+    assert meta["dcm2niix_detection_strategy"] in {"env_var", "mamba_env", "path", "bundled"}
+    assert meta["dcm2niix_binary_sha256"]
+    assert meta["dcm2niix_command_count"] >= 1
+    first_command = meta["dcm2niix_commands"][0]
+    assert isinstance(first_command["argv"], list)
+    assert first_command["argv"][0] == meta["dcm2niix_executable_path"]
+    assert first_command["duration_ms"] >= 0
+    assert first_command["return_code"] == 0
 
 
 def test_provenance_references_rollback_plan(tmp_path, monkeypatch):

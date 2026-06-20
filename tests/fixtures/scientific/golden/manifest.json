@@ -1,0 +1,25 @@
+{
+  "generator": "tests/fixtures/scientific/generate_golden.py",
+  "tr": 2.0,
+  "freq_band": [
+    0.01,
+    0.08
+  ],
+  "seed": 42,
+  "files": [
+    "alff_constant_golden.npy",
+    "alff_golden.npy",
+    "falff_constant_golden.npy",
+    "falff_golden.npy",
+    "fc_matrix_golden.npy",
+    "fisherz_golden.npy",
+    "reho_19_golden.npy",
+    "reho_27_golden.npy",
+    "reho_7_golden.npy"
+  ],
+  "kernels": {
+    "alff": "tools/alff_compute.py::compute_alff_numpy",
+    "reho": "tools/reho_compute.py::compute_reho_numpy",
+    "fc": "tools/functional_connectivity_compute.py::compute_fc_numpy"
+  }
+}

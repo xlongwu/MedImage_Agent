@@ -22,8 +22,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Collect tests
+        run: pytest --collect-only -q --strict-markers
+
       - name: Run tests
-        run: pytest --tb=short
+        run: pytest --strict-markers --tb=short
 
   frontend:
     runs-on: ubuntu-latest
@@ -43,6 +46,49 @@ jobs:
         working-directory: src/frontend
         run: npm ci
 
+      - name: Type check
+        working-directory: src/frontend
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: src/frontend
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Format check
+        working-directory: src/frontend
+        run: npm run format:check
+
+      - name: Test
+        working-directory: src/frontend
+        run: npm run test
+
+      - name: Project runs smoke test
+        working-directory: src/frontend
+        run: npm run test:project-runs
+
       - name: Build frontend
         working-directory: src/frontend
         run: npm run build
+
+  desktop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/electron/package-lock.json
+
+      - name: Install desktop dependencies
+        working-directory: desktop/electron
+        run: npm ci
+
+      - name: Desktop check
+        working-directory: desktop/electron
+        run: npm run check

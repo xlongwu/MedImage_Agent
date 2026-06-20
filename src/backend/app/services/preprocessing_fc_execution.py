@@ -62,8 +62,13 @@ def run_fc_sandbox_execution(
         copied.append(dest / bf.name)
         designs.append({"subject": subj, "functional": str(dest / bf.name), "fc_computed": False})
 
-    # FC execution: atlas-optional, Pearson preferred
-    metadata_only = True; computed = 0
+    # FC execution: ROI-based Pearson via the unified compute kernel.
+    # The kernel requires a 4D BOLD volume and a matching 3D atlas. When no
+    # external atlas is available we synthesize one via ``_generate_atlas``
+    # and record that fact in provenance so the matrix is never mistaken for
+    # an atlas-grounded result.
+    metadata_only = True; computed = 0; matrix_count = 0
+    fc_status = "metadata_only"
     _NUMPY_OK = False
     try:
         import numpy as _np; import nibabel as _nib
@@ -72,45 +77,65 @@ def run_fc_sandbox_execution(
         warnings.append("numpy/nibabel not available; metadata-only FC execution.")
 
     if _NUMPY_OK:
+        from src.backend.app.tools.functional_connectivity_compute import (
+            compute_fc_backend, _generate_atlas,
+        )
         for cp, design in zip(copied, designs):
             try:
                 img = _nib.load(str(cp))
                 data = img.get_fdata()
-                T = data.shape[-1] if data.ndim >= 4 else data.shape[0]
+                if data.ndim < 4:
+                    data = data[..., None]
+                T = data.shape[-1]
                 if T < 10:
                     warnings.append(f"{design['subject']}: too few timepoints ({T})")
                     continue
-                orig_shape = data.shape
-                data_2d = data.reshape(-1, T)
-                # Compute voxel-wise Pearson correlation on a subset for safety
-                n_vox = min(data_2d.shape[0], 1000)
-                idx = _np.random.RandomState(42).choice(data_2d.shape[0], n_vox, replace=False)
-                subset = data_2d[idx, :]
-                fc = _np.corrcoef(subset)
-                fc = _np.nan_to_num(fc, 0)
-                # Fisher-z transform
-                fc_z = _np.arctanh(_np.clip(fc, -0.9999, 0.9999))
+                spatial_shape = tuple(int(s) for s in data.shape[:3])
+                atlas, atlas_defs = _generate_atlas(spatial_shape, roi_count=8)
+                atlas_source = "synthetic_x_chunk"
+                result = compute_fc_backend(data, atlas, generate_seed_map=False, prefer_gpu=True)
+                if not result.get("ok") or result.get("correlation_matrix") is None:
+                    warnings.append(f"{design['subject']}: FC kernel returned no matrix: {result.get('errors')}")
+                    continue
+                corr = _np.asarray(result["correlation_matrix"]).astype(_np.float32)
+                fz = _np.asarray(result["fisher_z_matrix"]).astype(_np.float32)
                 out_path = sandbox_out / design['subject']
                 out_path.mkdir(parents=True, exist_ok=True)
-                fc_file = out_path / f"FC_matrix_{cp.name}.json"
-                fc_file.write_text(json.dumps({"shape": [n_vox, n_vox], "method": "pearson", "subset": True}))
-                fz_file = out_path / f"FC_FisherZ_{cp.name}.json"
-                fz_file.write_text(json.dumps({"shape": [n_vox, n_vox], "method": "fisher_z"}))
-                design['fc_computed'] = True; design['fc_output'] = str(fc_file)
-                computed += 1; metadata_only = False
+                corr_npy = out_path / f"sub-{design['subject']}_desc-fc_matrix.npy"
+                corr_tsv = out_path / f"sub-{design['subject']}_desc-fc_matrix.tsv"
+                fz_npy = out_path / f"sub-{design['subject']}_desc-fisherz_matrix.npy"
+                _np.save(corr_npy, corr)
+                _np.savetxt(corr_tsv, corr, delimiter="\t", fmt="%.6f")
+                _np.save(fz_npy, fz)
+                roi_labels = [{"label": d["label"], "name": d["name"]} for d in atlas_defs]
+                (out_path / f"sub-{design['subject']}_desc-fc_labels.json").write_text(
+                    json.dumps({"roi_count": len(roi_labels), "labels": roi_labels}, indent=2))
+                (out_path / f"sub-{design['subject']}_desc-fc_provenance.json").write_text(
+                    json.dumps({"method": "pearson", "fisher_z": True, "atlas_source": atlas_source,
+                                "backend": result.get("backend"), "roi_count": int(result.get("roi_count", 0)),
+                                "timepoints": int(result.get("timepoints", T)),
+                                "input_shape": [int(s) for s in data.shape]}, indent=2))
+                design['fc_computed'] = True; design['fc_output'] = str(corr_npy)
+                design['fisher_z_output'] = str(fz_npy)
+                computed += 1; matrix_count += 1; metadata_only = False; fc_status = "numerically_computed"
             except Exception as exc:
                 warnings.append(f"{design['subject']}: {exc}")
 
     fp_path = exec_dir / "fc_plan.json"
-    fp_path.write_text(json.dumps({"designs": designs, "metadata_only": metadata_only}, indent=2))
+    fp_path.write_text(json.dumps({"designs": designs, "metadata_only": metadata_only,
+                                   "fc_status": fc_status}, indent=2))
 
     stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
     result_status = "warning" if metadata_only else "succeeded"
     stdout_log.write_text(f"FC execution: status={result_status}, computed={computed}\n"); stderr_log.write_text("")
 
-    (exec_dir / "manifest.json").write_text(json.dumps({"status": result_status, "metadata_only": metadata_only}))
-    (exec_dir / "provenance.json").write_text(json.dumps({"sandbox_only": True, "metadata_only": metadata_only}))
-    (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "computed": computed, "metadata_only": metadata_only}))
+    (exec_dir / "manifest.json").write_text(json.dumps({
+        "status": result_status, "metadata_only": metadata_only,
+        "fc": {"computed": not metadata_only, "status": fc_status, "matrix_count": matrix_count}}))
+    (exec_dir / "provenance.json").write_text(json.dumps({"sandbox_only": True, "metadata_only": metadata_only,
+                                                          "fc_status": fc_status}))
+    (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "computed": computed,
+                                                              "metadata_only": metadata_only, "fc_status": fc_status}))
     (exec_dir / "README.md").write_text(f"# FC Sandbox\nStatus: {result_status}. Computed: {computed}/{len(copied)}.\n")
 
     return FcSandboxExecutionResponse(
@@ -122,5 +147,6 @@ def run_fc_sandbox_execution(
         stderr_log_path=str(stderr_log), manifest_path=str(exec_dir / "manifest.json"),
         provenance_path=str(exec_dir / "provenance.json"),
         subject_status_path=str(exec_dir / "subject_status.json"),
+        fc_computed=(not metadata_only), fc_status=fc_status, fc_matrix_count=matrix_count,
         warnings=warnings, next_actions=["Review FC matrices.", "Group analysis requires explicit opt-in."],
         safety_flags=fc_exec_safety_flags())

@@ -10,9 +10,6 @@ from src.backend.app.schemas.desktop import (
     RunLinkRecord,
     StudyOverview,
 )
-from src.backend.app.services.mock_store import mock_store
-
-
 class ProjectStore(Protocol):
     def list_projects(self) -> list[ProjectSummary]: ...
 
@@ -44,4 +41,5 @@ class ProjectStore(Protocol):
 
 
 def get_project_store() -> ProjectStore:
+    from src.backend.app.services.mock_store import mock_store
     return mock_store

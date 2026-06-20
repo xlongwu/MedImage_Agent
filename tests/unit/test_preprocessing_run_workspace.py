@@ -140,9 +140,10 @@ def test_external_stages_are_disabled(tmp_path, monkeypatch):
     req = PreprocessingRunCreateRequest(preprocessing_input_dir=str(cb))
     cr = create_preprocessing_run("brain-tumor-study", req, project_dir=str(tmp_path))
     result = execute_python_preflight("brain-tumor-study", cr.preprocessing_run_id, project_dir=str(tmp_path))
-    assert "realignment" in result.disabled_external_stages
-    assert "slice_timing" in result.disabled_external_stages
-    assert any(s.status == "disabled_external" for s in result.stage_statuses)
+    # Phase 6C: SPM/MATLAB stages are blocked; Python/GPU stages are planned
+    assert "realignment" in result.disabled_external_stages or "realignment" in result.blocked_stages
+    assert "slice_timing" in result.disabled_external_stages or "slice_timing" in result.blocked_stages
+    assert any(s.status in ("disabled_external", "blocked") for s in result.stage_statuses)
 
 
 def test_missing_t1w_reported(tmp_path, monkeypatch):

@@ -143,7 +143,7 @@ def test_availability_fake_runner_uses_argv_list(monkeypatch) -> None:
 
     def assert_argv(argv):
         assert isinstance(argv, list)
-        assert argv[0] == "dcm2niix"
+        assert str(argv[0]).lower().endswith(("dcm2niix", "dcm2niix.exe"))
         assert "--version" in argv
         return _FakeCompletedProcess(stdout="v1.0.0", returncode=0)
 
@@ -158,6 +158,41 @@ def test_availability_fake_runner_uses_argv_list(monkeypatch) -> None:
     }
     check = check_dcm2niix_availability(env=env, runner=assert_argv)
     assert check.status == "available"
+
+
+def test_availability_finds_dcm2niix_in_active_mamba_env(tmp_path) -> None:
+    """Phase 6B: active mamba/conda env is checked before generic PATH."""
+    fake_prefix = tmp_path / "mamba"
+    fake_exe = fake_prefix / "Scripts" / "dcm2niix.exe"
+    fake_exe.parent.mkdir(parents=True)
+    fake_exe.write_bytes(b"fake dcm2niix binary")
+
+    called: list[list[str]] = []
+
+    def fake_runner(argv):
+        called.append(argv)
+        return _FakeCompletedProcess(
+            stdout="Chris Rorden's dcm2niix version v1.0.20260416\n",
+            returncode=0,
+        )
+
+    env = {
+        "CONDA_PREFIX": str(fake_prefix),
+        "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
+        "MEDIMAGE_MATLAB_ENABLED": "1",
+        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
+        "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
+        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+    }
+    check = check_dcm2niix_availability(env=env, runner=fake_runner)
+
+    assert check.status == "available"
+    assert check.executable_path == str(fake_exe)
+    assert check.version == "v1.0.20260416"
+    assert check.binary_sha256 is not None
+    assert check.detection_strategy == "mamba_env"
+    assert check.expected_version == "v1.0.20260416"
+    assert called and called[0] == [str(fake_exe), "--version"]
 
 
 def test_availability_fake_runner_exception(monkeypatch) -> None:

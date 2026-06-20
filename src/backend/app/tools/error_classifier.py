@@ -1,19 +1,22 @@
-"""Structured error classifier backed by ERROR_KB.yaml v0.2.0."""
+"""Structured error classifier backed by error_kb.yaml v0.2.0.
+
+ERROR_KB is a static resource at src/backend/app/resources/error_kb.yaml.
+"""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_KB_REL = "memory/global/ERROR_KB.yaml"
+_DEFAULT_KB_REL = "src/backend/app/resources/error_kb.yaml"
 
 
 def _resolve_kb_path(kb_path: str | None = None) -> Path:
-    """Resolve ERROR_KB.yaml robustly across environments.
+    """Resolve error_kb.yaml robustly across environments.
 
     Priority:
       1. MEDIMAGE_ERROR_KB_PATH env var
-      2. Walk upward from __file__ to find repo root containing memory/global/ERROR_KB.yaml
+      2. Walk upward from __file__ to find repo root containing src/backend/app/resources/error_kb.yaml
       3. CWD fallback
     """
     env_path = os.environ.get("MEDIMAGE_ERROR_KB_PATH")

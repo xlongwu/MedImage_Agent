@@ -17,7 +17,17 @@ def compute_alff_numpy(
     data: np.ndarray,
     tr: float,
     freq_band: tuple[float, float],
+    *,
+    standardize: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[str]]:
+    """Compute ALFF/fALFF with optional z-standardization.
+
+    Args:
+        data: 4D BOLD (x, y, z, t)
+        tr: Repetition time in seconds
+        freq_band: (low, high) Hz for target band
+        standardize: If True, apply z-score normalization to ALFF/fALFF maps
+    """
     warnings: list[str] = []
 
     if data.ndim != 4:
@@ -51,6 +61,12 @@ def compute_alff_numpy(
     total_amp = np.sum(amplitude[..., 1:], axis=-1).astype("float32")
     band_sum = np.sum(band_amp, axis=-1).astype("float32")
     falff = _safe_falff(band_sum, total_amp)
+
+    if standardize:
+        alff_mean = alff.mean(); alff_std = alff.std() + 1e-10
+        alff = (alff - alff_mean) / alff_std
+        falff_mean = falff.mean(); falff_std = falff.std() + 1e-10
+        falff = (falff - falff_mean) / falff_std
 
     return alff, falff, warnings
 

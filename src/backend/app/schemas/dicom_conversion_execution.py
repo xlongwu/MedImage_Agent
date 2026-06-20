@@ -33,11 +33,14 @@ DicomConversionMode = Literal[
 ]
 
 DicomConversionStatus = Literal[
+    "pending",
+    "running",
     "ready",
     "blocked",
     "warning",
     "disabled",
     "failed",
+    "partial",
     "succeeded",
 ]
 
@@ -114,6 +117,7 @@ class DicomConversionMapping(BaseModel):
     confidence: str = "high"
     enabled: bool = True
     warnings: list[str] = Field(default_factory=list)
+    status: str | None = None  # execution status per mapping: succeeded / failed / running
 
 
 class DicomConversionSafetyFlags(BaseModel):
@@ -262,9 +266,9 @@ def build_dcm2niix_command_template(
     if filename_pattern:
         argv_parts.extend(["-f", filename_pattern])
     if bids_sidecar:
-        argv_parts.append("-b")
+        argv_parts.extend(["-b", "y"])
     if create_bids:
-        argv_parts.append("-ba")
+        argv_parts.extend(["-ba", "y"])
 
     argv_parts.extend(flags)
     argv_parts.extend(["-o", f'"{output_dir}"', f'"{input_dir}"'])
@@ -434,6 +438,9 @@ class Dcm2niixAvailabilityCheck(BaseModel):
     executable: str = "dcm2niix"
     executable_path: str | None = None
     version: str | None = None
+    binary_sha256: str | None = None
+    detection_strategy: str | None = None
+    expected_version: str | None = None
     env_enabled: bool = False
     missing_env_flags: list[str] = Field(default_factory=list)
     checked_at: str | None = None

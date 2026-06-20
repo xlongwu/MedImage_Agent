@@ -1,7 +1,7 @@
 # ADR-005: 跨平台策略
 
 ## Status
-Proposed (2026-06-14)
+Accepted (2026-06-14) — previously Proposed. Current v0.5 ships Windows-only Electron + PyInstaller packaging, which aligns with the phased approach: Windows first, macOS/Linux as future milestones.
 
 ## Context
 当前仅支持 Windows 打包（Electron + PyInstaller）。用户群体主要是神经影像研究者，macOS 和 Linux 在学术界占有相当比例。项目 Roadmap 提到 "macOS/Linux 打包" 作为未来目标。

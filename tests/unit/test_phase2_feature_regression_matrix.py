@@ -32,6 +32,7 @@ from src.backend.app.services import (
     spm_realign_dry_run,
     spm_realign_wrapper_skeleton,
 )
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -39,7 +40,7 @@ def _iso(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "cfg.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "prj")
-    for mod in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, spm_realign_dry_run, spm_realign_wrapper_skeleton, qc_dashboard_report, nifti_thumbnail):
+    for mod in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, spm_realign_dry_run, spm_realign_wrapper_skeleton, qc_dashboard_report, nifti_thumbnail, mock_store_module):
         monkeypatch.setattr(mod, "mock_store", store)
     monkeypatch.setattr(qc_dashboard_report, "_REPORT_DIR", tmp_path / "o" / "r" / "qc")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")

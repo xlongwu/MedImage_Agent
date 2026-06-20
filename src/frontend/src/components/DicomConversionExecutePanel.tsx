@@ -89,6 +89,8 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
       setResponse(resp);
       if (resp.ok && resp.status === "succeeded") {
         setUiState("succeeded");
+      } else if (resp.status === "partial") {
+        setUiState("partial");
       } else if (resp.status === "blocked" || resp.status === "disabled") {
         setUiState("blocked");
       } else {
@@ -108,7 +110,7 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
   }
 
   // ── Disabled info state ──
-  if (uiState === "disabled_info" || (!canShowConfirm && uiState !== "submitting" && uiState !== "succeeded" && uiState !== "failed" && uiState !== "blocked")) {
+  if (uiState === "disabled_info" || (!canShowConfirm && uiState !== "submitting" && uiState !== "succeeded" && uiState !== "partial" && uiState !== "failed" && uiState !== "blocked")) {
     const missing: string[] = [];
     if (!featureEnabled) missing.push("Frontend feature flag VITE_ENABLE_DICOM_EXECUTE_UI is not set.");
     if (!readinessReady) missing.push("Release readiness is not ready_for_human_release_review.");
@@ -222,19 +224,44 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
     );
   }
 
-  // ── Succeeded response ──
-  if (uiState === "succeeded" && response) {
+  // ── Succeeded / Partial response ──
+  if ((uiState === "succeeded" || uiState === "partial") && response) {
     return (
       <section className={styles.style028}>
-        <h3 className={styles.style029}>Conversion complete</h3>
+        <h3 className={styles.style029}>
+          {uiState === "partial" ? "Conversion partially completed" : "Conversion complete"}
+        </h3>
         <div className={styles.style030}>
           <KV label="status" value={response.status} />
-          <KV label="execution ID" value={response.execution_id} />
-          <KV label="started" value={response.started_at ?? ""} />
-          <KV label="finished" value={response.finished_at ?? ""} />
-          <KV label="checksum verified" value={String(response.checksum_verified)} />
-          <KV label="output root" value={response.output_root} />
+          {response.execution_id && <KV label="execution ID" value={response.execution_id} />}
+          {response.started_at && <KV label="started" value={response.started_at} />}
+          {response.finished_at && <KV label="finished" value={response.finished_at} />}
+          {response.checksum_verified !== undefined && (
+            <KV label="checksum verified" value={String(response.checksum_verified)} />
+          )}
+          {response.output_root && <KV label="output root" value={response.output_root} />}
         </div>
+
+        {uiState === "partial" && (
+          <div className={styles.style031} style={{ background: "#fff3e0", color: "#8d6300" }}>
+            Some mappings completed successfully while others failed. Rawdata remains unchanged. Review errors below and retry failed mappings.
+          </div>
+        )}
+
+        {(response as any).mapping_results && (response as any).mapping_results.length > 0 && (
+          <div className={styles.style004}>
+            <h4 className={styles.style005}>Mapping Results</h4>
+            {(response as any).mapping_results.map((mr: any, i: number) => (
+              <div key={i} className={styles.style006} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>
+                  <strong>{mr.subject_id}/{mr.modality}</strong>: {mr.status}
+                </span>
+                {mr.error && <span style={{ color: "#b53b3b", fontSize: 11 }}>{mr.error}</span>}
+                {mr.output_file && <span style={{ ...mono, fontSize: 10, color: "#555" }}>{mr.output_file}</span>}
+              </div>
+            ))}
+          </div>
+        )}
 
         {response.output_manifest_path && <PathRow label="Output manifest" path={response.output_manifest_path} />}
         {response.execution_provenance_path && <PathRow label="Execution provenance" path={response.execution_provenance_path} />}
@@ -242,13 +269,17 @@ export default function DicomConversionExecutePanel({ baseUrl, projectId, conver
         {response.audit_execution_final_path && <PathRow label="Audit final" path={response.audit_execution_final_path} />}
         {response.checksum_comparison_path && <PathRow label="Checksum comparison" path={response.checksum_comparison_path} />}
         {response.rollback_plan_path && <PathRow label="Rollback plan" path={response.rollback_plan_path} />}
+        {response.manifest_path && <PathRow label="Conversion manifest" path={response.manifest_path} />}
+        {response.provenance_path && <PathRow label="Provenance" path={response.provenance_path} />}
 
         <div className={styles.style031}>
           Rawdata checksum verified — rawdata is unchanged. SPM/DPABI/MATLAB were not executed.
         </div>
-        <button onClick={() => { setUiState("disabled_info"); setResponse(null); setConfirmChecks({}); }} style={{ marginTop: 12, padding: "6px 14px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
-          Back to readiness
-        </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <button onClick={() => { setUiState("disabled_info"); setResponse(null); setConfirmChecks({}); }} style={{ padding: "6px 14px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600, fontSize: 11 }}>
+            Back to readiness
+          </button>
+        </div>
       </section>
     );
   }

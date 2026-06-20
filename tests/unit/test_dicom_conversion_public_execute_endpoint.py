@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -42,6 +43,9 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
         project_routes, "DEFAULT_PROJECTS_ROOT",
         tmp_path / "projects",
     )
+    # Patch every module that imports ``mock_store`` at module level, and the
+    # ``mock_store`` module itself so the lazy import in ``dependencies.py``
+    # also returns the isolated store.
     for module in (
         project_routes,
         dashboard_routes,
@@ -50,6 +54,7 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
         project_history_routes,
         execute_reviewed_routes,
         conversion_planner,
+        mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
     desktop_config.DESKTOP_CONFIG_PATH.write_text(

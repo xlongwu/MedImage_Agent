@@ -136,9 +136,12 @@ def persist_conversion_plan(
     try:
         written.append(_write_json(paths["approval_record_path"], approval_record.model_dump()))
         written.append(_write_json(paths["audit_preview_path"], {
-            "audit_id": "",
+            "audit_id": f"audit-{conversion_run_id}",
             "approval_id": approval_record.approval_id,
             "project_id": project_id,
+            "reviewed_plan_id": approval_record.reviewed_plan_id,
+            "output_root": paths["output_root"],
+            "dcm2niix_version": approval_record.dcm2niix_version,
             "persisted_at": _now_iso(),
             "note": "Audit record placeholder — no conversion executed.",
         }))

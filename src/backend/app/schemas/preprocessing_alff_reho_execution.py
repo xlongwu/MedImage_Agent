@@ -19,6 +19,13 @@ class AlffRehoSandboxExecutionResponse(BaseModel):
     subjects_total: int = 0; subjects_succeeded: int = 0; subjects_failed: int = 0
     metric_plan_path: str = ""; stdout_log_path: str = ""; stderr_log_path: str = ""
     manifest_path: str = ""; provenance_path: str = ""; subject_status_path: str = ""
+    # Per-metric status (ExecutionStatus values). A false ``computed`` flag with
+    # a non-numeric status means only a sandbox was prepared, not a real map.
+    alff_computed: bool = False
+    alff_status: str = "metadata_only"
+    falff_computed: bool = False
+    reho_computed: bool = False
+    reho_status: str = "metadata_only"
     warnings: list[str] = Field(default_factory=list); errors: list[str] = Field(default_factory=list)
     blocking_issues: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)

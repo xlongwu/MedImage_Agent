@@ -1,7 +1,7 @@
 # ADR-004: DICOM 转换真实执行路线
 
 ## Status
-Proposed (2026-06-14)
+Accepted (2026-06-14) — previously Proposed. Public execute endpoint exists in `api/execute_reviewed_routes.py`, feature-flagged frontend UI in `DicomConversionExecutePanel.tsx`, and safety contracts are in place. Dry-run only was an earlier transitional state; real execution is the intended target.
 
 ## Context
 当前 DICOM 转换仅支持 dry-run（生成映射预览，不创建文件）。FunRaw/T1Raw 数据（1104 DICOM 验证通过）需要通过 dcm2niix 转换为 NIfTI 格式才能进入完整预处理链。已完成的准备工作：

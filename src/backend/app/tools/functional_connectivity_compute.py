@@ -68,9 +68,12 @@ def compute_fc_numpy(
             rts.append(np.where(np.isfinite(ts), ts, 0.0))
         rta = np.vstack(rts) if rts else np.zeros((0, nt))
 
-        # Correlation matrix via z-score + matmul
+        # Correlation matrix via z-score + matmul.
+        # ddof=1 matches the (nt-1) denominator and agrees with np.corrcoef;
+        # the previous ddof=0 with (nt-1) caused a N/(N-1) bias on identical
+        # time-series (see golden test regression).
         zt = rta - rta.mean(axis=1, keepdims=True)
-        stds = np.std(rta, axis=1)
+        stds = np.std(rta, axis=1, ddof=1)
         denom = stds[:, None] * stds[None, :] * (nt - 1)
         corr = (zt @ zt.T) / denom
         np.fill_diagonal(corr, 1.0)
@@ -78,16 +81,16 @@ def compute_fc_numpy(
 
         fz = _fisher_z(corr)
 
-        # Seed-to-voxel map
+        # Seed-to-voxel map (ddof=1 to match matrix path).
         seed_map = None
         seed_z_map = None
         if generate_seed_map and len(labels) > 0:
             seed_ts = rta[0]
-            ss = float(np.std(seed_ts))
+            ss = float(np.std(seed_ts, ddof=1))
             if ss > 0:
                 sc = seed_ts - np.mean(seed_ts)
                 z_data = flat - flat.mean(axis=1, keepdims=True)
-                sv = np.std(flat, axis=1)
+                sv = np.std(flat, axis=1, ddof=1)
                 denom_seed = (nt - 1) * ss * sv
                 seed_corr = np.where(denom_seed > 0, (z_data @ sc) / denom_seed, 0.0)
                 seed_corr = np.where(np.isfinite(seed_corr), seed_corr, 0.0)
@@ -159,9 +162,9 @@ def compute_fc_cupy(
             rts.append(cp.where(cp.isfinite(ts), ts, 0.0))
         rta = cp.vstack(rts) if rts else cp.zeros((0, nt), dtype=cp.float64)
 
-        # Correlation via z-score matmul
+        # Correlation via z-score matmul (ddof=1 to match NumPy fix).
         zt = rta - cp.mean(rta, axis=1, keepdims=True)
-        stds = cp.std(rta, axis=1)
+        stds = cp.std(rta, axis=1, ddof=1)
         denom = cp.outer(stds, stds) * (nt - 1)
         corr_gpu = (zt @ zt.T) / denom
         cp.fill_diagonal(corr_gpu, 1.0)
@@ -175,11 +178,11 @@ def compute_fc_cupy(
         seed_z_map = None
         if generate_seed_map and len(labels) > 0:
             seed_gpu = rta[0]
-            ss = float(cp.std(seed_gpu))
+            ss = float(cp.std(seed_gpu, ddof=1))
             if ss > 0:
                 sc = seed_gpu - cp.mean(seed_gpu)
                 z_data = data_gpu - cp.mean(data_gpu, axis=1, keepdims=True)
-                sv = cp.std(data_gpu, axis=1)
+                sv = cp.std(data_gpu, axis=1, ddof=1)
                 denom_seed = (nt - 1) * ss * sv
                 seed_corr_gpu = cp.where(denom_seed > 0, (z_data @ sc) / denom_seed, 0.0)
                 seed_corr_gpu = cp.where(cp.isfinite(seed_corr_gpu), seed_corr_gpu, 0.0)
