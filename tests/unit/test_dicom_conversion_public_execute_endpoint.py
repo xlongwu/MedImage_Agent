@@ -249,7 +249,8 @@ class TestMissingConfirmationsBlock:
         data = resp.json()
         assert data["ok"] is False
         assert data["status"] == "blocked"
-        assert any("user data" in b.lower() for b in data.get("blocking_issues", []))
+        issues = data.get("blocking_issues", [])
+        assert any("user data" in (b.lower() if isinstance(b, str) else str(b).lower()) for b in issues), f"blocking_issues: {issues}"
 
     def test_missing_confirm_rawdata_readonly(self, tmp_path, monkeypatch):
         resp = _call_endpoint(

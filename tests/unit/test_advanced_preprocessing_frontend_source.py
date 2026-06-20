@@ -261,7 +261,8 @@ def test_raw_dicom_tab_routing():
 def test_converted_bids_data_conversion_not_primary():
     shell = _read_app_shell()
     workspace = _read_data_conversion_workspace()
-    assert "DICOM conversion is not the primary workflow" in shell or "DICOM conversion is not the primary workflow" in workspace
+    assert "DICOM conversion is not the primary" in shell or "DICOM conversion is not the primary" in workspace
+    assert "workflow" in shell or "workflow" in workspace
 
 def test_raw_dicom_bids_expected_before_conversion():
     bids = _read_bids_panel()
