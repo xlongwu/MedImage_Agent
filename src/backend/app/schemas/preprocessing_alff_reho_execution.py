@@ -32,6 +32,12 @@ class AlffRehoSandboxExecutionResponse(BaseModel):
     falff_computed: bool = False
     reho_computed: bool = False
     reho_status: str = "metadata_only"
+
+    # Validation level (separate from execution status per AGENTS contract).
+    # e.g. "unvalidated", "golden_validated", "reference_validated".
+    reho_validation_status: str = "unvalidated"
+    # Backend used for ReHo computation, e.g. "none", "cpu-numpy", "gpu-cupy".
+    reho_backend: str = "none"
     # Aggregate TR source: "bids_json", "default", or "mixed".
     # "default" means sidecar(s) were missing and 2.0s fallback was used.
     tr_source: str = "default"

@@ -119,6 +119,7 @@ def run_alff_reho_sandbox_execution(
     # KCC kernel. No inline math: both metrics delegate to tools/*_compute.py.
     metadata_only = True
     alff_status = "metadata_only"; falff_status = "metadata_only"; reho_status = "metadata_only"
+    reho_validation_status = "unvalidated"; reho_backend = "none"
     any_alff = False; any_falff = False; any_reho = False
     alff_succeeded = 0; reho_succeeded = 0
     subjects_complete = 0; subjects_partial = 0
@@ -214,7 +215,10 @@ def run_alff_reho_sandbox_execution(
 
     alff_status = "numerically_computed" if any_alff else alff_status
     falff_status = "numerically_computed" if any_falff else falff_status
-    reho_status = "golden_validated_cpu" if any_reho else reho_status
+    reho_status = "validated" if any_reho else reho_status
+    if any_reho:
+        reho_validation_status = "golden_validated"
+        reho_backend = "cpu-numpy"
 
     # Per-subject aggregation: classify each subject as complete/partial/failed.
     for d in designs:
@@ -266,6 +270,8 @@ def run_alff_reho_sandbox_execution(
     mp_path = exec_dir / "metric_plan.json"
     mp_path.write_text(json.dumps({"designs": designs, "metadata_only": metadata_only,
                                    "alff_status": alff_status, "reho_status": reho_status,
+                                   "reho_validation_status": reho_validation_status,
+                                   "reho_backend": reho_backend,
                                    "subjects_complete": subjects_complete,
                                    "subjects_partial": subjects_partial}, indent=2))
 
@@ -283,11 +289,17 @@ def run_alff_reho_sandbox_execution(
                      "failed": total_subjects - subjects_complete - subjects_partial},
         "alff": {"computed": any_alff, "status": alff_status, "subject_count": alff_succeeded},
         "falff": {"computed": any_falff, "status": falff_status, "subject_count": alff_succeeded},
-        "reho": {"computed": any_reho, "status": reho_status, "subject_count": reho_succeeded,
+        "reho": {"computed": any_reho, "subject_count": reho_succeeded,
+                  "execution_status": reho_status,
+                  "validation_status": reho_validation_status,
+                  "backend": reho_backend,
+                  "external_reference_validated": False,
+                  "gpu_validated": False,
                   "note": "CPU Kendall's W implementation is golden validated and agrees with an independent in-repository NumPy reference. External reference validation remains pending. GPU backend remains unvalidated."}}))
     (exec_dir / "provenance.json").write_text(json.dumps({
         "sandbox_only": True, "metadata_only": metadata_only,
         "alff_status": alff_status, "reho_status": reho_status,
+        "reho_validation_status": reho_validation_status, "reho_backend": reho_backend,
         "tr_source": agg_tr_source,
         "dataset_selection": {"files_discovered": files_discovered,
                               "files_selected": files_selected,
@@ -302,6 +314,7 @@ def run_alff_reho_sandbox_execution(
          "metadata_only": metadata_only,
          "alff_succeeded": alff_succeeded, "reho_succeeded": reho_succeeded,
          "alff_status": alff_status, "reho_status": reho_status,
+         "reho_validation_status": reho_validation_status, "reho_backend": reho_backend,
          "per_subject": [{"subject": d["subject"],
                           "alff_computed": d.get("alff_computed", False),
                           "falff_computed": d.get("falff_computed", False),
@@ -329,6 +342,7 @@ def run_alff_reho_sandbox_execution(
         subject_status_path=str(exec_dir / "subject_status.json"),
         alff_computed=any_alff, alff_status=alff_status, falff_computed=any_falff,
         reho_computed=any_reho, reho_status=reho_status,
+        reho_validation_status=reho_validation_status, reho_backend=reho_backend,
         tr_source=agg_tr_source,
         warnings=warnings, next_actions=["Review ALFF/fALFF/ReHo maps.", "External ReHo validation and GPU ties-correct implementation remain pending."],
         safety_flags=alff_reho_exec_safety_flags())
