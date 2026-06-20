@@ -1,11 +1,13 @@
 # Project State
 
-Current as of 2026-06-14.
+Current as of 2026-06-20.
 
 ## Version and Branch
 
-- Current source/release line: `v0.5.0-rc1`.
-- Backend `APP_VERSION` and frontend package version should use `0.5.0-rc1`.
+- Current source/release line: `v0.6.0-rc1`.
+- Backend `APP_VERSION` (`src/backend/app/version.py`) is `0.6.0-rc1`.
+  All package surface versions (frontend, desktop/electron, pyproject.toml)
+  aligned to `0.6.0-rc1` as of 2026-06-20 architecture audit.
 - Current working branch: `main`.
 - Local Git tags present:
   - `v0.3.0-rc1` tagged 2026-06-06
@@ -32,6 +34,11 @@ their tag state.
   packages, release readiness, release approval metadata, rollback support, and
   a public conversion endpoint that is default-blocked by environment flags and
   approval/readiness gates.
+- The guarded public DICOM conversion path has been verified against real
+  DemoData when all maintainer execution flags and approvals are present:
+  1104 DICOM files produce 6 NIfTI outputs and 6 JSON sidecars under the
+  project workspace, with rawdata count unchanged and dcm2niix provenance
+  recorded.
 - Feature-flagged frontend execute UI for DICOM conversion; hidden by default.
 - Phase 5 preprocessing workflow for converted inputs, including dry-run plans,
   sandbox workspaces, stage output registration, validation, and report export.
@@ -67,6 +74,11 @@ D:\Anaconda3\envs\mamba\python.exe
   (`904c3ec`, 2026-06-13) recorded `109 passed, 4 skipped`.
 - Current cleanup validation is recorded in the final Completion Report rather
   than appended here as a development diary.
+- Current Phase 6B DICOM conversion focused validation includes strict
+  `tests/integration/test_dicom_conversion_public_e2e_smoke.py` execution with
+  `MEDIMAGE_E2E_SMOKE_RAWDATA_DIR` pointing to DemoData. The smoke now requires
+  real success, 6 NIfTI outputs, 6 provenance output paths, and unchanged
+  rawdata.
 
 ## Packaging State
 
@@ -82,6 +94,14 @@ D:\Anaconda3\envs\mamba\python.exe
 
 ## Known Limitations and Risks
 
+- Per-stage real capability is recorded in `docs/CAPABILITY_MATRIX.md`.
+  ALFF/fALFF/ReHo/FC are **Numerically Implemented** (real kernels wired into
+  the sandbox execution services); SPM/MATLAB stages remain
+  **Needs Verification** and stay off by default.
+- Scientific-computation sandbox services previously reported `succeeded` for
+  both "sandbox prepared" and "numeric result produced". Per-metric status
+  now distinguishes these; older manifests are read with backward-compatible
+  fallback.
 - `dashboard_routes.py` remains a large legacy aggregation/conversion workflow
   router. New unrelated domain endpoints should be split into domain routers.
 - Some historical docs still describe earlier route and frontend API layouts;
@@ -92,6 +112,8 @@ D:\Anaconda3\envs\mamba\python.exe
   mamba interpreter and `--basetemp=.pytest_tmp`.
 - The desktop SQLite state store is ignored runtime state and can accumulate
   stale local paths.
+- Full DICOM-to-preprocessing-to-report E2E remains unproven while SPM/MATLAB
+  preprocessing stages are unavailable or metadata-only.
 
 ## Next Work
 
@@ -106,6 +128,7 @@ D:\Anaconda3\envs\mamba\python.exe
 ## Reference Documents
 
 - Stable agent rules: `AGENTS.md`
+- Per-stage real capability: `docs/CAPABILITY_MATRIX.md`
 - Current architecture: `docs/architecture.md`
 - Desktop packaging: `docs/DESKTOP_APP_PACKAGING.md`
 - Release notes: `docs/releases/`

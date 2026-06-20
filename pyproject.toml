@@ -1,6 +1,6 @@
 [project]
 name = "medimage-agent"
-version = "0.3.0-alpha"
+version = "0.6.0-rc1"
 description = "Deterministic agentic pipeline engineering platform for rs-fMRI research"
 requires-python = ">=3.11"
 
