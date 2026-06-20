@@ -147,18 +147,30 @@ def run_fc_sandbox_execution(
                                    "fc_status": fc_status}, indent=2))
 
     stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
-    result_status = "warning" if metadata_only else "succeeded"
-    # Subset processing must not claim full-dataset completion (AGENTS Scientific
-    # Computing Contract). Downgrade 'succeeded' to 'partial' in preview mode.
-    if not dataset_complete and result_status == "succeeded":
+    # Status determination — aligned with ALFF/ReHo complete/partial/failed
+    # aggregation logic (AGENTS Scientific Computing Contract).
+    if metadata_only:
+        result_status = "warning"
+    elif computed == 0:
+        result_status = "warning"
+    elif computed < files_selected:
+        result_status = "partial"
+        warnings.append(
+            f"Overall status is 'partial': only {computed} of {files_selected} "
+            f"selected BOLD files produced valid FC matrices.")
+    elif not dataset_complete:
         result_status = "partial"
         warnings.append(
             f"Overall status downgraded to 'partial' because only {files_selected} "
             f"of {files_discovered} discovered BOLD files were processed (preview mode).")
+    else:
+        result_status = "succeeded"
     stdout_log.write_text(f"FC execution: status={result_status}, computed={computed}\n"); stderr_log.write_text("")
 
     (exec_dir / "manifest.json").write_text(json.dumps({
         "status": result_status, "metadata_only": metadata_only,
+        "subjects": {"total": len(copied), "succeeded": computed,
+                     "failed": len(copied) - computed},
         "fc": {"computed": not metadata_only, "status": fc_status, "matrix_count": matrix_count}}))
     (exec_dir / "provenance.json").write_text(json.dumps({"sandbox_only": True, "metadata_only": metadata_only,
                                                           "fc_status": fc_status,
@@ -168,6 +180,7 @@ def run_fc_sandbox_execution(
                                                                                 "dataset_complete": dataset_complete},
                                                           "atlas_source": "synthetic_x_chunk"}))
     (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "computed": computed,
+                                                              "failed": len(copied) - computed,
                                                               "metadata_only": metadata_only, "fc_status": fc_status}))
     (exec_dir / "README.md").write_text(f"# FC Sandbox\nStatus: {result_status}. Computed: {computed}/{len(copied)}.\n")
 
@@ -176,6 +189,7 @@ def run_fc_sandbox_execution(
         dry_run_id=request.dry_run_id, execution_id=exec_id, execution_dir=str(exec_dir),
         sandbox_input_dir=str(sandbox_in), sandbox_output_dir=str(sandbox_out),
         subjects_total=len(copied), subjects_succeeded=computed, subjects_failed=len(copied) - computed,
+        subjects_partial=0,
         files_discovered=files_discovered, files_selected=files_selected,
         dataset_complete=dataset_complete,
         fc_plan_path=str(fp_path), stdout_log_path=str(stdout_log),

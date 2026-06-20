@@ -33,7 +33,7 @@ describing the state of independent verification:
 | **Unvalidated** | Numerically implemented but no independent reference or golden test exists, OR the implementation has known gaps on certain backends (e.g. GPU ties handling). |
 | **Needs Verification** | An external tool path (SPM/MATLAB) exists but is not exercised in this environment; not a claim of numerical correctness. |
 | **Golden Validated** | Validated against committed golden `.npy` fixtures via `tests/test_scientific_golden.py` or `tests/golden/test_algorithm_golden.py`. |
-| **Reference Validated** | Golden Validated **and** an independent from-scratch reference implementation agrees within tolerance. |
+| **Reference Validated** | Golden Validated **and** validated against an external established implementation, trusted reference software, or independently produced reference dataset (not merely an in-repository reference). |
 | **E2E Validated** | Validated end-to-end against DemoData via integration smoke test (default-skipped in CI). |
 
 ## Availability

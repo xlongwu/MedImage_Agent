@@ -214,7 +214,7 @@ def run_alff_reho_sandbox_execution(
 
     alff_status = "numerically_computed" if any_alff else alff_status
     falff_status = "numerically_computed" if any_falff else falff_status
-    reho_status = "numerically_implemented_unvalidated" if any_reho else reho_status
+    reho_status = "golden_validated_cpu" if any_reho else reho_status
 
     # Per-subject aggregation: classify each subject as complete/partial/failed.
     for d in designs:
@@ -284,7 +284,7 @@ def run_alff_reho_sandbox_execution(
         "alff": {"computed": any_alff, "status": alff_status, "subject_count": alff_succeeded},
         "falff": {"computed": any_falff, "status": falff_status, "subject_count": alff_succeeded},
         "reho": {"computed": any_reho, "status": reho_status, "subject_count": reho_succeeded,
-                  "note": "numerically_implemented_unvalidated: KCC algorithm corrected (ranking direction + denominator); pending independent reference validation"}}))
+                  "note": "CPU Kendall's W implementation is golden validated and agrees with an independent in-repository NumPy reference. External reference validation remains pending. GPU backend remains unvalidated."}}))
     (exec_dir / "provenance.json").write_text(json.dumps({
         "sandbox_only": True, "metadata_only": metadata_only,
         "alff_status": alff_status, "reho_status": reho_status,
@@ -330,5 +330,5 @@ def run_alff_reho_sandbox_execution(
         alff_computed=any_alff, alff_status=alff_status, falff_computed=any_falff,
         reho_computed=any_reho, reho_status=reho_status,
         tr_source=agg_tr_source,
-        warnings=warnings, next_actions=["Review ALFF/fALFF/ReHo maps.", "ReHo remains pending independent reference validation."],
+        warnings=warnings, next_actions=["Review ALFF/fALFF/ReHo maps.", "External ReHo validation and GPU ties-correct implementation remain pending."],
         safety_flags=alff_reho_exec_safety_flags())

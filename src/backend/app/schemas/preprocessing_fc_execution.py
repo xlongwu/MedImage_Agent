@@ -17,6 +17,7 @@ class FcSandboxExecutionResponse(BaseModel):
     preprocessing_run_id: str = ""; dry_run_id: str = ""; execution_id: str = ""
     execution_dir: str = ""; sandbox_input_dir: str = ""; sandbox_output_dir: str = ""
     subjects_total: int = 0; subjects_succeeded: int = 0; subjects_failed: int = 0
+    subjects_partial: int = 0
     # Dataset selection transparency (AGENTS Scientific Computing Contract).
     files_discovered: int = 0
     files_selected: int = 0

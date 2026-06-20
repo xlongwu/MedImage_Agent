@@ -189,7 +189,7 @@
 - [ ] CPU/GPU 一致性验证（条件性，仅 CuPy 可用时）
 - [ ] 输出 ReHo NIfTI：`sub-xxx_desc-reho_map.nii.gz`
 - [ ] provenance JSON 记录：邻域大小、KCC 方法、mask 来源、后端、输入 checksum
-- [ ] 在独立参考验证完成前，状态标记为 `numerically_implemented_unvalidated`
+- [ ] CPU 后端状态标记为 `golden_validated_cpu`（独立 in-repo NumPy 参考已通过）；外部参考验证前不升级为 Reference Validated
 - [ ] 移除执行服务中的 "ReHo computation not yet implemented" 警告
 
 **Verification:**

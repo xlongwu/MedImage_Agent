@@ -329,13 +329,21 @@ def compute_reho_backend(
     prefer_gpu: bool = True,
     require_gpu: bool = False,
     z_chunk_size: int = 8,
+    allow_unvalidated_gpu: bool = False,
 ) -> dict[str, Any]:
     """Compute ReHo with automatic GPU/CPU backend selection.
 
     GPU path does NOT implement ties correction (average ranks + tie factor).
-    If ties are detected in the data, automatically falls back to CPU even
-    when prefer_gpu=True. Callers that need GPU should set prefer_gpu=True
-    but must be prepared for CPU fallback.
+    Ties detection is a probabilistic heuristic (random sampling of voxels)
+    and cannot guarantee safety.
+
+    By default, the GPU path is **disabled** even when ``prefer_gpu=True``
+    because the GPU backend lacks ties correction.  Callers that want to use
+    the GPU despite this must set ``allow_unvalidated_gpu=True`` and accept
+    the risk.
+
+    When ``require_gpu=True`` and ties are detected, this function returns
+    failure immediately — it never silently falls back to CPU in that case.
     """
     gpu_available = False
     if prefer_gpu or require_gpu:
@@ -354,6 +362,18 @@ def compute_reho_backend(
             "runtime_seconds": 0.0,
         }
 
+    # Safety gate: GPU ties correction is unimplemented and ties detection is
+    # probabilistic.  Unless the caller explicitly opts in, route to CPU.
+    if prefer_gpu and not require_gpu and not allow_unvalidated_gpu:
+        cpu_result = compute_reho_numpy(data_4d, neighborhood, gm_mask)
+        cpu_result.setdefault("warnings", []).append(
+            "ReHo GPU path disabled: GPU backend lacks ties correction and "
+            "ties detection is probabilistic (random voxel sampling). Using "
+            "CPU path. Set allow_unvalidated_gpu=True to opt into GPU at "
+            "your own risk."
+        )
+        return cpu_result
+
     # Auto-fallback: GPU path does not handle ties. Detect and fall back.
     use_gpu = gpu_available
     ties_warning = ""
@@ -363,6 +383,20 @@ def compute_reho_backend(
         except Exception:
             has_ties = True  # conservative: fall back on detection error
         if has_ties:
+            if require_gpu:
+                return {
+                    "ok": False, "backend": "none",
+                    "reho": None,
+                    "valid_voxel_count": 0, "skipped_voxel_count": 0,
+                    "warnings": [],
+                    "errors": [
+                        "require_gpu=True but GPU ReHo cannot proceed: "
+                        "tied values were detected and the GPU backend does "
+                        "not implement ties correction. Use "
+                        "require_gpu=False to allow CPU fallback."
+                    ],
+                    "runtime_seconds": 0.0,
+                }
             use_gpu = False
             ties_warning = (
                 "ReHo GPU path skipped: tied values detected in data. "
@@ -381,5 +415,5 @@ def compute_reho_backend(
 
     cpu_result = compute_reho_numpy(data_4d, neighborhood, gm_mask)
     if ties_warning:
-        cpu_result["warnings"].append(ties_warning)
+        cpu_result.setdefault("warnings", []).append(ties_warning)
     return cpu_result
