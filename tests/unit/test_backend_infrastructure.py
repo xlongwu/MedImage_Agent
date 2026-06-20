@@ -17,6 +17,36 @@ from src.backend.app.runtime.state_store import (
 )
 
 
+def _extract_route_paths(router) -> set[str]:
+    """Recursively extract route paths from a router/app, handling Mount
+    and _IncludedRouter wrappers introduced in newer Starlette versions."""
+    paths: set[str] = set()
+    for route in router.routes:
+        if hasattr(route, "routes"):
+            paths.update(_extract_route_paths(route))
+        elif hasattr(route, "path"):
+            paths.add(route.path)
+    return paths
+
+
+def _extract_route_method_paths(router) -> list[tuple[str, str]]:
+    """Recursively extract (method, path) pairs for duplicate detection."""
+    pairs: list[tuple[str, str]] = []
+    for route in router.routes:
+        if hasattr(route, "routes"):
+            pairs.extend(_extract_route_method_paths(route))
+        elif not isinstance(route, APIRoute):
+            continue
+        else:
+            if getattr(route, "deprecated", False):
+                continue
+            for method in route.methods or set():
+                if method in {"HEAD", "OPTIONS"}:
+                    continue
+                pairs.append((method, route.path))
+    return pairs
+
+
 def test_request_id_and_response_time_headers_are_added():
     app = create_app()
     client = TestClient(app)
@@ -54,11 +84,7 @@ def test_api_v1_prefix_preserves_legacy_route_contract():
 
 def test_domain_split_legacy_routes_remain_registered():
     app = create_app()
-    registered_paths = {
-        route.path
-        for route in app.routes
-        if isinstance(route, APIRoute)
-    }
+    registered_paths = _extract_route_paths(app)
 
     expected_paths = {
         "/health",
@@ -94,16 +120,10 @@ def test_domain_split_routes_do_not_register_duplicate_method_paths():
     seen: set[tuple[str, str]] = set()
     duplicates: list[tuple[str, str]] = []
 
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
-            continue
-        for method in route.methods or set():
-            if method in {"HEAD", "OPTIONS"}:
-                continue
-            key = (method, route.path)
-            if key in seen:
-                duplicates.append(key)
-            seen.add(key)
+    for key in _extract_route_method_paths(app):
+        if key in seen:
+            duplicates.append(key)
+        seen.add(key)
 
     assert duplicates == []
 
