@@ -30,7 +30,7 @@ describing the state of independent verification:
 
 | Status | Meaning |
 |--------|---------|
-| **Unvalidated** | Numerically implemented but no independent reference or golden test exists. |
+| **Unvalidated** | Numerically implemented but no independent reference or golden test exists, OR the implementation has known gaps on certain backends (e.g. GPU ties handling). |
 | **Needs Verification** | An external tool path (SPM/MATLAB) exists but is not exercised in this environment; not a claim of numerical correctness. |
 | **Golden Validated** | Validated against committed golden `.npy` fixtures via `tests/test_scientific_golden.py` or `tests/golden/test_algorithm_golden.py`. |
 | **Reference Validated** | Golden Validated **and** an independent from-scratch reference implementation agrees within tolerance. |
@@ -60,7 +60,7 @@ Describes whether and how the stage can be exercised:
 | Filtering | Numerically Implemented | Needs Verification | Sandbox-Only |
 | **ALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
 | **fALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
-| **ReHo** | Numerically Implemented | Unvalidated | Sandbox-Only |
+| **ReHo** | Numerically Implemented | Golden Validated (CPU); Unvalidated (GPU) | Sandbox-Only; CI-Covered (golden regression, CPU path) |
 | **FC** | Numerically Implemented | Reference Validated (Pearson kernel only) | Sandbox-Only; CI-Covered (golden regression); Synthetic-atlas preview only — atlas-grounded FC workflow not yet validated |
 
 ### DICOM Conversion note
@@ -87,6 +87,15 @@ Therefore:
 | Synthetic x-chunk atlas FC preview | Numerically Implemented |
 | External atlas loading | Not Yet Implemented |
 | Atlas-grounded research FC workflow | Not Yet Validated |
+
+### ReHo CPU vs GPU validation breakdown
+
+The ReHo entry distinguishes CPU and GPU validation:
+
+| Backend | Validation Status | Notes |
+|---------|-------------------|-------|
+| CPU (NumPy) | Golden Validated | Kendall's W with ties correction (average ranks + tie factor). Validated against committed golden fixtures and an independent pure-NumPy reference. |
+| GPU (CuPy) | Unvalidated | Double-argsort ranking does NOT handle ties (no average ranks, no tie correction). Ties are common in real fMRI data (background zeros, quantized signals, scrubbed timepoints). `compute_reho_backend` auto-detects ties and falls back to CPU. |
 
 ## Traceability
 

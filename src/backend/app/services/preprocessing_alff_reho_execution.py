@@ -190,7 +190,12 @@ def run_alff_reho_sandbox_execution(
                     warnings.append(f"{design['subject']}: ALFF kernel failed: {alff_res.get('errors')}")
 
                 # ReHo via unified KCC kernel (27-neighborhood, no GM mask in sandbox).
-                reho_res = compute_reho_backend(data, neighborhood=27, prefer_gpu=True)
+                # ReHo: use CPU path (prefer_gpu=False) because the GPU
+                # implementation does not yet handle ties correction. Ties
+                # are common in real fMRI data (background zeros, quantized
+                # signals, scrubbed timepoints) and would produce silently
+                # incorrect KCC values on GPU.
+                reho_res = compute_reho_backend(data, neighborhood=27, prefer_gpu=False)
                 if reho_res.get("ok") and reho_res.get("reho") is not None:
                     reho_map = _np.asarray(reho_res["reho"]).astype(_np.float32)
                     reho_out = out_path / f"{design['subject']}_desc-reho_map.nii.gz"
@@ -248,6 +253,15 @@ def run_alff_reho_sandbox_execution(
         result_status = "partial"
     else:
         result_status = "warning"
+
+    # If only a subset of discovered files was processed (preview mode),
+    # downgrade 'succeeded' to 'partial' — per AGENTS Scientific Computing
+    # Contract, subset processing must not claim full-dataset completion.
+    if not dataset_complete and result_status == "succeeded":
+        result_status = "partial"
+        warnings.append(
+            f"Overall status downgraded to 'partial' because only {files_selected} "
+            f"of {files_discovered} discovered BOLD files were processed (preview mode).")
 
     mp_path = exec_dir / "metric_plan.json"
     mp_path.write_text(json.dumps({"designs": designs, "metadata_only": metadata_only,
@@ -307,6 +321,8 @@ def run_alff_reho_sandbox_execution(
         subjects_total=total_subjects, subjects_succeeded=subjects_complete,
         subjects_failed=total_subjects - subjects_complete - subjects_partial,
         subjects_partial=subjects_partial,
+        files_discovered=files_discovered, files_selected=files_selected,
+        dataset_complete=dataset_complete,
         metric_plan_path=str(mp_path), stdout_log_path=str(stdout_log),
         stderr_log_path=str(stderr_log), manifest_path=str(exec_dir / "manifest.json"),
         provenance_path=str(exec_dir / "provenance.json"),

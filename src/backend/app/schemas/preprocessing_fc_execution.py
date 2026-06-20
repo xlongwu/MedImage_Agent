@@ -17,6 +17,10 @@ class FcSandboxExecutionResponse(BaseModel):
     preprocessing_run_id: str = ""; dry_run_id: str = ""; execution_id: str = ""
     execution_dir: str = ""; sandbox_input_dir: str = ""; sandbox_output_dir: str = ""
     subjects_total: int = 0; subjects_succeeded: int = 0; subjects_failed: int = 0
+    # Dataset selection transparency (AGENTS Scientific Computing Contract).
+    files_discovered: int = 0
+    files_selected: int = 0
+    dataset_complete: bool = True
     fc_plan_path: str = ""; stdout_log_path: str = ""; stderr_log_path: str = ""
     manifest_path: str = ""; provenance_path: str = ""; subject_status_path: str = ""
     # Per-metric status so callers can distinguish "sandbox prepared" from

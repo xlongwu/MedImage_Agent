@@ -148,6 +148,13 @@ def run_fc_sandbox_execution(
 
     stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
     result_status = "warning" if metadata_only else "succeeded"
+    # Subset processing must not claim full-dataset completion (AGENTS Scientific
+    # Computing Contract). Downgrade 'succeeded' to 'partial' in preview mode.
+    if not dataset_complete and result_status == "succeeded":
+        result_status = "partial"
+        warnings.append(
+            f"Overall status downgraded to 'partial' because only {files_selected} "
+            f"of {files_discovered} discovered BOLD files were processed (preview mode).")
     stdout_log.write_text(f"FC execution: status={result_status}, computed={computed}\n"); stderr_log.write_text("")
 
     (exec_dir / "manifest.json").write_text(json.dumps({
@@ -169,6 +176,8 @@ def run_fc_sandbox_execution(
         dry_run_id=request.dry_run_id, execution_id=exec_id, execution_dir=str(exec_dir),
         sandbox_input_dir=str(sandbox_in), sandbox_output_dir=str(sandbox_out),
         subjects_total=len(copied), subjects_succeeded=computed, subjects_failed=len(copied) - computed,
+        files_discovered=files_discovered, files_selected=files_selected,
+        dataset_complete=dataset_complete,
         fc_plan_path=str(fp_path), stdout_log_path=str(stdout_log),
         stderr_log_path=str(stderr_log), manifest_path=str(exec_dir / "manifest.json"),
         provenance_path=str(exec_dir / "provenance.json"),

@@ -60,11 +60,11 @@ their tag state.
 
 ## Validation Baseline
 
-- Required backend interpreter:
-
-```powershell
-D:\Anaconda3\envs\mamba\python.exe
-```
+- Required backend interpreter: use the Python interpreter from the active
+  project environment (e.g. `.venv/Scripts/python.exe` on Windows). The
+  maintainer's local validation environment is recorded in release-specific
+  validation evidence, not as a repository requirement. Do NOT hardcode
+  maintainer-local interpreter paths in stable documentation.
 
 - Use `--basetemp=.pytest_tmp` when Windows temp directories contain locked
   pytest temp entries.
@@ -109,7 +109,7 @@ D:\Anaconda3\envs\mamba\python.exe
   structure.
 - Desktop GUI validation requires a local interactive Windows desktop.
 - Default Windows temp folders can retain locked pytest directories; use the
-  mamba interpreter and `--basetemp=.pytest_tmp`.
+  active project interpreter and `--basetemp=.pytest_tmp`.
 - The desktop SQLite state store is ignored runtime state and can accumulate
   stale local paths.
 - Full DICOM-to-preprocessing-to-report E2E remains unproven while SPM/MATLAB

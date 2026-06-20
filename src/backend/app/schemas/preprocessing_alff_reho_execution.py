@@ -18,6 +18,11 @@ class AlffRehoSandboxExecutionResponse(BaseModel):
     execution_dir: str = ""; sandbox_input_dir: str = ""; sandbox_output_dir: str = ""
     subjects_total: int = 0; subjects_succeeded: int = 0; subjects_failed: int = 0
     subjects_partial: int = 0  # subjects where SOME but not ALL metrics succeeded
+    # Dataset selection transparency (AGENTS Scientific Computing Contract).
+    # When files_discovered > files_selected, only a preview subset was processed.
+    files_discovered: int = 0
+    files_selected: int = 0
+    dataset_complete: bool = True
     metric_plan_path: str = ""; stdout_log_path: str = ""; stderr_log_path: str = ""
     manifest_path: str = ""; provenance_path: str = ""; subject_status_path: str = ""
     # Per-metric status (ExecutionStatus values). A false ``computed`` flag with

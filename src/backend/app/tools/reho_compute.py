@@ -297,6 +297,31 @@ def compute_reho_cupy(
     }
 
 
+def _detect_ties_gpu(data_4d: np.ndarray, sample_voxels: int = 1000) -> bool:
+    """Quick heuristic: check if the data likely contains tied values.
+
+    Ties break the GPU double-argsort ranking (which does not apply average
+    ranks or ties correction). We sample a small subset of voxels and check
+    for duplicate values within their time-series. This is a fast heuristic,
+    not an exhaustive check.
+
+    Returns True if ties are detected, meaning CPU fallback is needed.
+    """
+    if data_4d.ndim != 4:
+        return False
+    nx, ny, nz, nt = data_4d.shape
+    rng = np.random.default_rng(0)
+    # Sample interior voxels
+    xs = rng.integers(1, max(2, nx - 1), size=min(sample_voxels, (nx - 2) * (ny - 2) * (nz - 2)))
+    ys = rng.integers(1, max(2, ny - 1), size=len(xs))
+    zs = rng.integers(1, max(2, nz - 1), size=len(xs))
+    for i in range(len(xs)):
+        ts = data_4d[xs[i], ys[i], zs[i], :]
+        if ts.size > 1 and np.unique(ts).size < ts.size:
+            return True
+    return False
+
+
 def compute_reho_backend(
     data_4d: np.ndarray,
     neighborhood: int = 27,
@@ -305,7 +330,13 @@ def compute_reho_backend(
     require_gpu: bool = False,
     z_chunk_size: int = 8,
 ) -> dict[str, Any]:
-    """Compute ReHo with automatic GPU/CPU backend selection."""
+    """Compute ReHo with automatic GPU/CPU backend selection.
+
+    GPU path does NOT implement ties correction (average ranks + tie factor).
+    If ties are detected in the data, automatically falls back to CPU even
+    when prefer_gpu=True. Callers that need GPU should set prefer_gpu=True
+    but must be prepared for CPU fallback.
+    """
     gpu_available = False
     if prefer_gpu or require_gpu:
         try:
@@ -323,12 +354,32 @@ def compute_reho_backend(
             "runtime_seconds": 0.0,
         }
 
-    if gpu_available:
+    # Auto-fallback: GPU path does not handle ties. Detect and fall back.
+    use_gpu = gpu_available
+    ties_warning = ""
+    if use_gpu:
+        try:
+            has_ties = _detect_ties_gpu(data_4d)
+        except Exception:
+            has_ties = True  # conservative: fall back on detection error
+        if has_ties:
+            use_gpu = False
+            ties_warning = (
+                "ReHo GPU path skipped: tied values detected in data. "
+                "GPU does not implement ties correction; using CPU path."
+            )
+
+    if use_gpu:
         result = compute_reho_cupy(data_4d, neighborhood, gm_mask, z_chunk_size)
         if result["ok"]:
             return result
         if require_gpu:
+            if ties_warning:
+                result["warnings"].append(ties_warning)
             return result
         # Fall through to CPU on GPU failure when prefer_gpu
 
-    return compute_reho_numpy(data_4d, neighborhood, gm_mask)
+    cpu_result = compute_reho_numpy(data_4d, neighborhood, gm_mask)
+    if ties_warning:
+        cpu_result["warnings"].append(ties_warning)
+    return cpu_result
