@@ -78,10 +78,15 @@ def test_alff_reho_produces_real_nifti_maps(tmp_path, monkeypatch):
     assert res.reho_computed, f"ReHo not computed: {res.warnings}"
 
     import nibabel as nib
-    out_dir = Path(res.execution_dir) / "sandbox_output" / "sub-001"
-    alff_img = nib.load(str(out_dir / "sub-001_desc-alff_map.nii.gz"))
-    falff_img = nib.load(str(out_dir / "sub-001_desc-falff_map.nii.gz"))
-    reho_img = nib.load(str(out_dir / "sub-001_desc-reho_map.nii.gz"))
+    # Output dir uses full BIDS prefix from filename (sub-001_task-rest)
+    out_root = Path(res.execution_dir) / "sandbox_output"
+    alff_files = list(out_root.rglob("*desc-alff_map.nii.gz"))
+    assert len(alff_files) == 1, f"Expected 1 ALFF map, found {len(alff_files)}"
+    alff_img = nib.load(str(alff_files[0]))
+    falff_files = list(out_root.rglob("*desc-falff_map.nii.gz"))
+    falff_img = nib.load(str(falff_files[0]))
+    reho_files = list(out_root.rglob("*desc-reho_map.nii.gz"))
+    reho_img = nib.load(str(reho_files[0]))
     alff = alff_img.get_fdata()
     falff = falff_img.get_fdata()
     reho = reho_img.get_fdata()
@@ -115,9 +120,12 @@ def test_fc_produces_real_matrices(tmp_path, monkeypatch):
     assert res.fc_status == "numerically_computed"
     assert res.fc_matrix_count == 1
 
-    out_dir = Path(res.execution_dir) / "sandbox_output" / "sub-001"
-    corr = np.load(out_dir / "sub-001_desc-fc_matrix.npy")
-    fz = np.load(out_dir / "sub-001_desc-fisherz_matrix.npy")
+    out_root = Path(res.execution_dir) / "sandbox_output"
+    corr_files = list(out_root.rglob("*desc-fc_matrix.npy"))
+    assert len(corr_files) == 1, f"Expected 1 FC matrix, found {len(corr_files)}"
+    corr = np.load(corr_files[0])
+    fz_files = list(out_root.rglob("*desc-fisherz_matrix.npy"))
+    fz = np.load(fz_files[0])
     assert corr.ndim == 2 and corr.shape[0] == corr.shape[1], corr.shape
     assert corr.shape == fz.shape
     # Correlation: symmetric, diagonal 1, in [-1, 1].
@@ -127,10 +135,12 @@ def test_fc_produces_real_matrices(tmp_path, monkeypatch):
     # Fisher-Z diagonal is 0 by construction.
     assert np.allclose(np.diag(fz), 0.0, atol=1e-4)
     # TSV is human-readable and reloads to the same matrix.
-    tsv = np.loadtxt(out_dir / "sub-001_desc-fc_matrix.tsv", delimiter="\t")
+    tsv_files = list(out_root.rglob("*desc-fc_matrix.tsv"))
+    tsv = np.loadtxt(tsv_files[0], delimiter="\t")
     assert np.allclose(tsv, corr, atol=1e-3)
 
-    labels = json.loads((out_dir / "sub-001_desc-fc_labels.json").read_text())
+    labels_files = list(out_root.rglob("*desc-fc_labels.json"))
+    labels = json.loads(labels_files[0].read_text())
     assert labels["roi_count"] == corr.shape[0]
 
     manifest = json.loads((Path(res.execution_dir) / "manifest.json").read_text())

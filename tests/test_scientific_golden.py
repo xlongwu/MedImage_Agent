@@ -47,6 +47,53 @@ def _ref_alff(data: np.ndarray, tr: float, band: tuple[float, float]):
     return alff, falff
 
 
+def _ref_kendall_w(mat: np.ndarray) -> float:
+    """Independent reference Kendall's W for ReHo.
+
+    ``mat`` has shape (T, K): T timepoints (objects), K voxels (judges).
+    Each judge ranks the T objects. Perfect agreement → W = 1.
+
+    Uses a pure-NumPy average-rank implementation (no scipy dependency).
+    """
+    T, K = mat.shape
+    if T < 2 or K < 2:
+        return 0.0
+    # Each column (voxel) ranks its T timepoints using average ranks for ties
+    ranks = np.zeros((T, K), dtype=np.float64)
+    for k in range(K):
+        col = mat[:, k]
+        order = np.argsort(col, kind="mergesort")
+        sv = col[order]
+        rr = np.empty(T, dtype=np.float64)
+        s = 0
+        while s < T:
+            e = s + 1
+            while e < T and sv[e] == sv[s]:
+                e += 1
+            rr[order[s:e]] = (s + 1 + e) / 2.0
+            s = e
+        ranks[:, k] = rr
+    # Rank-sum per timepoint across all K judges
+    rs = ranks.sum(axis=1)  # (T,)
+    rm = rs.mean()
+    S = np.sum((rs - rm) ** 2)
+    # Ties correction
+    T_corr = 0.0
+    for k in range(K):
+        sv = np.sort(mat[:, k])
+        s = 0
+        while s < T:
+            e = s + 1
+            while e < T and sv[e] == sv[s]:
+                e += 1
+            t_i = e - s
+            if t_i > 1:
+                T_corr += t_i ** 3 - t_i
+            s = e
+    den = K ** 2 * (T ** 3 - T) - K * T_corr
+    return float(12.0 * S / den) if den != 0 else 0.0
+
+
 def _ref_pearson(ts: np.ndarray) -> np.ndarray:
     """Pearson correlation of rows of a (K, T) time-series matrix.
     Uses ddof=1 to match np.corrcoef and the fixed kernel."""
@@ -101,16 +148,48 @@ def test_reho_matches_golden(neighborhood):
     assert np.allclose(reho, _load(f"reho_{neighborhood}_golden.npy"), atol=ATOL)
 
 
-def test_reho_identical_voxels_kcc_zero():
+def test_reho_matches_independent_reference():
+    """ReHo kernel must agree with an independent scipy-based Kendall's W."""
+    from src.backend.app.tools.reho_compute import compute_reho_numpy, _offsets
+    bold = np.load(INPUT_DIR / "tiny_reho_bold.npy")
+    res = compute_reho_numpy(bold, neighborhood=27)
+    assert res["ok"]
+    reho = np.asarray(res["reho"])
+    # Independently compute KCC for a few interior voxels
+    nx, ny, nz, nt = bold.shape
+    off = _offsets(27)
+    max_diff = 0.0
+    checked = 0
+    for x in range(1, nx - 1):
+        for y in range(1, ny - 1):
+            for z in range(1, nz - 1):
+                series = []
+                ok = True
+                for dx, dy, dz in off:
+                    xx, yy, zz = x + dx, y + dy, z + dz
+                    series.append(bold[xx, yy, zz, :])
+                mat = np.stack(series, axis=1)  # (T, K)
+                ref_w = _ref_kendall_w(mat)
+                diff = abs(float(reho[x, y, z]) - ref_w)
+                max_diff = max(max_diff, diff)
+                checked += 1
+    assert checked > 0, "No interior voxels checked"
+    assert max_diff < 1e-4, f"ReHo kernel vs independent ref max diff={max_diff}"
+
+
+def test_reho_identical_voxels_kcc_one():
     """When every voxel in a neighborhood has the identical time-series, all
-    column ranks are the same, so KCC numerator (sum of squared deviations of
-    rank sums) is exactly 0 → KCC = 0, not 1. This is by definition."""
+    judges (voxels) rank the timepoints identically → perfect concordance →
+    KCC (Kendall's W) = 1. This is the definition of W: all judges agree
+    completely means W = 1."""
     from src.backend.app.tools.reho_compute import compute_reho_numpy
     ts = np.sin(np.linspace(0, 2 * np.pi, 30)).astype(np.float32)
+    # Make sure timepoints vary (not constant) so ranks differ across time
     vol = np.broadcast_to(ts, (5, 5, 5, 30)).copy()
     res = compute_reho_numpy(vol, neighborhood=27)
     interior = res["reho"][2, 2, 2]
-    assert interior == pytest.approx(0.0, abs=1e-6)
+    assert interior == pytest.approx(1.0, abs=1e-5), \
+        f"Identical time-series should yield W=1 (perfect concordance), got {interior}"
 
 
 def test_reho_gm_mask_zeros_masked_voxels():

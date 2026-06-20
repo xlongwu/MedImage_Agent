@@ -85,34 +85,84 @@ def compute_reho_numpy(
     }
 
 
-def _rank_cols_numpy(vals: np.ndarray) -> np.ndarray:
+def _rank_along_time_numpy(vals: np.ndarray) -> np.ndarray:
+    """Rank timepoints within each voxel's time-series.
+
+    ``vals`` has shape (T, K): T timepoints, K neighborhood voxels.
+    Each column k is one voxel's time-series of length T. We rank the T
+    timepoints *within* each column (voxel), so each voxel acts as a
+    "judge" ranking the T "objects" (timepoints) by signal intensity.
+
+    Ties are assigned average ranks. Returns an array of shape (T, K).
+    """
     T, K = vals.shape
     ranks = np.zeros_like(vals, dtype=np.float64)
-    for t in range(T):
-        row = vals[t, :]
-        order = np.argsort(row, kind="mergesort")
-        sv = row[order]
-        rr = np.empty_like(row, dtype=np.float64)
+    for k in range(K):
+        col = vals[:, k]
+        order = np.argsort(col, kind="mergesort")
+        sv = col[order]
+        rr = np.empty(T, dtype=np.float64)
         s = 0
-        while s < len(sv):
+        while s < T:
             e = s + 1
-            while e < len(sv) and sv[e] == sv[s]:
+            while e < T and sv[e] == sv[s]:
                 e += 1
-            rr[order[s:e]] = (s + 1 + e) / 2.0
+            rr[order[s:e]] = (s + 1 + e) / 2.0  # average rank
             s = e
-        ranks[t, :] = rr
+        ranks[:, k] = rr
     return ranks
 
 
+def _tie_correction_numpy(vals: np.ndarray) -> float:
+    """Compute Kendall's W tie correction term summed across all judges.
+
+    For each column (voxel/judge), sum(t_i^3 - t_i) where t_i is the size
+    of each tied group. Returns the total across all K judges.
+    """
+    T, K = vals.shape
+    total = 0.0
+    for k in range(K):
+        col = vals[:, k]
+        sv = np.sort(col)
+        s = 0
+        while s < T:
+            e = s + 1
+            while e < T and sv[e] == sv[s]:
+                e += 1
+            t_i = e - s
+            if t_i > 1:
+                total += t_i ** 3 - t_i
+            s = e
+    return total
+
+
 def _kcc_numpy(tbv: np.ndarray) -> float:
+    """Kendall's coefficient of concordance (W) for ReHo.
+
+    ``tbv`` has shape (T, K): T timepoints (objects), K neighborhood voxels
+    (judges). Each voxel judges the T timepoints by ranking its own
+    time-series. Perfect agreement (all voxels rank timepoints identically)
+    yields W = 1.
+
+    Formula (with ties correction):
+
+        W = 12 * S / (K^2 * (T^3 - T) - K * T_corr)
+
+    where:
+        S   = sum over timepoints of (rank_sum - mean_rank_sum)^2
+        K   = number of judges (neighborhood voxels)
+        T   = number of objects (timepoints)
+        T_corr = sum across all judges of sum(t_i^3 - t_i)
+    """
     T, K = tbv.shape
     if T < 2 or K < 2:
         return 0.0
-    r = _rank_cols_numpy(tbv)
-    rs = np.sum(r, axis=0)
-    rm = np.mean(rs)
+    r = _rank_along_time_numpy(tbv)          # (T, K): rank of each timepoint per voxel
+    rs = np.sum(r, axis=1)                     # (T,): rank-sum per timepoint across K judges
+    rm = np.mean(rs)                            # mean rank-sum
     num = 12.0 * np.sum((rs - rm) ** 2)
-    den = T**2 * (K**3 - K)
+    tie_corr = _tie_correction_numpy(tbv)
+    den = K ** 2 * (T ** 3 - T) - K * tie_corr
     return float(num / den) if den != 0 else 0.0
 
 
@@ -194,19 +244,21 @@ def compute_reho_cupy(
             nz_idx = cp.clip(nz_idx, 0, nz - 1)
             neighbor_data[:, ki, :] = data_gpu[nx_idx, ny_idx, nz_idx, :]
 
-        # Compute ranks per timepoint (vectorized)
-        # neighbor_data: (nv, K, T) -> we need ranks along K axis for each T
-        # Transpose to (nv, T, K) for easier processing
-        nd_t = neighbor_data.transpose(0, 2, 1)  # (nv, T, K)
+        # Compute ranks per timepoint within each voxel (vectorized).
+        # neighbor_data: (nv, K, T) — for each voxel, K neighbors each with T timepoints.
+        # Each of the K voxels is a "judge" that ranks its T timepoints.
+        # So we rank along axis=2 (the T axis) — rank timepoints within each voxel.
+        # Double argsort gives ranks (1-based after +1.0).
+        order = cp.argsort(cp.argsort(neighbor_data, axis=2), axis=2).astype(cp.float64) + 1.0  # (nv, K, T)
 
-        # Double argsort for rank approximation (ties not handled, acceptable for MRI data)
-        order = cp.argsort(cp.argsort(nd_t, axis=2), axis=2).astype(cp.float64) + 1.0  # (nv, T, K)
-
-        # Sum ranks across time: R_s = sum_t rank(t, s)
-        rs = cp.sum(order, axis=1)  # (nv, K)
+        # Sum ranks across K judges (axis=1) for each timepoint → rank_sum per timepoint.
+        rs = cp.sum(order, axis=1)  # (nv, T)
         rm = cp.mean(rs, axis=1, keepdims=True)  # (nv, 1)
         num = 12.0 * cp.sum((rs - rm) ** 2, axis=1)  # (nv,)
-        den = float(nt**2) * (K**3 - K)  # scalar
+
+        # Denominator: K^2 * (T^3 - T). Ties correction omitted for GPU speed;
+        # CPU path handles ties exactly. For typical MRI data ties are rare.
+        den = float(K ** 2) * (nt ** 3 - nt)  # scalar
 
         # KCC values
         kcc = cp.where(den != 0, num / den, 0.0).astype(cp.float32)

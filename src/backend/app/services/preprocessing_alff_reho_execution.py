@@ -26,6 +26,28 @@ def bids_sidecar_for(path: Path) -> Path | None:
     return path.parent / f"{stem}.json"
 
 
+def bids_prefix_from_path(path: Path) -> str:
+    """Extract a unique BIDS entity prefix from a NIfTI file path.
+
+    Returns a string like 'sub-001' or 'sub-001_ses-01_task-rest_run-1'
+    containing all BIDS key-value pairs found in the filename. This ensures
+    multi-session / multi-run inputs produce non-colliding output paths.
+    """
+    name = path.name
+    if name.endswith(".nii.gz"):
+        stem = name[:-7]
+    elif name.endswith(".nii"):
+        stem = name[:-4]
+    else:
+        stem = name
+    # Remove trailing descriptor like _bold, _T1w, etc. — keep only entity pairs
+    parts = stem.split("_")
+    entities = [p for p in parts if "-" in p]
+    if not entities:
+        return path.stem
+    return "_".join(entities)
+
+
 def _now_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
@@ -69,18 +91,27 @@ def run_alff_reho_sandbox_execution(
     logs_dir = exec_dir / "logs"; logs_dir.mkdir()
 
     warnings: list[str] = []; copied = []; designs = []
+    files_discovered = len(bold_files)
+    files_selected = min(files_discovered, 10)
+    dataset_complete = files_discovered <= 10
+    if not dataset_complete:
+        warnings.append(
+            f"Found {files_discovered} BOLD files but only processing first 10 "
+            f"(preview mode). Set a higher limit or split the dataset.")
     for bf in bold_files[:10]:
         subj = "sub-unknown"
         for part in bf.parts:
             if part.startswith("sub-"): subj = part; break
-        dest = sandbox_in / subj; dest.mkdir(parents=True, exist_ok=True)
+        bids_prefix = bids_prefix_from_path(bf)
+        dest = sandbox_in / bids_prefix; dest.mkdir(parents=True, exist_ok=True)
         shutil.copy2(bf, dest / bf.name)
         # Copy BIDS JSON sidecar alongside NIfTI so TR can be read correctly.
         sidecar = bids_sidecar_for(bf)
         if sidecar and sidecar.exists():
             shutil.copy2(sidecar, dest / sidecar.name)
         copied.append(dest / bf.name)
-        designs.append({"subject": subj, "functional": str(dest / bf.name),
+        designs.append({"subject": subj, "bids_prefix": bids_prefix,
+                        "functional": str(dest / bf.name),
                         "alff_computed": False, "falff_computed": False,
                         "reho_computed": False, "tr_source": "unknown"})
 
@@ -137,7 +168,7 @@ def run_alff_reho_sandbox_execution(
                         f"falling back to default TR=2.0s")
                 freq_band = (0.01, 0.08)
                 alff_res = compute_alff_backend(data, tr=tr, freq_band=freq_band, prefer_gpu=True)
-                out_path = sandbox_out / design['subject']
+                out_path = sandbox_out / design['bids_prefix']
                 out_path.mkdir(parents=True, exist_ok=True)
                 if alff_res.get("ok") and alff_res.get("alff") is not None:
                     alff_map = _np.asarray(alff_res["alff"]).astype(_np.float32)
@@ -202,7 +233,17 @@ def run_alff_reho_sandbox_execution(
 
     total_subjects = len(copied)
     if total_subjects > 0 and subjects_complete == total_subjects:
-        result_status = "succeeded"
+        # All metrics succeeded for all subjects. If TR came from default
+        # fallback (not BIDS sidecar), frequency axis is uncertain → downgrade
+        # to "partial" since ALFF/fALFF values may be inaccurate.
+        if agg_tr_source == "default":
+            result_status = "partial"
+            warnings.append(
+                "Overall status downgraded to 'partial' because TR source is "
+                "'default' (BIDS sidecar not found). ALFF/fALFF frequency axis "
+                "may be inaccurate.")
+        else:
+            result_status = "succeeded"
     elif subjects_complete > 0 or subjects_partial > 0:
         result_status = "partial"
     else:
@@ -229,11 +270,15 @@ def run_alff_reho_sandbox_execution(
         "alff": {"computed": any_alff, "status": alff_status, "subject_count": alff_succeeded},
         "falff": {"computed": any_falff, "status": falff_status, "subject_count": alff_succeeded},
         "reho": {"computed": any_reho, "status": reho_status, "subject_count": reho_succeeded,
-                  "note": "numerically_implemented_unvalidated: pending independent reference validation"}}))
+                  "note": "numerically_implemented_unvalidated: KCC algorithm corrected (ranking direction + denominator); pending independent reference validation"}}))
     (exec_dir / "provenance.json").write_text(json.dumps({
         "sandbox_only": True, "metadata_only": metadata_only,
         "alff_status": alff_status, "reho_status": reho_status,
         "tr_source": agg_tr_source,
+        "dataset_selection": {"files_discovered": files_discovered,
+                              "files_selected": files_selected,
+                              "selection_policy": "first_10_preview" if not dataset_complete else "all",
+                              "dataset_complete": dataset_complete},
         "kernels": ["tools/alff_compute.py::compute_alff_backend",
                     "tools/reho_compute.py::compute_reho_backend"]}))
     (exec_dir / "subject_status.json").write_text(json.dumps(

@@ -1148,7 +1148,7 @@ enforcement is **planned** (no `.pre-commit-config.yaml` exists yet):
 |:--|:--|:--|
 | `atomic_write_json()` for runtime state | pre-commit grep (planned) | `tests/unit/test_agents_md_compliance.py` |
 | No `write_text(json.dumps(...))` in services | pre-commit pygrep (planned) | `.pre-commit-config.yaml` (not yet created) |
-| No `mock_store` coupling in new endpoints | CI compliance test | `tests/unit/test_agents_md_compliance.py` |
+| `mock_store` coupling debt budget monitoring | CI compliance test (baseline + 5 budget) | `tests/unit/test_agents_md_compliance.py` |
 | Version consistency | CI version check | GitHub Actions |
 | Scientific artifact integrity | Backend CI job (full pytest) | `tests/test_scientific_golden.py`, `tests/test_scientific_gpu_consistency.py`, `tests/golden/test_algorithm_golden.py` |
 

@@ -60,8 +60,8 @@ Describes whether and how the stage can be exercised:
 | Filtering | Numerically Implemented | Needs Verification | Sandbox-Only |
 | **ALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
 | **fALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
-| **ReHo** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
-| **FC** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
+| **ReHo** | Numerically Implemented | Unvalidated | Sandbox-Only |
+| **FC** | Numerically Implemented | Reference Validated (Pearson kernel only) | Sandbox-Only; CI-Covered (golden regression); Synthetic-atlas preview only — atlas-grounded FC workflow not yet validated |
 
 ### DICOM Conversion note
 
@@ -71,6 +71,22 @@ requires dcm2niix + pydicom + DemoData; the E2E smoke test
 (`tests/integration/test_dicom_conversion_public_e2e_smoke.py`) is
 default-skipped in CI. It is not "Release Ready" until the default-blocked
 constraint is lifted by maintainer approval.
+
+### FC capability breakdown
+
+The FC entry above covers the **Pearson correlation kernel** only
+(`tools/functional_connectivity_compute.py::compute_fc_backend`), which is
+Reference Validated via golden regression. The sandbox execution service
+always uses a **synthetic x-chunk atlas** (`_generate_atlas` with
+`roi_count=8`), not a real brain atlas (AAL, Schaefer, Brainnetome, etc.).
+Therefore:
+
+| Sub-capability | Status |
+|----------------|--------|
+| ROI Pearson correlation kernel | Reference Validated |
+| Synthetic x-chunk atlas FC preview | Numerically Implemented |
+| External atlas loading | Not Yet Implemented |
+| Atlas-grounded research FC workflow | Not Yet Validated |
 
 ## Traceability
 

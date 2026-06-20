@@ -53,14 +53,35 @@ def run_fc_sandbox_execution(
     logs_dir = exec_dir / "logs"; logs_dir.mkdir()
 
     warnings: list[str] = []; copied = []; designs = []
+    files_discovered = len(bold_files)
+    files_selected = min(files_discovered, 10)
+    dataset_complete = files_discovered <= 10
+    if not dataset_complete:
+        warnings.append(
+            f"Found {files_discovered} BOLD files but only processing first 10 "
+            f"(preview mode). Set a higher limit or split the dataset.")
     for bf in bold_files[:10]:
         subj = "sub-unknown"
         for part in bf.parts:
             if part.startswith("sub-"): subj = part; break
-        dest = sandbox_in / subj; dest.mkdir(parents=True, exist_ok=True)
+        # Use full BIDS entity prefix to avoid multi-session/run output collisions
+        bids_prefix = subj
+        name = bf.name
+        if name.endswith(".nii.gz"):
+            stem = name[:-7]
+        elif name.endswith(".nii"):
+            stem = name[:-4]
+        else:
+            stem = name
+        parts = stem.split("_")
+        entities = [p for p in parts if "-" in p]
+        if entities:
+            bids_prefix = "_".join(entities)
+        dest = sandbox_in / bids_prefix; dest.mkdir(parents=True, exist_ok=True)
         shutil.copy2(bf, dest / bf.name)
         copied.append(dest / bf.name)
-        designs.append({"subject": subj, "functional": str(dest / bf.name), "fc_computed": False})
+        designs.append({"subject": subj, "bids_prefix": bids_prefix,
+                        "functional": str(dest / bf.name), "fc_computed": False})
 
     # FC execution: ROI-based Pearson via the unified compute kernel.
     # The kernel requires a 4D BOLD volume and a matching 3D atlas. When no
@@ -99,7 +120,7 @@ def run_fc_sandbox_execution(
                     continue
                 corr = _np.asarray(result["correlation_matrix"]).astype(_np.float32)
                 fz = _np.asarray(result["fisher_z_matrix"]).astype(_np.float32)
-                out_path = sandbox_out / design['subject']
+                out_path = sandbox_out / design['bids_prefix']
                 out_path.mkdir(parents=True, exist_ok=True)
                 corr_npy = out_path / f"{design['subject']}_desc-fc_matrix.npy"
                 corr_tsv = out_path / f"{design['subject']}_desc-fc_matrix.tsv"
@@ -133,7 +154,12 @@ def run_fc_sandbox_execution(
         "status": result_status, "metadata_only": metadata_only,
         "fc": {"computed": not metadata_only, "status": fc_status, "matrix_count": matrix_count}}))
     (exec_dir / "provenance.json").write_text(json.dumps({"sandbox_only": True, "metadata_only": metadata_only,
-                                                          "fc_status": fc_status}))
+                                                          "fc_status": fc_status,
+                                                          "dataset_selection": {"files_discovered": files_discovered,
+                                                                                "files_selected": files_selected,
+                                                                                "selection_policy": "first_10_preview" if not dataset_complete else "all",
+                                                                                "dataset_complete": dataset_complete},
+                                                          "atlas_source": "synthetic_x_chunk"}))
     (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "computed": computed,
                                                               "metadata_only": metadata_only, "fc_status": fc_status}))
     (exec_dir / "README.md").write_text(f"# FC Sandbox\nStatus: {result_status}. Computed: {computed}/{len(copied)}.\n")

@@ -148,6 +148,7 @@ def test_no_sub_sub_prefix(tmp_path, monkeypatch):
     assert result.ok
     alff_maps = list(Path(result.sandbox_output_dir).rglob("*desc-alff_map.nii.gz"))
     assert len(alff_maps) >= 1
+    # Filename uses subject prefix, directory uses full BIDS prefix
     # Must be sub-001_desc-alff_map.nii.gz, NOT sub-sub-001_desc-alff_map.nii.gz
     assert all("sub-sub-" not in p.name for p in alff_maps), \
         f"Found double sub- prefix: {[p.name for p in alff_maps]}"
