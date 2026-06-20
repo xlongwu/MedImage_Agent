@@ -165,6 +165,11 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
     monkeypatch.setattr("src.backend.app.api.dashboard_routes.mock_store", store)
     monkeypatch.setattr("src.backend.app.services.task_manager.mock_store", store)
     monkeypatch.setattr("src.backend.app.services.pipeline_runner.mock_store", store)
+    # Patch the source module so that split route files (image_routes,
+    # preprocessing_routes, etc.) whose local ``get_project_store`` helpers
+    # import ``mock_store`` from the source at call-time also see the isolated
+    # store.
+    monkeypatch.setattr("src.backend.app.services.mock_store.mock_store", store)
 
     client = TestClient(app)
     import nibabel as nib

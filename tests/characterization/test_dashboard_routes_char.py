@@ -30,21 +30,23 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
         execute_reviewed_routes,
         project_history_routes,
     )
-    from src.backend.app.api import dependencies as route_dependencies
     from src.backend.app.runtime import desktop_config
     from src.backend.app.planner import project_context, reviewed_plan_store
     from src.backend.app.services import conversion_planner
+    import src.backend.app.services.mock_store as mock_store_module
 
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    # Patch every module that imports ``mock_store`` at module level so the
-    # isolated store is used by both the old dashboard_routes and the new
-    # conversion_routes (which goes through ``dependencies.get_project_store``).
+    # Patch every module that imports ``mock_store`` at module level, plus the
+    # ``mock_store`` module itself so that ``dependencies.get_project_store()``
+    # (which reads ``_mock_store_module.mock_store``) and the local
+    # ``get_project_store`` helpers in the split route files all return the
+    # isolated store.
     for module in (
         project_routes, dashboard_routes, project_context,
         reviewed_plan_store, project_history_routes,
-        execute_reviewed_routes, conversion_planner, route_dependencies,
+        execute_reviewed_routes, conversion_planner, mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
