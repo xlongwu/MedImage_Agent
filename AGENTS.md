@@ -364,7 +364,7 @@ Responsibilities:
 * Scientific kernels perform numerical computation.
 * Storage persists state, provenance, and artifacts.
 
-Prohibited:
+Prohibited / 禁止:
 
 * complex business logic in routes;
 * numerical algorithms in routes;

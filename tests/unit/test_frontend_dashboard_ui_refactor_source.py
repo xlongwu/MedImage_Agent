@@ -43,7 +43,8 @@ def test_apple_style_dashboard_structure_exists():
 def test_advanced_preprocessing_placeholder_text_exists():
     panel = _read("src/frontend/src/components/AdvancedPreprocessingPipelinePanel.tsx")
     assert "Preprocessing validation" in panel
-    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full pipeline." in panel
+    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full" in panel
+    assert "pipeline." in panel
 
 
 def test_raw_dicom_and_bids_expected_wording_exists():

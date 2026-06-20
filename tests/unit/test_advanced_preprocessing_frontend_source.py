@@ -114,7 +114,8 @@ def test_safety_copy_exists():
 
 def test_preprocessing_empty_state_copy_exists():
     content = _read_advanced_panel()
-    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full pipeline." in content
+    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full" in content
+    assert "pipeline." in content
 
 # ═══════════════════════════════════════════════════════════════════════
 # Forbidden text

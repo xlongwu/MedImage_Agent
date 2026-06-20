@@ -238,7 +238,9 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
     sources = client.get("/api/images/sources", params={"project_id": "brain-tumor-study"})
     assert sources.status_code == 200
     source_payload = sources.json()
-    imported_source = next(item for item in source_payload["manifest"] if item["subject_id"] == "sub-import")
+    imported_matches = [item for item in source_payload["manifest"] if item["subject_id"] == "sub-import"]
+    assert imported_matches, f"sub-import not found in manifest; found subjects: {[item.get('subject_id') for item in source_payload['manifest']]}"
+    imported_source = imported_matches[0]
     assert imported_source["sequence"] == "T1"
     assert imported_source["dimensions"] == [4, 5, 6]
     assert imported_source["plane_slice_counts"]["axial"] == 6
