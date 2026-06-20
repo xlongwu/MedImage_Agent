@@ -262,38 +262,33 @@ class TestPublicE2ESmoke:
         assert data["ok"] is True, data
         assert data["status"] == "succeeded", data
 
-        status = data["status"]
-        if status in ("blocked", "disabled"):
-            # Endpoint blocked — verify blocking issues are informative
-            assert data.get("blocking_issues") or data.get("errors"), (
-                f"Blocked response must explain why: {data}"
-            )
-        elif status == "succeeded":
-            # ── 6. Verify evidence artifacts ──────────────────────────
-            _assert_artifact_exists(data, "output_manifest_path")
-            _assert_artifact_exists(data, "execution_provenance_path")
-            _assert_artifact_exists(data, "audit_execution_start_path")
-            _assert_artifact_exists(data, "audit_execution_final_path")
-            if data.get("checksum_comparison_path"):
-                assert data.get("checksum_verified") is True, (
-                    "Checksum should be verified when succeeded"
-                )
-
-            # ── 7. Verify rawdata unchanged ───────────────────────────
-            dcm_count = len(list(Path(rawdata_dir).rglob("*.dcm")))
-            assert dcm_count == 1104, (
-                f"Rawdata DICOM count changed: expected 1104, got {dcm_count}"
+        # status is already asserted == "succeeded" above. The previous
+        # blocked/disabled branch was unreachable and has been removed.
+        # ── 6. Verify evidence artifacts ──────────────────────────
+        _assert_artifact_exists(data, "output_manifest_path")
+        _assert_artifact_exists(data, "execution_provenance_path")
+        _assert_artifact_exists(data, "audit_execution_start_path")
+        _assert_artifact_exists(data, "audit_execution_final_path")
+        if data.get("checksum_comparison_path"):
+            assert data.get("checksum_verified") is True, (
+                "Checksum should be verified when succeeded"
             )
 
-            # ── 8. Verify no output leaked to rawdata ─────────────────
-            if data.get("output_root"):
-                out_root = Path(data["output_root"])
-                if out_root.exists():
-                    for p in out_root.rglob("*"):
-                        if p.is_file():
-                            assert not str(p).startswith(rawdata_dir), (
-                                f"Output leaked to rawdata: {p}"
-                            )
+        # ── 7. Verify rawdata unchanged ───────────────────────────
+        dcm_count = len(list(Path(rawdata_dir).rglob("*.dcm")))
+        assert dcm_count == 1104, (
+            f"Rawdata DICOM count changed: expected 1104, got {dcm_count}"
+        )
+
+        # ── 8. Verify no output leaked to rawdata ─────────────────
+        if data.get("output_root"):
+            out_root = Path(data["output_root"])
+            if out_root.exists():
+                for p in out_root.rglob("*"):
+                    if p.is_file():
+                        assert not str(p).startswith(rawdata_dir), (
+                            f"Output leaked to rawdata: {p}"
+                        )
 
         out_root = Path(data["output_root"])
         nifti_files = list(out_root.rglob("*.nii*"))
@@ -342,9 +337,12 @@ class TestPublicE2ESmoke:
 
 
 def _assert_artifact_exists(data: dict, key: str):
+    """Assert that the artifact path in data[key] exists on disk.
+
+    Called only after status == "succeeded" is asserted, so the artifact
+    MUST exist. A missing artifact is a test failure, not a soft warning.
+    """
     path_str = data.get(key)
-    if path_str and Path(path_str).exists():
-        return
-    # Path may not exist yet if execution didn't complete successfully
-    # Don't fail — just note it
-    pass
+    assert path_str, f"Response missing required artifact key '{key}': {data}"
+    assert Path(path_str).exists(), (
+        f"Artifact for '{key}' does not exist on disk: {path_str}")

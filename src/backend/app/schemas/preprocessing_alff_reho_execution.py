@@ -17,6 +17,7 @@ class AlffRehoSandboxExecutionResponse(BaseModel):
     preprocessing_run_id: str = ""; dry_run_id: str = ""; execution_id: str = ""
     execution_dir: str = ""; sandbox_input_dir: str = ""; sandbox_output_dir: str = ""
     subjects_total: int = 0; subjects_succeeded: int = 0; subjects_failed: int = 0
+    subjects_partial: int = 0  # subjects where SOME but not ALL metrics succeeded
     metric_plan_path: str = ""; stdout_log_path: str = ""; stderr_log_path: str = ""
     manifest_path: str = ""; provenance_path: str = ""; subject_status_path: str = ""
     # Per-metric status (ExecutionStatus values). A false ``computed`` flag with
@@ -26,6 +27,9 @@ class AlffRehoSandboxExecutionResponse(BaseModel):
     falff_computed: bool = False
     reho_computed: bool = False
     reho_status: str = "metadata_only"
+    # Aggregate TR source: "bids_json", "default", or "mixed".
+    # "default" means sidecar(s) were missing and 2.0s fallback was used.
+    tr_source: str = "default"
     warnings: list[str] = Field(default_factory=list); errors: list[str] = Field(default_factory=list)
     blocking_issues: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)

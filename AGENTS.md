@@ -1141,15 +1141,16 @@ unmet.
 
 ### 16.1 Automated enforcement
 
-The following critical rules are enforced by CI and pre-commit hooks:
+The following critical rules are enforced by CI. Pre-commit hook
+enforcement is **planned** (no `.pre-commit-config.yaml` exists yet):
 
 | Rule | Enforcement | Mechanism |
 |:--|:--|:--|
-| `atomic_write_json()` for runtime state | pre-commit grep | `tests/test_agents_md_compliance.py` |
-| No `write_text(json.dumps(...))` in services | pre-commit pygrep | `.pre-commit-config.yaml` |
-| No `mock_store` coupling in new endpoints | CI compliance test | `tests/test_agents_md_compliance.py` |
+| `atomic_write_json()` for runtime state | pre-commit grep (planned) | `tests/unit/test_agents_md_compliance.py` |
+| No `write_text(json.dumps(...))` in services | pre-commit pygrep (planned) | `.pre-commit-config.yaml` (not yet created) |
+| No `mock_store` coupling in new endpoints | CI compliance test | `tests/unit/test_agents_md_compliance.py` |
 | Version consistency | CI version check | GitHub Actions |
-| Scientific artifact integrity | Scientific Validation CI | GitHub Actions |
+| Scientific artifact integrity | Backend CI job (full pytest) | `tests/test_scientific_golden.py`, `tests/test_scientific_gpu_consistency.py`, `tests/golden/test_algorithm_golden.py` |
 
 ### 16.2 Known compliance debt
 

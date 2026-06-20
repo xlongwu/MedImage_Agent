@@ -101,16 +101,16 @@ def run_fc_sandbox_execution(
                 fz = _np.asarray(result["fisher_z_matrix"]).astype(_np.float32)
                 out_path = sandbox_out / design['subject']
                 out_path.mkdir(parents=True, exist_ok=True)
-                corr_npy = out_path / f"sub-{design['subject']}_desc-fc_matrix.npy"
-                corr_tsv = out_path / f"sub-{design['subject']}_desc-fc_matrix.tsv"
-                fz_npy = out_path / f"sub-{design['subject']}_desc-fisherz_matrix.npy"
+                corr_npy = out_path / f"{design['subject']}_desc-fc_matrix.npy"
+                corr_tsv = out_path / f"{design['subject']}_desc-fc_matrix.tsv"
+                fz_npy = out_path / f"{design['subject']}_desc-fisherz_matrix.npy"
                 _np.save(corr_npy, corr)
                 _np.savetxt(corr_tsv, corr, delimiter="\t", fmt="%.6f")
                 _np.save(fz_npy, fz)
                 roi_labels = [{"label": d["label"], "name": d["name"]} for d in atlas_defs]
-                (out_path / f"sub-{design['subject']}_desc-fc_labels.json").write_text(
+                (out_path / f"{design['subject']}_desc-fc_labels.json").write_text(
                     json.dumps({"roi_count": len(roi_labels), "labels": roi_labels}, indent=2))
-                (out_path / f"sub-{design['subject']}_desc-fc_provenance.json").write_text(
+                (out_path / f"{design['subject']}_desc-fc_provenance.json").write_text(
                     json.dumps({"method": "pearson", "fisher_z": True, "atlas_source": atlas_source,
                                 "backend": result.get("backend"), "roi_count": int(result.get("roi_count", 0)),
                                 "timepoints": int(result.get("timepoints", T)),

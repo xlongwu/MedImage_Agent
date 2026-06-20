@@ -50,3 +50,28 @@ def test_endpoint_200(tmp_path):
     resp = client.post("/api/projects/brain-tumor-study/preprocessing/runs/pp-test/fc/execute-sandbox",
         json={"dry_run_id": "dr", "confirm_sandbox_copy": True})
     assert resp.status_code == 200
+
+
+# ── P1-5: sub-sub-* filename fix ──
+
+def test_no_sub_sub_prefix_fc(tmp_path, monkeypatch):
+    """FC output filenames use 'sub-001_desc-...' not 'sub-sub-001_desc-...'."""
+    _setup(tmp_path, monkeypatch)
+    np = pytest.importorskip("numpy")
+    nib = pytest.importorskip("nibabel")
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    sub_dir = func_dir / "sub-001" / "func"; sub_dir.mkdir(parents=True)
+    bold_path = sub_dir / "sub-001_task-rest_bold.nii.gz"
+    # 12x12x12x50 — enough timepoints for FC (T>=10)
+    data = np.random.rand(12, 12, 12, 50).astype(np.float32)
+    nib.save(nib.Nifti1Image(data, np.eye(4)), str(bold_path))
+    dd = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / "dr-synth"
+    dd.mkdir(parents=True); (dd / "fc_dry_run_manifest.json").write_text('{"status":"dry_run_preview"}')
+    req = FcSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_fc_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok, f"Execution failed: {result.warnings}"
+    npy_files = list(Path(result.sandbox_output_dir).rglob("*desc-fc_matrix.npy"))
+    assert len(npy_files) >= 1
+    assert all("sub-sub-" not in p.name for p in npy_files), \
+        f"Found double sub- prefix: {[p.name for p in npy_files]}"
+    assert any(p.name == "sub-001_desc-fc_matrix.npy" for p in npy_files)

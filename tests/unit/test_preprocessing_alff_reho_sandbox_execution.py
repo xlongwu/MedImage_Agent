@@ -17,7 +17,7 @@ def _make_func(tmp_path):
 _ALL = {"MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1", "MEDIMAGE_ALLOW_SANDBOXED_ALFF_REHO": "1"}
 
 from src.backend.app.schemas.preprocessing_alff_reho_execution import AlffRehoSandboxExecutionRequest
-from src.backend.app.services.preprocessing_alff_reho_execution import run_alff_reho_sandbox_execution
+from src.backend.app.services.preprocessing_alff_reho_execution import run_alff_reho_sandbox_execution, bids_sidecar_for
 
 def test_disabled_without_env(tmp_path, monkeypatch):
     _setup(tmp_path, monkeypatch)
@@ -50,3 +50,158 @@ def test_endpoint_200(tmp_path):
     resp = client.post("/api/projects/brain-tumor-study/preprocessing/runs/pp-test/alff-reho/execute-sandbox",
         json={"dry_run_id": "dr", "confirm_sandbox_copy": True})
     assert resp.status_code == 200
+
+
+# ── P0-1 / P0-2 / P1-5: TR reading, sidecar copy, partial status, file naming ──
+
+def test_bids_sidecar_for_nii_gz():
+    """bids_sidecar_for correctly strips .nii.gz → .json (BIDS spec)."""
+    p = Path("data/sub-001/func/sub-001_task-rest_bold.nii.gz")
+    sc = bids_sidecar_for(p)
+    assert sc is not None
+    assert sc.name == "sub-001_task-rest_bold.json"
+    assert sc.parent == Path("data/sub-001/func")
+
+def test_bids_sidecar_for_nii():
+    """bids_sidecar_for correctly strips .nii → .json."""
+    p = Path("data/sub-001_task-rest_bold.nii")
+    sc = bids_sidecar_for(p)
+    assert sc is not None
+    assert sc.name == "sub-001_task-rest_bold.json"
+
+def test_bids_sidecar_for_non_nifti():
+    """bids_sidecar_for returns None for non-NIfTI files."""
+    assert bids_sidecar_for(Path("data/file.dcm")) is None
+    assert bids_sidecar_for(Path("data/file.json")) is None
+
+def _make_synth_bold(func_dir, tr=1.5, with_sidecar=True):
+    """Create a synthetic 4D BOLD NIfTI + optional BIDS JSON sidecar.
+
+    Returns the path to the .nii.gz file.
+    """
+    np = pytest.importorskip("numpy")
+    nib = pytest.importorskip("nibabel")
+    sub_dir = func_dir / "sub-001" / "func"; sub_dir.mkdir(parents=True, exist_ok=True)
+    bold_path = sub_dir / "sub-001_task-rest_bold.nii.gz"
+    # 12x12x12x50 — enough timepoints for ALFF (T>=8) and ReHo (27-neighborhood)
+    data = np.random.rand(12, 12, 12, 50).astype(np.float32)
+    nib.save(nib.Nifti1Image(data, np.eye(4)), str(bold_path))
+    if with_sidecar:
+        sidecar = sub_dir / "sub-001_task-rest_bold.json"
+        sidecar.write_text(json.dumps({"RepetitionTime": tr, "TaskName": "rest"}))
+    return bold_path
+
+def _make_dry_run(tmp_path, dry_run_id="dr-synth"):
+    dd = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / dry_run_id
+    dd.mkdir(parents=True, exist_ok=True)
+    (dd / "alff_reho_dry_run_manifest.json").write_text('{"status":"dry_run_preview"}')
+    return dd
+
+def test_sidecar_copied_to_sandbox(tmp_path, monkeypatch):
+    """BIDS JSON sidecar is copied into sandbox_input alongside NIfTI."""
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_synth_bold(func_dir, tr=1.5, with_sidecar=True)
+    _make_dry_run(tmp_path)
+    req = AlffRehoSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_alff_reho_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok
+    # Sidecar should exist in sandbox_input
+    sidecars = list(Path(result.sandbox_input_dir).rglob("*.json"))
+    assert len(sidecars) >= 1, "BIDS JSON sidecar not copied to sandbox_input"
+
+def test_tr_source_recorded_in_provenance(tmp_path, monkeypatch):
+    """provenance.json contains tr_source field."""
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_synth_bold(func_dir, tr=1.5, with_sidecar=True)
+    _make_dry_run(tmp_path)
+    req = AlffRehoSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_alff_reho_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok
+    prov = json.loads(Path(result.provenance_path).read_text())
+    assert "tr_source" in prov
+    assert prov["tr_source"] == "bids_json"
+    assert result.tr_source == "bids_json"
+
+def test_default_tr_adds_warning(tmp_path, monkeypatch):
+    """Missing sidecar → tr_source='default' + warning in response."""
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_synth_bold(func_dir, with_sidecar=False)  # no sidecar
+    _make_dry_run(tmp_path)
+    req = AlffRehoSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_alff_reho_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok
+    assert result.tr_source == "default"
+    tr_warnings = [w for w in result.warnings if "TR sidecar not found" in w]
+    assert len(tr_warnings) >= 1, "Expected TR fallback warning"
+
+def test_no_sub_sub_prefix(tmp_path, monkeypatch):
+    """Output filenames use 'sub-001_desc-...' not 'sub-sub-001_desc-...'."""
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_synth_bold(func_dir, tr=2.0, with_sidecar=True)
+    _make_dry_run(tmp_path)
+    req = AlffRehoSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_alff_reho_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok
+    alff_maps = list(Path(result.sandbox_output_dir).rglob("*desc-alff_map.nii.gz"))
+    assert len(alff_maps) >= 1
+    # Must be sub-001_desc-alff_map.nii.gz, NOT sub-sub-001_desc-alff_map.nii.gz
+    assert all("sub-sub-" not in p.name for p in alff_maps), \
+        f"Found double sub- prefix: {[p.name for p in alff_maps]}"
+    assert any(p.name == "sub-001_desc-alff_map.nii.gz" for p in alff_maps)
+
+def test_succeeded_all_metrics(tmp_path, monkeypatch):
+    """All metrics succeed → status='succeeded', subjects_succeeded=1."""
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_synth_bold(func_dir, tr=2.0, with_sidecar=True)
+    _make_dry_run(tmp_path)
+    req = AlffRehoSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_alff_reho_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok
+    assert result.status == "succeeded", f"Expected succeeded, got {result.status}: {result.warnings}"
+    assert result.subjects_succeeded == 1
+    assert result.subjects_partial == 0
+    assert result.alff_computed is True
+    assert result.reho_computed is True
+
+def test_partial_status_alff_only(tmp_path, monkeypatch):
+    """ALFF succeeds but ReHo fails → status='partial'."""
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_synth_bold(func_dir, tr=2.0, with_sidecar=True)
+    _make_dry_run(tmp_path)
+    # Mock ReHo kernel to fail
+    def mock_reho_fail(*a, **kw):
+        return {"ok": False, "errors": ["mocked ReHo failure"]}
+    monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_backend", mock_reho_fail)
+    req = AlffRehoSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_alff_reho_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok
+    assert result.status == "partial", f"Expected partial, got {result.status}"
+    assert result.alff_computed is True
+    assert result.reho_computed is False
+    assert result.subjects_partial == 1
+    assert result.subjects_succeeded == 0
+
+def test_partial_status_reho_only(tmp_path, monkeypatch):
+    """ReHo succeeds but ALFF fails → status='partial'."""
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_synth_bold(func_dir, tr=2.0, with_sidecar=True)
+    _make_dry_run(tmp_path)
+    # Mock ALFF kernel to fail
+    def mock_alff_fail(*a, **kw):
+        return {"ok": False, "errors": ["mocked ALFF failure"]}
+    monkeypatch.setattr("src.backend.app.tools.alff_compute.compute_alff_backend", mock_alff_fail)
+    req = AlffRehoSandboxExecutionRequest(dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    result = run_alff_reho_sandbox_execution("proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path))
+    assert result.ok
+    assert result.status == "partial", f"Expected partial, got {result.status}"
+    assert result.alff_computed is False
+    assert result.reho_computed is True
+    assert result.subjects_partial == 1
+    assert result.subjects_succeeded == 0

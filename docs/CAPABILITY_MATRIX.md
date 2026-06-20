@@ -10,8 +10,8 @@ real output level changes.
 
 ## Capability Levels
 
-Each stage is classified at exactly one level. Levels are strictly ordered
-from least to most real:
+Each stage is classified at exactly one **Capability Level**. Levels are
+strictly ordered from least to most real:
 
 | Level | Meaning |
 |-------|---------|
@@ -23,21 +23,54 @@ from least to most real:
 | **Reference Validated** | Numerically Implemented **and** validated against an independent reference / golden dataset within tolerance. |
 | **Release Ready** | Reference Validated, covered by CI, and the production execution path is enabled by maintainer approval. |
 
+## Validation Status
+
+Separate from capability level, each stage carries a **Validation Status**
+describing the state of independent verification:
+
+| Status | Meaning |
+|--------|---------|
+| **Unvalidated** | Numerically implemented but no independent reference or golden test exists. |
+| **Needs Verification** | An external tool path (SPM/MATLAB) exists but is not exercised in this environment; not a claim of numerical correctness. |
+| **Golden Validated** | Validated against committed golden `.npy` fixtures via `tests/test_scientific_golden.py` or `tests/golden/test_algorithm_golden.py`. |
+| **Reference Validated** | Golden Validated **and** an independent from-scratch reference implementation agrees within tolerance. |
+| **E2E Validated** | Validated end-to-end against DemoData via integration smoke test (default-skipped in CI). |
+
+## Availability
+
+Describes whether and how the stage can be exercised:
+
+| Availability | Meaning |
+|--------------|---------|
+| **Default-Blocked** | Requires explicit env flags and/or external tools to run; never executes by default. |
+| **Sandbox-Only** | Execution confined to sandbox workspace; no production path. |
+| **CI-Covered** | Golden/regression tests run in the backend CI job on every push/PR. |
+| **Manually Release-Validated** | Requires a persisted human release approval record before execution. |
+
 ## Matrix
 
-| Stage | Level | Notes / Provenance |
-|-------|-------|--------------------|
-| DICOM Conversion | Release Ready | Guarded public path verified against DemoData; default-blocked by env/approval gates. |
-| Slice Timing | Needs Verification | SPM/MATLAB-gated; sandbox + dry-run available, real execution off by default. |
-| Realignment | Needs Verification | SPM/MATLAB-gated; pre-execution matrix contract available. |
-| Coregistration / Normalization | Needs Verification | SPM/MATLAB-gated; sandbox scaffold available. |
-| Smoothing | Needs Verification | SPM/MATLAB-gated; sandbox execution available. |
-| Nuisance Regression | Needs Verification | Python kernel exists; sandbox execution available. |
-| Filtering | Needs Verification | Python kernel exists; sandbox execution available. |
-| **ALFF** | Numerically Implemented | FFT kernel (`tools/alff_compute.py::compute_alff_backend`) wired into the sandbox execution service; outputs `ALFF` + `fALFF` NIfTI and provenance. |
-| **fALFF** | Numerically Implemented | Produced alongside ALFF by the same FFT kernel. |
-| **ReHo** | Numerically Implemented | KCC kernel (`tools/reho_compute.py::compute_reho_backend`) wired into the sandbox execution service; 7/19/27 neighborhoods supported. |
-| **FC** | Numerically Implemented | ROI Pearson kernel (`tools/functional_connectivity_compute.py::compute_fc_backend`); persists real `.npy`/`.tsv` correlation + Fisher-Z matrices. |
+| Stage | Capability Level | Validation Status | Availability |
+|-------|-----------------|-------------------|--------------|
+| DICOM Conversion | Reference Validated | E2E Validated | Manually Release-Validated; Default-Blocked (12 env flags + dcm2niix + pydicom + DemoData) |
+| Slice Timing | Dry-run | Needs Verification | Default-Blocked (SPM/MATLAB-gated) |
+| Realignment | Dry-run | Needs Verification | Default-Blocked (SPM/MATLAB-gated) |
+| Coregistration / Normalization | Sandbox Scaffold | Needs Verification | Default-Blocked (SPM/MATLAB-gated) |
+| Smoothing | Sandbox Scaffold | Needs Verification | Default-Blocked (SPM/MATLAB-gated) |
+| Nuisance Regression | Numerically Implemented | Needs Verification | Sandbox-Only |
+| Filtering | Numerically Implemented | Needs Verification | Sandbox-Only |
+| **ALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
+| **fALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
+| **ReHo** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
+| **FC** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
+
+### DICOM Conversion note
+
+DICOM Conversion is classified as **Reference Validated** (not Release Ready)
+because the production execution path is default-blocked by 12 env flags and
+requires dcm2niix + pydicom + DemoData; the E2E smoke test
+(`tests/integration/test_dicom_conversion_public_e2e_smoke.py`) is
+default-skipped in CI. It is not "Release Ready" until the default-blocked
+constraint is lifted by maintainer approval.
 
 ## Traceability
 
@@ -46,7 +79,8 @@ Each **Numerically Implemented** or higher stage is backed by:
 - A unified compute kernel under `src/backend/app/tools/*_compute.py`.
 - A sandbox execution service under `src/backend/app/services/preprocessing_*_execution.py` that calls the kernel (no inline math).
 - A per-metric status entry in `manifest.json` distinguishing sandbox-prepared vs numerically-computed.
-- Golden/regression tests under `tests/golden/` and `tests/unit/`.
+- Golden/regression tests under `tests/test_scientific_golden.py`, `tests/test_scientific_gpu_consistency.py`, and `tests/golden/test_algorithm_golden.py`.
 
-"Needs Verification" means the SPM/MATLAB external tool path exists but is
-not exercised in this environment; it is not a claim of numerical correctness.
+"Needs Verification" in the Validation Status column means the SPM/MATLAB
+external tool path (or an equivalent Python kernel) exists but is not
+exercised in this environment; it is not a claim of numerical correctness.

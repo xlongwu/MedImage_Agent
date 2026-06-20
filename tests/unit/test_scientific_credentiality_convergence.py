@@ -79,9 +79,9 @@ def test_alff_reho_produces_real_nifti_maps(tmp_path, monkeypatch):
 
     import nibabel as nib
     out_dir = Path(res.execution_dir) / "sandbox_output" / "sub-001"
-    alff_img = nib.load(str(out_dir / "sub-sub-001_desc-alff_map.nii.gz"))
-    falff_img = nib.load(str(out_dir / "sub-sub-001_desc-falff_map.nii.gz"))
-    reho_img = nib.load(str(out_dir / "sub-sub-001_desc-reho_map.nii.gz"))
+    alff_img = nib.load(str(out_dir / "sub-001_desc-alff_map.nii.gz"))
+    falff_img = nib.load(str(out_dir / "sub-001_desc-falff_map.nii.gz"))
+    reho_img = nib.load(str(out_dir / "sub-001_desc-reho_map.nii.gz"))
     alff = alff_img.get_fdata()
     falff = falff_img.get_fdata()
     reho = reho_img.get_fdata()
@@ -116,8 +116,8 @@ def test_fc_produces_real_matrices(tmp_path, monkeypatch):
     assert res.fc_matrix_count == 1
 
     out_dir = Path(res.execution_dir) / "sandbox_output" / "sub-001"
-    corr = np.load(out_dir / "sub-sub-001_desc-fc_matrix.npy")
-    fz = np.load(out_dir / "sub-sub-001_desc-fisherz_matrix.npy")
+    corr = np.load(out_dir / "sub-001_desc-fc_matrix.npy")
+    fz = np.load(out_dir / "sub-001_desc-fisherz_matrix.npy")
     assert corr.ndim == 2 and corr.shape[0] == corr.shape[1], corr.shape
     assert corr.shape == fz.shape
     # Correlation: symmetric, diagonal 1, in [-1, 1].
@@ -127,10 +127,10 @@ def test_fc_produces_real_matrices(tmp_path, monkeypatch):
     # Fisher-Z diagonal is 0 by construction.
     assert np.allclose(np.diag(fz), 0.0, atol=1e-4)
     # TSV is human-readable and reloads to the same matrix.
-    tsv = np.loadtxt(out_dir / "sub-sub-001_desc-fc_matrix.tsv", delimiter="\t")
+    tsv = np.loadtxt(out_dir / "sub-001_desc-fc_matrix.tsv", delimiter="\t")
     assert np.allclose(tsv, corr, atol=1e-3)
 
-    labels = json.loads((out_dir / "sub-sub-001_desc-fc_labels.json").read_text())
+    labels = json.loads((out_dir / "sub-001_desc-fc_labels.json").read_text())
     assert labels["roi_count"] == corr.shape[0]
 
     manifest = json.loads((Path(res.execution_dir) / "manifest.json").read_text())
