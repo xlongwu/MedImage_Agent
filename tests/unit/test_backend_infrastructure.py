@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import json
+from typing import List, Set
 
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from src.backend.app.api import planner_routes
@@ -17,34 +17,28 @@ from src.backend.app.runtime.state_store import (
 )
 
 
-def _extract_route_paths(router) -> set[str]:
-    """Recursively extract route paths from a router/app, handling Mount
-    and _IncludedRouter wrappers introduced in newer Starlette versions."""
-    paths: set[str] = set()
-    for route in router.routes:
-        if hasattr(route, "routes"):
-            paths.update(_extract_route_paths(route))
-        elif hasattr(route, "path"):
-            paths.add(route.path)
-    return paths
+def _extract_route_paths(app) -> Set[str]:
+    """Extract all registered route paths from the OpenAPI schema.
+
+    Uses app.openapi() instead of iterating app.routes directly because
+    Starlette 0.40+ wraps routes in Mount/_IncludedRouter objects that are
+    not flat-enumerable at the top level.
+    """
+    schema = app.openapi()
+    return set(schema.get("paths", {}).keys())
 
 
-def _extract_route_method_paths(router) -> list[tuple[str, str]]:
-    """Recursively extract (method, path) pairs for duplicate detection."""
-    pairs: list[tuple[str, str]] = []
-    for route in router.routes:
-        if hasattr(route, "routes"):
-            pairs.extend(_extract_route_method_paths(route))
-        elif not isinstance(route, APIRoute):
-            continue
-        else:
-            if getattr(route, "deprecated", False):
-                continue
-            for method in route.methods or set():
-                if method in {"HEAD", "OPTIONS"}:
-                    continue
-                pairs.append((method, route.path))
-    return pairs
+def _extract_duplicate_routes(app) -> List[str]:
+    """Find duplicate (method, path) entries via OpenAPI schema."""
+    duplicates: List[str] = []
+    schema = app.openapi()
+    for path, methods in schema.get("paths", {}).items():
+        seen: Set[str] = set()
+        for method in methods:
+            if method in seen:
+                duplicates.append(f"{method.upper()} {path}")
+            seen.add(method)
+    return duplicates
 
 
 def test_request_id_and_response_time_headers_are_added():
@@ -117,15 +111,8 @@ def test_domain_split_legacy_routes_remain_registered():
 
 def test_domain_split_routes_do_not_register_duplicate_method_paths():
     app = create_app()
-    seen: set[tuple[str, str]] = set()
-    duplicates: list[tuple[str, str]] = []
-
-    for key in _extract_route_method_paths(app):
-        if key in seen:
-            duplicates.append(key)
-        seen.add(key)
-
-    assert duplicates == []
+    duplicates = _extract_duplicate_routes(app)
+    assert duplicates == [], f"Duplicate routes: {duplicates}"
 
 
 def test_rate_limiter_returns_structured_429(monkeypatch):

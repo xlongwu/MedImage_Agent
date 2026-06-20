@@ -20,7 +20,6 @@ def test_app_has_title():
 def test_app_has_routes():
     """App should have at least the /health route."""
     from src.backend.app.main import app
-    route_paths = [
-        r.path for r in app.routes if hasattr(r, "path")
-    ]
+    schema = app.openapi()
+    route_paths = list(schema.get("paths", {}).keys())
     assert "/health" in route_paths, f"Expected /health in routes, got {route_paths}"
