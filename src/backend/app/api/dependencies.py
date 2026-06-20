@@ -40,6 +40,8 @@ class ProjectStore(Protocol):
     ) -> RunLinkRecord | None: ...
 
 
+from src.backend.app.services.mock_store import mock_store
+
+
 def get_project_store() -> ProjectStore:
-    from src.backend.app.services.mock_store import mock_store
     return mock_store

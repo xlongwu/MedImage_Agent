@@ -143,12 +143,12 @@ async def run_pipeline(
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, object]:
     import asyncio
+    from fastapi import HTTPException
     from src.backend.app.services.mock_store import mock_store
     from src.backend.app.services.pipeline_runner import run_pipeline_task
     from src.backend.app.services.task_manager import task_manager
 
     if not request.input_sequences:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="input_sequences must not be empty")
 
     if request.execution_mode == "external_smoke" and request.external_smoke_mode == "approved_smoke":
