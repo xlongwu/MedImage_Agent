@@ -15,7 +15,9 @@ export interface DataConversionWorkspaceProps {
 }
 
 export function DataConversionWorkspace({
-  baseUrl, projectId, inventory,
+  baseUrl,
+  projectId,
+  inventory,
 }: DataConversionWorkspaceProps) {
   const isConverted = inventory.dataState === "converted_bids";
 
@@ -28,7 +30,8 @@ export function DataConversionWorkspace({
           status="Ready"
         />
         <div className="workspace-mode-note">
-          This project is already in converted BIDS/NIfTI mode. DICOM conversion is not the primary workflow.
+          This project is already in converted BIDS/NIfTI mode. DICOM conversion is not the primary
+          workflow.
         </div>
         <div className="workspace-summary-row">
           <div>
@@ -42,7 +45,11 @@ export function DataConversionWorkspace({
         </div>
         <div className="workspace-panel-grid">
           <div id="bids-validation-panel">
-            <BidsValidationPanel baseUrl={baseUrl} projectId={projectId} projectState={inventory.dataState} />
+            <BidsValidationPanel
+              baseUrl={baseUrl}
+              projectId={projectId}
+              projectState={inventory.dataState}
+            />
           </div>
           <div id="preprocessing-validation-card">
             <AdvancedPreprocessingPipelinePanel projectId={projectId} preprocessingRunId={null} />
@@ -70,7 +77,9 @@ export function DataConversionWorkspace({
       />
       {inventory.dataState === "mixed" && (
         <div className="workspace-mode-note workspace-mode-note-spaced">
-          <strong>Notice:</strong> Converted BIDS/NIfTI outputs are already present in this project, but raw DICOM files have also been detected. Review the conversion state before preprocessing.
+          <strong>Notice:</strong> Converted BIDS/NIfTI outputs are already present in this project,
+          but raw DICOM files have also been detected. Review the conversion state before
+          preprocessing.
         </div>
       )}
       <div className="workspace-summary-row">
@@ -97,10 +106,18 @@ export function DataConversionWorkspace({
       </div>
       <div className="workspace-panel-grid">
         <div id="data-readiness-panel">
-          <DataReadinessPanel baseUrl={baseUrl} projectId={projectId} projectState={inventory.dataState} />
+          <DataReadinessPanel
+            baseUrl={baseUrl}
+            projectId={projectId}
+            projectState={inventory.dataState}
+          />
         </div>
         <div id="bids-validation-panel">
-          <BidsValidationPanel baseUrl={baseUrl} projectId={projectId} projectState={inventory.dataState} />
+          <BidsValidationPanel
+            baseUrl={baseUrl}
+            projectId={projectId}
+            projectState={inventory.dataState}
+          />
         </div>
         <div id="conversion-dry-run-panel">
           <ConversionDryRunPanel baseUrl={baseUrl} projectId={projectId} />

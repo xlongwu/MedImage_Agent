@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
-import { getSessionRuns, postSessionIndex, querySessions } from '../lib/api/sessions';
-import type { SessionRunSummary, SessionSearchResult, SessionStats } from '../lib/api/sessions';
-import styles from './SessionMemoryBrowserPanel.module.css';
+import { useCallback, useEffect, useState } from "react";
+import { getSessionRuns, postSessionIndex, querySessions } from "../lib/api/sessions";
+import type { SessionRunSummary, SessionSearchResult, SessionStats } from "../lib/api/sessions";
+import styles from "./SessionMemoryBrowserPanel.module.css";
 
 interface Props {
   baseUrl: string;
@@ -10,7 +10,7 @@ interface Props {
 export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
   const [stats, setStats] = useState<SessionStats | null>(null);
   const [runs, setRuns] = useState<SessionRunSummary[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [results, setResults] = useState<SessionSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +21,7 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
       setStats(res.stats ?? null);
       setRuns(res.runs || []);
     } catch (error) {
-      console.error('Failed to load runs', error);
+      console.error("Failed to load runs", error);
     } finally {
       setLoading(false);
     }
@@ -37,7 +37,7 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
       await postSessionIndex(baseUrl);
       await loadRuns();
     } catch (error) {
-      console.error('Failed to index', error);
+      console.error("Failed to index", error);
       setLoading(false);
     }
   }
@@ -49,7 +49,7 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
       const res = await querySessions(baseUrl, search);
       setResults(res.results || []);
     } catch (error) {
-      console.error('Search failed', error);
+      console.error("Search failed", error);
     } finally {
       setLoading(false);
     }
@@ -61,27 +61,41 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
 
       {stats && (
         <div className={styles.statsBar}>
-          <span className={styles.statBadge}>Runs: <strong>{stats.total_runs}</strong></span>
-          <span className={styles.statBadge}>Success: <strong>{stats.success_runs}</strong></span>
-          <span className={styles.statBadge}>Nodes: <strong>{stats.total_nodes}</strong></span>
-          <span className={styles.statBadge}>Failed: <strong className={styles.statDanger}>{stats.failed_nodes}</strong></span>
-          <span className={styles.statBadge}>Errors: <strong>{stats.total_errors}</strong></span>
+          <span className={styles.statBadge}>
+            Runs: <strong>{stats.total_runs}</strong>
+          </span>
+          <span className={styles.statBadge}>
+            Success: <strong>{stats.success_runs}</strong>
+          </span>
+          <span className={styles.statBadge}>
+            Nodes: <strong>{stats.total_nodes}</strong>
+          </span>
+          <span className={styles.statBadge}>
+            Failed: <strong className={styles.statDanger}>{stats.failed_nodes}</strong>
+          </span>
+          <span className={styles.statBadge}>
+            Errors: <strong>{stats.total_errors}</strong>
+          </span>
         </div>
       )}
 
       <div className={styles.toolbar}>
         <button onClick={doIndex} disabled={loading} className={styles.actionButton}>
-          {loading ? 'Indexing...' : 'Index All Runs'}
+          {loading ? "Indexing..." : "Index All Runs"}
         </button>
         <input
           type="text"
           placeholder="Search runs, errors, subjects..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && doSearch()}
+          onKeyDown={(e) => e.key === "Enter" && doSearch()}
           className={styles.searchInput}
         />
-        <button onClick={doSearch} disabled={loading || !search.trim()} className={styles.actionButton}>
+        <button
+          onClick={doSearch}
+          disabled={loading || !search.trim()}
+          className={styles.actionButton}
+        >
           Search
         </button>
       </div>
@@ -92,7 +106,12 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
           {results.map((r: SessionSearchResult, i: number) => (
             <div key={i} className={styles.resultItem}>
               <strong>[{r.record_type}]</strong> {r.title}
-              {r.snippet && <p className={styles.resultSnippet} dangerouslySetInnerHTML={{ __html: r.snippet }} />}
+              {r.snippet && (
+                <p
+                  className={styles.resultSnippet}
+                  dangerouslySetInnerHTML={{ __html: r.snippet }}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -111,11 +130,22 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
         </thead>
         <tbody>
           {runs.map((r: SessionRunSummary) => (
-            <tr key={r.run_id} className={`${styles.tableRow} ${r.status === 'FAILED' ? styles.failedRow : ''}`}>
+            <tr
+              key={r.run_id}
+              className={`${styles.tableRow} ${r.status === "FAILED" ? styles.failedRow : ""}`}
+            >
               <td className={styles.cell}>{r.run_id}</td>
               <td className={styles.cell}>{r.pipeline_id}</td>
               <td className={styles.cell}>
-                <span className={r.status === 'SUCCESS' ? styles.statusSuccess : r.status === 'FAILED' ? styles.statusFailed : styles.statusMuted}>
+                <span
+                  className={
+                    r.status === "SUCCESS"
+                      ? styles.statusSuccess
+                      : r.status === "FAILED"
+                        ? styles.statusFailed
+                        : styles.statusMuted
+                  }
+                >
                   {r.status}
                 </span>
               </td>
@@ -124,7 +154,11 @@ export default function SessionMemoryBrowserPanel({ baseUrl }: Props) {
             </tr>
           ))}
           {runs.length === 0 && (
-            <tr><td colSpan={5} className={`${styles.cell} ${styles.emptyCell}`}>No runs indexed yet. Click "Index All Runs" to scan existing data.</td></tr>
+            <tr>
+              <td colSpan={5} className={`${styles.cell} ${styles.emptyCell}`}>
+                No runs indexed yet. Click "Index All Runs" to scan existing data.
+              </td>
+            </tr>
           )}
         </tbody>
       </table>

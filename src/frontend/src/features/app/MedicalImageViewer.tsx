@@ -1,4 +1,10 @@
-import type { ImagePlane, ImagePreview, ImageSourceFile, ImageSources, ImageValidationReport } from "../../lib/types/image";
+import type {
+  ImagePlane,
+  ImagePreview,
+  ImageSourceFile,
+  ImageSources,
+  ImageValidationReport,
+} from "../../lib/types/image";
 import type { ProjectDetail } from "../../lib/types/project";
 import { BrainScan } from "./BrainScan";
 import { MiniScan } from "./MiniScan";
@@ -45,7 +51,9 @@ export function MedicalImageViewer({
     { axis: "C", value: "coronal", label: "Coronal" },
   ];
   const planeLabel = planeOptions.find((item) => item.value === activePlane)?.label ?? "Axial";
-  const dimensions = sourceFile?.dimensions?.length ? sourceFile.dimensions : preview.dimensions ?? [];
+  const dimensions = sourceFile?.dimensions?.length
+    ? sourceFile.dimensions
+    : (preview.dimensions ?? []);
   const spacing = sourceFile?.voxel_spacing ?? [];
   const sourceSummary = sourceFile?.relative_path ?? preview.source_path ?? preview.message;
   const visibleValidationIssues = validation.issues.slice(0, 3);
@@ -61,7 +69,9 @@ export function MedicalImageViewer({
         >
           {imageSources.subjects.length ? (
             imageSources.subjects.map((item) => (
-              <option key={item.subject_id} value={item.subject_id}>{item.subject_id}</option>
+              <option key={item.subject_id} value={item.subject_id}>
+                {item.subject_id}
+              </option>
             ))
           ) : (
             <option value="">No sources</option>
@@ -74,7 +84,9 @@ export function MedicalImageViewer({
           aria-label="Sequence"
         >
           {(sequenceOptions.length ? sequenceOptions : project.sequences).map((item) => (
-            <option key={item} value={item}>{item}</option>
+            <option key={item} value={item}>
+              {item}
+            </option>
           ))}
         </select>
         <button aria-label="Window level">WL</button>
@@ -107,31 +119,51 @@ export function MedicalImageViewer({
         ) : (
           <BrainScan />
         )}
-        <div className="slice-rule"><span>S</span><i /><span>I</span></div>
-        <div className="scan-count">{loading ? "loading" : sliceCount ? `${currentSlice + 1} / ${sliceCount}` : "126 / 256"}</div>
+        <div className="slice-rule">
+          <span>S</span>
+          <i />
+          <span>I</span>
+        </div>
+        <div className="scan-count">
+          {loading ? "loading" : sliceCount ? `${currentSlice + 1} / ${sliceCount}` : "126 / 256"}
+        </div>
       </div>
       <div className="preview-status">
-        <strong>{preview.source === "nifti" ? `${planeLabel} NIfTI preview` : "Fallback preview"}</strong>
+        <strong>
+          {preview.source === "nifti" ? `${planeLabel} NIfTI preview` : "Fallback preview"}
+        </strong>
         <span>
           {preview.source === "nifti"
             ? `slice ${(preview.slice_index ?? 0) + 1} / ${preview.slice_count ?? "?"}`
             : preview.message}
         </span>
         <div className="preview-meta">
-          <span>Dims <b>{dimensions.length ? dimensions.join(" x ") : "unknown"}</b></span>
-          <span>Spacing <b>{spacing.length ? spacing.slice(0, 3).join(" x ") : "pending"}</b></span>
-          <span>Source <b>{sourceSummary}</b></span>
+          <span>
+            Dims <b>{dimensions.length ? dimensions.join(" x ") : "unknown"}</b>
+          </span>
+          <span>
+            Spacing <b>{spacing.length ? spacing.slice(0, 3).join(" x ") : "pending"}</b>
+          </span>
+          <span>
+            Source <b>{sourceSummary}</b>
+          </span>
         </div>
         <div className={`validation-checklist ${validation.status}`}>
-          <span>Validation <b>{validation.status}</b></span>
+          <span>
+            Validation <b>{validation.status}</b>
+          </span>
           {visibleValidationIssues.length ? (
             visibleValidationIssues.map((issue) => (
-              <span key={`${issue.code}-${issue.subject_id ?? "project"}-${issue.sequence ?? "all"}`}>
+              <span
+                key={`${issue.code}-${issue.subject_id ?? "project"}-${issue.sequence ?? "all"}`}
+              >
                 {issue.severity}: <b>{issue.message}</b>
               </span>
             ))
           ) : (
-            <span><b>No checklist issues</b></span>
+            <span>
+              <b>No checklist issues</b>
+            </span>
           )}
         </div>
         {sliceCount > 1 ? (
@@ -148,7 +180,9 @@ export function MedicalImageViewer({
       </div>
       <div className="viewer-dock">
         {["Pan", "Cross", "Zoom", "WL", "Grid", "Measure", "Expand"].map((item, index) => (
-          <button key={item} className={index === 0 ? "selected" : ""}>{item.slice(0, 2)}</button>
+          <button key={item} className={index === 0 ? "selected" : ""}>
+            {item.slice(0, 2)}
+          </button>
         ))}
       </div>
     </section>

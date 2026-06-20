@@ -35,8 +35,18 @@ export interface SecondaryToolsDrawerProps {
 }
 
 const quickActions = [
-  { title: "New Pipeline", subtitle: "Create auditable workflow", kind: "flow", action: "new-pipeline" },
-  { title: "Upload Data", subtitle: "Create project from DICOM or BIDS directory", kind: "cloud", action: "upload-data" },
+  {
+    title: "New Pipeline",
+    subtitle: "Create auditable workflow",
+    kind: "flow",
+    action: "new-pipeline",
+  },
+  {
+    title: "Upload Data",
+    subtitle: "Create project from DICOM or BIDS directory",
+    kind: "cloud",
+    action: "upload-data",
+  },
   { title: "Run Pipeline", subtitle: "Start analysis", kind: "play", action: "run-pipeline" },
   { title: "View Results", subtitle: "Open latest report", kind: "chart", action: "view-results" },
 ];
@@ -68,15 +78,24 @@ export function SecondaryToolsDrawer({
 }: SecondaryToolsDrawerProps) {
   const drawer = useToolsDrawerController(
     onSetMode,
-    async () => { await onQuickAction("upload-data"); },
-    async () => { await onQuickAction("run-pipeline"); },
-    async () => { await onQuickAction("view-results"); },
+    async () => {
+      await onQuickAction("upload-data");
+    },
+    async () => {
+      await onQuickAction("run-pipeline");
+    },
+    async () => {
+      await onQuickAction("view-results");
+    },
     pipelineLoading,
   );
 
   if (!isOpen) {
     return (
-      <aside className="secondary-tools-drawer collapsed" aria-label="Secondary tools drawer collapsed">
+      <aside
+        className="secondary-tools-drawer collapsed"
+        aria-label="Secondary tools drawer collapsed"
+      >
         <button
           type="button"
           className="drawer-toggle-btn"
@@ -94,7 +113,13 @@ export function SecondaryToolsDrawer({
   return (
     <aside className="secondary-tools-drawer open" aria-label="Secondary tools drawer">
       <details open>
-        <summary className="drawer-summary" onClick={(e) => { e.preventDefault(); onToggle(); }}>
+        <summary
+          className="drawer-summary"
+          onClick={(e) => {
+            e.preventDefault();
+            onToggle();
+          }}
+        >
           <span>Tools Drawer</span>
           <span className="drawer-summary-action">Close</span>
         </summary>
@@ -136,7 +161,9 @@ export function SecondaryToolsDrawer({
                   disabled={pipelineLoading && item.action === "run-pipeline"}
                 >
                   <span>{item.title.slice(0, 1)}</span>
-                  <strong>{item.action === "run-pipeline" && pipelineLoading ? "Running..." : item.title}</strong>
+                  <strong>
+                    {item.action === "run-pipeline" && pipelineLoading ? "Running..." : item.title}
+                  </strong>
                   <small>{item.subtitle}</small>
                 </button>
               ))}

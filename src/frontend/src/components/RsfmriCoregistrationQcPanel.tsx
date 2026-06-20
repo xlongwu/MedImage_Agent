@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  getRsfmriCoregistrationQc,
-  runRsfmriCoregistrationQc
-} from "../lib/api/legacy";
+import { getRsfmriCoregistrationQc, runRsfmriCoregistrationQc } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -19,7 +16,7 @@ export function RsfmriCoregistrationQcPanel({ baseUrl }: Props) {
 
   async function handleRun() {
     const confirmed = window.confirm(
-      "Confirm to run SPM Coregistration + Registration QC? This only processes synthetic BIDS data and will not modify rawdata."
+      "Confirm to run SPM Coregistration + Registration QC? This only processes synthetic BIDS data and will not modify rawdata.",
     );
 
     if (!confirmed) return;
@@ -31,7 +28,7 @@ export function RsfmriCoregistrationQcPanel({ baseUrl }: Props) {
       const response = await runRsfmriCoregistrationQc(baseUrl, {
         project_config_path: "examples/project_config_dataset.yaml",
         pipeline_path: "examples/pipeline_rsfmri_coregistration_qc.yaml",
-        approved: true
+        approved: true,
       });
       setResult(response);
       setStatus("SUCCESS");
@@ -100,17 +97,21 @@ export function RsfmriCoregistrationQcPanel({ baseUrl }: Props) {
       <JsonBlock value={result} emptyText="Not yet run" />
 
       <h3>Registration QC Summary</h3>
-      <JsonBlock value={loaded?.registration_qc_summary} emptyText="No registration QC summary available" />
+      <JsonBlock
+        value={loaded?.registration_qc_summary}
+        emptyText="No registration QC summary available"
+      />
 
       <h3>Subject Registration QC</h3>
-      <JsonBlock value={loaded?.subject_registration_qc} emptyText="No subject registration QC available" />
+      <JsonBlock
+        value={loaded?.subject_registration_qc}
+        emptyText="No subject registration QC available"
+      />
 
       <h3>Registration QC Report</h3>
       <TextViewer
         text={
-          typeof loaded?.registration_qc_report === "string"
-            ? loaded.registration_qc_report
-            : null
+          typeof loaded?.registration_qc_report === "string" ? loaded.registration_qc_report : null
         }
         emptyText="No registration QC report available"
       />

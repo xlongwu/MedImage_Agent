@@ -10,9 +10,9 @@ type Props = {
 
 export function ReportViewer({ baseUrl }: Props) {
   const [report, setReport] = useState<DatasetEvaluationReport | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    "summary" | "markdown" | "csv" | "exclusion" | "html"
-  >("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "markdown" | "csv" | "exclusion" | "html">(
+    "summary",
+  );
   const [error, setError] = useState("");
 
   async function refreshReport() {

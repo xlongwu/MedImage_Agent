@@ -36,7 +36,7 @@ export default function GpuBenchmarkPanel({ baseUrl }: GpuBenchmarkPanelProps) {
         freq_band: [0.01, 0.08],
         prefer_gpu: true,
         require_gpu: false,
-        benchmark_compare_cpu_gpu: true
+        benchmark_compare_cpu_gpu: true,
       });
       setBenchmarkResult(result);
     } catch (err) {
@@ -49,7 +49,7 @@ export default function GpuBenchmarkPanel({ baseUrl }: GpuBenchmarkPanelProps) {
   return (
     <div style={{ padding: "16px" }}>
       <h2>GPU Benchmark Panel</h2>
-      
+
       <div style={{ marginBottom: "16px" }}>
         <button onClick={handleDetectGpu} disabled={loading} style={{ marginRight: "8px" }}>
           Detect GPU
@@ -65,7 +65,14 @@ export default function GpuBenchmarkPanel({ baseUrl }: GpuBenchmarkPanelProps) {
       {gpuInfo && (
         <div style={{ marginTop: "16px" }}>
           <h3>GPU Detection Result</h3>
-          <pre style={{ background: "#f5f5f5", padding: "12px", borderRadius: "4px", overflow: "auto" }}>
+          <pre
+            style={{
+              background: "#f5f5f5",
+              padding: "12px",
+              borderRadius: "4px",
+              overflow: "auto",
+            }}
+          >
             {JSON.stringify(gpuInfo, null, 2)}
           </pre>
         </div>
@@ -74,7 +81,14 @@ export default function GpuBenchmarkPanel({ baseUrl }: GpuBenchmarkPanelProps) {
       {benchmarkResult && (
         <div style={{ marginTop: "16px" }}>
           <h3>Benchmark Result</h3>
-          <pre style={{ background: "#f5f5f5", padding: "12px", borderRadius: "4px", overflow: "auto" }}>
+          <pre
+            style={{
+              background: "#f5f5f5",
+              padding: "12px",
+              borderRadius: "4px",
+              overflow: "auto",
+            }}
+          >
             {JSON.stringify(benchmarkResult, null, 2)}
           </pre>
         </div>

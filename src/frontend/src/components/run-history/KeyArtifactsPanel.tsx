@@ -1,9 +1,6 @@
 import { useMemo } from "react";
 import type { RunArtifactRecord, RunSummaryPreview } from "../../types";
-import {
-  getKeyArtifactReason,
-  getKeyArtifacts,
-} from "../projectRunsPanelModel";
+import { getKeyArtifactReason, getKeyArtifacts } from "../projectRunsPanelModel";
 import {
   artifactAttentionStyle,
   artifactTone,
@@ -35,7 +32,7 @@ export function KeyArtifactsPanel({
 }) {
   const keyArtifacts = useMemo(
     () => getKeyArtifacts(artifacts, runSummary),
-    [artifacts, runSummary]
+    [artifacts, runSummary],
   );
 
   return (
@@ -43,9 +40,13 @@ export function KeyArtifactsPanel({
       <div style={{ ...headerStyle, marginBottom: 10 }}>
         <div>
           <h4 style={{ margin: 0, fontSize: 14 }}>Key Artifacts</h4>
-          <span style={subtitleStyle}>Summary, pipeline, reports, QC, failed logs, and tables.</span>
+          <span style={subtitleStyle}>
+            Summary, pipeline, reports, QC, failed logs, and tables.
+          </span>
         </div>
-        <span style={{ ...statusPillStyle, ...artifactTone(keyArtifacts.length ? "ok" : "neutral") }}>
+        <span
+          style={{ ...statusPillStyle, ...artifactTone(keyArtifacts.length ? "ok" : "neutral") }}
+        >
           {keyArtifacts.length}
         </span>
       </div>
@@ -63,12 +64,30 @@ export function KeyArtifactsPanel({
                 disabled={previewLoading}
                 style={{
                   ...keyArtifactButtonStyle,
-                  ...(selected ? selectedArtifactCardStyle : artifactAttentionStyle(artifact, runSummary)),
+                  ...(selected
+                    ? selectedArtifactCardStyle
+                    : artifactAttentionStyle(artifact, runSummary)),
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-                  <strong style={{ fontSize: 12, overflowWrap: "anywhere" }}>{artifact.name}</strong>
-                  <span style={{ color: "#667085", fontSize: 11, fontWeight: 900, whiteSpace: "nowrap" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <strong style={{ fontSize: 12, overflowWrap: "anywhere" }}>
+                    {artifact.name}
+                  </strong>
+                  <span
+                    style={{
+                      color: "#667085",
+                      fontSize: 11,
+                      fontWeight: 900,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {reason}
                   </span>
                 </div>

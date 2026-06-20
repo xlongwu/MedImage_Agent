@@ -36,22 +36,18 @@ import { requestJson } from "./legacyCore";
 
 export async function createProjectFromDirectory(
   baseUrl: string,
-  payload: ProjectCreateRequest
+  payload: ProjectCreateRequest,
 ): Promise<ProjectCreateResponse> {
   return requestJson<ProjectCreateResponse>(baseUrl, "/api/projects/create", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
-export async function getProjectRun(
-  baseUrl: string,
-  projectId: string,
-  runId: string
-) {
+export async function getProjectRun(baseUrl: string, projectId: string, runId: string) {
   return requestJson<ProjectRunDetailResponse>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}`
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}`,
   );
 }
 
@@ -59,11 +55,11 @@ export async function getProjectRunArtifact(
   baseUrl: string,
   projectId: string,
   runId: string,
-  artifactId: string
+  artifactId: string,
 ) {
   return requestJson<RunArtifactPreviewResponse>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}`,
   );
 }
 
@@ -78,39 +74,29 @@ export async function getProjectRunStateTimeline(
   );
 }
 
-export async function listProjectRunArtifacts(
-  baseUrl: string,
-  projectId: string,
-  runId: string
-) {
+export async function listProjectRunArtifacts(baseUrl: string, projectId: string, runId: string) {
   return requestJson<ProjectRunArtifactsResponse>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/artifacts`
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/artifacts`,
   );
 }
 
-export async function listProjectRunEvents(
-  baseUrl: string,
-  projectId: string,
-  runId: string,
-) {
+export async function listProjectRunEvents(baseUrl: string, projectId: string, runId: string) {
   return requestJson<ProjectRunEventsResponse>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/events`
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/events`,
   );
 }
 
 export async function listProjectRunLinks(
   baseUrl: string,
   projectId: string,
-  reviewedPlanId?: string
+  reviewedPlanId?: string,
 ) {
-  const query = reviewedPlanId
-    ? `?reviewed_plan_id=${encodeURIComponent(reviewedPlanId)}`
-    : "";
+  const query = reviewedPlanId ? `?reviewed_plan_id=${encodeURIComponent(reviewedPlanId)}` : "";
   return requestJson<{ ok: boolean; project_id: string; runs: RunLinkRecord[] }>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/runs${query}`
+    `/api/projects/${encodeURIComponent(projectId)}/runs${query}`,
   );
 }
 
@@ -130,14 +116,10 @@ export async function listProjectRunLogs(
   const query = params.size ? `?${params.toString()}` : "";
   return requestJson<ProjectRunLogsResponse>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/logs${query}`
+    `/api/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/logs${query}`,
   );
 }
 
-export async function listProjectRuns(
-  baseUrl: string,
-  projectId: string,
-  reviewedPlanId?: string
-) {
+export async function listProjectRuns(baseUrl: string, projectId: string, reviewedPlanId?: string) {
   return listProjectRunLinks(baseUrl, projectId, reviewedPlanId);
 }

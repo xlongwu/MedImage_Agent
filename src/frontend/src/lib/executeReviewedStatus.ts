@@ -86,8 +86,7 @@ const STATUS_MAP: Record<string, StatusEntry> = {
     severity: "warning",
     explanation:
       "The backend requires the environment variable MEDIMAGE_ENABLE_REVIEWED_EXECUTION to be set to '1' before it will execute any reviewed plan. This is a deliberate safety gate to prevent accidental execution.",
-    nextAction:
-      "Set MEDIMAGE_ENABLE_REVIEWED_EXECUTION=1 in the backend environment and restart.",
+    nextAction: "Set MEDIMAGE_ENABLE_REVIEWED_EXECUTION=1 in the backend environment and restart.",
     safetyNote:
       "This gate exists to prevent accidental pipeline execution. Only enable it when you are ready to execute reviewed plans.",
     canRetryDryRun: true,
@@ -147,8 +146,7 @@ const STATUS_MAP: Record<string, StatusEntry> = {
     severity: "warning",
     explanation:
       "Writing the pipeline YAML to disk requires that audit persistence is also enabled. Both write_pipeline_yaml and persist_audit must be true.",
-    nextAction:
-      "Enable the 'Persist audit record' checkbox and retry.",
+    nextAction: "Enable the 'Persist audit record' checkbox and retry.",
     canRetryDryRun: true,
     canAttemptExecute: false,
   },

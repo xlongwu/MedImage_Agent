@@ -42,7 +42,7 @@ export function toWebSocketUrl(baseUrl: string, path: string): string {
 
 export async function requestJson<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const { baseUrl: explicitBaseUrl, headers, ...requestOptions } = options ?? {};
-  const baseUrl = explicitBaseUrl ?? await getApiBaseUrl();
+  const baseUrl = explicitBaseUrl ?? (await getApiBaseUrl());
   const response = await fetch(`${baseUrl}${path}`, {
     headers: {
       "Content-Type": "application/json",
@@ -75,7 +75,11 @@ export function getHealth(baseUrl = getFallbackApiBaseUrl()): Promise<Record<str
   return getJson<Record<string, unknown>>("/api/health", { baseUrl });
 }
 
-export function postJson<T>(path: string, payload: unknown, options?: ApiRequestOptions): Promise<T> {
+export function postJson<T>(
+  path: string,
+  payload: unknown,
+  options?: ApiRequestOptions,
+): Promise<T> {
   return requestJson<T>(path, {
     ...options,
     method: "POST",

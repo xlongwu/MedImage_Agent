@@ -67,7 +67,15 @@ export function RunDetailPanel({
 }) {
   const health = deriveRunHealth(detail, summaryPreview);
   return (
-    <div style={{ minWidth: 0, border: "1px solid rgba(137, 150, 171, 0.28)", borderRadius: 8, background: "rgba(247, 249, 253, 0.9)", padding: 12 }}>
+    <div
+      style={{
+        minWidth: 0,
+        border: "1px solid rgba(137, 150, 171, 0.28)",
+        borderRadius: 8,
+        background: "rgba(247, 249, 253, 0.9)",
+        padding: 12,
+      }}
+    >
       <div style={{ ...headerStyle, marginBottom: 10 }}>
         <div>
           <h3 style={{ margin: 0, fontSize: 15 }}>Run Detail</h3>
@@ -75,32 +83,64 @@ export function RunDetailPanel({
             {detailLoading ? "Loading detail..." : detail ? detail.run_id : "Select a run"}
           </span>
         </div>
-        {detail ? <span style={{ ...statusPillStyle, ...statusTone(detail.status) }}>{detail.status}</span> : null}
+        {detail ? (
+          <span style={{ ...statusPillStyle, ...statusTone(detail.status) }}>{detail.status}</span>
+        ) : null}
       </div>
 
       {detail ? (
         <div style={{ display: "grid", gap: 12 }}>
           <div style={detailGridStyle}>
-            <div><span>project_id</span><strong>{projectId || "-"}</strong></div>
-            <div><span>run_id</span><strong>{detail.run_id}</strong></div>
-            <div><span>run_link_id</span><strong>{detail.run_link_id}</strong></div>
-            <div><span>reviewed_plan_id</span><strong>{detail.reviewed_plan_id}</strong></div>
-            <div><span>audit_id</span><strong>{detail.audit_id || "-"}</strong></div>
-            <div><span>project_config_path</span><strong style={{ fontSize: 11 }}>{detail.project_config_path || "-"}</strong></div>
-            <div><span>created_at</span><strong>{formatDate(detail.created_at)}</strong></div>
-            <div><span>updated_at</span><strong>{formatDate(detail.updated_at)}</strong></div>
+            <div>
+              <span>project_id</span>
+              <strong>{projectId || "-"}</strong>
+            </div>
+            <div>
+              <span>run_id</span>
+              <strong>{detail.run_id}</strong>
+            </div>
+            <div>
+              <span>run_link_id</span>
+              <strong>{detail.run_link_id}</strong>
+            </div>
+            <div>
+              <span>reviewed_plan_id</span>
+              <strong>{detail.reviewed_plan_id}</strong>
+            </div>
+            <div>
+              <span>audit_id</span>
+              <strong>{detail.audit_id || "-"}</strong>
+            </div>
+            <div>
+              <span>project_config_path</span>
+              <strong style={{ fontSize: 11 }}>{detail.project_config_path || "-"}</strong>
+            </div>
+            <div>
+              <span>created_at</span>
+              <strong>{formatDate(detail.created_at)}</strong>
+            </div>
+            <div>
+              <span>updated_at</span>
+              <strong>{formatDate(detail.updated_at)}</strong>
+            </div>
           </div>
 
           {/* Run health card */}
-          <div style={{
-            ...summaryPanelStyle,
-            borderLeft: `4px solid ${healthLevelColor(health.level)}`,
-          }}>
+          <div
+            style={{
+              ...summaryPanelStyle,
+              borderLeft: `4px solid ${healthLevelColor(health.level)}`,
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{
-                ...statusPillStyle,
-                ...statusTone(detail.status),
-              }}>{health.label}</span>
+              <span
+                style={{
+                  ...statusPillStyle,
+                  ...statusTone(detail.status),
+                }}
+              >
+                {health.label}
+              </span>
               <span style={{ fontSize: 12, color: "#344054", lineHeight: 1.5 }}>
                 {health.explanation}
               </span>
@@ -201,17 +241,9 @@ export function RunDetailPanel({
             </details>
           )}
 
-          <RunEventsPanel
-            baseUrl={baseUrl}
-            projectId={projectId ?? null}
-            runId={detail.run_id}
-          />
+          <RunEventsPanel baseUrl={baseUrl} projectId={projectId ?? null} runId={detail.run_id} />
 
-          <RunLogsPanel
-            baseUrl={baseUrl}
-            projectId={projectId ?? null}
-            runId={detail.run_id}
-          />
+          <RunLogsPanel baseUrl={baseUrl} projectId={projectId ?? null} runId={detail.run_id} />
 
           <RunStateTimelinePanel
             baseUrl={baseUrl}
@@ -228,9 +260,13 @@ export function RunDetailPanel({
 
 function healthLevelColor(level: string): string {
   switch (level) {
-    case "ok": return "#2e7d32";
-    case "warning": return "#e65100";
-    case "failed": return "#c62828";
-    default: return "#999";
+    case "ok":
+      return "#2e7d32";
+    case "warning":
+      return "#e65100";
+    case "failed":
+      return "#c62828";
+    default:
+      return "#999";
   }
 }

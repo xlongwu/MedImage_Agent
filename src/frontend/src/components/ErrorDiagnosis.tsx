@@ -8,10 +8,7 @@ type Props = {
   defaultRunId?: string;
 };
 
-export function ErrorDiagnosis({
-  baseUrl,
-  defaultRunId = "run_subject_preprocess_001"
-}: Props) {
+export function ErrorDiagnosis({ baseUrl, defaultRunId = "run_subject_preprocess_001" }: Props) {
   const [runId, setRunId] = useState(defaultRunId);
   const [diagnosis, setDiagnosis] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("IDLE");
@@ -67,7 +64,7 @@ export function ErrorDiagnosis({
         runId,
         "examples/project_config_dataset.yaml",
         retryRunId || undefined,
-        true
+        true,
       );
       setRetryResult(result);
       setRetryStatus("DONE");
@@ -86,10 +83,7 @@ export function ErrorDiagnosis({
       <div className="formGrid">
         <label>
           Run ID
-          <input
-            value={runId}
-            onChange={(e) => setRunId(e.target.value)}
-          />
+          <input value={runId} onChange={(e) => setRunId(e.target.value)} />
         </label>
       </div>
 
@@ -194,9 +188,7 @@ export function ErrorDiagnosis({
                     <span>Node: {(issue.node as string) || "N/A"}</span>
                     <span>Category: {(issue.category as string) || "UNKNOWN"}</span>
                   </div>
-                  <div className="issueMessage">
-                    {(issue.message as string) || "No message"}
-                  </div>
+                  <div className="issueMessage">{(issue.message as string) || "No message"}</div>
                   {(issue.matched_error_ids as string[])?.length ? (
                     <div className="issueMatches">
                       <strong>匹配的错误模式:</strong>

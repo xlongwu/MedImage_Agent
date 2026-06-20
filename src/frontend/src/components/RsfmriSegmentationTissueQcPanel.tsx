@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  getRsfmriSegmentationTissueQc,
-  runRsfmriSegmentationTissueQc
-} from "../lib/api/legacy";
+import { getRsfmriSegmentationTissueQc, runRsfmriSegmentationTissueQc } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -19,7 +16,7 @@ export function RsfmriSegmentationTissueQcPanel({ baseUrl }: Props) {
 
   async function handleRun() {
     const confirmed = window.confirm(
-      "Confirm to run SPM Segmentation + Tissue QC? This only processes synthetic BIDS data and will not modify rawdata."
+      "Confirm to run SPM Segmentation + Tissue QC? This only processes synthetic BIDS data and will not modify rawdata.",
     );
 
     if (!confirmed) return;
@@ -31,7 +28,7 @@ export function RsfmriSegmentationTissueQcPanel({ baseUrl }: Props) {
       const response = await runRsfmriSegmentationTissueQc(baseUrl, {
         project_config_path: "examples/project_config_dataset.yaml",
         pipeline_path: "examples/pipeline_rsfmri_segmentation_tissue_qc.yaml",
-        approved: true
+        approved: true,
       });
       setResult(response);
       setStatus("SUCCESS");
@@ -107,11 +104,7 @@ export function RsfmriSegmentationTissueQcPanel({ baseUrl }: Props) {
 
       <h3>Tissue QC Report</h3>
       <TextViewer
-        text={
-          typeof loaded?.tissue_qc_report === "string"
-            ? loaded.tissue_qc_report
-            : null
-        }
+        text={typeof loaded?.tissue_qc_report === "string" ? loaded.tissue_qc_report : null}
         emptyText="No tissue QC report available"
       />
     </div>

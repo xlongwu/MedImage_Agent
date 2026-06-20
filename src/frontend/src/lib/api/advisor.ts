@@ -17,6 +17,12 @@ export function getAdvisorStatus(baseUrl: string): Promise<AdvisorStatus> {
   return getJson<AdvisorStatus>("/api/advisor/status", { baseUrl });
 }
 
-export function runAdvisor(baseUrl: string, advisorType: string, payload: unknown): Promise<AdvisorResult> {
-  return postJson<AdvisorResult>(`/api/advisor/${encodeURIComponent(advisorType)}`, payload, { baseUrl });
+export function runAdvisor(
+  baseUrl: string,
+  advisorType: string,
+  payload: unknown,
+): Promise<AdvisorResult> {
+  return postJson<AdvisorResult>(`/api/advisor/${encodeURIComponent(advisorType)}`, payload, {
+    baseUrl,
+  });
 }

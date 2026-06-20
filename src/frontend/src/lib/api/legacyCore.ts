@@ -65,8 +65,7 @@ declare global {
 export async function requestJson<T>(
   baseUrl: string,
   path: string,
-  options?: RequestInit
+  options?: RequestInit,
 ): Promise<T> {
   return clientRequestJson<T>(path, { ...options, baseUrl });
 }
-

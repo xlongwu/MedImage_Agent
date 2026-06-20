@@ -4,7 +4,7 @@ import type { TaskStreamMessage } from "../lib/types/task";
 
 export function useTaskStream(
   taskId: string | null,
-  onMessage: (message: TaskStreamMessage) => void
+  onMessage: (message: TaskStreamMessage) => void,
 ) {
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
@@ -60,4 +60,3 @@ export function useTaskStream(
 
   return { connected, error };
 }
-

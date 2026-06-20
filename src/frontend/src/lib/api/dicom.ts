@@ -38,35 +38,32 @@ export async function getDicomPreflight(
   baseUrl: string,
   projectId = "brain-tumor-study",
   path = "data/DemoData",
-  maxFiles = 2000
+  maxFiles = 2000,
 ) {
   const params = new URLSearchParams({
     project_id: projectId,
-    max_files: String(maxFiles)
+    max_files: String(maxFiles),
   });
   if (path.trim()) {
     params.set("path", path.trim());
   }
-  return requestJson<Record<string, unknown>>(baseUrl, `/api/datasets/dicom/preflight?${params.toString()}`);
-}
-
-export async function getProjectBidsValidation(
-  baseUrl: string,
-  projectId: string,
-) {
-  return requestJson<BidsValidationResponse>(
+  return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/bids-validation`
+    `/api/datasets/dicom/preflight?${params.toString()}`,
   );
 }
 
-export async function getProjectDataReadiness(
-  baseUrl: string,
-  projectId: string,
-) {
+export async function getProjectBidsValidation(baseUrl: string, projectId: string) {
+  return requestJson<BidsValidationResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/bids-validation`,
+  );
+}
+
+export async function getProjectDataReadiness(baseUrl: string, projectId: string) {
   return requestJson<DataReadinessResponse>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/data-readiness`
+    `/api/projects/${encodeURIComponent(projectId)}/data-readiness`,
   );
 }
 
@@ -117,10 +114,7 @@ export async function runProjectDicomConversionExecute(
   );
 }
 
-export async function runProjectDicomConversionPreflight(
-  baseUrl: string,
-  projectId: string,
-) {
+export async function runProjectDicomConversionPreflight(baseUrl: string, projectId: string) {
   return requestJson<import("../../types").DicomConversionPreflightResponse>(
     baseUrl,
     `/api/projects/${encodeURIComponent(projectId)}/conversion/preflight`,

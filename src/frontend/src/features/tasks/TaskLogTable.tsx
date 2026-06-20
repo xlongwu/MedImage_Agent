@@ -10,13 +10,26 @@ export interface TaskLogTableProps {
   onSelectTask: (taskId: string) => void;
 }
 
-export function TaskLogTable({ tasks, loading, error, onRetry, selectedTaskId, onSelectTask }: TaskLogTableProps) {
+export function TaskLogTable({
+  tasks,
+  loading,
+  error,
+  onRetry,
+  selectedTaskId,
+  onSelectTask,
+}: TaskLogTableProps) {
   return (
     <section className="task-log">
       <div className="log-header">
         <div>
           <h2>Task Log</h2>
-          <span>{loading ? "Loading task activity" : error ? "Using fallback task data" : "Live pipeline and execution activity"}</span>
+          <span>
+            {loading
+              ? "Loading task activity"
+              : error
+                ? "Using fallback task data"
+                : "Live pipeline and execution activity"}
+          </span>
         </div>
         <div className="tab-row">
           <button className="active">All Runs</button>
@@ -36,8 +49,15 @@ export function TaskLogTable({ tasks, loading, error, onRetry, selectedTaskId, o
             <span>{task.run_name}</span>
             <span>{task.pipeline}</span>
             <span>{task.dataset}</span>
-            <span><StatusPill status={task.status} /></span>
-            <span className="progress-cell"><i><b style={{ width: `${task.progress}%` }} /></i>{task.progress}%</span>
+            <span>
+              <StatusPill status={task.status} />
+            </span>
+            <span className="progress-cell">
+              <i>
+                <b style={{ width: `${task.progress}%` }} />
+              </i>
+              {task.progress}%
+            </span>
             <span>{task.started_at}</span>
             <span>{task.duration}</span>
           </button>

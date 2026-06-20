@@ -28,7 +28,9 @@ declare global {
       getApiBaseUrl: () => Promise<string>;
       getRuntime?: () => Promise<Window["MEDIMAGE_DESKTOP_RUNTIME"]>;
       selectDirectory: () => Promise<string | null>;
-      selectFile: (filters?: Array<{ name: string; extensions: string[] }>) => Promise<string | null>;
+      selectFile: (
+        filters?: Array<{ name: string; extensions: string[] }>,
+      ) => Promise<string | null>;
       openExternalPath: (path: string) => Promise<boolean>;
     };
   }

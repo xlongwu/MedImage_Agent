@@ -53,8 +53,14 @@ describe("WorkflowTabs", () => {
     render(<WorkflowTabs activeTab="data" onChange={vi.fn()} />);
 
     expect(screen.getAllByRole("tab")).toHaveLength(4);
-    expect(screen.getByRole("tab", { name: /data & conversion/i })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: /preprocessing/i })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tab", { name: /data & conversion/i })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tab", { name: /preprocessing/i })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
   });
 
   it("calls onWorkflowStepChange on tab click", async () => {
@@ -160,14 +166,20 @@ describe("Dashboard summary components", () => {
   it("renders raw DICOM recommended action", () => {
     render(
       <RecommendedNextStepCard
-        inventory={inventory({ dataState: "raw_dicom", hasRawDicom: true, dataStateLabel: "Raw DICOM" })}
+        inventory={inventory({
+          dataState: "raw_dicom",
+          hasRawDicom: true,
+          dataStateLabel: "Raw DICOM",
+        })}
         hasPreprocessingRun={false}
         onPrimaryAction={vi.fn()}
         onSecondaryAction={vi.fn()}
       />,
     );
 
-    expect(screen.getByRole("button", { name: /generate conversion dry-run/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /generate conversion dry-run/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Persist review package")).toBeInTheDocument();
   });
 

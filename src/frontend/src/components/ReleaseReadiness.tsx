@@ -70,13 +70,25 @@ export function ReleaseReadiness({ baseUrl }: Props) {
       <h2>Release Readiness</h2>
 
       <div style={{ marginBottom: 16 }}>
-        <button onClick={handleCheck} disabled={loading} style={{ backgroundColor: "#673ab7", color: "white" }}>
+        <button
+          onClick={handleCheck}
+          disabled={loading}
+          style={{ backgroundColor: "#673ab7", color: "white" }}
+        >
           {loading ? "Checking..." : "Run Readiness Check"}
         </button>
       </div>
 
       {error && (
-        <div style={{ color: "red", marginBottom: 16, padding: 12, background: "#ffebee", borderRadius: 4 }}>
+        <div
+          style={{
+            color: "red",
+            marginBottom: 16,
+            padding: 12,
+            background: "#ffebee",
+            borderRadius: 4,
+          }}
+        >
           <strong>Error:</strong> {error}
         </div>
       )}
@@ -84,8 +96,24 @@ export function ReleaseReadiness({ baseUrl }: Props) {
       {readiness && (
         <>
           {/* Status Summary */}
-          <div style={{ marginBottom: 24, padding: 16, background: getStatusColor(status), borderRadius: 4, color: "white" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div
+            style={{
+              marginBottom: 24,
+              padding: 16,
+              background: getStatusColor(status),
+              borderRadius: 4,
+              color: "white",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
               <div>
                 <div style={{ fontSize: 12, opacity: 0.9 }}>Status</div>
                 <div style={{ fontSize: 32, fontWeight: "bold" }}>{status}</div>
@@ -98,7 +126,14 @@ export function ReleaseReadiness({ baseUrl }: Props) {
           </div>
 
           {/* Stats Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12, marginBottom: 24 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+              gap: 12,
+              marginBottom: 24,
+            }}
+          >
             <div style={{ padding: 12, background: "#e8f5e9", borderRadius: 4 }}>
               <div style={{ fontSize: 12, color: "#666" }}>Passed</div>
               <div style={{ fontSize: 20, fontWeight: "bold", color: "#4caf50" }}>
@@ -125,7 +160,9 @@ export function ReleaseReadiness({ baseUrl }: Props) {
               <h3 style={{ marginTop: 0, color: "#c62828" }}>❌ Blockers</h3>
               <ul style={{ margin: 0, paddingLeft: 20 }}>
                 {blockers.map((blocker, idx) => (
-                  <li key={idx} style={{ marginBottom: 4 }}>{blocker}</li>
+                  <li key={idx} style={{ marginBottom: 4 }}>
+                    {blocker}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -137,7 +174,9 @@ export function ReleaseReadiness({ baseUrl }: Props) {
               <h3 style={{ marginTop: 0, color: "#e65100" }}>⚠️ Warnings</h3>
               <ul style={{ margin: 0, paddingLeft: 20 }}>
                 {warnings.map((warning, idx) => (
-                  <li key={idx} style={{ marginBottom: 4 }}>{warning}</li>
+                  <li key={idx} style={{ marginBottom: 4 }}>
+                    {warning}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -146,7 +185,14 @@ export function ReleaseReadiness({ baseUrl }: Props) {
           {/* All Checks */}
           <div>
             <h3>All Checks ({checks.length})</h3>
-            <div style={{ maxHeight: "400px", overflow: "auto", border: "1px solid #e0e0e0", borderRadius: 4 }}>
+            <div
+              style={{
+                maxHeight: "400px",
+                overflow: "auto",
+                border: "1px solid #e0e0e0",
+                borderRadius: 4,
+              }}
+            >
               {checks.map((check, idx) => (
                 <div
                   key={idx}
@@ -174,7 +220,9 @@ export function ReleaseReadiness({ baseUrl }: Props) {
                   </span>
                   <span style={{ flex: 1, fontSize: 13 }}>
                     <strong>{check.name}</strong>
-                    {check.kind && <span style={{ color: "#666", marginLeft: 4 }}>({check.kind})</span>}
+                    {check.kind && (
+                      <span style={{ color: "#666", marginLeft: 4 }}>({check.kind})</span>
+                    )}
                   </span>
                   <span style={{ fontSize: 12, color: "#666" }}>{check.message}</span>
                 </div>
@@ -186,7 +234,13 @@ export function ReleaseReadiness({ baseUrl }: Props) {
           {(readiness?.safety as Record<string, boolean> | undefined) && (
             <div style={{ marginTop: 24, padding: 12, background: "#e3f2fd", borderRadius: 4 }}>
               <h3 style={{ marginTop: 0 }}>Safety Guarantees</h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: 8,
+                }}
+              >
                 {Object.entries(readiness.safety as Record<string, boolean>).map(([key, value]) => (
                   <div key={key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 16 }}>{value ? "✅" : "❌"}</span>

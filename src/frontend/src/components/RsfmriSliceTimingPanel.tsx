@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  getRsfmriSpmSliceTiming,
-  runRsfmriSpmSliceTiming
-} from "../lib/api/legacy";
+import { getRsfmriSpmSliceTiming, runRsfmriSpmSliceTiming } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -19,7 +16,7 @@ export function RsfmriSliceTimingPanel({ baseUrl }: Props) {
 
   async function handleRun() {
     const confirmed = window.confirm(
-      "Confirm to run SPM slice timing correction? This only processes synthetic BIDS data and will not modify rawdata."
+      "Confirm to run SPM slice timing correction? This only processes synthetic BIDS data and will not modify rawdata.",
     );
 
     if (!confirmed) return;
@@ -31,7 +28,7 @@ export function RsfmriSliceTimingPanel({ baseUrl }: Props) {
       const response = await runRsfmriSpmSliceTiming(baseUrl, {
         project_config_path: "examples/project_config_dataset.yaml",
         pipeline_path: "examples/pipeline_rsfmri_spm_slice_timing.yaml",
-        approved: true
+        approved: true,
       });
       setResult(response);
       setStatus("SUCCESS");
@@ -84,11 +81,7 @@ export function RsfmriSliceTimingPanel({ baseUrl }: Props) {
         </div>
         <div className="metricCard">
           <span>Mean TR</span>
-          <strong>
-            {summary?.mean_tr == null
-              ? "-"
-              : Number(summary.mean_tr).toFixed(4)}
-          </strong>
+          <strong>{summary?.mean_tr == null ? "-" : Number(summary.mean_tr).toFixed(4)}</strong>
         </div>
       </div>
 
@@ -96,17 +89,21 @@ export function RsfmriSliceTimingPanel({ baseUrl }: Props) {
       <JsonBlock value={result} emptyText="Not yet run" />
 
       <h3>Slice Timing QC Summary</h3>
-      <JsonBlock value={loaded?.slice_timing_qc_summary} emptyText="No slice timing QC summary available" />
+      <JsonBlock
+        value={loaded?.slice_timing_qc_summary}
+        emptyText="No slice timing QC summary available"
+      />
 
       <h3>Subject Slice Timing QC</h3>
-      <JsonBlock value={loaded?.subject_slice_timing_qc} emptyText="No subject slice timing QC available" />
+      <JsonBlock
+        value={loaded?.subject_slice_timing_qc}
+        emptyText="No subject slice timing QC available"
+      />
 
       <h3>Slice Timing QC Report</h3>
       <TextViewer
         text={
-          typeof loaded?.slice_timing_qc_report === "string"
-            ? loaded.slice_timing_qc_report
-            : null
+          typeof loaded?.slice_timing_qc_report === "string" ? loaded.slice_timing_qc_report : null
         }
         emptyText="No slice timing QC report available"
       />

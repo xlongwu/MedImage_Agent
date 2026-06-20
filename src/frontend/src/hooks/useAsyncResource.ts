@@ -13,7 +13,7 @@ export interface AsyncResource<T> {
 export function useAsyncResource<T>(
   loader: (() => Promise<T>) | null,
   fallback: T,
-  deps: DependencyList
+  deps: DependencyList,
 ): AsyncResource<T> {
   const [data, setData] = useState<T>(fallback);
   const [loading, setLoading] = useState(true);

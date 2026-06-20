@@ -32,9 +32,7 @@ type ProjectWorkflowSignals = {
 };
 
 function asSignalRecord(value: unknown): SignalRecord {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as SignalRecord)
-    : {};
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as SignalRecord) : {};
 }
 
 function nestedSignal(value: unknown, key: string): SignalRecord {
@@ -157,7 +155,9 @@ export function deriveProjectWorkflowState(
     bidsRecord.issues,
   ]);
   const readinessIndicatesRawDicom =
-    /funraw|t1raw|raw dicom|dicom rawdata|dicom layout detected|dicom files are present/i.test(rawText);
+    /funraw|t1raw|raw dicom|dicom rawdata|dicom layout detected|dicom files are present/i.test(
+      rawText,
+    );
   const dicomPreflightSucceeded =
     Boolean(dicomRecord.ok) &&
     (dicomFileCount > 0 || dicomSeriesCount > 0 || countSignal(dicomRecord.series) > 0);
@@ -190,10 +190,8 @@ export function deriveProjectWorkflowState(
 
   const hasRealBidsRoots =
     bidsRootCount > 0 && (!hasRawDicomEvidence || niftiCount > 0 || explicitConvertedSubjects > 0);
-  const hasRealConvertedData =
-    niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence;
-  const convertedDataAbsent =
-    niftiCount === 0 && !hasRealBidsRoots && !hasConvertedSubjectEvidence;
+  const hasRealConvertedData = niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence;
+  const convertedDataAbsent = niftiCount === 0 && !hasRealBidsRoots && !hasConvertedSubjectEvidence;
 
   const importCount = readinessRecord.import_count ?? projectDiagnostics.import_count ?? 0;
   const rawdataDir = projectMetadata.rawdata_dir ?? arrayItem(bidsRecord.roots, 0) ?? "";
@@ -223,10 +221,7 @@ export function directoryBasename(path: string): string {
   return parts.length ? parts[parts.length - 1] : "New Project";
 }
 
-export function diagnosticNumber(
-  diagnostics: Record<string, unknown>,
-  key: string,
-): number {
+export function diagnosticNumber(diagnostics: Record<string, unknown>, key: string): number {
   const value = Number(diagnostics[key]);
   return Number.isFinite(value) ? value : 0;
 }
@@ -245,10 +240,7 @@ export function firstDiagnosticNumber(
   return fallback;
 }
 
-export function diagnosticArrayLength(
-  diagnostics: Record<string, unknown>,
-  key: string,
-): number {
+export function diagnosticArrayLength(diagnostics: Record<string, unknown>, key: string): number {
   const value = diagnostics[key];
   return Array.isArray(value) ? value.length : 0;
 }
@@ -258,9 +250,21 @@ export function buildProjectInventory(
   overview: StudyOverview,
   diagnostics: Record<string, unknown>,
 ): ProjectInventory {
-  const dicomFileCount = firstDiagnosticNumber(diagnostics, ["dicom_file_count", "dicom_files"], overview.dicom_files ?? 0);
-  const dicomSeriesCount = firstDiagnosticNumber(diagnostics, ["dicom_series_count", "series_count"], overview.dicom_series ?? 0);
-  const niftiFileCount = firstDiagnosticNumber(diagnostics, ["nifti_file_count", "nifti_files", "image_source_count"]);
+  const dicomFileCount = firstDiagnosticNumber(
+    diagnostics,
+    ["dicom_file_count", "dicom_files"],
+    overview.dicom_files ?? 0,
+  );
+  const dicomSeriesCount = firstDiagnosticNumber(
+    diagnostics,
+    ["dicom_series_count", "series_count"],
+    overview.dicom_series ?? 0,
+  );
+  const niftiFileCount = firstDiagnosticNumber(diagnostics, [
+    "nifti_file_count",
+    "nifti_files",
+    "image_source_count",
+  ]);
   const convertedSubjectInventory = firstDiagnosticNumber(
     diagnostics,
     ["converted_subject_count", "nifti_subject_count", "image_subject_count"],
@@ -275,7 +279,11 @@ export function buildProjectInventory(
   );
   const hasRawDicom = dicomFileCount > 0 || dicomSeriesCount > 0 || rawDicomCandidates > 0;
   const convertedSubjects = hasRawDicom
-    ? firstDiagnosticNumber(diagnostics, ["converted_subject_count", "nifti_subject_count", "image_subject_count"])
+    ? firstDiagnosticNumber(diagnostics, [
+        "converted_subject_count",
+        "nifti_subject_count",
+        "image_subject_count",
+      ])
     : convertedSubjectInventory;
   const metadataOnlyNiftiInventory = niftiFileCount === 0 && isMetadataOnlySignal(diagnostics);
   const workflowSignals: SignalRecord = {
@@ -344,10 +352,7 @@ export function mergeCreatedProjectIntoList(
   projects: ProjectSummary[],
 ): ProjectSummary[] {
   const createdProject = projectSummaryFromCreateResult(result);
-  return [
-    createdProject,
-    ...projects.filter((item) => item.id !== result.project_id),
-  ];
+  return [createdProject, ...projects.filter((item) => item.id !== result.project_id)];
 }
 
 export function uniqueProjectName(baseName: string, projects: ProjectSummary[]): string {
@@ -362,7 +367,10 @@ export function uniqueProjectName(baseName: string, projects: ProjectSummary[]):
       return candidate;
     }
   }
-  const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 12);
+  const stamp = new Date()
+    .toISOString()
+    .replace(/[-:TZ.]/g, "")
+    .slice(0, 12);
   return `${trimmed} ${stamp}`;
 }
 

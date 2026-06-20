@@ -12,7 +12,11 @@ type SelectableDataSource = "demo" | "directory";
 
 const sourceOptions: Array<{ key: SelectableDataSource; label: string; desc: string }> = [
   { key: "demo", label: "Use Demo Data", desc: "Synthetic BIDS dataset, no MATLAB required" },
-  { key: "directory", label: "Local Directory", desc: "Path to BIDS / DICOM / NIfTI data on server" },
+  {
+    key: "directory",
+    label: "Local Directory",
+    desc: "Path to BIDS / DICOM / NIfTI data on server",
+  },
 ];
 
 export function DataUploadStep({ state, dispatch }: Props) {
@@ -22,7 +26,11 @@ export function DataUploadStep({ state, dispatch }: Props) {
 
   const selectSource = (sourceType: SelectableDataSource) => {
     if (sourceType === "demo") {
-      dispatch({ type: "SET_DATA_SOURCE", sourceType: "demo", path: "examples/synthetic_bids/rawdata" });
+      dispatch({
+        type: "SET_DATA_SOURCE",
+        sourceType: "demo",
+        path: "examples/synthetic_bids/rawdata",
+      });
     } else {
       dispatch({ type: "SET_DATA_SOURCE", sourceType, path: pathInput });
     }
@@ -31,7 +39,8 @@ export function DataUploadStep({ state, dispatch }: Props) {
   const runInspection = async () => {
     setInspecting(true);
     try {
-      const path = state.dataSource === "demo" ? "examples/synthetic_bids/rawdata" : state.datasetPath;
+      const path =
+        state.dataSource === "demo" ? "examples/synthetic_bids/rawdata" : state.datasetPath;
       setInspectResult(await inspectRealDataInventory(DEFAULT_API_BASE, path));
     } catch (error) {
       setInspectResult({ error: error instanceof Error ? error.message : String(error) });
@@ -49,7 +58,11 @@ export function DataUploadStep({ state, dispatch }: Props) {
             key={opt.key}
             onClick={() => selectSource(opt.key)}
             style={{
-              flex: 1, padding: 20, borderRadius: 8, cursor: "pointer", border: "2px solid",
+              flex: 1,
+              padding: 20,
+              borderRadius: 8,
+              cursor: "pointer",
+              border: "2px solid",
               borderColor: state.dataSource === opt.key ? "#1976d2" : "#e0e0e0",
               background: state.dataSource === opt.key ? "#e3f2fd" : "#fff",
             }}
@@ -66,9 +79,19 @@ export function DataUploadStep({ state, dispatch }: Props) {
           <input
             type="text"
             value={pathInput}
-            onChange={(e) => { setPathInput(e.target.value); dispatch({ type: "SET_DATA_SOURCE", sourceType: "directory", path: e.target.value }); }}
+            onChange={(e) => {
+              setPathInput(e.target.value);
+              dispatch({ type: "SET_DATA_SOURCE", sourceType: "directory", path: e.target.value });
+            }}
             placeholder="e.g., data/DemoData or examples/synthetic_bids/rawdata"
-            style={{ width: "100%", padding: "8px 12px", marginTop: 4, borderRadius: 4, border: "1px solid #ccc", fontSize: 14 }}
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              marginTop: 4,
+              borderRadius: 4,
+              border: "1px solid #ccc",
+              fontSize: 14,
+            }}
           />
         </div>
       )}
@@ -82,55 +105,117 @@ export function DataUploadStep({ state, dispatch }: Props) {
       )}
 
       {inspectResult && inspectResult.ok === false && !inspectResult.error && (
-        <div style={{ padding: 12, background: "#fff3e0", borderRadius: 4, marginBottom: 16, fontSize: 13, color: "#e65100" }}>
+        <div
+          style={{
+            padding: 12,
+            background: "#fff3e0",
+            borderRadius: 4,
+            marginBottom: 16,
+            fontSize: 13,
+            color: "#e65100",
+          }}
+        >
           <strong>No data found:</strong> {inspectResult.errors?.join("; ") || "Unknown reason"}
-          <br/><span style={{ fontSize: 12 }}>Available: <code>examples/synthetic_bids/rawdata</code> (synthetic BIDS)</span>
+          <br />
+          <span style={{ fontSize: 12 }}>
+            Available: <code>examples/synthetic_bids/rawdata</code> (synthetic BIDS)
+          </span>
         </div>
       )}
 
       {inspectResult && inspectResult.ok !== false && !inspectResult.error && (
         <div style={{ padding: 16, background: "#e8f5e9", borderRadius: 8, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, color: "#2e7d32", marginBottom: 8 }}>Data Inspection Result</div>
+          <div style={{ fontWeight: 700, color: "#2e7d32", marginBottom: 8 }}>
+            Data Inspection Result
+          </div>
           <div style={{ fontSize: 14, lineHeight: 1.8 }}>
-            Format: <strong>{inspectResult.format || "Unknown"}</strong><br/>
-            Subjects: <strong>{inspectResult.completeness?.subjects_total ?? inspectResult.summary?.total_subjects ?? "?"}</strong>
+            Format: <strong>{inspectResult.format || "Unknown"}</strong>
+            <br />
+            Subjects:{" "}
+            <strong>
+              {inspectResult.completeness?.subjects_total ??
+                inspectResult.summary?.total_subjects ??
+                "?"}
+            </strong>
             {" | "}T1w: <strong>{inspectResult.completeness?.has_t1w ?? "?"}</strong>
             {" | "}BOLD: <strong>{inspectResult.completeness?.has_bold ?? "?"}</strong>
             {inspectResult.subjects?.[0]?.tr && (
-              <>{" | "}TR: <strong>{inspectResult.subjects[0].tr}s</strong></>
+              <>
+                {" | "}TR: <strong>{inspectResult.subjects[0].tr}s</strong>
+              </>
             )}
             {inspectResult.subjects?.[0]?.manufacturer && (
-              <><br/>Scanner: <strong>{inspectResult.subjects[0].manufacturer} {inspectResult.subjects[0].model}</strong></>
+              <>
+                <br />
+                Scanner:{" "}
+                <strong>
+                  {inspectResult.subjects[0].manufacturer} {inspectResult.subjects[0].model}
+                </strong>
+              </>
             )}
             {inspectResult.subjects?.[0]?.matrix && (
-              <>{" | "}Matrix: <strong>{inspectResult.subjects[0].matrix}</strong></>
+              <>
+                {" | "}Matrix: <strong>{inspectResult.subjects[0].matrix}</strong>
+              </>
             )}
             {inspectResult.subjects?.[0]?.field_strength_t && (
-              <>{" | "}Field: <strong>{inspectResult.subjects[0].field_strength_t}T</strong></>
+              <>
+                {" | "}Field: <strong>{inspectResult.subjects[0].field_strength_t}T</strong>
+              </>
             )}
             {inspectResult.subjects?.[0]?.bold_count && (
-              <><br/>BOLD volumes: <strong>{inspectResult.subjects[0].bold_count}</strong></>
+              <>
+                <br />
+                BOLD volumes: <strong>{inspectResult.subjects[0].bold_count}</strong>
+              </>
             )}
             {inspectResult.subjects?.[0]?.t1_count && (
-              <>{" | "}T1 slices: <strong>{inspectResult.subjects[0].t1_count}</strong></>
+              <>
+                {" | "}T1 slices: <strong>{inspectResult.subjects[0].t1_count}</strong>
+              </>
             )}
-            {" | "}Completeness: <strong style={{ color: (inspectResult.completeness?.t1_ratio || 0) >= 100 ? "#2e7d32" : "#ff9800" }}>
-              {inspectResult.completeness?.t1_ratio ?? inspectResult.completeness?.has_t1w ? 100 : 0}%
+            {" | "}Completeness:{" "}
+            <strong
+              style={{
+                color: (inspectResult.completeness?.t1_ratio || 0) >= 100 ? "#2e7d32" : "#ff9800",
+              }}
+            >
+              {(inspectResult.completeness?.t1_ratio ?? inspectResult.completeness?.has_t1w)
+                ? 100
+                : 0}
+              %
             </strong>
           </div>
         </div>
       )}
 
       {inspectResult?.error && (
-        <div style={{ padding: 12, background: "#fff3e0", borderRadius: 4, marginBottom: 16, fontSize: 13, color: "#e65100" }}>
-          Could not connect: {inspectResult.error}. Backend may not be running.<br/>
-          Start with: <code>python -m uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000</code>
+        <div
+          style={{
+            padding: 12,
+            background: "#fff3e0",
+            borderRadius: 4,
+            marginBottom: 16,
+            fontSize: 13,
+            color: "#e65100",
+          }}
+        >
+          Could not connect: {inspectResult.error}. Backend may not be running.
+          <br />
+          Start with:{" "}
+          <code>python -m uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000</code>
         </div>
       )}
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => dispatch({ type: "SET_STEP", step: 0 })} style={btnBack}>Back</button>
-        <button onClick={() => dispatch({ type: "SET_STEP", step: 2 })} disabled={state.dataSource === "none"} style={btnNext}>
+        <button onClick={() => dispatch({ type: "SET_STEP", step: 0 })} style={btnBack}>
+          Back
+        </button>
+        <button
+          onClick={() => dispatch({ type: "SET_STEP", step: 2 })}
+          disabled={state.dataSource === "none"}
+          style={btnNext}
+        >
           Next: Preprocessing
         </button>
       </div>
@@ -138,6 +223,28 @@ export function DataUploadStep({ state, dispatch }: Props) {
   );
 }
 
-const btnNext: React.CSSProperties = { padding: "8px 20px", background: "#1976d2", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 };
-const btnBack: React.CSSProperties = { padding: "8px 20px", background: "#f5f5f5", border: "1px solid #ccc", borderRadius: 4, cursor: "pointer" };
-const btnSecondary: React.CSSProperties = { padding: "8px 20px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 };
+const btnNext: React.CSSProperties = {
+  padding: "8px 20px",
+  background: "#1976d2",
+  color: "#fff",
+  border: "none",
+  borderRadius: 4,
+  cursor: "pointer",
+  fontWeight: 600,
+};
+const btnBack: React.CSSProperties = {
+  padding: "8px 20px",
+  background: "#f5f5f5",
+  border: "1px solid #ccc",
+  borderRadius: 4,
+  cursor: "pointer",
+};
+const btnSecondary: React.CSSProperties = {
+  padding: "8px 20px",
+  background: "#4caf50",
+  color: "#fff",
+  border: "none",
+  borderRadius: 4,
+  cursor: "pointer",
+  fontWeight: 600,
+};

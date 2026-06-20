@@ -20,12 +20,24 @@ export function QCReportsWorkspace({ baseUrl, projectId }: QCReportsWorkspacePro
         status="Review"
       />
       <div className="workspace-panel-grid">
-        <div><QcDashboardSummaryPanel baseUrl={baseUrl} projectId={projectId} /></div>
-        <div><NiftiQcSnapshotPanel baseUrl={baseUrl} projectId={projectId} /></div>
-        <div><BoldReferenceReadinessPanel baseUrl={baseUrl} projectId={projectId} /></div>
-        <div><MotionQcReadinessPanel baseUrl={baseUrl} projectId={projectId} /></div>
-        <div><MotionMetricsDraftPanel baseUrl={baseUrl} projectId={projectId} /></div>
-        <div><RsfmriQcPlanningReportPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div>
+          <QcDashboardSummaryPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
+        <div>
+          <NiftiQcSnapshotPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
+        <div>
+          <BoldReferenceReadinessPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
+        <div>
+          <MotionQcReadinessPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
+        <div>
+          <MotionMetricsDraftPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
+        <div>
+          <RsfmriQcPlanningReportPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
       </div>
     </div>
   );

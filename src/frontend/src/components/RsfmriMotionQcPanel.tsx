@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  getRsfmriSpmRealignMotionQc,
-  runRsfmriSpmRealignMotionQc
-} from "../lib/api/legacy";
+import { getRsfmriSpmRealignMotionQc, runRsfmriSpmRealignMotionQc } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -19,7 +16,7 @@ export function RsfmriMotionQcPanel({ baseUrl }: Props) {
 
   async function handleRun() {
     const confirmed = window.confirm(
-      "Confirm to run SPM realignment + motion QC? This only processes synthetic BIDS data and will not modify rawdata."
+      "Confirm to run SPM realignment + motion QC? This only processes synthetic BIDS data and will not modify rawdata.",
     );
 
     if (!confirmed) return;
@@ -31,7 +28,7 @@ export function RsfmriMotionQcPanel({ baseUrl }: Props) {
       const response = await runRsfmriSpmRealignMotionQc(baseUrl, {
         project_config_path: "examples/project_config_dataset.yaml",
         pipeline_path: "examples/pipeline_rsfmri_spm_realign_motion_qc.yaml",
-        approved: true
+        approved: true,
       });
       setResult(response);
       setStatus("SUCCESS");
@@ -89,9 +86,7 @@ export function RsfmriMotionQcPanel({ baseUrl }: Props) {
         <div className="metricCard">
           <span>Group Mean FD</span>
           <strong>
-            {summary?.group_mean_fd == null
-              ? "-"
-              : Number(summary.group_mean_fd).toFixed(4)}
+            {summary?.group_mean_fd == null ? "-" : Number(summary.group_mean_fd).toFixed(4)}
           </strong>
         </div>
       </div>
@@ -107,11 +102,7 @@ export function RsfmriMotionQcPanel({ baseUrl }: Props) {
 
       <h3>Motion QC Report</h3>
       <TextViewer
-        text={
-          typeof loaded?.motion_qc_report === "string"
-            ? loaded.motion_qc_report
-            : null
-        }
+        text={typeof loaded?.motion_qc_report === "string" ? loaded.motion_qc_report : null}
         emptyText="No motion QC report available"
       />
     </div>

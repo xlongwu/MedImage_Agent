@@ -7,7 +7,6 @@ export function useDatasetSummary(projectId: string | null) {
   return useAsyncResource<DatasetSummary>(
     () => (projectId ? getDatasetSummary(projectId) : Promise.resolve(fallbackDatasetSummary)),
     fallbackDatasetSummary,
-    [projectId]
+    [projectId],
   );
 }
-

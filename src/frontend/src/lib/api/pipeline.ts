@@ -40,7 +40,7 @@ export async function checkApprovalGate(
     plan: Record<string, unknown>;
     validation: Record<string, unknown>;
     approval: Record<string, unknown> | null;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/approval/check", {
     method: "POST",
@@ -52,23 +52,17 @@ export async function checkApprovalGate(
 
 // === Audit Record ===
 
-export async function createAgentPlan(
-  baseUrl: string,
-  payload: AgentPlanRequest
-) {
+export async function createAgentPlan(baseUrl: string, payload: AgentPlanRequest) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/agent/plan", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
-export async function executeAgentPlan(
-  baseUrl: string,
-  payload: AgentExecuteRequest
-) {
+export async function executeAgentPlan(baseUrl: string, payload: AgentExecuteRequest) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/agent/execute", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -82,7 +76,7 @@ export async function executeReviewedDryRun(
     project_config_path?: string;
     persist_audit?: boolean;
     actor?: string;
-  }
+  },
 ) {
   return requestJson<ExecuteReviewedResponse>(baseUrl, "/api/plans/execute-reviewed", {
     method: "POST",
@@ -99,7 +93,7 @@ export async function executeReviewedPlan(
     reviewed_plan_id?: string;
     project_config_path: string;
     actor?: string;
-  }
+  },
 ) {
   return requestJson<ExecuteReviewedResponse>(baseUrl, "/api/plans/execute-reviewed", {
     method: "POST",
@@ -121,7 +115,7 @@ export async function executeReviewedPlan(
 export async function fetchAuditRecord(baseUrl: string, auditId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/audit/records/${encodeURIComponent(auditId)}`
+    `/api/audit/records/${encodeURIComponent(auditId)}`,
   );
 }
 
@@ -130,7 +124,7 @@ export async function fetchAuditRecord(baseUrl: string, auditId: string) {
 export async function fetchToolCatalog(baseUrl: string) {
   return requestJson<{ ok: boolean; count: number; items: Array<Record<string, unknown>> }>(
     baseUrl,
-    "/api/tools/catalog"
+    "/api/tools/catalog",
   );
 }
 
@@ -144,7 +138,7 @@ export async function generatePlanFromGoal(
     project_id?: string;
     project_config_path?: string;
     constraints?: Record<string, unknown>;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/planner/plan-from-goal", {
     method: "POST",
@@ -155,35 +149,29 @@ export async function generatePlanFromGoal(
 // === Plan Validator ===
 
 export async function getAgentRun(baseUrl: string, agentRunId: string) {
-  return requestJson<AgentRun>(
-    baseUrl,
-    `/api/agent-runs/${encodeURIComponent(agentRunId)}`
-  );
+  return requestJson<AgentRun>(baseUrl, `/api/agent-runs/${encodeURIComponent(agentRunId)}`);
 }
 
 export async function getPipeline(baseUrl: string, pipelineName: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/pipelines/${encodeURIComponent(pipelineName)}`
+    `/api/pipelines/${encodeURIComponent(pipelineName)}`,
   );
 }
 
 export async function getProjectReviewedPlan(
   baseUrl: string,
   projectId: string,
-  reviewedPlanId: string
+  reviewedPlanId: string,
 ) {
   return requestJson<{ ok: boolean; reviewed_plan: ReviewedPlanRecord }>(
     baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(reviewedPlanId)}`
+    `/api/projects/${encodeURIComponent(projectId)}/plans/${encodeURIComponent(reviewedPlanId)}`,
   );
 }
 
 export async function listPipelines(baseUrl: string) {
-  return requestJson<{ ok: boolean; pipelines: string[] }>(
-    baseUrl,
-    "/api/pipelines"
-  );
+  return requestJson<{ ok: boolean; pipelines: string[] }>(baseUrl, "/api/pipelines");
 }
 
 export async function listProjectReviewedPlans(baseUrl: string, projectId: string) {
@@ -205,19 +193,16 @@ export async function saveReviewedPlan(
     provider?: string;
     status?: string;
     warnings?: string[];
-  }
+  },
 ) {
   return requestJson<{ ok: boolean; reviewed_plan: ReviewedPlanRecord }>(
     baseUrl,
     `/api/projects/${encodeURIComponent(projectId)}/plans`,
-    { method: "POST", body: JSON.stringify(payload) }
+    { method: "POST", body: JSON.stringify(payload) },
   );
 }
 
-export async function validatePlan(
-  baseUrl: string,
-  plan: Record<string, unknown>
-) {
+export async function validatePlan(baseUrl: string, plan: Record<string, unknown>) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/plans/validate", {
     method: "POST",
     body: JSON.stringify({ plan }),

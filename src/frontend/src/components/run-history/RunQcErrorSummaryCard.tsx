@@ -51,16 +51,16 @@ export function RunQcErrorSummaryCard({
 }) {
   const health = useMemo(
     () => summarizeRunHealth(run, runSummary, artifacts),
-    [artifacts, run, runSummary]
+    [artifacts, run, runSummary],
   );
   const qcHighlights = useMemo(() => extractQcHighlights(artifacts), [artifacts]);
   const failedNodes = useMemo(
     () => extractFailedNodeHighlights(runSummary, artifacts),
-    [artifacts, runSummary]
+    [artifacts, runSummary],
   );
   const provenanceRows = useMemo(
     () => buildArtifactProvenanceRows(artifacts).slice(0, 8),
-    [artifacts]
+    [artifacts],
   );
 
   return (
@@ -68,7 +68,9 @@ export function RunQcErrorSummaryCard({
       <div style={{ ...headerStyle, marginBottom: 10 }}>
         <div>
           <h4 style={{ margin: 0, fontSize: 14 }}>QC / Error Summary</h4>
-          <span style={subtitleStyle}>Run health, QC highlights, failed logs, and artifact provenance.</span>
+          <span style={subtitleStyle}>
+            Run health, QC highlights, failed logs, and artifact provenance.
+          </span>
         </div>
         <span style={{ ...statusPillStyle, ...statusTone(health.status) }}>{health.status}</span>
       </div>
@@ -85,14 +87,26 @@ export function RunQcErrorSummaryCard({
       </div>
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <span style={{ ...artifactChipStyle, ...artifactTone(health.hasMissingArtifacts ? "missing" : "ok") }}>
+        <span
+          style={{
+            ...artifactChipStyle,
+            ...artifactTone(health.hasMissingArtifacts ? "missing" : "ok"),
+          }}
+        >
           {health.hasMissingArtifacts ? "missing artifacts" : "artifacts present"}
         </span>
-        <span style={{ ...artifactChipStyle, ...artifactTone(health.hasFailedNodeLogs ? "error" : "ok") }}>
+        <span
+          style={{
+            ...artifactChipStyle,
+            ...artifactTone(health.hasFailedNodeLogs ? "error" : "ok"),
+          }}
+        >
           {health.hasFailedNodeLogs ? "failed-node logs" : "no failed-node logs"}
         </span>
         {loading ? (
-          <span style={{ ...artifactChipStyle, ...artifactTone("neutral") }}>loading artifacts</span>
+          <span style={{ ...artifactChipStyle, ...artifactTone("neutral") }}>
+            loading artifacts
+          </span>
         ) : null}
       </div>
 
@@ -112,8 +126,12 @@ export function RunQcErrorSummaryCard({
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                     <strong style={{ fontSize: 12 }}>{node.nodeName || node.nodeId}</strong>
-                    <span style={{ ...artifactChipStyle, ...artifactTone("error") }}>{node.status}</span>
-                    {node.artifactName ? <span style={artifactMiniTextStyle}>{node.artifactName}</span> : null}
+                    <span style={{ ...artifactChipStyle, ...artifactTone("error") }}>
+                      {node.status}
+                    </span>
+                    {node.artifactName ? (
+                      <span style={artifactMiniTextStyle}>{node.artifactName}</span>
+                    ) : null}
                   </div>
                   {node.errorExcerpt ? (
                     <pre style={summaryExcerptStyle}>{node.errorExcerpt}</pre>
@@ -153,17 +171,26 @@ export function RunQcErrorSummaryCard({
               >
                 <div style={{ display: "grid", gap: 6, minWidth: 0 }}>
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <strong style={{ fontSize: 12, overflowWrap: "anywhere" }}>{highlight.artifactName}</strong>
+                    <strong style={{ fontSize: 12, overflowWrap: "anywhere" }}>
+                      {highlight.artifactName}
+                    </strong>
                     <span style={{ ...artifactChipStyle, ...artifactTone(tone) }}>
                       {highlight.status ?? highlight.category}
                     </span>
-                    {highlight.subjectId ? <span style={artifactMiniTextStyle}>subject {highlight.subjectId}</span> : null}
-                    {highlight.nodeId ? <span style={artifactMiniTextStyle}>node {highlight.nodeId}</span> : null}
+                    {highlight.subjectId ? (
+                      <span style={artifactMiniTextStyle}>subject {highlight.subjectId}</span>
+                    ) : null}
+                    {highlight.nodeId ? (
+                      <span style={artifactMiniTextStyle}>node {highlight.nodeId}</span>
+                    ) : null}
                   </div>
                   {highlight.metrics.length ? (
                     <div style={metricChipGridStyle}>
                       {highlight.metrics.map((metric) => (
-                        <span key={`${highlight.artifactId}-${metric.label}`} style={metricChipStyle}>
+                        <span
+                          key={`${highlight.artifactId}-${metric.label}`}
+                          style={metricChipStyle}
+                        >
                           {metric.label}: <b>{metric.value}</b>
                         </span>
                       ))}
@@ -175,7 +202,9 @@ export function RunQcErrorSummaryCard({
                   ) : null}
                   <WarningList warnings={highlight.warnings.slice(0, 3)} />
                   {highlight.errorMessage ? (
-                    <div style={{ ...jsonMessageStyle, color: "#b53b3b" }}>{highlight.errorMessage}</div>
+                    <div style={{ ...jsonMessageStyle, color: "#b53b3b" }}>
+                      {highlight.errorMessage}
+                    </div>
                   ) : null}
                   <div style={artifactMiniTextStyle}>{highlight.reference}</div>
                 </div>
@@ -193,7 +222,9 @@ export function RunQcErrorSummaryCard({
         </div>
       ) : (
         <div className="empty" style={{ padding: 8 }}>
-          {loading ? "Loading QC artifacts..." : "No QC JSON or QC report artifacts were discovered."}
+          {loading
+            ? "Loading QC artifacts..."
+            : "No QC JSON or QC report artifacts were discovered."}
         </div>
       )}
 

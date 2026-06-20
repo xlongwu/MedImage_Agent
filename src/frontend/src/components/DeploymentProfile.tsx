@@ -60,42 +60,39 @@ export function DeploymentProfile({ baseUrl }: Props) {
   return (
     <div className={styles.style001}>
       <h2>Deployment Profile</h2>
-      
+
       <div className={styles.style002}>
-        <button 
-          onClick={handleCheck} 
+        <button
+          onClick={handleCheck}
           disabled={loading}
-          style={{ 
-            backgroundColor: "#2196f3", 
+          style={{
+            backgroundColor: "#2196f3",
             color: "white",
             padding: "8px 16px",
             border: "none",
             borderRadius: 4,
-            cursor: loading ? "not-allowed" : "pointer"
+            cursor: loading ? "not-allowed" : "pointer",
           }}
         >
           {loading ? "Checking..." : "Scan Deployment Profile"}
         </button>
       </div>
-      
-      {error && (
-        <div className={styles.style003}>
-          {error}
-        </div>
-      )}
-      
+
+      {error && <div className={styles.style003}>{error}</div>}
+
       {profile && (
         <>
           {/* Status Summary */}
-          <div className={styles.style004} style={cssVars({ "--status-bg": getStatusColor(status) })}>
-            <div className={styles.style005}>
-              {status || "UNKNOWN"}
-            </div>
+          <div
+            className={styles.style004}
+            style={cssVars({ "--status-bg": getStatusColor(status) })}
+          >
+            <div className={styles.style005}>{status || "UNKNOWN"}</div>
             <div className={styles.style006}>
               Checks: {checksPassed} / {checksTotal} passed
             </div>
           </div>
-          
+
           {/* Stats Grid */}
           <div className={styles.style007}>
             <div className={styles.style008}>
@@ -106,18 +103,14 @@ export function DeploymentProfile({ baseUrl }: Props) {
             </div>
             <div className={styles.style011}>
               <div className={styles.style012}>Blockers</div>
-              <div className={styles.style013}>
-                {blockers.length}
-              </div>
+              <div className={styles.style013}>{blockers.length}</div>
             </div>
             <div className={styles.style014}>
               <div className={styles.style015}>Warnings</div>
-              <div className={styles.style016}>
-                {warnings.length}
-              </div>
+              <div className={styles.style016}>{warnings.length}</div>
             </div>
           </div>
-          
+
           {/* Profiles */}
           {profiles && (
             <div className={styles.style017}>
@@ -141,14 +134,17 @@ export function DeploymentProfile({ baseUrl }: Props) {
                       Compose: {(profiles.docker_demo as Record<string, string>).compose_file}
                     </div>
                     <div className={styles.style026}>
-                      MATLAB: {(profiles.docker_demo as Record<string, boolean>).matlab_enabled_by_default ? "enabled" : "disabled"}
+                      MATLAB:{" "}
+                      {(profiles.docker_demo as Record<string, boolean>).matlab_enabled_by_default
+                        ? "enabled"
+                        : "disabled"}
                     </div>
                   </div>
                 )}
               </div>
             </div>
           )}
-          
+
           {/* Blockers */}
           {blockers.length > 0 && (
             <div className={styles.style027}>
@@ -162,7 +158,7 @@ export function DeploymentProfile({ baseUrl }: Props) {
               </div>
             </div>
           )}
-          
+
           {/* Warnings */}
           {warnings.length > 0 && (
             <div className={styles.style031}>
@@ -176,7 +172,7 @@ export function DeploymentProfile({ baseUrl }: Props) {
               </div>
             </div>
           )}
-          
+
           {/* All Checks */}
           <div className={styles.style035}>
             <h3>All Checks ({checks.length})</h3>
@@ -202,7 +198,7 @@ export function DeploymentProfile({ baseUrl }: Props) {
               ))}
             </div>
           </div>
-          
+
           {/* Environment */}
           {environment && (
             <div className={styles.style040}>
@@ -210,25 +206,34 @@ export function DeploymentProfile({ baseUrl }: Props) {
               <div className={styles.style041}>
                 <div>Platform: {environment.platform as string}</div>
                 <div>CWD: {environment.cwd as string}</div>
-                <div>Docker: {(environment.docker_version as Record<string, unknown>)?.ok ? "available" : "not available"}</div>
-                <div>Node: {(environment.node_version as Record<string, unknown>)?.stdout as string || "not available"}</div>
+                <div>
+                  Docker:{" "}
+                  {(environment.docker_version as Record<string, unknown>)?.ok
+                    ? "available"
+                    : "not available"}
+                </div>
+                <div>
+                  Node:{" "}
+                  {((environment.node_version as Record<string, unknown>)?.stdout as string) ||
+                    "not available"}
+                </div>
               </div>
             </div>
           )}
-          
+
           {/* Safety Guarantees */}
           {(profile?.safety as Record<string, boolean> | undefined) && (
             <div>
               <h3>Safety Guarantees</h3>
               <div className={styles.style042}>
                 {Object.entries(profile.safety as Record<string, boolean>).map(([key, value]) => (
-                  <div 
-                    key={key} 
-                    style={{ 
-                      padding: "8px 12px", 
+                  <div
+                    key={key}
+                    style={{
+                      padding: "8px 12px",
                       background: value ? "#ffebee" : "#e8f5e9",
                       borderRadius: 4,
-                      fontSize: 12
+                      fontSize: 12,
                     }}
                   >
                     {value ? "❌" : "✅"} {key.replace(/_/g, " ")}

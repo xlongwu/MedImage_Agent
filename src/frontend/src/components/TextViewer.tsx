@@ -12,14 +12,20 @@ export function TextViewer({
   parsed,
   truncated,
   previewType,
-  maxHeight = "400px"
+  maxHeight = "400px",
 }: TextViewerProps) {
   if (previewType === "nifti_metadata" && parsed && typeof parsed === "object") {
     const metadata = parsed as Record<string, unknown>;
     return (
       <div style={{ padding: 12, background: "#f5f5f5", borderRadius: 4 }}>
         <div style={{ marginBottom: 8, fontWeight: "bold" }}>NIfTI Metadata</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 8 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 8,
+          }}
+        >
           {metadata.shape && (
             <div>
               <strong>Shape:</strong> {JSON.stringify(metadata.shape)}
@@ -37,14 +43,10 @@ export function TextViewer({
           )}
         </div>
         {metadata.note && (
-          <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
-            {String(metadata.note)}
-          </div>
+          <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>{String(metadata.note)}</div>
         )}
         {metadata.error && (
-          <div style={{ marginTop: 8, color: "red" }}>
-            Error: {String(metadata.error)}
-          </div>
+          <div style={{ marginTop: 8, color: "red" }}>Error: {String(metadata.error)}</div>
         )}
       </div>
     );
@@ -65,9 +67,7 @@ export function TextViewer({
       {isJson && (
         <div style={{ marginBottom: 8 }}>
           <details>
-            <summary style={{ cursor: "pointer", color: "#2196f3" }}>
-              View Parsed JSON
-            </summary>
+            <summary style={{ cursor: "pointer", color: "#2196f3" }}>View Parsed JSON</summary>
             <pre
               style={{
                 background: "#f5f5f5",
@@ -76,7 +76,7 @@ export function TextViewer({
                 overflow: "auto",
                 maxHeight,
                 fontSize: 12,
-                marginTop: 8
+                marginTop: 8,
               }}
             >
               {JSON.stringify(parsed, null, 2)}
@@ -93,7 +93,7 @@ export function TextViewer({
           maxHeight,
           fontSize: 12,
           whiteSpace: "pre-wrap",
-          wordBreak: "break-word"
+          wordBreak: "break-word",
         }}
       >
         {text}

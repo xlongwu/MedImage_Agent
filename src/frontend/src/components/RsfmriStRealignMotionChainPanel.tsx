@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  getRsfmriStRealignMotionQc,
-  runRsfmriStRealignMotionQc
-} from "../lib/api/legacy";
+import { getRsfmriStRealignMotionQc, runRsfmriStRealignMotionQc } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -19,7 +16,7 @@ export function RsfmriStRealignMotionChainPanel({ baseUrl }: Props) {
 
   async function handleRun() {
     const confirmed = window.confirm(
-      "Confirm to run Slice Timing → Realignment → Motion QC chain pipeline? This only processes synthetic BIDS data and will not modify rawdata."
+      "Confirm to run Slice Timing → Realignment → Motion QC chain pipeline? This only processes synthetic BIDS data and will not modify rawdata.",
     );
 
     if (!confirmed) return;
@@ -31,7 +28,7 @@ export function RsfmriStRealignMotionChainPanel({ baseUrl }: Props) {
       const response = await runRsfmriStRealignMotionQc(baseUrl, {
         project_config_path: "examples/project_config_dataset.yaml",
         pipeline_path: "examples/pipeline_rsfmri_st_realign_motion_qc.yaml",
-        approved: true
+        approved: true,
       });
       setResult(response);
       setStatus("SUCCESS");
@@ -95,24 +92,26 @@ export function RsfmriStRealignMotionChainPanel({ baseUrl }: Props) {
       <JsonBlock value={loaded?.chain_summary} emptyText="No chain summary available" />
 
       <h3>Slice Timing Summary</h3>
-      <JsonBlock value={loaded?.slice_timing_qc_summary} emptyText="No slice timing summary available" />
+      <JsonBlock
+        value={loaded?.slice_timing_qc_summary}
+        emptyText="No slice timing summary available"
+      />
 
       <h3>Motion QC Summary</h3>
       <JsonBlock value={loaded?.motion_qc_summary} emptyText="No motion QC summary available" />
 
       <h3>Subject Slice Timing QC</h3>
-      <JsonBlock value={loaded?.subject_slice_timing_qc} emptyText="No subject slice timing QC available" />
+      <JsonBlock
+        value={loaded?.subject_slice_timing_qc}
+        emptyText="No subject slice timing QC available"
+      />
 
       <h3>Subject Motion QC</h3>
       <JsonBlock value={loaded?.subject_motion_qc} emptyText="No subject motion QC available" />
 
       <h3>Chain Report</h3>
       <TextViewer
-        text={
-          typeof loaded?.chain_report === "string"
-            ? loaded.chain_report
-            : null
-        }
+        text={typeof loaded?.chain_report === "string" ? loaded.chain_report : null}
         emptyText="No chain report available"
       />
     </div>

@@ -24,11 +24,13 @@ export function ProjectCreateResultPanel({
   const diagnostics = result?.diagnostics ?? {};
   const status = String(diagnostics.status ?? "UNKNOWN");
   const dicomFileCount = diagnosticNumber(diagnostics, "dicom_file_count");
-  const hasRawDicom = dicomFileCount > 0 && diagnosticNumber(diagnostics, "image_source_count") === 0;
+  const hasRawDicom =
+    dicomFileCount > 0 && diagnosticNumber(diagnostics, "image_source_count") === 0;
   const rawDicomCandidates = firstDiagnosticNumber(
     diagnostics,
     ["raw_dicom_candidate_subjects", "dicom_candidate_subjects", "dicom_subject_count"],
-    diagnosticArrayLength(diagnostics, "subject_candidates") || diagnosticNumber(diagnostics, "subjects_total"),
+    diagnosticArrayLength(diagnostics, "subject_candidates") ||
+      diagnosticNumber(diagnostics, "subjects_total"),
   );
   const nextActions = cleanupNextActions(result?.next_actions ?? [], { rawDicom: hasRawDicom });
   return (
@@ -42,7 +44,9 @@ export function ProjectCreateResultPanel({
                 ? "Project creation failed"
                 : `Project created: ${result?.project_name}`}
           </div>
-          <span>{loading ? "Inspecting the selected BIDS/rawdata directory" : `Status: ${status}`}</span>
+          <span>
+            {loading ? "Inspecting the selected BIDS/rawdata directory" : `Status: ${status}`}
+          </span>
         </div>
         <div className="detail-actions">
           {!loading ? <button onClick={onDismiss}>Dismiss</button> : null}
@@ -54,13 +58,34 @@ export function ProjectCreateResultPanel({
       {result ? (
         <>
           <div className="detail-grid">
-            <div><span>Status</span><strong>{status}</strong></div>
-            <div><span>Converted subjects</span><strong>{diagnosticNumber(diagnostics, "image_subject_count")}</strong></div>
-            <div><span>Raw DICOM candidates</span><strong>{rawDicomCandidates}</strong></div>
-            <div><span>DICOM files</span><strong>{dicomFileCount.toLocaleString()}</strong></div>
-            <div><span>Complete</span><strong>{diagnosticNumber(diagnostics, "subjects_complete")}</strong></div>
-            <div><span>Warning</span><strong>{diagnosticNumber(diagnostics, "subjects_warning")}</strong></div>
-            <div><span>Incomplete</span><strong>{diagnosticNumber(diagnostics, "subjects_incomplete")}</strong></div>
+            <div>
+              <span>Status</span>
+              <strong>{status}</strong>
+            </div>
+            <div>
+              <span>Converted subjects</span>
+              <strong>{diagnosticNumber(diagnostics, "image_subject_count")}</strong>
+            </div>
+            <div>
+              <span>Raw DICOM candidates</span>
+              <strong>{rawDicomCandidates}</strong>
+            </div>
+            <div>
+              <span>DICOM files</span>
+              <strong>{dicomFileCount.toLocaleString()}</strong>
+            </div>
+            <div>
+              <span>Complete</span>
+              <strong>{diagnosticNumber(diagnostics, "subjects_complete")}</strong>
+            </div>
+            <div>
+              <span>Warning</span>
+              <strong>{diagnosticNumber(diagnostics, "subjects_warning")}</strong>
+            </div>
+            <div>
+              <span>Incomplete</span>
+              <strong>{diagnosticNumber(diagnostics, "subjects_incomplete")}</strong>
+            </div>
           </div>
 
           <div className="section-spacer">
@@ -77,9 +102,18 @@ export function ProjectCreateResultPanel({
           {showTechDetails && (
             <>
               <div className="event-list">
-                <div className="event-row"><span>Project directory</span><p>{result.project_dir}</p></div>
-                <div className="event-row"><span>Rawdata directory</span><p>{result.rawdata_dir}</p></div>
-                <div className="event-row"><span>Dataset index</span><p>{result.dataset_index_path || "Not generated"}</p></div>
+                <div className="event-row">
+                  <span>Project directory</span>
+                  <p>{result.project_dir}</p>
+                </div>
+                <div className="event-row">
+                  <span>Rawdata directory</span>
+                  <p>{result.rawdata_dir}</p>
+                </div>
+                <div className="event-row">
+                  <span>Dataset index</span>
+                  <p>{result.dataset_index_path || "Not generated"}</p>
+                </div>
               </div>
 
               <div className="tool-result-list">

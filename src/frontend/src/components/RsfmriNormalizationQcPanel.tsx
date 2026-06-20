@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  getRsfmriNormalizationQc,
-  runRsfmriNormalizationQc
-} from "../lib/api/legacy";
+import { getRsfmriNormalizationQc, runRsfmriNormalizationQc } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -19,7 +16,7 @@ export function RsfmriNormalizationQcPanel({ baseUrl }: Props) {
 
   async function handleRun() {
     const confirmed = window.confirm(
-      "Confirm to run SPM Normalization + Normalization QC? This only processes synthetic BIDS data and will not modify rawdata."
+      "Confirm to run SPM Normalization + Normalization QC? This only processes synthetic BIDS data and will not modify rawdata.",
     );
 
     if (!confirmed) return;
@@ -31,7 +28,7 @@ export function RsfmriNormalizationQcPanel({ baseUrl }: Props) {
       const response = await runRsfmriNormalizationQc(baseUrl, {
         project_config_path: "examples/project_config_dataset.yaml",
         pipeline_path: "examples/pipeline_rsfmri_normalization_qc.yaml",
-        approved: true
+        approved: true,
       });
       setResult(response);
       setStatus("SUCCESS");
@@ -100,10 +97,16 @@ export function RsfmriNormalizationQcPanel({ baseUrl }: Props) {
       <JsonBlock value={result} emptyText="Not yet run" />
 
       <h3>Normalization QC Summary</h3>
-      <JsonBlock value={loaded?.normalization_qc_summary} emptyText="No normalization QC summary available" />
+      <JsonBlock
+        value={loaded?.normalization_qc_summary}
+        emptyText="No normalization QC summary available"
+      />
 
       <h3>Subject Normalization QC</h3>
-      <JsonBlock value={loaded?.subject_normalization_qc} emptyText="No subject normalization QC available" />
+      <JsonBlock
+        value={loaded?.subject_normalization_qc}
+        emptyText="No subject normalization QC available"
+      />
 
       <h3>Normalization QC Report</h3>
       <TextViewer

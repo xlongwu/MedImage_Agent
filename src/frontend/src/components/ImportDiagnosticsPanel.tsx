@@ -6,7 +6,7 @@ import {
   getImageManifestReport,
   getImageValidationReport,
   getLatestImportDiagnosticsPackage,
-  verifyImportDiagnosticsPackage
+  verifyImportDiagnosticsPackage,
 } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { TextViewer } from "./TextViewer";
@@ -135,12 +135,13 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
     setError("");
     setNotice("");
     try {
-      const [validationPayload, manifestPayload, importHistoryPayload, latestPackagePayload] = await Promise.all([
-        getImageValidationReport(baseUrl, trimmedProjectId),
-        getImageManifestReport(baseUrl, trimmedProjectId),
-        getDatasetImportHistory(baseUrl, trimmedProjectId),
-        getLatestImportDiagnosticsPackage(baseUrl, trimmedProjectId)
-      ]);
+      const [validationPayload, manifestPayload, importHistoryPayload, latestPackagePayload] =
+        await Promise.all([
+          getImageValidationReport(baseUrl, trimmedProjectId),
+          getImageManifestReport(baseUrl, trimmedProjectId),
+          getDatasetImportHistory(baseUrl, trimmedProjectId),
+          getLatestImportDiagnosticsPackage(baseUrl, trimmedProjectId),
+        ]);
       setValidation(validationPayload);
       setManifest(manifestPayload);
       setImportHistory(importHistoryPayload);
@@ -149,10 +150,14 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
         setHandoffPackage(latestPackage);
       }
       try {
-        setDicomPreflight(await getDicomPreflight(baseUrl, trimmedProjectId, dicomPath, dicomMaxFiles));
+        setDicomPreflight(
+          await getDicomPreflight(baseUrl, trimmedProjectId, dicomPath, dicomMaxFiles),
+        );
       } catch (dicomErr) {
         setDicomPreflight(null);
-        setNotice(`DICOM preflight unavailable: ${dicomErr instanceof Error ? dicomErr.message : String(dicomErr)}`);
+        setNotice(
+          `DICOM preflight unavailable: ${dicomErr instanceof Error ? dicomErr.message : String(dicomErr)}`,
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -199,7 +204,11 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
     try {
       const payload = await verifyImportDiagnosticsPackage(baseUrl, trimmedProjectId);
       setVerifyResult(payload);
-      setNotice(payload.ok ? "Handoff package verification passed." : "Handoff package verification needs review.");
+      setNotice(
+        payload.ok
+          ? "Handoff package verification passed."
+          : "Handoff package verification needs review.",
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -218,7 +227,7 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
       setNotice(
         Boolean(payload.ok)
           ? `DICOM metadata preflight complete: ${String(payload.report_path || "")}`
-          : "DICOM metadata preflight needs review."
+          : "DICOM metadata preflight needs review.",
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -242,7 +251,9 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
   const packageZipPath = String(handoffPackage?.zip_path || "");
   const packageDir = String(handoffPackage?.package_dir || "");
   const checksumPath = String(handoffPackage?.checksum_path || "");
-  const checksumCount = asRecord(handoffPackage?.checksums) ? Object.keys(asRecord(handoffPackage?.checksums) || {}).length : 0;
+  const checksumCount = asRecord(handoffPackage?.checksums)
+    ? Object.keys(asRecord(handoffPackage?.checksums) || {}).length
+    : 0;
   const safetyFlags = asRecord(handoffPackage?.safety_flags);
   const dicomSafetyFlags = asRecord(dicomPreflight?.safety_flags);
   const dicomReportPath = String(dicomPreflight?.report_path || "");
@@ -254,7 +265,11 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
   return (
     <div>
       {error ? <div className="errorBox">{error}</div> : null}
-      {notice ? <div className="empty" style={{ marginBottom: 12 }}>{notice}</div> : null}
+      {notice ? (
+        <div className="empty" style={{ marginBottom: 12 }}>
+          {notice}
+        </div>
+      ) : null}
       <div className="formGrid">
         <label>
           Project ID
@@ -275,17 +290,57 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
       </div>
 
       <div className="row">
-        <button onClick={refresh} disabled={busy}>{busy ? "Refreshing..." : "Revalidate imports"}</button>
-        <button onClick={() => void openArtifact(reportPath, "validation report")} disabled={!reportPath}>Open report</button>
-        <button onClick={() => void openArtifact(jsonPath, "validation JSON")} disabled={!jsonPath}>Open JSON</button>
-        <button onClick={() => void openArtifact(manifestPath, "image manifest")} disabled={!manifestPath}>Open manifest</button>
-        <button onClick={generatePackage} disabled={packaging}>{packaging ? "Packaging..." : "Generate handoff package"}</button>
-        <button onClick={() => void openArtifact(packageReportPath, "handoff report")} disabled={!packageReportPath}>Open handoff</button>
-        <button onClick={() => void openArtifact(packageZipPath, "handoff ZIP")} disabled={!packageZipPath}>Open ZIP</button>
-        <button onClick={() => void openArtifact(packageDir, "handoff folder")} disabled={!packageDir}>Open folder</button>
-        <button onClick={() => void openArtifact(checksumPath, "handoff checksums")} disabled={!checksumPath}>Open checksums</button>
-        <button onClick={verifyPackage} disabled={verifying || !packageZipPath}>{verifying ? "Verifying..." : "Verify package"}</button>
-        <span className="status-pill">{issueCount === 0 ? "No blocking issues" : `${issueCount} validation issues`}</span>
+        <button onClick={refresh} disabled={busy}>
+          {busy ? "Refreshing..." : "Revalidate imports"}
+        </button>
+        <button
+          onClick={() => void openArtifact(reportPath, "validation report")}
+          disabled={!reportPath}
+        >
+          Open report
+        </button>
+        <button onClick={() => void openArtifact(jsonPath, "validation JSON")} disabled={!jsonPath}>
+          Open JSON
+        </button>
+        <button
+          onClick={() => void openArtifact(manifestPath, "image manifest")}
+          disabled={!manifestPath}
+        >
+          Open manifest
+        </button>
+        <button onClick={generatePackage} disabled={packaging}>
+          {packaging ? "Packaging..." : "Generate handoff package"}
+        </button>
+        <button
+          onClick={() => void openArtifact(packageReportPath, "handoff report")}
+          disabled={!packageReportPath}
+        >
+          Open handoff
+        </button>
+        <button
+          onClick={() => void openArtifact(packageZipPath, "handoff ZIP")}
+          disabled={!packageZipPath}
+        >
+          Open ZIP
+        </button>
+        <button
+          onClick={() => void openArtifact(packageDir, "handoff folder")}
+          disabled={!packageDir}
+        >
+          Open folder
+        </button>
+        <button
+          onClick={() => void openArtifact(checksumPath, "handoff checksums")}
+          disabled={!checksumPath}
+        >
+          Open checksums
+        </button>
+        <button onClick={verifyPackage} disabled={verifying || !packageZipPath}>
+          {verifying ? "Verifying..." : "Verify package"}
+        </button>
+        <span className="status-pill">
+          {issueCount === 0 ? "No blocking issues" : `${issueCount} validation issues`}
+        </span>
         <span className="status-pill">{sourceCount} image sources</span>
         {checksumCount ? <span className="status-pill">{checksumCount} checksums</span> : null}
       </div>
@@ -342,11 +397,25 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
         <button onClick={runDicomMetadataPreflight} disabled={dicomBusy}>
           {dicomBusy ? "Checking DICOM..." : "Run DICOM preflight"}
         </button>
-        <button onClick={() => void openArtifact(dicomReportPath, "DICOM preflight report")} disabled={!dicomReportPath}>Open DICOM report</button>
-        <button onClick={() => void openArtifact(dicomJsonPath, "DICOM preflight JSON")} disabled={!dicomJsonPath}>Open DICOM JSON</button>
-        <span className="status-pill">{Number(dicomPreflight?.dicom_file_count || 0)} DICOM files</span>
+        <button
+          onClick={() => void openArtifact(dicomReportPath, "DICOM preflight report")}
+          disabled={!dicomReportPath}
+        >
+          Open DICOM report
+        </button>
+        <button
+          onClick={() => void openArtifact(dicomJsonPath, "DICOM preflight JSON")}
+          disabled={!dicomJsonPath}
+        >
+          Open DICOM JSON
+        </button>
+        <span className="status-pill">
+          {Number(dicomPreflight?.dicom_file_count || 0)} DICOM files
+        </span>
         <span className="status-pill">{Number(dicomPreflight?.series_count || 0)} series</span>
-        <span className="status-pill">{Number(dicomPreflight?.sampled_file_count || 0)} sampled</span>
+        <span className="status-pill">
+          {Number(dicomPreflight?.sampled_file_count || 0)} sampled
+        </span>
       </div>
       <div className="metricGrid" style={{ marginTop: 12 }}>
         <div className="metricCard">
@@ -389,21 +458,30 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
                 border: "1px solid #e5e7eb",
                 borderRadius: 8,
                 padding: 12,
-                background: "#fff"
+                background: "#fff",
               }}
             >
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <strong>{series.series_description || series.sequence_name || "DICOM series"}</strong>
+                <strong>
+                  {series.series_description || series.sequence_name || "DICOM series"}
+                </strong>
                 <span className="status-pill">{series.subject_id || "subject unknown"}</span>
                 <span className="status-pill">{series.modality || "modality unknown"}</span>
                 <span className="status-pill">{series.instances || 0} instances</span>
               </div>
               <div className="muted" style={{ marginTop: 6 }}>
-                {[series.manufacturer, series.magnetic_field_strength ? `${series.magnetic_field_strength}T` : "", series.repetition_time ? `TR ${series.repetition_time}` : "", series.echo_time ? `TE ${series.echo_time}` : ""]
+                {[
+                  series.manufacturer,
+                  series.magnetic_field_strength ? `${series.magnetic_field_strength}T` : "",
+                  series.repetition_time ? `TR ${series.repetition_time}` : "",
+                  series.echo_time ? `TE ${series.echo_time}` : "",
+                ]
                   .filter(Boolean)
                   .join(" · ") || "Header metadata available"}
               </div>
-              <div className="muted" style={{ marginTop: 6, wordBreak: "break-all" }}>{series.sample_file || ""}</div>
+              <div className="muted" style={{ marginTop: 6, wordBreak: "break-all" }}>
+                {series.sample_file || ""}
+              </div>
             </div>
           ))}
         </div>
@@ -413,7 +491,12 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
       {dicomWarnings.length || dicomErrors.length ? (
         <div style={{ display: "grid", gap: 6, marginTop: 12 }}>
           {[...dicomErrors, ...dicomWarnings].map((message, index) => (
-            <div key={`${message}-${index}`} className={dicomErrors.includes(message) ? "errorBox" : "empty"}>{message}</div>
+            <div
+              key={`${message}-${index}`}
+              className={dicomErrors.includes(message) ? "errorBox" : "empty"}
+            >
+              {message}
+            </div>
           ))}
         </div>
       ) : null}
@@ -432,7 +515,7 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
                 border: "1px solid #e5e7eb",
                 borderRadius: 8,
                 padding: 12,
-                background: "#fff"
+                background: "#fff",
               }}
             >
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -441,7 +524,9 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
                 <span className="status-pill">{item.exists ? "path exists" : "path missing"}</span>
                 <span className="muted">{item.created_at || ""}</span>
               </div>
-              <div className="muted" style={{ marginTop: 6, wordBreak: "break-all" }}>{item.path || ""}</div>
+              <div className="muted" style={{ marginTop: 6, wordBreak: "break-all" }}>
+                {item.path || ""}
+              </div>
             </div>
           ))}
         </div>
@@ -459,7 +544,7 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
                 border: "1px solid #e5e7eb",
                 borderRadius: 8,
                 padding: 12,
-                background: "#fff"
+                background: "#fff",
               }}
             >
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -468,16 +553,22 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
                     color: severityTone(issue.severity),
                     fontWeight: 700,
                     textTransform: "uppercase",
-                    fontSize: 11
+                    fontSize: 11,
                   }}
                 >
                   {issue.severity || "info"}
                 </span>
                 <strong>{issue.code || "diagnostic"}</strong>
-                <span className="muted">{[issue.subject_id, issue.session_id, issue.sequence].filter(Boolean).join(" / ")}</span>
+                <span className="muted">
+                  {[issue.subject_id, issue.session_id, issue.sequence].filter(Boolean).join(" / ")}
+                </span>
               </div>
               <div style={{ marginTop: 6 }}>{issue.message || "No message"}</div>
-              {issue.file_path ? <div className="muted" style={{ marginTop: 6, wordBreak: "break-all" }}>{issue.file_path}</div> : null}
+              {issue.file_path ? (
+                <div className="muted" style={{ marginTop: 6, wordBreak: "break-all" }}>
+                  {issue.file_path}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -490,7 +581,9 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
           <h3>Manifest warnings</h3>
           <div style={{ display: "grid", gap: 6 }}>
             {manifestWarnings.map((warning, index) => (
-              <div key={`${warning}-${index}`} className="errorBox">{warning}</div>
+              <div key={`${warning}-${index}`} className="errorBox">
+                {warning}
+              </div>
             ))}
           </div>
         </>
@@ -516,7 +609,12 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
         </div>
       ) : null}
       <div className="row">
-        <button onClick={() => void openArtifact(packageJsonPath, "handoff JSON")} disabled={!packageJsonPath}>Open handoff JSON</button>
+        <button
+          onClick={() => void openArtifact(packageJsonPath, "handoff JSON")}
+          disabled={!packageJsonPath}
+        >
+          Open handoff JSON
+        </button>
       </div>
       <JsonBlock value={handoffPackage} emptyText="No handoff package generated in this session" />
       <h3>Verify result</h3>

@@ -1,9 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  getArtifacts,
-  previewArtifact,
-  refreshArtifacts
-} from "../lib/api/legacy";
+import { getArtifacts, previewArtifact, refreshArtifacts } from "../lib/api/legacy";
 import { TextViewer } from "./TextViewer";
 
 type Props = {
@@ -122,25 +118,44 @@ export function ArtifactBrowser({ baseUrl }: Props) {
         <button onClick={handleLoad} disabled={status === "LOADING"} style={{ marginRight: 8 }}>
           {status === "LOADING" ? "Loading..." : "Load Artifacts"}
         </button>
-        <button onClick={handleRefresh} disabled={status === "LOADING"} style={{ backgroundColor: "#2196f3", color: "white" }}>
+        <button
+          onClick={handleRefresh}
+          disabled={status === "LOADING"}
+          style={{ backgroundColor: "#2196f3", color: "white" }}
+        >
           {status === "LOADING" ? "Refreshing..." : "Refresh Index"}
         </button>
       </div>
 
       {error && (
-        <div style={{ color: "red", marginBottom: 16, padding: 12, background: "#ffebee", borderRadius: 4 }}>
+        <div
+          style={{
+            color: "red",
+            marginBottom: 16,
+            padding: 12,
+            background: "#ffebee",
+            borderRadius: 4,
+          }}
+        >
           <strong>Error:</strong> {error}
         </div>
       )}
 
       {indexMeta && (
         <div style={{ marginBottom: 16, padding: 12, background: "#e3f2fd", borderRadius: 4 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+              gap: 12,
+            }}
+          >
             <div>
               <strong>Total Artifacts:</strong> {indexMeta.artifacts_total}
             </div>
             <div>
-              <strong>Generated:</strong> {new Date(String(indexMeta.generated_at)).toLocaleString()}
+              <strong>Generated:</strong>{" "}
+              {new Date(String(indexMeta.generated_at)).toLocaleString()}
             </div>
           </div>
         </div>
@@ -153,10 +168,7 @@ export function ArtifactBrowser({ baseUrl }: Props) {
               <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 4 }}>
                 Category
               </label>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
                 <option value="all">All</option>
                 {categories.map((c) => (
                   <option key={c} value={c}>
@@ -170,10 +182,7 @@ export function ArtifactBrowser({ baseUrl }: Props) {
               <label style={{ display: "block", fontSize: 12, color: "#666", marginBottom: 4 }}>
                 Extension
               </label>
-              <select
-                value={extensionFilter}
-                onChange={(e) => setExtensionFilter(e.target.value)}
-              >
+              <select value={extensionFilter} onChange={(e) => setExtensionFilter(e.target.value)}>
                 <option value="all">All</option>
                 {extensions.map((e) => (
                   <option key={e} value={e}>
@@ -233,7 +242,7 @@ export function ArtifactBrowser({ baseUrl }: Props) {
                           padding: "2px 6px",
                           borderRadius: 4,
                           background: "#e3f2fd",
-                          fontSize: 11
+                          fontSize: 11,
                         }}
                       >
                         {artifact.category}
@@ -276,7 +285,14 @@ export function ArtifactBrowser({ baseUrl }: Props) {
 
       {preview && (
         <div style={{ marginTop: 24, padding: 16, background: "#fafafa", borderRadius: 4 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 12,
+            }}
+          >
             <h3 style={{ margin: 0 }}>Preview</h3>
             <button onClick={() => setPreview(null)} style={{ fontSize: 12 }}>
               Close
@@ -288,7 +304,15 @@ export function ArtifactBrowser({ baseUrl }: Props) {
           ) : (
             <>
               {(preview.artifact as ArtifactRecord | undefined) && (
-                <div style={{ marginBottom: 12, padding: 8, background: "#e3f2fd", borderRadius: 4, fontSize: 12 }}>
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: 8,
+                    background: "#e3f2fd",
+                    borderRadius: 4,
+                    fontSize: 12,
+                  }}
+                >
                   <strong>{(preview.artifact as ArtifactRecord).name}</strong>
                   <span style={{ marginLeft: 8, color: "#666" }}>
                     {(preview.artifact as ArtifactRecord).path}
@@ -299,8 +323,12 @@ export function ArtifactBrowser({ baseUrl }: Props) {
               <TextViewer
                 text={String((preview.preview as Record<string, unknown> | undefined)?.text ?? "")}
                 parsed={(preview.preview as Record<string, unknown> | undefined)?.parsed}
-                truncated={Boolean((preview.preview as Record<string, unknown> | undefined)?.truncated)}
-                previewType={String((preview.preview as Record<string, unknown> | undefined)?.preview_type ?? "text")}
+                truncated={Boolean(
+                  (preview.preview as Record<string, unknown> | undefined)?.truncated,
+                )}
+                previewType={String(
+                  (preview.preview as Record<string, unknown> | undefined)?.preview_type ?? "text",
+                )}
               />
             </>
           )}

@@ -64,9 +64,11 @@ describe("deriveProjectWorkflowState", () => {
   });
 
   it("returns raw_dicom when diagnostics contain DICOM files", () => {
-    const state = deriveProjectWorkflowState(project({
-      metadata: { diagnostics: { dicom_file_count: 24 } },
-    }));
+    const state = deriveProjectWorkflowState(
+      project({
+        metadata: { diagnostics: { dicom_file_count: 24 } },
+      }),
+    );
 
     expect(state).toBe("raw_dicom");
   });
@@ -104,14 +106,16 @@ describe("deriveProjectWorkflowState", () => {
   });
 
   it("keeps metadata-only NIfTI inventory from counting as converted data", () => {
-    const state = deriveProjectWorkflowState(project({
-      metadata: {
-        diagnostics: {
-          nifti_file_count: 0,
-          note: "metadata-only inventory",
+    const state = deriveProjectWorkflowState(
+      project({
+        metadata: {
+          diagnostics: {
+            nifti_file_count: 0,
+            note: "metadata-only inventory",
+          },
         },
-      },
-    }));
+      }),
+    );
 
     expect(state).toBe("empty");
   });

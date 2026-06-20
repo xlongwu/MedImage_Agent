@@ -14,21 +14,24 @@ type Tone = "ok" | "info" | "warning" | "error" | "unknown";
 function stateTone(state: string): Tone {
   const s = (state || "").toLowerCase();
   if (["succeeded", "reused"].includes(s)) return "ok";
-  if (["running", "ready", "preflight", "queued", "created"].includes(s))
-    return "info";
-  if (["failed", "blocked", "timeout", "interrupted", "invalidated"].includes(s))
-    return "error";
+  if (["running", "ready", "preflight", "queued", "created"].includes(s)) return "info";
+  if (["failed", "blocked", "timeout", "interrupted", "invalidated"].includes(s)) return "error";
   if (["cancelled", "skipped"].includes(s)) return "unknown";
   return "unknown";
 }
 
 function toneColor(tone: Tone): string {
   switch (tone) {
-    case "ok": return "#2e7d32";
-    case "info": return "#1565c0";
-    case "warning": return "#e65100";
-    case "error": return "#c62828";
-    default: return "#888";
+    case "ok":
+      return "#2e7d32";
+    case "info":
+      return "#1565c0";
+    case "warning":
+      return "#e65100";
+    case "error":
+      return "#c62828";
+    default:
+      return "#888";
   }
 }
 
@@ -100,11 +103,7 @@ export function RunStateTimelinePanel({ baseUrl, projectId, runId }: Props) {
 
   // Error
   if (error) {
-    return (
-      <div style={{ color: "#c62828", fontSize: 13 }}>
-        Failed to load timeline: {error}
-      </div>
-    );
+    return <div style={{ color: "#c62828", fontSize: 13 }}>Failed to load timeline: {error}</div>;
   }
 
   // No data
@@ -118,20 +117,14 @@ export function RunStateTimelinePanel({ baseUrl, projectId, runId }: Props) {
     <div>
       {/* ── Run State Summary ── */}
       <div style={{ marginBottom: 14 }}>
-        <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 700 }}>
-          Run State
-        </h4>
+        <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 700 }}>Run State</h4>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span style={badgeStyle(runTone)}>{data.current_run_state}</span>
           <span style={boolBadge(data.terminal)}>
             {data.terminal ? "terminal" : "non-terminal"}
           </span>
-          {data.retry_eligible && (
-            <span style={boolBadge(true)}>retry eligible</span>
-          )}
-          {data.resume_eligible && (
-            <span style={boolBadge(true)}>resume eligible</span>
-          )}
+          {data.retry_eligible && <span style={boolBadge(true)}>retry eligible</span>}
+          {data.resume_eligible && <span style={boolBadge(true)}>resume eligible</span>}
         </div>
       </div>
 
@@ -153,9 +146,7 @@ export function RunStateTimelinePanel({ baseUrl, projectId, runId }: Props) {
 
       {/* ── Timeline Events ── */}
       <div style={{ marginBottom: 14 }}>
-        <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 700 }}>
-          Timeline Events
-        </h4>
+        <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 700 }}>Timeline Events</h4>
         {data.events.length === 0 ? (
           <div style={{ fontSize: 12, color: "#888" }}>
             No timeline events were derived for this run.
@@ -177,21 +168,13 @@ export function RunStateTimelinePanel({ baseUrl, projectId, runId }: Props) {
                     <span style={badgeStyle(tone)}>{ev.state}</span>
                     <span style={{ color: "#667085", fontSize: 10 }}>{ev.source}</span>
                     {ev.node_id && (
-                      <span style={{ color: "#888", fontSize: 10 }}>
-                        node: {ev.node_id}
-                      </span>
+                      <span style={{ color: "#888", fontSize: 10 }}>node: {ev.node_id}</span>
                     )}
                     {ev.timestamp && (
-                      <span style={{ color: "#999", fontSize: 10 }}>
-                        {ev.timestamp}
-                      </span>
+                      <span style={{ color: "#999", fontSize: 10 }}>{ev.timestamp}</span>
                     )}
                   </div>
-                  {ev.message && (
-                    <div style={{ color: "#344054", marginTop: 2 }}>
-                      {ev.message}
-                    </div>
-                  )}
+                  {ev.message && <div style={{ color: "#344054", marginTop: 2 }}>{ev.message}</div>}
                 </div>
               );
             })}
@@ -201,9 +184,7 @@ export function RunStateTimelinePanel({ baseUrl, projectId, runId }: Props) {
 
       {/* ── Node States ── */}
       <div>
-        <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 700 }}>
-          Node States
-        </h4>
+        <h4 style={{ margin: "0 0 4px 0", fontSize: 13, fontWeight: 700 }}>Node States</h4>
         {data.nodes.length === 0 ? (
           <div style={{ fontSize: 12, color: "#888" }}>
             No node-level state records were derived for this run.

@@ -56,7 +56,10 @@ export function useToolsDrawerController(
       setAssistantMessages((current) => [...current, { role: "user", text: message }]);
       try {
         const response = await sendAssistantMessage({ project_id: "", message });
-        setAssistantMessages((current) => [...current, { role: "assistant", text: response.reply }]);
+        setAssistantMessages((current) => [
+          ...current,
+          { role: "assistant", text: response.reply },
+        ]);
       } catch (err) {
         const friendly = err instanceof Error ? err.message : String(err);
         setAssistantError(friendly);
@@ -94,13 +97,22 @@ export function useToolsDrawerController(
   );
 
   return {
-    isOpen, setIsOpen,
-    executionMode, setExecutionMode,
-    externalSmokeApprovedRun, setExternalSmokeApprovedRun,
-    externalSmokeApprovedBy, setExternalSmokeApprovedBy,
-    assistantMessages, assistantInput, setAssistantInput,
-    assistantLoading, assistantError, pipelineLoading,
+    isOpen,
+    setIsOpen,
+    executionMode,
+    setExecutionMode,
+    externalSmokeApprovedRun,
+    setExternalSmokeApprovedRun,
+    externalSmokeApprovedBy,
+    setExternalSmokeApprovedBy,
+    assistantMessages,
+    assistantInput,
+    setAssistantInput,
+    assistantLoading,
+    assistantError,
+    pipelineLoading,
     handleAssistantSubmit,
-    handleNewChat, handleQuickAction,
+    handleNewChat,
+    handleQuickAction,
   };
 }

@@ -26,4 +26,3 @@ export function useTaskDiagnostics(taskId: string | null) {
 
   return useAsyncResource<TaskDiagnostics>(loader, emptyDiagnostics, [taskId]);
 }
-

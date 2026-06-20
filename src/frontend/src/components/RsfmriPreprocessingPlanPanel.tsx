@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  getRsfmriPreprocessingPlan,
-  refreshRsfmriPreprocessingPlan
-} from "../lib/api/legacy";
+import { getRsfmriPreprocessingPlan, refreshRsfmriPreprocessingPlan } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -38,7 +35,7 @@ export function RsfmriPreprocessingPlanPanel({ baseUrl }: Props) {
       const result = await refreshRsfmriPreprocessingPlan(baseUrl);
       setPayload({
         ok: true,
-        plan: result
+        plan: result,
       });
       setStatus("REFRESHED");
     } catch (err) {
@@ -84,11 +81,7 @@ export function RsfmriPreprocessingPlanPanel({ baseUrl }: Props) {
 
       <h3>rs-fMRI Preprocessing Plan Report</h3>
       <TextViewer
-        text={
-          typeof payload?.report === "string"
-            ? payload.report
-            : null
-        }
+        text={typeof payload?.report === "string" ? payload.report : null}
         emptyText="No plan report available"
       />
     </div>

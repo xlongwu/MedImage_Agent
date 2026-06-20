@@ -42,7 +42,9 @@ export function AssistantPanel({
           placeholder="Ask a question..."
           aria-label="Ask AI Assistant"
         />
-        <button type="submit" disabled={loading}>Go</button>
+        <button type="submit" disabled={loading}>
+          Go
+        </button>
       </form>
     </section>
   );

@@ -1,5 +1,10 @@
 import { useState } from "react";
-import type { TaskAuditPackage, TaskDiagnostics, TaskEvent, TaskLogEntry } from "../../lib/types/task";
+import type {
+  TaskAuditPackage,
+  TaskDiagnostics,
+  TaskEvent,
+  TaskLogEntry,
+} from "../../lib/types/task";
 
 export interface TaskDetailsPanelProps {
   task: TaskLogEntry | null;
@@ -67,17 +72,31 @@ export function TaskDetailsPanel({
             {streamConnected ? "Stream live" : "Stream idle"}
           </span>
           {error ? <button onClick={onRetry}>Reload Events</button> : null}
-          {!streamConnected && task.status === "running" ? <button onClick={onReconnect}>Reconnect</button> : null}
+          {!streamConnected && task.status === "running" ? (
+            <button onClick={onReconnect}>Reconnect</button>
+          ) : null}
           <button onClick={onGenerateAudit} disabled={auditLoading}>
             {auditLoading ? "Generating..." : "Audit Package"}
           </button>
         </div>
       </div>
       <div className="detail-grid">
-        <div><span>Mode</span><strong>{task.execution_mode || "simulated"}</strong></div>
-        <div><span>Progress</span><strong>{task.progress}%</strong></div>
-        <div><span>Owner</span><strong>{task.owner}</strong></div>
-        <div><span>Result</span><strong>{task.result_path || "Pending"}</strong></div>
+        <div>
+          <span>Mode</span>
+          <strong>{task.execution_mode || "simulated"}</strong>
+        </div>
+        <div>
+          <span>Progress</span>
+          <strong>{task.progress}%</strong>
+        </div>
+        <div>
+          <span>Owner</span>
+          <strong>{task.owner}</strong>
+        </div>
+        <div>
+          <span>Result</span>
+          <strong>{task.result_path || "Pending"}</strong>
+        </div>
       </div>
       {task.execution_mode === "external_smoke" ? (
         <div className="approval-strip">
@@ -105,7 +124,10 @@ export function TaskDetailsPanel({
       {diagnostics.diagnosis.length ? (
         <div className="diagnostic-list">
           {diagnostics.diagnosis.slice(0, 4).map((item, index) => (
-            <div key={`${item.code}-${index}`} className={`diagnostic-item ${String(item.severity || "info")}`}>
+            <div
+              key={`${item.code}-${index}`}
+              className={`diagnostic-item ${String(item.severity || "info")}`}
+            >
               <span>{String(item.code || "diagnostic")}</span>
               <p>{String(item.message || "")}</p>
             </div>
@@ -131,7 +153,9 @@ export function TaskDetailsPanel({
               <div className="panel-kicker">External tool results</div>
               {diagnostics.external_tool_results.slice(0, 3).map((result, index) => (
                 <div className="tool-result-row" key={index}>
-                  <strong>{String(result.command || result.function || `External run ${index + 1}`)}</strong>
+                  <strong>
+                    {String(result.command || result.function || `External run ${index + 1}`)}
+                  </strong>
                   <span>returncode {String(result.returncode ?? "n/a")}</span>
                 </div>
               ))}

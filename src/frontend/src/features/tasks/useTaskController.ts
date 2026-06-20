@@ -1,6 +1,12 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { TaskAuditPackage, TaskDiagnostics, TaskEvent, TaskLogEntry, TaskStreamMessage } from "../../lib/types/task";
+import type {
+  TaskAuditPackage,
+  TaskDiagnostics,
+  TaskEvent,
+  TaskLogEntry,
+  TaskStreamMessage,
+} from "../../lib/types/task";
 import { useTaskStream } from "../../hooks/useTaskStream";
 import { useTasks } from "../../hooks/useTasks";
 import { useTaskEvents } from "../../hooks/useTaskEvents";
@@ -55,7 +61,9 @@ export function useTaskController(
   const [auditLoading, setAuditLoading] = useState(false);
 
   // Reset audit package when the selected task changes.
-  useEffect(() => { setAuditPackage(null); }, [selectedTaskId]);
+  useEffect(() => {
+    setAuditPackage(null);
+  }, [selectedTaskId]);
 
   const handleTaskMessage = useCallback(
     (message: TaskStreamMessage) => {
@@ -75,14 +83,23 @@ export function useTaskController(
         taskEvents.setData((current) => [...current, event]);
       }
       // notice is owned by the app controller; callers handle it.
-      if ((message.status === "completed" || message.status === "failed") && selectedTaskId === message.task_id) {
+      if (
+        (message.status === "completed" || message.status === "failed") &&
+        selectedTaskId === message.task_id
+      ) {
         window.setTimeout(() => {
           taskEvents.reload();
           taskDiagnostics.reload();
         }, 250);
       }
     },
-    [selectedTaskId, taskDiagnostics.reload, taskEvents.reload, taskEvents.setData, updateTaskFromStream],
+    [
+      selectedTaskId,
+      taskDiagnostics.reload,
+      taskEvents.reload,
+      taskEvents.setData,
+      updateTaskFromStream,
+    ],
   );
 
   const taskStream = useTaskStream(null, handleTaskMessage);
@@ -164,18 +181,31 @@ export function useTaskController(
   }, [selectedTaskId, setActiveTaskId]);
 
   return {
-    tasks: tasks.data, tasksLoading: tasks.loading, tasksError: tasks.error,
-    reloadTasks: tasks.reload, updateTaskFromStream,
-    selectedTaskId, setSelectedTaskId,
-    selectedTask, taskCounts, hasPreprocessingRun,
-    taskEvents: taskEvents.data, taskEventsLoading: taskEvents.loading, taskEventsError: taskEvents.error,
+    tasks: tasks.data,
+    tasksLoading: tasks.loading,
+    tasksError: tasks.error,
+    reloadTasks: tasks.reload,
+    updateTaskFromStream,
+    selectedTaskId,
+    setSelectedTaskId,
+    selectedTask,
+    taskCounts,
+    hasPreprocessingRun,
+    taskEvents: taskEvents.data,
+    taskEventsLoading: taskEvents.loading,
+    taskEventsError: taskEvents.error,
     reloadTaskEvents: taskEvents.reload,
     taskDiagnosticsData: taskDiagnostics.data,
     reloadTaskDiagnostics: taskDiagnostics.reload,
-    taskStreamConnected: taskStream.connected, taskStreamError: taskStream.error,
-    approvalName, setApprovalName,
-    auditPackage, auditLoading,
-    handleApproveSelectedTask, handleGenerateAuditPackage, handleReconnectTaskStream,
+    taskStreamConnected: taskStream.connected,
+    taskStreamError: taskStream.error,
+    approvalName,
+    setApprovalName,
+    auditPackage,
+    auditLoading,
+    handleApproveSelectedTask,
+    handleGenerateAuditPackage,
+    handleReconnectTaskStream,
     setAuditPackage,
     taskEventsSetData: taskEvents.setData,
   };

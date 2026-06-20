@@ -11,7 +11,6 @@ export function useProject(projectId: string | null) {
   return useAsyncResource<ProjectDetail>(
     () => (projectId ? getProject(projectId) : Promise.resolve(fallbackProjectDetail)),
     fallbackProjectDetail,
-    [projectId]
+    [projectId],
   );
 }
-

@@ -38,12 +38,12 @@ const EMPTY_SETTINGS: Settings = {
     base_url: "https://api.openai.com/v1",
     model: "",
     api_key: "",
-    api_key_set: false
+    api_key_set: false,
   },
   gui_agent: {
     provider: "mock",
-    approved: false
-  }
+    approved: false,
+  },
 };
 
 export default function DesktopSettingsPanel({ baseUrl }: Props) {
@@ -62,7 +62,7 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
     try {
       const [configPayload, healthPayload] = await Promise.all([
         getDesktopConfig(baseUrl),
-        getDesktopHealth(baseUrl)
+        getDesktopHealth(baseUrl),
       ]);
       setSettings({ ...EMPTY_SETTINGS, ...((configPayload.config as Partial<Settings>) || {}) });
       setHealth(healthPayload);
@@ -94,27 +94,45 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
       <div className="formGrid">
         <label>
           Project directory
-          <input value={settings.project_dir} onChange={(event) => update("project_dir", event.target.value)} />
+          <input
+            value={settings.project_dir}
+            onChange={(event) => update("project_dir", event.target.value)}
+          />
         </label>
         <label>
           Python path
-          <input value={settings.python_path} onChange={(event) => update("python_path", event.target.value)} />
+          <input
+            value={settings.python_path}
+            onChange={(event) => update("python_path", event.target.value)}
+          />
         </label>
         <label>
           MATLAB command
-          <input value={settings.matlab_command} onChange={(event) => update("matlab_command", event.target.value)} />
+          <input
+            value={settings.matlab_command}
+            onChange={(event) => update("matlab_command", event.target.value)}
+          />
         </label>
         <label>
           SPM directory
-          <input value={settings.spm_dir} onChange={(event) => update("spm_dir", event.target.value)} />
+          <input
+            value={settings.spm_dir}
+            onChange={(event) => update("spm_dir", event.target.value)}
+          />
         </label>
         <label>
           DPABI directory
-          <input value={settings.dpabi_dir} onChange={(event) => update("dpabi_dir", event.target.value)} />
+          <input
+            value={settings.dpabi_dir}
+            onChange={(event) => update("dpabi_dir", event.target.value)}
+          />
         </label>
         <label>
           GPU mode
-          <select value={settings.gpu_mode} onChange={(event) => update("gpu_mode", event.target.value)}>
+          <select
+            value={settings.gpu_mode}
+            onChange={(event) => update("gpu_mode", event.target.value)}
+          >
             <option value="prefer">Prefer GPU</option>
             <option value="require">Require GPU</option>
             <option value="off">CPU only</option>
@@ -147,10 +165,14 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
           GUI provider (mock only)
           <select
             value={settings.gui_agent.provider}
-            onChange={(event) => update("gui_agent", { ...settings.gui_agent, provider: event.target.value })}
+            onChange={(event) =>
+              update("gui_agent", { ...settings.gui_agent, provider: event.target.value })
+            }
           >
             <option value="mock">Mock (safe default)</option>
-            <option value="pywinauto" disabled>pywinauto (blocked)</option>
+            <option value="pywinauto" disabled>
+              pywinauto (blocked)
+            </option>
           </select>
         </label>
       </div>
@@ -167,11 +189,15 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
           <input
             type="checkbox"
             checked={settings.gui_agent.approved}
-            onChange={(event) => update("gui_agent", { ...settings.gui_agent, approved: event.target.checked })}
+            onChange={(event) =>
+              update("gui_agent", { ...settings.gui_agent, approved: event.target.checked })
+            }
           />
           Enable GUI Agent (mock-only, record_observation)
         </label>
-        <button onClick={save} disabled={saving}>{saving ? "Saving..." : "Save settings"}</button>
+        <button onClick={save} disabled={saving}>
+          {saving ? "Saving..." : "Save settings"}
+        </button>
         <button onClick={refresh}>Refresh checks</button>
       </div>
       <h3>Desktop runtime</h3>

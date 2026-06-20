@@ -12,7 +12,11 @@ const workflowTabItems: Array<{ id: WorkflowTab; label: string; description: str
   { id: "environment", label: "Settings / Environment", description: "Planning tools" },
 ];
 
-export const WorkspaceSuspenseFallback = memo(function WorkspaceSuspenseFallback({ label }: { label: string }) {
+export const WorkspaceSuspenseFallback = memo(function WorkspaceSuspenseFallback({
+  label,
+}: {
+  label: string;
+}) {
   return (
     <div className="workspace-suspense-fallback" role="status" aria-live="polite">
       <span className="loading-dot" />
@@ -43,7 +47,12 @@ export const TopBar = memo(function TopBar({
         </div>
         <label className="search-box" htmlFor="global-search">
           <span>Search</span>
-          <input id="global-search" type="search" aria-label="Search projects, datasets, and studies" placeholder="projects, datasets, studies..." />
+          <input
+            id="global-search"
+            type="search"
+            aria-label="Search projects, datasets, and studies"
+            placeholder="projects, datasets, studies..."
+          />
           <kbd>Ctrl K</kbd>
         </label>
         <div className="top-actions">
@@ -54,7 +63,10 @@ export const TopBar = memo(function TopBar({
           <button onClick={onToggleMode}>{modeLabel}</button>
           <div className="profile-chip">
             <span>AM</span>
-            <div><strong>Dr. Alex Morgan</strong><small>Local lab desktop</small></div>
+            <div>
+              <strong>Dr. Alex Morgan</strong>
+              <small>Local lab desktop</small>
+            </div>
           </div>
         </div>
       </header>
@@ -82,7 +94,9 @@ export const ProjectList = memo(function ProjectList({
 }) {
   return (
     <div className="project-stack">
-      <div className="panel-kicker">Recent projects {loading ? "(loading)" : error ? "(fallback)" : ""}</div>
+      <div className="panel-kicker">
+        Recent projects {loading ? "(loading)" : error ? "(fallback)" : ""}
+      </div>
       {projects.map((item) => (
         <div key={item.id} className="project-pill-row">
           <button
@@ -109,11 +123,23 @@ export const ProjectList = memo(function ProjectList({
   );
 });
 
-export const ProjectHeroPanel = memo(function ProjectHeroPanel({ inventory }: { inventory: ProjectInventory }) {
+export const ProjectHeroPanel = memo(function ProjectHeroPanel({
+  inventory,
+}: {
+  inventory: ProjectInventory;
+}) {
   return (
     <section className="project-hero-panel" aria-label="Project summary">
       <div className="summary-meta-row">
-        <DashboardStatusPill status={inventory.dataState === "converted_bids" ? "ready" : inventory.dataState === "empty" ? "not_started" : "warning"}>
+        <DashboardStatusPill
+          status={
+            inventory.dataState === "converted_bids"
+              ? "ready"
+              : inventory.dataState === "empty"
+                ? "not_started"
+                : "warning"
+          }
+        >
           {inventory.dataStateLabel}
         </DashboardStatusPill>
         <span className="panel-kicker">{inventory.modality}</span>
@@ -129,14 +155,30 @@ export const ProjectHeroPanel = memo(function ProjectHeroPanel({ inventory }: { 
   );
 });
 
-const ProjectInventorySummary = memo(function ProjectInventorySummary({ inventory }: { inventory: ProjectInventory }) {
+const ProjectInventorySummary = memo(function ProjectInventorySummary({
+  inventory,
+}: {
+  inventory: ProjectInventory;
+}) {
   return (
     <div className="hero-metrics-grid">
-      <MetricTile label="Raw DICOM candidates" value={inventory.rawDicomCandidates} tone={inventory.hasRawDicom ? "blue" : "neutral"} />
+      <MetricTile
+        label="Raw DICOM candidates"
+        value={inventory.rawDicomCandidates}
+        tone={inventory.hasRawDicom ? "blue" : "neutral"}
+      />
       <MetricTile label="DICOM series" value={inventory.dicomSeriesCount} />
       <MetricTile label="DICOM files" value={inventory.dicomFileCount.toLocaleString()} />
-      <MetricTile label="Converted subjects" value={inventory.convertedSubjects} tone={inventory.convertedSubjects > 0 ? "green" : "neutral"} />
-      <MetricTile label="NIfTI files" value={inventory.niftiFileCount.toLocaleString()} tone={inventory.niftiFileCount > 0 ? "green" : "neutral"} />
+      <MetricTile
+        label="Converted subjects"
+        value={inventory.convertedSubjects}
+        tone={inventory.convertedSubjects > 0 ? "green" : "neutral"}
+      />
+      <MetricTile
+        label="NIfTI files"
+        value={inventory.niftiFileCount.toLocaleString()}
+        tone={inventory.niftiFileCount > 0 ? "green" : "neutral"}
+      />
     </div>
   );
 });
@@ -156,7 +198,9 @@ export const RecommendedNextStepCard = memo(function RecommendedNextStepCard({
     inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
       ? "Generate conversion dry-run"
       : inventory.dataState === "converted_bids"
-        ? (hasPreprocessingRun ? "Check preprocessing validation" : "Create preprocessing run")
+        ? hasPreprocessingRun
+          ? "Check preprocessing validation"
+          : "Create preprocessing run"
         : "Import dataset";
   const explanation =
     inventory.dataState === "raw_dicom" || inventory.dataState === "mixed"
@@ -177,7 +221,7 @@ export const RecommendedNextStepCard = memo(function RecommendedNextStepCard({
         ? [
             hasPreprocessingRun ? "Check preprocessing validation" : "Create preprocessing run",
             "Review QC report status",
-            "Open Plan Review when ready"
+            "Open Plan Review when ready",
           ]
         : ["Import dataset", "Review data readiness", "Check environment health"];
 
@@ -189,7 +233,10 @@ export const RecommendedNextStepCard = memo(function RecommendedNextStepCard({
       </div>
       <ol className="recommended-steps">
         {steps.slice(0, 3).map((step, index) => (
-          <li key={step}><span>{index + 1}</span>{step}</li>
+          <li key={step}>
+            <span>{index + 1}</span>
+            {step}
+          </li>
         ))}
       </ol>
       <div className="recommended-actions">
@@ -220,7 +267,8 @@ export const ReadinessStatusStrip = memo(function ReadinessStatusStrip({
   const isMixed = inventory.dataState === "mixed";
   const isEmpty = inventory.dataState === "empty";
 
-  let dataStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  let dataStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" =
+    "unknown";
   if (isConverted) {
     dataStatus = "ready";
   } else if (isRawDicom || isMixed) {
@@ -231,7 +279,8 @@ export const ReadinessStatusStrip = memo(function ReadinessStatusStrip({
 
   const dicomStatus = inventory.dicomFileCount > 0 ? "ready" : "not_applicable";
 
-  let bidsStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  let bidsStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" =
+    "unknown";
   if (isConverted) {
     bidsStatus = "ready";
   } else if (isRawDicom) {
@@ -242,7 +291,8 @@ export const ReadinessStatusStrip = memo(function ReadinessStatusStrip({
     bidsStatus = "not_started";
   }
 
-  let safetyStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  let safetyStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" =
+    "unknown";
   if (isConverted) {
     safetyStatus = "not_applicable";
   } else if (isRawDicom || isMixed) {
@@ -251,7 +301,8 @@ export const ReadinessStatusStrip = memo(function ReadinessStatusStrip({
     safetyStatus = "not_applicable";
   }
 
-  let prepStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" = "unknown";
+  let prepStatus: "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown" =
+    "unknown";
   if (isConverted || isMixed) {
     prepStatus = hasPreprocessingRun ? "ready" : "not_started";
   } else if (isRawDicom) {
@@ -267,7 +318,11 @@ export const ReadinessStatusStrip = memo(function ReadinessStatusStrip({
       <StatusStripItem label="Data" status={dataStatus} />
       <StatusStripItem label="DICOM" status={dicomStatus} />
       <StatusStripItem label="BIDS/NIfTI" status={bidsStatus} projectState={inventory.dataState} />
-      <StatusStripItem label="Conversion Safety" status={safetyStatus} projectState={inventory.dataState} />
+      <StatusStripItem
+        label="Conversion Safety"
+        status={safetyStatus}
+        projectState={inventory.dataState}
+      />
       <StatusStripItem label="Preprocessing" status={prepStatus} />
       <StatusStripItem label="Environment" status={envStatus} />
     </section>
@@ -286,7 +341,11 @@ const StatusStripItem = memo(function StatusStripItem({
   let copy: string | undefined = undefined;
   if (label === "BIDS/NIfTI" && status === "warning" && projectState === "raw_dicom") {
     copy = "Expected before conversion";
-  } else if (label === "Conversion Safety" && status === "warning" && projectState === "raw_dicom") {
+  } else if (
+    label === "Conversion Safety" &&
+    status === "warning" &&
+    projectState === "raw_dicom"
+  ) {
     copy = "Review required";
   }
   return (
@@ -304,29 +363,32 @@ export const WorkflowTabs = memo(function WorkflowTabs({
   activeTab: WorkflowTab;
   onChange: (tab: WorkflowTab) => void;
 }) {
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, tabId: WorkflowTab) => {
-    const currentIndex = workflowTabItems.findIndex((tab) => tab.id === tabId);
-    const lastIndex = workflowTabItems.length - 1;
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = currentIndex === lastIndex ? 0 : currentIndex + 1;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = currentIndex === 0 ? lastIndex : currentIndex - 1;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = lastIndex;
-    }
-    if (nextIndex === null) {
-      return;
-    }
-    event.preventDefault();
-    const nextTab = workflowTabItems[nextIndex];
-    onChange(nextTab.id);
-    window.requestAnimationFrame(() => {
-      document.getElementById(`workflow-tab-${nextTab.id}`)?.focus();
-    });
-  }, [onChange]);
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLButtonElement>, tabId: WorkflowTab) => {
+      const currentIndex = workflowTabItems.findIndex((tab) => tab.id === tabId);
+      const lastIndex = workflowTabItems.length - 1;
+      let nextIndex: number | null = null;
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        nextIndex = currentIndex === lastIndex ? 0 : currentIndex + 1;
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        nextIndex = currentIndex === 0 ? lastIndex : currentIndex - 1;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = lastIndex;
+      }
+      if (nextIndex === null) {
+        return;
+      }
+      event.preventDefault();
+      const nextTab = workflowTabItems[nextIndex];
+      onChange(nextTab.id);
+      window.requestAnimationFrame(() => {
+        document.getElementById(`workflow-tab-${nextTab.id}`)?.focus();
+      });
+    },
+    [onChange],
+  );
 
   return (
     <nav className="workflow-tabs" role="tablist" aria-label="Workflow stages">

@@ -34,54 +34,54 @@ import type {
 } from "../../types";
 import { requestJson } from "./legacyCore";
 
-export async function createImportDiagnosticsPackage(baseUrl: string, projectId = "brain-tumor-study") {
+export async function createImportDiagnosticsPackage(
+  baseUrl: string,
+  projectId = "brain-tumor-study",
+) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
     `/api/datasets/diagnostics/package?project_id=${encodeURIComponent(projectId)}`,
-    { method: "POST" }
+    { method: "POST" },
   );
 }
 
 export async function diagnoseRun(baseUrl: string, runId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/runs/${encodeURIComponent(runId)}/diagnosis`
+    `/api/runs/${encodeURIComponent(runId)}/diagnosis`,
   );
 }
 
 export async function getDatasetImportHistory(baseUrl: string, projectId = "brain-tumor-study") {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/datasets/imports?project_id=${encodeURIComponent(projectId)}`
+    `/api/datasets/imports?project_id=${encodeURIComponent(projectId)}`,
   );
 }
 
-export async function getLatestImportDiagnosticsPackage(baseUrl: string, projectId = "brain-tumor-study") {
+export async function getLatestImportDiagnosticsPackage(
+  baseUrl: string,
+  projectId = "brain-tumor-study",
+) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/datasets/diagnostics/package/latest?project_id=${encodeURIComponent(projectId)}`
+    `/api/datasets/diagnostics/package/latest?project_id=${encodeURIComponent(projectId)}`,
   );
 }
 
 export async function getRetryRun(baseUrl: string, retryRunId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/retry-runs/${encodeURIComponent(retryRunId)}`
+    `/api/retry-runs/${encodeURIComponent(retryRunId)}`,
   );
 }
 
 export async function inspectRun(baseUrl: string, runId: string) {
-  return requestJson<RunInspection>(
-    baseUrl,
-    `/api/runs/${encodeURIComponent(runId)}`
-  );
+  return requestJson<RunInspection>(baseUrl, `/api/runs/${encodeURIComponent(runId)}`);
 }
 
 export async function listRuns(baseUrl: string) {
-  return requestJson<{ ok: boolean; runs: Array<Record<string, unknown>> }>(
-    baseUrl,
-    "/api/runs"
-  );
+  return requestJson<{ ok: boolean; runs: Array<Record<string, unknown>> }>(baseUrl, "/api/runs");
 }
 
 export async function readLog(baseUrl: string, path: string) {
@@ -94,14 +94,10 @@ export async function readLog(baseUrl: string, path: string) {
   }>(baseUrl, `/api/logs/read?path=${encodeURIComponent(path)}`);
 }
 
-export async function retryDryRun(
-  baseUrl: string,
-  runId: string,
-  retryRunId?: string
-) {
+export async function retryDryRun(baseUrl: string, runId: string, retryRunId?: string) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/retry/dry-run", {
     method: "POST",
-    body: JSON.stringify({ run_id: runId, retry_run_id: retryRunId })
+    body: JSON.stringify({ run_id: runId, retry_run_id: retryRunId }),
   });
 }
 
@@ -110,7 +106,7 @@ export async function retryExecute(
   runId: string,
   projectConfigPath: string,
   retryRunId?: string,
-  approved = false
+  approved = false,
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/retry/execute", {
     method: "POST",
@@ -118,15 +114,18 @@ export async function retryExecute(
       run_id: runId,
       project_config_path: projectConfigPath,
       retry_run_id: retryRunId,
-      approved
-    })
+      approved,
+    }),
   });
 }
 
-export async function verifyImportDiagnosticsPackage(baseUrl: string, projectId = "brain-tumor-study") {
+export async function verifyImportDiagnosticsPackage(
+  baseUrl: string,
+  projectId = "brain-tumor-study",
+) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
     `/api/datasets/diagnostics/package/verify?project_id=${encodeURIComponent(projectId)}`,
-    { method: "POST" }
+    { method: "POST" },
   );
 }

@@ -11,17 +11,9 @@ import type {
   RunLinkRecord,
   RunSummaryPreview,
 } from "../types";
-import {
-  mergeSummaryWarnings,
-  normalizeRunSummaryPreview,
-} from "./projectRunsPanelModel";
+import { mergeSummaryWarnings, normalizeRunSummaryPreview } from "./projectRunsPanelModel";
 import { RunDetailPanel, RunListPanel } from "./run-history";
-import {
-  headerStyle,
-  panelStyle,
-  subtitleStyle,
-  titleStyle,
-} from "./run-history/pathActions";
+import { headerStyle, panelStyle, subtitleStyle, titleStyle } from "./run-history/pathActions";
 
 type Props = {
   baseUrl: string;
@@ -57,7 +49,7 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
 
   const selectedFromList = useMemo(
     () => runs.find((run) => run.run_id === selectedRunId) ?? null,
-    [runs, selectedRunId]
+    [runs, selectedRunId],
   );
   const detail = selectedRun ?? selectedFromList;
 
@@ -294,7 +286,12 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
           <h2 style={titleStyle}>Project Runs</h2>
           <span style={subtitleStyle}>Reviewed execute history and artifact entry points.</span>
         </div>
-        <button type="button" onClick={() => void refreshRuns()} disabled={loading} style={{ minHeight: 34, padding: "6px 12px", fontWeight: 850 }}>
+        <button
+          type="button"
+          onClick={() => void refreshRuns()}
+          disabled={loading}
+          style={{ minHeight: 34, padding: "6px 12px", fontWeight: 850 }}
+        >
           {loading ? "Refreshing..." : "Refresh"}
         </button>
       </div>
@@ -306,7 +303,14 @@ export default function ProjectRunsPanel({ baseUrl, projectId, projectDir }: Pro
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, alignItems: "start" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: 14,
+          alignItems: "start",
+        }}
+      >
         <div style={{ minWidth: 0 }}>
           <RunListPanel
             runs={runs}

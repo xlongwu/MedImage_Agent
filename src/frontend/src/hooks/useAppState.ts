@@ -65,7 +65,13 @@ export function useAppState() {
   const tasks = useTasks();
   const imageSources = useImageSources(project.data.id);
   const imageValidation = useImageValidation(project.data.id);
-  const imagePreview = useImagePreview(project.data.id, sequence, selectedSubjectId, sliceIndex, plane);
+  const imagePreview = useImagePreview(
+    project.data.id,
+    sequence,
+    selectedSubjectId,
+    sliceIndex,
+    plane,
+  );
   const pipeline = useRunPipeline();
   const taskEvents = useTaskEvents(selectedTaskId);
   const taskDiagnostics = useTaskDiagnostics(selectedTaskId);
@@ -113,7 +119,7 @@ export function useAppState() {
     }
     setHealth(false);
     setApiError(
-      "Backend disconnected. Start it with:\npython -m uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000"
+      "Backend disconnected. Start it with:\npython -m uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000",
     );
   }, [baseUrl]);
 
@@ -146,7 +152,13 @@ export function useAppState() {
         }, 250);
       }
     },
-    [selectedTaskId, taskDiagnostics.reload, taskEvents.reload, taskEvents.setData, tasks.updateTaskFromStream]
+    [
+      selectedTaskId,
+      taskDiagnostics.reload,
+      taskEvents.reload,
+      taskEvents.setData,
+      tasks.updateTaskFromStream,
+    ],
   );
 
   const taskStream = useTaskStream(activeTaskId, handleTaskMessage);
@@ -166,7 +178,9 @@ export function useAppState() {
   const selectedImageSource = useMemo(() => {
     const manifest = imageSources.data.manifest ?? [];
     return (
-      manifest.find((item) => item.subject_id === selectedSubjectId && item.sequence === sequence) ??
+      manifest.find(
+        (item) => item.subject_id === selectedSubjectId && item.sequence === sequence,
+      ) ??
       manifest.find((item) => item.subject_id === selectedSubjectId) ??
       null
     );
@@ -174,26 +188,66 @@ export function useAppState() {
 
   return {
     // state
-    baseUrl, mode, health, apiError, notice,
-    selectedProjectId, selectedSubjectId, selectedTaskId, activeTaskId,
-    sequence, plane, sliceIndex,
-    executionMode, externalSmokeApprovedRun, externalSmokeApprovedBy, taskApprovalName,
-    auditPackage, auditLoading,
-    assistantInput, assistantLoading, assistantError,
+    baseUrl,
+    mode,
+    health,
+    apiError,
+    notice,
+    selectedProjectId,
+    selectedSubjectId,
+    selectedTaskId,
+    activeTaskId,
+    sequence,
+    plane,
+    sliceIndex,
+    executionMode,
+    externalSmokeApprovedRun,
+    externalSmokeApprovedBy,
+    taskApprovalName,
+    auditPackage,
+    auditLoading,
+    assistantInput,
+    assistantLoading,
+    assistantError,
     // data hooks
-    projects, project, overview, dataset, model, tasks,
-    imageSources, imageValidation, imagePreview,
-    pipeline, taskEvents, taskDiagnostics, taskStream,
+    projects,
+    project,
+    overview,
+    dataset,
+    model,
+    tasks,
+    imageSources,
+    imageValidation,
+    imagePreview,
+    pipeline,
+    taskEvents,
+    taskDiagnostics,
+    taskStream,
     // derived
-    taskCounts, sequenceOptions, selectedImageSource,
+    taskCounts,
+    sequenceOptions,
+    selectedImageSource,
     // setters
-    setMode, setHealth, setApiError, setNotice,
-    setSelectedProjectId, setSelectedSubjectId, setSelectedTaskId, setActiveTaskId,
-    setSequence, setPlane, setSliceIndex,
-    setExecutionMode, setExternalSmokeApprovedRun, setExternalSmokeApprovedBy,
+    setMode,
+    setHealth,
+    setApiError,
+    setNotice,
+    setSelectedProjectId,
+    setSelectedSubjectId,
+    setSelectedTaskId,
+    setActiveTaskId,
+    setSequence,
+    setPlane,
+    setSliceIndex,
+    setExecutionMode,
+    setExternalSmokeApprovedRun,
+    setExternalSmokeApprovedBy,
     setTaskApprovalName,
-    setAuditPackage, setAuditLoading,
-    setAssistantInput, setAssistantLoading, setAssistantError,
+    setAuditPackage,
+    setAuditLoading,
+    setAssistantInput,
+    setAssistantLoading,
+    setAssistantError,
     // actions
     checkHealth,
   };

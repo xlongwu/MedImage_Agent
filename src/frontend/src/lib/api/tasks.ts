@@ -22,8 +22,14 @@ export function getTaskEvents(taskId: string): Promise<TaskEvent[]> {
   return getJson<TaskEvent[]>(`/api/tasks/${encodeURIComponent(taskId)}/events`);
 }
 
-export function approveTask(taskId: string, payload: TaskApprovalRequest): Promise<TaskApprovalResponse> {
-  return postJson<TaskApprovalResponse>(`/api/tasks/${encodeURIComponent(taskId)}/approve`, payload);
+export function approveTask(
+  taskId: string,
+  payload: TaskApprovalRequest,
+): Promise<TaskApprovalResponse> {
+  return postJson<TaskApprovalResponse>(
+    `/api/tasks/${encodeURIComponent(taskId)}/approve`,
+    payload,
+  );
 }
 
 export function getTaskDiagnostics(taskId: string): Promise<TaskDiagnostics> {

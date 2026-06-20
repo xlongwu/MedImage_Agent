@@ -8,6 +8,9 @@ export function getDesktopHealth(baseUrl: string): Promise<Record<string, unknow
   return getJson<Record<string, unknown>>("/api/desktop/health", { baseUrl });
 }
 
-export function saveDesktopConfig(baseUrl: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+export function saveDesktopConfig(
+  baseUrl: string,
+  payload: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   return postJson<Record<string, unknown>>("/api/desktop/config", payload, { baseUrl });
 }

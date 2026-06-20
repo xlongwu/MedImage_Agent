@@ -1,15 +1,99 @@
 import { useState } from "react";
-import { getRsfmriFunctionalConnectivity, runRsfmriFunctionalConnectivity } from "../lib/api/legacy";
-import { JsonBlock } from "./JsonBlock"; import { StatusBadge } from "./StatusBadge"; import { TextViewer } from "./TextViewer";
+import {
+  getRsfmriFunctionalConnectivity,
+  runRsfmriFunctionalConnectivity,
+} from "../lib/api/legacy";
+import { JsonBlock } from "./JsonBlock";
+import { StatusBadge } from "./StatusBadge";
+import { TextViewer } from "./TextViewer";
 type Props = { baseUrl: string };
 export function RsfmriFunctionalConnectivityPanel({ baseUrl }: Props) {
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loaded, setLoaded] = useState<Record<string, unknown> | null>(null);
-  const [status, setStatus] = useState("IDLE"); const [error, setError] = useState("");
-  async function handleRun() { if (!window.confirm("Run Python FC? Synthetic only, no DPABI/GPU.")) return; setStatus("RUNNING"); setError(""); try { const r = await runRsfmriFunctionalConnectivity(baseUrl, { project_config_path: "examples/project_config_dataset.yaml", pipeline_path: "examples/pipeline_rsfmri_functional_connectivity.yaml", approved: true }); setResult(r); setStatus("SUCCESS"); } catch (err) { setError(err instanceof Error ? err.message : String(err)); setStatus("ERROR"); } }
-  async function handleLoad() { setStatus("LOADING"); setError(""); try { setLoaded(await getRsfmriFunctionalConnectivity(baseUrl)); setStatus("LOADED"); } catch (err) { setError(err instanceof Error ? err.message : String(err)); setStatus("ERROR"); } }
+  const [status, setStatus] = useState("IDLE");
+  const [error, setError] = useState("");
+  async function handleRun() {
+    if (!window.confirm("Run Python FC? Synthetic only, no DPABI/GPU.")) return;
+    setStatus("RUNNING");
+    setError("");
+    try {
+      const r = await runRsfmriFunctionalConnectivity(baseUrl, {
+        project_config_path: "examples/project_config_dataset.yaml",
+        pipeline_path: "examples/pipeline_rsfmri_functional_connectivity.yaml",
+        approved: true,
+      });
+      setResult(r);
+      setStatus("SUCCESS");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("ERROR");
+    }
+  }
+  async function handleLoad() {
+    setStatus("LOADING");
+    setError("");
+    try {
+      setLoaded(await getRsfmriFunctionalConnectivity(baseUrl));
+      setStatus("LOADED");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("ERROR");
+    }
+  }
   const s = loaded?.functional_connectivity_qc_summary as Record<string, unknown> | undefined;
-  return (<div><div className="row"><button className="dangerButton" onClick={handleRun}>Approve and Run Python FC</button><button onClick={handleLoad}>Load FC Results</button><StatusBadge status={status} /></div>{error ? <div className="errorBox">{error}</div> : null}
-    <div className="metricGrid"><div className="metricCard"><span>Subjects</span><strong>{String(s?.subjects_total ?? "-")}</strong></div><div className="metricCard"><span>PASS</span><strong>{String(s?.subjects_pass ?? "-")}</strong></div><div className="metricCard"><span>WARNING</span><strong>{String(s?.subjects_warning ?? "-")}</strong></div><div className="metricCard"><span>FAIL</span><strong>{String(s?.subjects_fail ?? "-")}</strong></div><div className="metricCard"><span>Mean ROI Count</span><strong>{s?.mean_roi_count == null ? "-" : Number(s.mean_roi_count).toFixed(2)}</strong></div></div>
-    <h3>Run Summary</h3><JsonBlock value={result} emptyText="Not yet run" /><h3>FC QC Summary</h3><JsonBlock value={loaded?.functional_connectivity_qc_summary} emptyText="No summary" /><h3>Subject QC</h3><JsonBlock value={loaded?.subject_functional_connectivity_qc} emptyText="No subject QC" /><h3>Subject Results</h3><JsonBlock value={loaded?.subject_functional_connectivity_results} emptyText="No results" /><h3>GPU Contract</h3><JsonBlock value={loaded?.gpu_candidate_contract} emptyText="No contract" /><h3>DPABI Contract</h3><JsonBlock value={loaded?.dpabi_backend_contract} emptyText="No contract" /><h3>Report</h3><TextViewer text={typeof loaded?.functional_connectivity_qc_report === "string" ? loaded.functional_connectivity_qc_report : null} emptyText="No report" /></div>);
+  return (
+    <div>
+      <div className="row">
+        <button className="dangerButton" onClick={handleRun}>
+          Approve and Run Python FC
+        </button>
+        <button onClick={handleLoad}>Load FC Results</button>
+        <StatusBadge status={status} />
+      </div>
+      {error ? <div className="errorBox">{error}</div> : null}
+      <div className="metricGrid">
+        <div className="metricCard">
+          <span>Subjects</span>
+          <strong>{String(s?.subjects_total ?? "-")}</strong>
+        </div>
+        <div className="metricCard">
+          <span>PASS</span>
+          <strong>{String(s?.subjects_pass ?? "-")}</strong>
+        </div>
+        <div className="metricCard">
+          <span>WARNING</span>
+          <strong>{String(s?.subjects_warning ?? "-")}</strong>
+        </div>
+        <div className="metricCard">
+          <span>FAIL</span>
+          <strong>{String(s?.subjects_fail ?? "-")}</strong>
+        </div>
+        <div className="metricCard">
+          <span>Mean ROI Count</span>
+          <strong>{s?.mean_roi_count == null ? "-" : Number(s.mean_roi_count).toFixed(2)}</strong>
+        </div>
+      </div>
+      <h3>Run Summary</h3>
+      <JsonBlock value={result} emptyText="Not yet run" />
+      <h3>FC QC Summary</h3>
+      <JsonBlock value={loaded?.functional_connectivity_qc_summary} emptyText="No summary" />
+      <h3>Subject QC</h3>
+      <JsonBlock value={loaded?.subject_functional_connectivity_qc} emptyText="No subject QC" />
+      <h3>Subject Results</h3>
+      <JsonBlock value={loaded?.subject_functional_connectivity_results} emptyText="No results" />
+      <h3>GPU Contract</h3>
+      <JsonBlock value={loaded?.gpu_candidate_contract} emptyText="No contract" />
+      <h3>DPABI Contract</h3>
+      <JsonBlock value={loaded?.dpabi_backend_contract} emptyText="No contract" />
+      <h3>Report</h3>
+      <TextViewer
+        text={
+          typeof loaded?.functional_connectivity_qc_report === "string"
+            ? loaded.functional_connectivity_qc_report
+            : null
+        }
+        emptyText="No report"
+      />
+    </div>
+  );
 }

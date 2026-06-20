@@ -1,9 +1,6 @@
 import type { RunSummaryPreview } from "../../types";
 import { JsonBlock } from "../JsonBlock";
-import {
-  mergeSummaryWarnings,
-  missingSummaryWarning,
-} from "../projectRunsPanelModel";
+import { mergeSummaryWarnings, missingSummaryWarning } from "../projectRunsPanelModel";
 import {
   detailGridStyle,
   formatDate,
@@ -48,7 +45,15 @@ export function RunSummaryPreviewCard({
   const failedNodes = preview.failed_nodes ?? [];
   return (
     <div style={{ display: "grid", gap: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
         <div style={{ minWidth: 0 }}>
           <div style={{ color: "#667085", fontSize: 11, fontWeight: 900 }}>summary_path</div>
           <div style={{ ...monoPathStyle, marginTop: 4 }}>{summaryPath || "-"}</div>
@@ -68,10 +73,22 @@ export function RunSummaryPreviewCard({
       </div>
 
       <div style={detailGridStyle}>
-        <div><span>started</span><strong>{formatDate(preview.started_at)}</strong></div>
-        <div><span>finished</span><strong>{formatDate(preview.finished_at)}</strong></div>
-        <div><span>summary run_id</span><strong>{preview.run_id || "-"}</strong></div>
-        <div><span>raw preview</span><strong>{preview.raw_truncated ? "truncated" : "bounded"}</strong></div>
+        <div>
+          <span>started</span>
+          <strong>{formatDate(preview.started_at)}</strong>
+        </div>
+        <div>
+          <span>finished</span>
+          <strong>{formatDate(preview.finished_at)}</strong>
+        </div>
+        <div>
+          <span>summary run_id</span>
+          <strong>{preview.run_id || "-"}</strong>
+        </div>
+        <div>
+          <span>raw preview</span>
+          <strong>{preview.raw_truncated ? "truncated" : "bounded"}</strong>
+        </div>
       </div>
 
       <WarningList warnings={mergeSummaryWarnings(preview, warnings)} />

@@ -39,8 +39,7 @@ export function deriveRunHealth(
 
   const status = (run.status ?? "").toUpperCase();
   const isFailedStatus = status.includes("FAILED") || status.includes("BLOCKED");
-  const hasFailedNodes =
-    summaryPreview?.nodes_failed != null && summaryPreview.nodes_failed > 0;
+  const hasFailedNodes = summaryPreview?.nodes_failed != null && summaryPreview.nodes_failed > 0;
 
   if (isFailedStatus || hasFailedNodes) {
     const reasons: string[] = [];
@@ -88,10 +87,9 @@ export function deriveRunHealth(
     return {
       level: "ok",
       label: "Healthy",
-      explanation:
-        status.includes("RUNNING")
-          ? "Run is submitted/running; summary may update later."
-          : "Run completed successfully with no warnings.",
+      explanation: status.includes("RUNNING")
+        ? "Run is submitted/running; summary may update later."
+        : "Run completed successfully with no warnings.",
     };
   }
 

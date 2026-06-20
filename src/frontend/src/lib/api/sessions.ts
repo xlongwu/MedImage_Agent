@@ -43,5 +43,7 @@ export function postSessionIndex(baseUrl: string): Promise<Record<string, unknow
 }
 
 export function querySessions(baseUrl: string, q: string): Promise<SessionQueryResponse> {
-  return getJson<SessionQueryResponse>(`/api/sessions/query?q=${encodeURIComponent(q)}&limit=50`, { baseUrl });
+  return getJson<SessionQueryResponse>(`/api/sessions/query?q=${encodeURIComponent(q)}&limit=50`, {
+    baseUrl,
+  });
 }

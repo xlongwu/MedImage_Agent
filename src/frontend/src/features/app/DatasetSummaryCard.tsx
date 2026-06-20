@@ -8,7 +8,8 @@ export interface DatasetSummaryCardProps {
 }
 
 export function DatasetSummaryCard({ summary, loading, error }: DatasetSummaryCardProps) {
-  const isRawDicom = summary.dicom_files !== undefined && summary.dicom_files > 0 && summary.subjects === 0;
+  const isRawDicom =
+    summary.dicom_files !== undefined && summary.dicom_files > 0 && summary.subjects === 0;
   return (
     <MetricCard
       title={`Dataset Summary ${loading ? "..." : error ? "(fallback)" : ""}`}

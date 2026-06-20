@@ -14,7 +14,7 @@ const DPABI_FUNCTIONS = [
   "y_alff_falff",
   "y_Reho",
   "y_ROItseries",
-  "y_FC"
+  "y_FC",
 ];
 
 export default function ExternalSmokePanel({ baseUrl }: Props) {
@@ -53,7 +53,7 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
         config_path: configPath,
         approved,
         approved_by: approvedBy,
-        dpabi_function: dpabiFunction
+        dpabi_function: dpabiFunction,
       });
       setResult(payload);
       await refresh();
@@ -96,7 +96,9 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
           DPABI function
           <select value={dpabiFunction} onChange={(event) => setDpabiFunction(event.target.value)}>
             {DPABI_FUNCTIONS.map((item) => (
-              <option key={item} value={item}>{item}</option>
+              <option key={item} value={item}>
+                {item}
+              </option>
             ))}
           </select>
         </label>
@@ -114,8 +116,12 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
           />
           Approve MATLAB smoke
         </label>
-        <button onClick={run} disabled={busy}>{busy ? "Running..." : "Run external smoke"}</button>
-        <button onClick={refresh} disabled={busy}>Refresh status</button>
+        <button onClick={run} disabled={busy}>
+          {busy ? "Running..." : "Run external smoke"}
+        </button>
+        <button onClick={refresh} disabled={busy}>
+          Refresh status
+        </button>
       </div>
       <h3>Latest status</h3>
       <JsonBlock value={status} emptyText="No external smoke status" />

@@ -12,7 +12,7 @@ type Props = {
 function NodeStateCard({
   node,
   onSelect,
-  onReadLog
+  onReadLog,
 }: {
   node: NodeStateSummary;
   onSelect: (node: NodeStateSummary) => void;
@@ -41,14 +41,10 @@ function NodeStateCard({
       <div className="row">
         <button onClick={() => onSelect(node)}>查看 State</button>
         {node.stdout_log ? (
-          <button onClick={() => onReadLog(node.stdout_log as string)}>
-            stdout
-          </button>
+          <button onClick={() => onReadLog(node.stdout_log as string)}>stdout</button>
         ) : null}
         {node.stderr_log ? (
-          <button onClick={() => onReadLog(node.stderr_log as string)}>
-            stderr
-          </button>
+          <button onClick={() => onReadLog(node.stderr_log as string)}>stderr</button>
         ) : null}
       </div>
     </div>
@@ -102,9 +98,7 @@ export function RunMonitor({ baseUrl }: Props) {
   }
 
   const summaryStatus =
-    inspection?.summary &&
-    typeof inspection.summary === "object" &&
-    "status" in inspection.summary
+    inspection?.summary && typeof inspection.summary === "object" && "status" in inspection.summary
       ? String((inspection.summary as { status?: unknown }).status)
       : "UNKNOWN";
 
@@ -113,10 +107,7 @@ export function RunMonitor({ baseUrl }: Props) {
       <div className="formGrid">
         <label>
           Run ID
-          <input
-            value={selectedRunId}
-            onChange={(event) => setSelectedRunId(event.target.value)}
-          />
+          <input value={selectedRunId} onChange={(event) => setSelectedRunId(event.target.value)} />
         </label>
       </div>
 

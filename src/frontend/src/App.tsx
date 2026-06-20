@@ -17,7 +17,12 @@ import { useTasks } from "./hooks/useTasks";
 import { buildProjectInventory } from "./lib/projectWorkflow";
 import type { ProjectInventory } from "./lib/projectWorkflow";
 import type { ChatMessage } from "./lib/types/assistant";
-import type { ImagePlane, ImagePreview, ImageSources, ImageValidationReport } from "./lib/types/image";
+import type {
+  ImagePlane,
+  ImagePreview,
+  ImageSources,
+  ImageValidationReport,
+} from "./lib/types/image";
 import type { ModelStatus } from "./lib/types/model";
 import type { ExecutionMode } from "./lib/types/pipeline";
 import type { ProjectDetail } from "./lib/types/project";
@@ -39,18 +44,23 @@ export default function App() {
   const taskController = useTaskController() as TaskController;
   const toolsDrawer = useToolsDrawerController(
     app.setMode,
-    async () => { await projectController.handleUploadData(); },
-    () => app.handleRunPipeline({
-      projectId: projectController.project.id,
-      pipelineId: projectController.project.current_pipeline_id,
-      modelId: projectController.project.current_model_id,
-      sequences: projectController.project.sequences,
-      executionMode: "simulated",
-      externalSmokeApproved: false,
-      externalSmokeApprovedBy: "",
-      onTaskStarted: () => {},
-    }),
-    async () => { await app.handleQuickAction("view-results"); },
+    async () => {
+      await projectController.handleUploadData();
+    },
+    () =>
+      app.handleRunPipeline({
+        projectId: projectController.project.id,
+        pipelineId: projectController.project.current_pipeline_id,
+        modelId: projectController.project.current_model_id,
+        sequences: projectController.project.sequences,
+        executionMode: "simulated",
+        externalSmokeApproved: false,
+        externalSmokeApprovedBy: "",
+        onTaskStarted: () => {},
+      }),
+    async () => {
+      await app.handleQuickAction("view-results");
+    },
     app.pipelineLoading,
   );
 
@@ -74,7 +84,10 @@ export default function App() {
 
   const project = useProject(selectedProjectId);
   const selectedProjectForPlanReview = useMemo(
-    () => selectedProjectId && !project.fromFallback && project.data.id === selectedProjectId ? project.data : null,
+    () =>
+      selectedProjectId && !project.fromFallback && project.data.id === selectedProjectId
+        ? project.data
+        : null,
     [selectedProjectId, project],
   );
   const selectedProjectMetadata = selectedProjectForPlanReview?.metadata;
@@ -83,7 +96,9 @@ export default function App() {
       return projectController.projectCreateResult.diagnostics;
     }
     const diagnostics = selectedProjectMetadata?.diagnostics;
-    return diagnostics && typeof diagnostics === "object" ? (diagnostics as Record<string, unknown>) : {};
+    return diagnostics && typeof diagnostics === "object"
+      ? (diagnostics as Record<string, unknown>)
+      : {};
   }, [projectController.projectCreateResult, selectedProjectId, selectedProjectMetadata]);
 
   const overview = useProjectOverview(project.data.study_id);
@@ -96,7 +111,13 @@ export default function App() {
   const model = useModelStatus(project.data.id);
   const imageSources = useImageSources(project.data.id);
   const imageValidation = useImageValidation(project.data.id);
-  const imagePreview = useImagePreview(project.data.id, sequence, selectedSubjectId, sliceIndex, plane);
+  const imagePreview = useImagePreview(
+    project.data.id,
+    sequence,
+    selectedSubjectId,
+    sliceIndex,
+    plane,
+  );
   const pipeline = useRunPipeline();
   const taskEvents = useTaskEvents(selectedTaskId);
   const taskDiagnostics = useTaskDiagnostics(selectedTaskId);
@@ -108,16 +129,30 @@ export default function App() {
 
   const selectedImageSource = useMemo(() => {
     const manifest = imageSources.data.manifest ?? [];
-    return manifest.find((item) => item.subject_id === selectedSubjectId && item.sequence === sequence) ?? manifest.find((item) => item.subject_id === selectedSubjectId) ?? null;
+    return (
+      manifest.find(
+        (item) => item.subject_id === selectedSubjectId && item.sequence === sequence,
+      ) ??
+      manifest.find((item) => item.subject_id === selectedSubjectId) ??
+      null
+    );
   }, [imageSources.data.manifest, selectedSubjectId, sequence]);
 
   useEffect(() => {
     let active = true;
-    getApiBaseUrl().then((url) => { if (active) app.setBaseUrl(url); }).catch(() => {});
-    return () => { active = false; };
+    getApiBaseUrl()
+      .then((url) => {
+        if (active) app.setBaseUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, [app]);
 
-  useEffect(() => { app.checkHealth(); }, [app.baseUrl, app.checkHealth]);
+  useEffect(() => {
+    app.checkHealth();
+  }, [app.baseUrl, app.checkHealth]);
 
   useEffect(() => {
     if (projectInventory) {
@@ -129,23 +164,31 @@ export default function App() {
 
   useEffect(() => {
     if (!projectController.projects.data.length) return;
-    const exists = selectedProjectId ? projectController.projects.data.some((item) => item.id === selectedProjectId) : false;
+    const exists = selectedProjectId
+      ? projectController.projects.data.some((item) => item.id === selectedProjectId)
+      : false;
     if (!selectedProjectId || !exists) setSelectedProjectId(projectController.projects.data[0].id);
   }, [projectController.projects.data, selectedProjectId]);
 
   useEffect(() => {
-    if (project.data.sequences.length && !project.data.sequences.includes(sequence)) setSequence(project.data.sequences[0]);
+    if (project.data.sequences.length && !project.data.sequences.includes(sequence))
+      setSequence(project.data.sequences[0]);
   }, [project.data.sequences, sequence]);
 
   useEffect(() => {
     const subjects = imageSources.data.subjects;
     if (!subjects.length) return;
-    if (!selectedSubjectId || !subjects.some((item) => item.subject_id === selectedSubjectId)) setSelectedSubjectId(subjects[0].subject_id);
+    if (!selectedSubjectId || !subjects.some((item) => item.subject_id === selectedSubjectId))
+      setSelectedSubjectId(subjects[0].subject_id);
   }, [imageSources.data.subjects, selectedSubjectId]);
 
-  useEffect(() => { setSliceIndex(null); }, [project.data.id, selectedSubjectId, sequence, plane]);
+  useEffect(() => {
+    setSliceIndex(null);
+  }, [project.data.id, selectedSubjectId, sequence, plane]);
 
-  useEffect(() => { taskController.setAuditPackage?.(null); }, [selectedTaskId, taskController]);
+  useEffect(() => {
+    taskController.setAuditPackage?.(null);
+  }, [selectedTaskId, taskController]);
 
   const handleTaskMessage = useCallback(
     (message: TaskStreamMessage) => {
@@ -165,7 +208,10 @@ export default function App() {
         taskController.taskEventsSetData((current) => [...current, event]);
       }
       app.setNotice(message.message);
-      if ((message.status === "completed" || message.status === "failed") && selectedTaskId === message.task_id) {
+      if (
+        (message.status === "completed" || message.status === "failed") &&
+        selectedTaskId === message.task_id
+      ) {
         window.setTimeout(() => {
           taskController.reloadTaskEvents();
           taskController.reloadTaskDiagnostics();
@@ -194,8 +240,14 @@ export default function App() {
   }, [app, project.data, executionMode, externalSmokeApprovedRun, externalSmokeApprovedBy]);
 
   const handleApproveSelectedTask = useCallback(async () => {
-    if (!selectedTaskId) { app.setNotice("Select an External Smoke task before approving a real smoke run."); return; }
-    if (!taskApprovalName.trim()) { app.setNotice("Approval requires an approved-by name."); return; }
+    if (!selectedTaskId) {
+      app.setNotice("Select an External Smoke task before approving a real smoke run.");
+      return;
+    }
+    if (!taskApprovalName.trim()) {
+      app.setNotice("Approval requires an approved-by name.");
+      return;
+    }
     try {
       const message = await app.handleApproveTask(selectedTaskId, taskApprovalName);
       await taskController.reloadTasks();
@@ -209,7 +261,10 @@ export default function App() {
   }, [selectedTaskId, taskApprovalName, taskController, app, setActiveTaskId]);
 
   const handleGenerateAuditPackage = useCallback(async () => {
-    if (!selectedTaskId) { app.setNotice("Select a task before generating an audit package."); return; }
+    if (!selectedTaskId) {
+      app.setNotice("Select a task before generating an audit package.");
+      return;
+    }
     setAuditLoading(true);
     try {
       const response = await app.handleGenerateAuditPackage(selectedTaskId);

@@ -9,10 +9,10 @@ type Props = {
 
 export function SchedulerPanel({ baseUrl }: Props) {
   const [projectConfigPath, setProjectConfigPath] = useState(
-    "examples/project_config_dataset.yaml"
+    "examples/project_config_dataset.yaml",
   );
   const [pipelinePath, setPipelinePath] = useState(
-    "examples/pipeline_subject_preprocess_parallel.yaml"
+    "examples/pipeline_subject_preprocess_parallel.yaml",
   );
   const [plan, setPlan] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("IDLE");
@@ -49,17 +49,11 @@ export function SchedulerPanel({ baseUrl }: Props) {
       <div className="formGrid">
         <label>
           Project Config Path
-          <input
-            value={projectConfigPath}
-            onChange={(e) => setProjectConfigPath(e.target.value)}
-          />
+          <input value={projectConfigPath} onChange={(e) => setProjectConfigPath(e.target.value)} />
         </label>
         <label>
           Pipeline Path
-          <input
-            value={pipelinePath}
-            onChange={(e) => setPipelinePath(e.target.value)}
-          />
+          <input value={pipelinePath} onChange={(e) => setPipelinePath(e.target.value)} />
         </label>
       </div>
 

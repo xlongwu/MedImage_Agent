@@ -3,8 +3,7 @@ type Props = {
 };
 
 export function StatusBadge({ status }: Props) {
-  const text =
-    typeof status === "boolean" ? (status ? "OK" : "FAILED") : status || "UNKNOWN";
+  const text = typeof status === "boolean" ? (status ? "OK" : "FAILED") : status || "UNKNOWN";
 
   const normalized = String(text).toUpperCase();
 

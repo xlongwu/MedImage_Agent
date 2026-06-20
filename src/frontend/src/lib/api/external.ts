@@ -47,11 +47,11 @@ export async function runExternalSmoke(
     approved?: boolean;
     approved_by?: string;
     dpabi_function?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/external-smoke/run", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 

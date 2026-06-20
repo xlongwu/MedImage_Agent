@@ -1,9 +1,5 @@
 import { useState } from "react";
-import {
-  listBundles,
-  createBundle,
-  inspectBundle,
-} from "../lib/api/legacy";
+import { listBundles, createBundle, inspectBundle } from "../lib/api/legacy";
 import styles from "./ReproducibilityBundle.module.css";
 
 type Props = {
@@ -123,9 +119,7 @@ export function ReproducibilityBundle({ baseUrl }: Props) {
       <div className={styles.style005}>
         <h3>Create New Bundle</h3>
         <div className={styles.style006}>
-          <label className={styles.style007}>
-            Bundle ID (optional, auto-generated if empty)
-          </label>
+          <label className={styles.style007}>Bundle ID (optional, auto-generated if empty)</label>
           <input
             type="text"
             value={createOptions.bundle_id}
@@ -140,7 +134,9 @@ export function ReproducibilityBundle({ baseUrl }: Props) {
             <input
               type="checkbox"
               checked={createOptions.include_logs}
-              onChange={(e) => setCreateOptions({ ...createOptions, include_logs: e.target.checked })}
+              onChange={(e) =>
+                setCreateOptions({ ...createOptions, include_logs: e.target.checked })
+              }
             />
             Include Logs
           </label>
@@ -148,7 +144,9 @@ export function ReproducibilityBundle({ baseUrl }: Props) {
             <input
               type="checkbox"
               checked={createOptions.include_reports}
-              onChange={(e) => setCreateOptions({ ...createOptions, include_reports: e.target.checked })}
+              onChange={(e) =>
+                setCreateOptions({ ...createOptions, include_reports: e.target.checked })
+              }
             />
             Include Reports
           </label>
@@ -156,20 +154,25 @@ export function ReproducibilityBundle({ baseUrl }: Props) {
             <input
               type="checkbox"
               checked={createOptions.include_artifact_index}
-              onChange={(e) => setCreateOptions({ ...createOptions, include_artifact_index: e.target.checked })}
+              onChange={(e) =>
+                setCreateOptions({ ...createOptions, include_artifact_index: e.target.checked })
+              }
             />
             Include Artifact Index
           </label>
         </div>
 
         <div className={styles.style012}>
-          <label className={styles.style013}>
-            Max File Size (bytes)
-          </label>
+          <label className={styles.style013}>Max File Size (bytes)</label>
           <input
             type="number"
             value={createOptions.max_file_size_bytes}
-            onChange={(e) => setCreateOptions({ ...createOptions, max_file_size_bytes: parseInt(e.target.value) || 2000000 })}
+            onChange={(e) =>
+              setCreateOptions({
+                ...createOptions,
+                max_file_size_bytes: parseInt(e.target.value) || 2000000,
+              })
+            }
             style={{ width: 150 }}
           />
           <span className={styles.style014}>
@@ -200,15 +203,11 @@ export function ReproducibilityBundle({ baseUrl }: Props) {
               <tbody>
                 {bundles.map((bundle) => (
                   <tr key={bundle.bundle_id} className={styles.style025}>
-                    <td className={styles.style026}>
-                      {bundle.bundle_id}
-                    </td>
+                    <td className={styles.style026}>{bundle.bundle_id}</td>
                     <td className={styles.style027}>
                       {new Date(bundle.created_at).toLocaleString()}
                     </td>
-                    <td className={styles.style028}>
-                      {formatBytes(bundle.zip_size_bytes)}
-                    </td>
+                    <td className={styles.style028}>{formatBytes(bundle.zip_size_bytes)}</td>
                     <td className={styles.style029}>
                       {bundle.files_copied} copied, {bundle.files_skipped} skipped
                     </td>
@@ -233,7 +232,13 @@ export function ReproducibilityBundle({ baseUrl }: Props) {
         <div className={styles.style031}>
           <div className={styles.style032}>
             <h3 className={styles.style033}>Bundle Detail: {selectedBundle.bundle_id}</h3>
-            <button onClick={() => { setSelectedBundle(null); setBundleDetail(null); }} style={{ fontSize: 12 }}>
+            <button
+              onClick={() => {
+                setSelectedBundle(null);
+                setBundleDetail(null);
+              }}
+              style={{ fontSize: 12 }}
+            >
               Close
             </button>
           </div>
@@ -255,31 +260,38 @@ export function ReproducibilityBundle({ baseUrl }: Props) {
 
           <div className={styles.style044}>
             <strong>ZIP SHA256:</strong>
-            <code className={styles.style045}>
-              {selectedBundle.zip_sha256}
-            </code>
+            <code className={styles.style045}>{selectedBundle.zip_sha256}</code>
           </div>
 
           <div className={styles.style046}>
             <strong>Bundle Directory:</strong>
-            <code className={styles.style047}>
-              {selectedBundle.bundle_dir}
-            </code>
+            <code className={styles.style047}>{selectedBundle.bundle_dir}</code>
           </div>
 
           <div className={styles.style048}>
             <strong>ZIP Path:</strong>
-            <code className={styles.style049}>
-              {selectedBundle.zip_path}
-            </code>
+            <code className={styles.style049}>{selectedBundle.zip_path}</code>
           </div>
 
           {(bundleDetail.manifest as Record<string, unknown> | undefined)?.safety && (
             <div className={styles.style050}>
               <h4>Safety Checks</h4>
               <div className={styles.style051}>
-                {Object.entries((bundleDetail.manifest as Record<string, unknown>).safety as Record<string, boolean>).map(([key, value]) => (
-                  <div key={key} style={{ padding: 8, background: value ? "#ffebee" : "#e8f5e9", borderRadius: 4, fontSize: 12 }}>
+                {Object.entries(
+                  (bundleDetail.manifest as Record<string, unknown>).safety as Record<
+                    string,
+                    boolean
+                  >,
+                ).map(([key, value]) => (
+                  <div
+                    key={key}
+                    style={{
+                      padding: 8,
+                      background: value ? "#ffebee" : "#e8f5e9",
+                      borderRadius: 4,
+                      fontSize: 12,
+                    }}
+                  >
                     <span style={{ color: value ? "#c62828" : "#2e7d32" }}>
                       {value ? "❌" : "✅"}
                     </span>{" "}

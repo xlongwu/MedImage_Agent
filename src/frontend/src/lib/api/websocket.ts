@@ -11,7 +11,7 @@ export async function connectTaskStream(
     onMessage: (message: TaskStreamMessage) => void;
     onError?: (message: string) => void;
     onClose?: () => void;
-  }
+  },
 ): Promise<TaskStreamHandle> {
   const baseUrl = await getApiBaseUrl();
   const socket = new WebSocket(toWebSocketUrl(baseUrl, `/ws/tasks/${encodeURIComponent(taskId)}`));
@@ -28,4 +28,3 @@ export async function connectTaskStream(
     close: () => socket.close(),
   };
 }
-

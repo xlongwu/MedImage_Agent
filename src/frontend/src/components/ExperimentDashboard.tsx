@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from "react";
-import {
-  getExperimentDashboard,
-  refreshExperimentDashboard,
-} from "../lib/api/legacy";
-import {
-  SimpleBarChart,
-  SimpleLineChart,
-  SimplePieChart,
-} from "./SimpleCharts";
+import { getExperimentDashboard, refreshExperimentDashboard } from "../lib/api/legacy";
+import { SimpleBarChart, SimpleLineChart, SimplePieChart } from "./SimpleCharts";
 import styles from "./ExperimentDashboard.module.css";
 
 function cssVars(vars: Record<string, string>): React.CSSProperties {
@@ -194,16 +187,29 @@ export function ExperimentDashboard({ baseUrl }: ExperimentDashboardProps) {
           {/* Charts */}
           <div className={styles.style025}>
             {dashboard.status_distribution && (
-              <SimplePieChart title="Status Distribution" data={toBarData(dashboard.status_distribution)} />
+              <SimplePieChart
+                title="Status Distribution"
+                data={toBarData(dashboard.status_distribution)}
+              />
             )}
-            {dashboard.pipeline_distribution && Object.keys(dashboard.pipeline_distribution).length > 0 && (
-              <SimpleBarChart title="Pipeline Distribution" data={toBarData(dashboard.pipeline_distribution)} />
-            )}
+            {dashboard.pipeline_distribution &&
+              Object.keys(dashboard.pipeline_distribution).length > 0 && (
+                <SimpleBarChart
+                  title="Pipeline Distribution"
+                  data={toBarData(dashboard.pipeline_distribution)}
+                />
+              )}
             {dashboard.scheduler_distribution && (
-              <SimpleBarChart title="Scheduler Distribution" data={toBarData(dashboard.scheduler_distribution)} />
+              <SimpleBarChart
+                title="Scheduler Distribution"
+                data={toBarData(dashboard.scheduler_distribution)}
+              />
             )}
             {dashboard.run_type_distribution && (
-              <SimpleBarChart title="Run Type Distribution" data={toBarData(dashboard.run_type_distribution)} />
+              <SimpleBarChart
+                title="Run Type Distribution"
+                data={toBarData(dashboard.run_type_distribution)}
+              />
             )}
             {dashboard.duration_trend && dashboard.duration_trend.length > 0 && (
               <SimpleLineChart title="Duration Trend" data={toLineData(dashboard.duration_trend)} />
@@ -231,47 +237,48 @@ export function ExperimentDashboard({ baseUrl }: ExperimentDashboardProps) {
                     </tr>
                   </thead>
                   <tbody>
-                    {dashboard.runs.slice(-10).reverse().map((run, idx) => (
-                      <tr key={idx} className={styles.style040}>
-                        <td className={styles.style041}>{run.index}</td>
-                        <td className={styles.style042}>{run.run_id}</td>
-                        <td className={styles.style043}>
-                          <span className={styles.style044}>
-                            {run.run_type}
-                          </span>
-                        </td>
-                        <td className={styles.style045}>{run.pipeline_id}</td>
-                        <td className={styles.style046}>
-                          <span
-                            className={styles.style047}
-                            style={cssVars({ "--status-bg": getStatusColor(run.status) })}
-                          >
-                            {run.status}
-                          </span>
-                        </td>
-                        <td className={styles.style048}>
-                          {formatDuration(run.duration_seconds)}
-                        </td>
-                        <td className={styles.style049}>
-                          {run.nodes_success}/{run.nodes_total}
-                        </td>
-                        <td className={styles.style050}>{run.outputs_count}</td>
-                        <td className={styles.style051}>
-                          {run.warnings_count ? (
-                            <span className={styles.style052}>{run.warnings_count}</span>
-                          ) : (
-                            "0"
-                          )}
-                        </td>
-                        <td className={styles.style053}>
-                          {run.errors_count ? (
-                            <span className={styles.style054}>{run.errors_count}</span>
-                          ) : (
-                            "0"
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {dashboard.runs
+                      .slice(-10)
+                      .reverse()
+                      .map((run, idx) => (
+                        <tr key={idx} className={styles.style040}>
+                          <td className={styles.style041}>{run.index}</td>
+                          <td className={styles.style042}>{run.run_id}</td>
+                          <td className={styles.style043}>
+                            <span className={styles.style044}>{run.run_type}</span>
+                          </td>
+                          <td className={styles.style045}>{run.pipeline_id}</td>
+                          <td className={styles.style046}>
+                            <span
+                              className={styles.style047}
+                              style={cssVars({ "--status-bg": getStatusColor(run.status) })}
+                            >
+                              {run.status}
+                            </span>
+                          </td>
+                          <td className={styles.style048}>
+                            {formatDuration(run.duration_seconds)}
+                          </td>
+                          <td className={styles.style049}>
+                            {run.nodes_success}/{run.nodes_total}
+                          </td>
+                          <td className={styles.style050}>{run.outputs_count}</td>
+                          <td className={styles.style051}>
+                            {run.warnings_count ? (
+                              <span className={styles.style052}>{run.warnings_count}</span>
+                            ) : (
+                              "0"
+                            )}
+                          </td>
+                          <td className={styles.style053}>
+                            {run.errors_count ? (
+                              <span className={styles.style054}>{run.errors_count}</span>
+                            ) : (
+                              "0"
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -283,8 +290,9 @@ export function ExperimentDashboard({ baseUrl }: ExperimentDashboardProps) {
             <h3>Metrics Summary</h3>
             <div className={styles.style056}>
               <div>
-                <strong>Duration:</strong> Mean {formatDuration(dashboard.mean_duration_seconds)}, Median{" "}
-                {formatDuration(dashboard.median_duration_seconds)}, Max {formatDuration(dashboard.max_duration_seconds)}
+                <strong>Duration:</strong> Mean {formatDuration(dashboard.mean_duration_seconds)},
+                Median {formatDuration(dashboard.median_duration_seconds)}, Max{" "}
+                {formatDuration(dashboard.max_duration_seconds)}
               </div>
               <div>
                 <strong>Outputs:</strong> {dashboard.total_outputs} total

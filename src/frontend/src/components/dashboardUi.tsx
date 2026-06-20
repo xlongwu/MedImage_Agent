@@ -1,6 +1,12 @@
 import { memo, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
-export type DashboardStatus = "ready" | "warning" | "blocked" | "not_applicable" | "not_started" | "unknown";
+export type DashboardStatus =
+  | "ready"
+  | "warning"
+  | "blocked"
+  | "not_applicable"
+  | "not_started"
+  | "unknown";
 
 type ActionCleanupOptions = {
   rawDicom?: boolean;
@@ -23,7 +29,10 @@ export function normalizeActionText(action: string): string {
     .replace(/\s+/g, " ");
 }
 
-export function cleanupNextActions(actions: string[], options: ActionCleanupOptions = {}): string[] {
+export function cleanupNextActions(
+  actions: string[],
+  options: ActionCleanupOptions = {},
+): string[] {
   const seen = new Set<string>();
   const filtered = actions.filter((action) => {
     const normalized = normalizeActionText(action);
@@ -82,7 +91,11 @@ export const StatusPill = memo(function StatusPill({
   children?: ReactNode;
 }) {
   const resolved = statusFromBackend(status);
-  return <span className={`apple-status-pill ${statusClass[resolved]}`}>{children ?? statusLabel(resolved)}</span>;
+  return (
+    <span className={`apple-status-pill ${statusClass[resolved]}`}>
+      {children ?? statusLabel(resolved)}
+    </span>
+  );
 });
 
 export function statusLabel(status: DashboardStatus): string {
@@ -171,7 +184,11 @@ export const ActionList = memo(function ActionList({
         </div>
       ))}
       {cleaned.length > maxVisible ? (
-        <button type="button" className="apple-link-button" onClick={() => setExpanded((value) => !value)}>
+        <button
+          type="button"
+          className="apple-link-button"
+          onClick={() => setExpanded((value) => !value)}
+        >
           {expanded ? "View fewer" : `View ${cleaned.length - maxVisible} more`}
         </button>
       ) : null}

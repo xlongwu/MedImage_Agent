@@ -78,9 +78,7 @@ export function RunEventsPanel({ baseUrl, projectId, runId }: Props) {
       <div style={{ ...headerStyle, marginBottom: 10 }}>
         <div>
           <h4 style={{ margin: 0, fontSize: 14 }}>Run Events</h4>
-          <span style={subtitleStyle}>
-            {loading ? "Loading..." : `${events.length} event(s)`}
-          </span>
+          <span style={subtitleStyle}>{loading ? "Loading..." : `${events.length} event(s)`}</span>
         </div>
       </div>
 
@@ -102,27 +100,25 @@ export function RunEventsPanel({ baseUrl, projectId, runId }: Props) {
               }}
             >
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                <span style={{ ...statusPillStyle, ...levelTone(event.level) }}>
-                  {event.level}
-                </span>
-                <span style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  minHeight: 22,
-                  padding: "0 7px",
-                  borderRadius: 999,
-                  fontSize: 10,
-                  fontWeight: 900,
-                  background: "#eef1f6",
-                  color: "#667085",
-                  border: "1px solid rgba(137, 150, 171, 0.28)",
-                }}>
+                <span style={{ ...statusPillStyle, ...levelTone(event.level) }}>{event.level}</span>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    minHeight: 22,
+                    padding: "0 7px",
+                    borderRadius: 999,
+                    fontSize: 10,
+                    fontWeight: 900,
+                    background: "#eef1f6",
+                    color: "#667085",
+                    border: "1px solid rgba(137, 150, 171, 0.28)",
+                  }}
+                >
                   {event.source}
                 </span>
                 {event.node_id ? (
-                  <span style={{ fontSize: 11, color: "#667085" }}>
-                    node: {event.node_id}
-                  </span>
+                  <span style={{ fontSize: 11, color: "#667085" }}>node: {event.node_id}</span>
                 ) : null}
                 {event.subject_id ? (
                   <span style={{ fontSize: 11, color: "#667085" }}>
@@ -133,12 +129,8 @@ export function RunEventsPanel({ baseUrl, projectId, runId }: Props) {
                   {formatDate(event.timestamp)}
                 </span>
               </div>
-              <div style={{ fontSize: 12, color: "#344054", lineHeight: 1.5 }}>
-                {event.message}
-              </div>
-              {event.path ? (
-                <div style={monoPathStyle}>{event.path}</div>
-              ) : null}
+              <div style={{ fontSize: 12, color: "#344054", lineHeight: 1.5 }}>{event.message}</div>
+              {event.path ? <div style={monoPathStyle}>{event.path}</div> : null}
             </div>
           ))}
         </div>

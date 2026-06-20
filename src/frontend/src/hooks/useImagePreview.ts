@@ -8,11 +8,14 @@ export function useImagePreview(
   sequence: string,
   subjectId?: string | null,
   sliceIndex?: number | null,
-  plane: ImagePlane = "axial"
+  plane: ImagePlane = "axial",
 ) {
   return useAsyncResource<ImagePreview>(
-    () => (projectId ? getImagePreview(projectId, sequence, subjectId || undefined, sliceIndex, plane) : Promise.resolve(fallbackImagePreview)),
+    () =>
+      projectId
+        ? getImagePreview(projectId, sequence, subjectId || undefined, sliceIndex, plane)
+        : Promise.resolve(fallbackImagePreview),
     { ...fallbackImagePreview, sequence, subject_id: subjectId, plane },
-    [projectId, sequence, subjectId, sliceIndex, plane]
+    [projectId, sequence, subjectId, sliceIndex, plane],
   );
 }

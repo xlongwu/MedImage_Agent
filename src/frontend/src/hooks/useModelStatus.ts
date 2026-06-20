@@ -7,7 +7,6 @@ export function useModelStatus(projectId: string | null) {
   return useAsyncResource<ModelStatus>(
     () => (projectId ? getModelStatus(projectId) : Promise.resolve(fallbackModelStatus)),
     fallbackModelStatus,
-    [projectId]
+    [projectId],
   );
 }
-

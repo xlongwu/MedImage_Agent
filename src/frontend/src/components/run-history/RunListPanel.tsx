@@ -61,8 +61,17 @@ export function RunListPanel({
               textAlign: "left",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-              <strong style={{ fontFamily: '"Cascadia Mono", "Consolas", monospace', fontSize: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 10,
+                alignItems: "center",
+              }}
+            >
+              <strong
+                style={{ fontFamily: '"Cascadia Mono", "Consolas", monospace', fontSize: 12 }}
+              >
                 {shortId(run.run_id)}
               </strong>
               <span style={{ ...statusPillStyle, ...statusTone(run.status) }}>{run.status}</span>

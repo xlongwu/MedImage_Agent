@@ -24,12 +24,19 @@ export function SettingsEnvironmentWorkspace({
         status="Planning only"
       />
       <div className="planning-note">
-        These tools produce readiness previews and review packages. They do not enable MATLAB/SPM execution or DPABI execution.
+        These tools produce readiness previews and review packages. They do not enable MATLAB/SPM
+        execution or DPABI execution.
       </div>
       <div className="workspace-panel-grid">
-        <div><EnvironmentHealthPanel baseUrl={baseUrl} /></div>
-        <div><SpmRealignDryRunPanel baseUrl={baseUrl} projectId={projectId} /></div>
-        <div><SpmRealignWrapperSkeletonPanel baseUrl={baseUrl} projectId={projectId} /></div>
+        <div>
+          <EnvironmentHealthPanel baseUrl={baseUrl} />
+        </div>
+        <div>
+          <SpmRealignDryRunPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
+        <div>
+          <SpmRealignWrapperSkeletonPanel baseUrl={baseUrl} projectId={projectId} />
+        </div>
         <div>
           <RsfmriPresetPanel
             baseUrl={baseUrl}

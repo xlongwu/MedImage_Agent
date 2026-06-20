@@ -12,10 +12,7 @@ type Props = {
   title: string;
 };
 
-export function SimpleBarChart({
-  title,
-  data
-}: Props & { data: BarDatum[] }) {
+export function SimpleBarChart({ title, data }: Props & { data: BarDatum[] }) {
   const maxValue = Math.max(...data.map((item) => item.value), 1);
 
   return (
@@ -23,11 +20,27 @@ export function SimpleBarChart({
       <h4 style={{ margin: "0 0 12px 0", fontSize: 14 }}>{title}</h4>
       <div className="barChart">
         {data.map((item) => (
-          <div className="barRow" key={item.label} style={{ display: "flex", alignItems: "center", marginBottom: 6 }}>
-            <div className="barLabel" style={{ width: 100, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis" }}>
+          <div
+            className="barRow"
+            key={item.label}
+            style={{ display: "flex", alignItems: "center", marginBottom: 6 }}
+          >
+            <div
+              className="barLabel"
+              style={{ width: 100, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis" }}
+            >
               {item.label}
             </div>
-            <div className="barTrack" style={{ flex: 1, height: 16, background: "#e0e0e0", borderRadius: 2, marginRight: 8 }}>
+            <div
+              className="barTrack"
+              style={{
+                flex: 1,
+                height: 16,
+                background: "#e0e0e0",
+                borderRadius: 2,
+                marginRight: 8,
+              }}
+            >
               <div
                 className="barFill"
                 style={{
@@ -48,10 +61,7 @@ export function SimpleBarChart({
   );
 }
 
-export function SimpleLineChart({
-  title,
-  data
-}: Props & { data: LineDatum[] }) {
+export function SimpleLineChart({ title, data }: Props & { data: LineDatum[] }) {
   const width = 520;
   const height = 180;
   const padding = 24;
@@ -61,13 +71,8 @@ export function SimpleLineChart({
 
   const points = data.map((item, index) => {
     const x =
-      data.length === 1
-        ? width / 2
-        : padding + (index / (data.length - 1)) * (width - padding * 2);
-    const y =
-      height -
-      padding -
-      ((item.value - minValue) / span) * (height - padding * 2);
+      data.length === 1 ? width / 2 : padding + (index / (data.length - 1)) * (width - padding * 2);
+    const y = height - padding - ((item.value - minValue) / span) * (height - padding * 2);
 
     return { x, y, label: item.label, value: item.value };
   });
@@ -79,8 +84,18 @@ export function SimpleLineChart({
   return (
     <div className="chartCard" style={{ marginBottom: 16 }}>
       <h4 style={{ margin: "0 0 12px 0", fontSize: 14 }}>{title}</h4>
-      <svg viewBox={`0 0 ${width} ${height}`} className="lineChart" style={{ width: "100%", maxWidth: 540 }}>
-        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#ccc" />
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="lineChart"
+        style={{ width: "100%", maxWidth: 540 }}
+      >
+        <line
+          x1={padding}
+          y1={height - padding}
+          x2={width - padding}
+          y2={height - padding}
+          stroke="#ccc"
+        />
         <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#ccc" />
         <path d={path} fill="none" stroke="#2196f3" strokeWidth="2" />
         {points.map((point, idx) => (
@@ -94,10 +109,7 @@ export function SimpleLineChart({
   );
 }
 
-export function SimplePieChart({
-  title,
-  data
-}: Props & { data: BarDatum[] }) {
+export function SimplePieChart({ title, data }: Props & { data: BarDatum[] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   const colors = ["#4caf50", "#f44336", "#ff9800", "#2196f3", "#9c27b0", "#607d8b"];
 
@@ -138,9 +150,22 @@ export function SimplePieChart({
         </svg>
         <div style={{ marginLeft: 16 }}>
           {slices.map((slice, idx) => (
-            <div key={idx} style={{ display: "flex", alignItems: "center", marginBottom: 4, fontSize: 12 }}>
-              <div style={{ width: 12, height: 12, background: slice.color, marginRight: 8, borderRadius: 2 }} />
-              <span>{slice.label}: {slice.value} ({((slice.value / total) * 100).toFixed(1)}%)</span>
+            <div
+              key={idx}
+              style={{ display: "flex", alignItems: "center", marginBottom: 4, fontSize: 12 }}
+            >
+              <div
+                style={{
+                  width: 12,
+                  height: 12,
+                  background: slice.color,
+                  marginRight: 8,
+                  borderRadius: 2,
+                }}
+              />
+              <span>
+                {slice.label}: {slice.value} ({((slice.value / total) * 100).toFixed(1)}%)
+              </span>
             </div>
           ))}
         </div>

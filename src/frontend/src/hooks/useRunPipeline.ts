@@ -21,4 +21,3 @@ export function useRunPipeline() {
 
   return { start, loading, error };
 }
-

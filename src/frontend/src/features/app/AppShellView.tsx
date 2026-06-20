@@ -1,7 +1,12 @@
 import { Suspense } from "react";
 import type { ExecutionMode } from "../../lib/types/pipeline";
 import type { ChatMessage } from "../../lib/types/assistant";
-import type { ImagePlane, ImagePreview, ImageSources, ImageValidationReport } from "../../lib/types/image";
+import type {
+  ImagePlane,
+  ImagePreview,
+  ImageSources,
+  ImageValidationReport,
+} from "../../lib/types/image";
 import type { ProjectDetail } from "../../lib/types/project";
 import type { TaskEvent, TaskLogEntry, TaskStreamMessage } from "../../lib/types/task";
 import type { PresetPlanDraft } from "../../types";
@@ -41,10 +46,53 @@ export type AppShellViewProps = {
   selectedProjectId: string | null;
   project: { data: ProjectDetail };
   projectInventory: ProjectInventory | null;
-  projectController: Pick<ProjectController, "projectCreateResult" | "projectCreateLoading" | "projectCreateError" | "setProjectCreateResult" | "setProjectCreateError" | "projects" | "projectsLoading" | "projectsError" | "handleDeleteProject" | "handleUploadData">;
-  taskController: Pick<TaskController, "tasks" | "tasksLoading" | "tasksError" | "reloadTasks" | "selectedTask" | "taskEvents" | "taskEventsLoading" | "taskEventsError" | "reloadTaskEvents" | "taskDiagnosticsData" | "reloadTaskDiagnostics" | "taskStreamConnected" | "hasPreprocessingRun">;
+  projectController: Pick<
+    ProjectController,
+    | "projectCreateResult"
+    | "projectCreateLoading"
+    | "projectCreateError"
+    | "setProjectCreateResult"
+    | "setProjectCreateError"
+    | "projects"
+    | "projectsLoading"
+    | "projectsError"
+    | "handleDeleteProject"
+    | "handleUploadData"
+  >;
+  taskController: Pick<
+    TaskController,
+    | "tasks"
+    | "tasksLoading"
+    | "tasksError"
+    | "reloadTasks"
+    | "selectedTask"
+    | "taskEvents"
+    | "taskEventsLoading"
+    | "taskEventsError"
+    | "reloadTaskEvents"
+    | "taskDiagnosticsData"
+    | "reloadTaskDiagnostics"
+    | "taskStreamConnected"
+    | "hasPreprocessingRun"
+  >;
   taskStream: { error: string | null };
-  app: Pick<AppController, "notice" | "setNotice" | "activeWorkflow" | "setActiveWorkflow" | "handleScrollToPanel" | "setDrawerOpen" | "handleRunPipeline" | "handleApproveTask" | "handleGenerateAuditPackage" | "handleReconnectTaskStream" | "handleAssistantSubmit" | "handleQuickAction" | "pipelineLoading" | "presetPlanDraft">;
+  app: Pick<
+    AppController,
+    | "notice"
+    | "setNotice"
+    | "activeWorkflow"
+    | "setActiveWorkflow"
+    | "handleScrollToPanel"
+    | "setDrawerOpen"
+    | "handleRunPipeline"
+    | "handleApproveTask"
+    | "handleGenerateAuditPackage"
+    | "handleReconnectTaskStream"
+    | "handleAssistantSubmit"
+    | "handleQuickAction"
+    | "pipelineLoading"
+    | "presetPlanDraft"
+  >;
   image: {
     sequence: string;
     setSequence: (seq: string) => void;
@@ -138,7 +186,13 @@ export function AppShellView({
   if (mode === "advanced") {
     return (
       <div className="windows-workstation advanced-workstation">
-        <TopBar health={null} apiError={null} onRetry={() => {}} onToggleMode={() => setMode("dashboard")} modeLabel="Dashboard" />
+        <TopBar
+          health={null}
+          apiError={null}
+          onRetry={() => {}}
+          onToggleMode={() => setMode("dashboard")}
+          modeLabel="Dashboard"
+        />
         <Suspense fallback={<WorkspaceSuspenseFallback label="Loading advanced console..." />}>
           <AdvancedModePanel baseUrl={baseUrl} />
         </Suspense>
@@ -148,10 +202,19 @@ export function AppShellView({
 
   if (mode === "planner") {
     const selectedProject = selectedProjectId ? project : null;
-    const projectDir = typeof selectedProject?.data.metadata?.project_dir === "string" ? selectedProject.data.metadata.project_dir : null;
+    const projectDir =
+      typeof selectedProject?.data.metadata?.project_dir === "string"
+        ? selectedProject.data.metadata.project_dir
+        : null;
     return (
       <div className="windows-workstation">
-        <TopBar health={null} apiError={null} onRetry={() => {}} onToggleMode={() => setMode("dashboard")} modeLabel="Dashboard" />
+        <TopBar
+          health={null}
+          apiError={null}
+          onRetry={() => {}}
+          onToggleMode={() => setMode("dashboard")}
+          modeLabel="Dashboard"
+        />
         <Suspense fallback={<WorkspaceSuspenseFallback label="Loading planning tools..." />}>
           <PlanReviewConsole
             selectedProjectId={selectedProjectId}
@@ -161,7 +224,11 @@ export function AppShellView({
             rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
             initialPresetDraft={app.presetPlanDraft}
           />
-          <ProjectRunsPanel baseUrl={baseUrl} projectId={selectedProjectId} projectDir={projectDir} />
+          <ProjectRunsPanel
+            baseUrl={baseUrl}
+            projectId={selectedProjectId}
+            projectDir={projectDir}
+          />
         </Suspense>
       </div>
     );
@@ -169,7 +236,13 @@ export function AppShellView({
 
   return (
     <div className="windows-workstation">
-      <TopBar health={null} apiError={null} onRetry={() => {}} onToggleMode={() => setMode("advanced")} modeLabel="Advanced Console" />
+      <TopBar
+        health={null}
+        apiError={null}
+        onRetry={() => {}}
+        onToggleMode={() => setMode("advanced")}
+        modeLabel="Advanced Console"
+      />
       <button onClick={() => setMode("planner")}>Plan Review</button>
       {app.notice ? (
         <div className="toast-line">
@@ -252,17 +325,25 @@ export function AppShellView({
               inventory={projectInventory}
               hasPreprocessingRun={taskController.hasPreprocessingRun}
               onPrimaryAction={() => {
-                app.setActiveWorkflow(projectInventory?.dataState === "converted_bids" ? "preprocessing" : "data");
+                app.setActiveWorkflow(
+                  projectInventory?.dataState === "converted_bids" ? "preprocessing" : "data",
+                );
                 window.setTimeout(() => app.handleScrollToPanel("workflow-workspace"), 0);
               }}
               onSecondaryAction={() => {
-                app.setActiveWorkflow(projectInventory?.dataState === "converted_bids" ? "reports" : "data");
+                app.setActiveWorkflow(
+                  projectInventory?.dataState === "converted_bids" ? "reports" : "data",
+                );
                 window.setTimeout(() => app.handleScrollToPanel("workflow-workspace"), 0);
               }}
             />
           </section>
 
-          <ReadinessStatusStrip inventory={projectInventory} health={null} hasPreprocessingRun={taskController.hasPreprocessingRun} />
+          <ReadinessStatusStrip
+            inventory={projectInventory}
+            health={null}
+            hasPreprocessingRun={taskController.hasPreprocessingRun}
+          />
 
           <MedicalImageViewer
             project={project.data}
@@ -281,7 +362,10 @@ export function AppShellView({
             onSliceChange={image.setSliceIndex}
           />
 
-          <WorkflowTabs activeTab={app.activeWorkflow as WorkflowTab} onChange={app.setActiveWorkflow} />
+          <WorkflowTabs
+            activeTab={app.activeWorkflow as WorkflowTab}
+            onChange={app.setActiveWorkflow}
+          />
 
           <section
             id="workflow-workspace"
@@ -292,7 +376,11 @@ export function AppShellView({
           >
             <Suspense fallback={<WorkspaceSuspenseFallback label="Loading workspace..." />}>
               {app.activeWorkflow === "data" ? (
-                <DataConversionWorkspace baseUrl={baseUrl} projectId={selectedProjectId} inventory={projectInventory} />
+                <DataConversionWorkspace
+                  baseUrl={baseUrl}
+                  projectId={selectedProjectId}
+                  inventory={projectInventory}
+                />
               ) : app.activeWorkflow === "preprocessing" ? (
                 <PreprocessingWorkspace
                   projectId={selectedProjectId}
@@ -310,7 +398,9 @@ export function AppShellView({
                   projectId={selectedProjectId}
                   onReviewDraft={(draft: PresetPlanDraft) => {
                     app.setActiveWorkflow("settings" as WorkflowTab);
-                    app.setNotice("Preset draft loaded into Plan Review Console. Review and save before dry-run.");
+                    app.setNotice(
+                      "Preset draft loaded into Plan Review Console. Review and save before dry-run.",
+                    );
                   }}
                 />
               )}
@@ -333,7 +423,9 @@ export function AppShellView({
             error={taskController.taskEventsError}
             streamConnected={taskController.taskStreamConnected}
             approvalName={approval.taskApprovalName}
-            auditPackage={approval.auditPackage as import("../../lib/types/task").TaskAuditPackage | null}
+            auditPackage={
+              approval.auditPackage as import("../../lib/types/task").TaskAuditPackage | null
+            }
             auditLoading={approval.auditLoading}
             onApprovalNameChange={approval.setTaskApprovalName}
             onApprove={handleApproveSelectedTask}

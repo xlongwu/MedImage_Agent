@@ -38,7 +38,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: src/frontend/package-lock.json
 
@@ -81,9 +81,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: desktop/electron/package-lock.json
+          node-version: "22"
 
       - name: Install desktop dependencies
         working-directory: desktop/electron

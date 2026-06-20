@@ -50,10 +50,9 @@ describe("useAsyncResource", () => {
 
   it("does not re-fetch when deps are unchanged", async () => {
     const loader = vi.fn(() => Promise.resolve("loaded"));
-    const { result, rerender } = renderHook(
-      ({ label }) => useAsyncResource(loader, label, []),
-      { initialProps: { label: "fallback-a" } },
-    );
+    const { result, rerender } = renderHook(({ label }) => useAsyncResource(loader, label, []), {
+      initialProps: { label: "fallback-a" },
+    });
 
     await waitFor(() => expect(result.current.data).toBe("loaded"));
     rerender({ label: "fallback-b" });

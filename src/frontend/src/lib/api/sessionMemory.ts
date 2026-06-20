@@ -44,7 +44,10 @@ export async function postSessionIndex(baseUrl: string) {
 }
 
 export async function querySessions(baseUrl: string, q: string) {
-  return requestJson<Record<string, unknown>>(baseUrl, `/api/sessions/query?q=${encodeURIComponent(q)}&limit=50`);
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/sessions/query?q=${encodeURIComponent(q)}&limit=50`,
+  );
 }
 
 // === Tool Catalog ===

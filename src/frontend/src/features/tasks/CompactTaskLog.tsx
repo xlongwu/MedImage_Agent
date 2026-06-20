@@ -10,7 +10,14 @@ export interface CompactTaskLogProps {
   onSelectTask: (taskId: string) => void;
 }
 
-export function CompactTaskLog({ tasks, loading, error, onRetry, selectedTaskId, onSelectTask }: CompactTaskLogProps) {
+export function CompactTaskLog({
+  tasks,
+  loading,
+  error,
+  onRetry,
+  selectedTaskId,
+  onSelectTask,
+}: CompactTaskLogProps) {
   const visibleTasks = tasks.slice(0, 2);
   return (
     <section className="compact-task-log compact-task-log-tight" aria-label="Compact task log">
@@ -20,7 +27,18 @@ export function CompactTaskLog({ tasks, loading, error, onRetry, selectedTaskId,
             <h2>Recent Activity</h2>
             <small>(Click to view recent task logs / demo runs)</small>
           </div>
-          {error ? <button type="button" className="compact-retry-button" onClick={(e) => { e.stopPropagation(); onRetry(); }}>Retry</button> : null}
+          {error ? (
+            <button
+              type="button"
+              className="compact-retry-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetry();
+              }}
+            >
+              Retry
+            </button>
+          ) : null}
         </summary>
         <div className="activity-body">
           {visibleTasks.length ? (

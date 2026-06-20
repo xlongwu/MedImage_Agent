@@ -164,7 +164,10 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
     run_id: runId || null,
     function_name: functionName,
     fwhm: [fwhmX, fwhmY, fwhmZ],
-    subjects: subjects.split(",").map((s) => s.trim()).filter(Boolean),
+    subjects: subjects
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     scheduler: {
       mode: schedulerMode,
       max_workers: maxWorkers,
@@ -191,7 +194,10 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
     setError(null);
     setCreateResult(null);
     try {
-      const result = (await createDpabiTemplateWizardInstance(baseUrl, getPayload())) as CreateResult;
+      const result = (await createDpabiTemplateWizardInstance(
+        baseUrl,
+        getPayload(),
+      )) as CreateResult;
       setCreateResult(result);
       if (result.instance_id) {
         setInstanceId(result.instance_id);
@@ -230,11 +236,7 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
       <h2>DPABI Template Wizard</h2>
 
       <div style={{ marginBottom: 16 }}>
-        <button
-          onClick={handleLoadOptions}
-          disabled={loadingOptions}
-          style={{ marginRight: 8 }}
-        >
+        <button onClick={handleLoadOptions} disabled={loadingOptions} style={{ marginRight: 8 }}>
           {loadingOptions ? "Loading..." : "Reload Options"}
         </button>
       </div>
@@ -434,11 +436,21 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
           >
             <strong>Status:</strong> {previewResult.ok ? "OK" : "Failed"}
           </div>
-          <p><strong>Template ID:</strong> {previewResult.template_id}</p>
-          <p><strong>Instance ID:</strong> {previewResult.instance_id}</p>
-          <p><strong>Function:</strong> {previewResult.function_name}</p>
-          <p><strong>Subjects:</strong> {previewResult.subjects?.join(", ")}</p>
-          <p><strong>Will Execute:</strong> {previewResult.will_execute ? "Yes" : "No"}</p>
+          <p>
+            <strong>Template ID:</strong> {previewResult.template_id}
+          </p>
+          <p>
+            <strong>Instance ID:</strong> {previewResult.instance_id}
+          </p>
+          <p>
+            <strong>Function:</strong> {previewResult.function_name}
+          </p>
+          <p>
+            <strong>Subjects:</strong> {previewResult.subjects?.join(", ")}
+          </p>
+          <p>
+            <strong>Will Execute:</strong> {previewResult.will_execute ? "Yes" : "No"}
+          </p>
 
           {previewResult.safety && (
             <div style={{ marginTop: 12 }}>
@@ -457,7 +469,9 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
               <h4>Errors</h4>
               <ul>
                 {previewResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -478,18 +492,30 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
           >
             <strong>Status:</strong> {createResult.ok ? "OK" : "Failed"}
           </div>
-          <p><strong>Template ID:</strong> {createResult.template_id}</p>
-          <p><strong>Instance ID:</strong> {createResult.instance_id}</p>
-          <p><strong>Run ID:</strong> {createResult.run_id}</p>
+          <p>
+            <strong>Template ID:</strong> {createResult.template_id}
+          </p>
+          <p>
+            <strong>Instance ID:</strong> {createResult.instance_id}
+          </p>
+          <p>
+            <strong>Run ID:</strong> {createResult.run_id}
+          </p>
 
           {createResult.pipeline_path && (
-            <p><strong>Pipeline:</strong> <code>{createResult.pipeline_path}</code></p>
+            <p>
+              <strong>Pipeline:</strong> <code>{createResult.pipeline_path}</code>
+            </p>
           )}
           {createResult.manifest_path && (
-            <p><strong>Manifest:</strong> <code>{createResult.manifest_path}</code></p>
+            <p>
+              <strong>Manifest:</strong> <code>{createResult.manifest_path}</code>
+            </p>
           )}
           {createResult.review_path && (
-            <p><strong>Review:</strong> <code>{createResult.review_path}</code></p>
+            <p>
+              <strong>Review:</strong> <code>{createResult.review_path}</code>
+            </p>
           )}
 
           {createResult.errors && createResult.errors.length > 0 && (
@@ -497,7 +523,9 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
               <h4>Errors</h4>
               <ul>
                 {createResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -518,9 +546,15 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
           >
             <strong>Status:</strong> {executeResult.ok ? "OK" : "Failed"}
           </div>
-          <p><strong>Instance ID:</strong> {executeResult.instance_id}</p>
-          <p><strong>Run ID:</strong> {executeResult.run_id}</p>
-          <p><strong>Status:</strong> {executeResult.status}</p>
+          <p>
+            <strong>Instance ID:</strong> {executeResult.instance_id}
+          </p>
+          <p>
+            <strong>Run ID:</strong> {executeResult.run_id}
+          </p>
+          <p>
+            <strong>Status:</strong> {executeResult.status}
+          </p>
 
           {executeResult.execution_summary && (
             <div style={{ marginTop: 12 }}>
@@ -534,7 +568,9 @@ export function DpabiTemplateWizard({ baseUrl }: DpabiTemplateWizardProps) {
               <h4>Errors</h4>
               <ul>
                 {executeResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>

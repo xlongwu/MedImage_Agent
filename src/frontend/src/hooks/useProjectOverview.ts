@@ -7,7 +7,6 @@ export function useProjectOverview(studyId: string | null) {
   return useAsyncResource<StudyOverview>(
     () => (studyId ? getStudyOverview(studyId) : Promise.resolve(fallbackOverview)),
     fallbackOverview,
-    [studyId]
+    [studyId],
   );
 }
-

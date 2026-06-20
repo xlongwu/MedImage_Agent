@@ -1,5 +1,22 @@
 import React, { useState } from "react";
-import { runDpabiCapability, runDpabiScaffold, runDpabiInputManifest, runDpabiPreflight, runDpabiRunPlan, runDpabiSandboxSmoke, runDpabiSignatureProbe, generateDpabiWrapperContracts, runDpabiSingleFunctionSandbox, runDpabiSubjectSmooth, generateDpabiSubjectWrapperReport, generateDpabiWrapperValidationMatrix, generateDpabiTemplateLibrary, listDpabiTemplates, instantiateDpabiTemplate, executeDpabiTemplate } from "../lib/api/legacy";
+import {
+  runDpabiCapability,
+  runDpabiScaffold,
+  runDpabiInputManifest,
+  runDpabiPreflight,
+  runDpabiRunPlan,
+  runDpabiSandboxSmoke,
+  runDpabiSignatureProbe,
+  generateDpabiWrapperContracts,
+  runDpabiSingleFunctionSandbox,
+  runDpabiSubjectSmooth,
+  generateDpabiSubjectWrapperReport,
+  generateDpabiWrapperValidationMatrix,
+  generateDpabiTemplateLibrary,
+  listDpabiTemplates,
+  instantiateDpabiTemplate,
+  executeDpabiTemplate,
+} from "../lib/api/legacy";
 
 interface FunctionItem {
   name: string;
@@ -358,7 +375,7 @@ interface DpabiCapabilityPanelProps {
 
 export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
   const [projectConfigPath, setProjectConfigPath] = useState<string>(
-    "examples/project_config_dataset.yaml"
+    "examples/project_config_dataset.yaml",
   );
   const [approvedBy, setApprovedBy] = useState<string>("local-user");
   const [loadingCapability, setLoadingCapability] = useState(false);
@@ -377,26 +394,39 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
   const [sandboxResult, setSandboxResult] = useState<SandboxResult | null>(null);
   const [signatureResult, setSignatureResult] = useState<SignatureResult | null>(null);
   const [contractsResult, setContractsResult] = useState<ContractsResult | null>(null);
-  const [singleFunctionResult, setSingleFunctionResult] = useState<SingleFunctionResult | null>(null);
+  const [singleFunctionResult, setSingleFunctionResult] = useState<SingleFunctionResult | null>(
+    null,
+  );
   const [functionName, setFunctionName] = useState<string>("y_Smooth");
   const [loadingSingleFunction, setLoadingSingleFunction] = useState(false);
   const [subjectId, setSubjectId] = useState<string>("sub-01");
-  const [inputBold, setInputBold] = useState<string>("examples/synthetic_bids/rawdata/sub-01/func/sub-01_task-rest_bold.nii.gz");
+  const [inputBold, setInputBold] = useState<string>(
+    "examples/synthetic_bids/rawdata/sub-01/func/sub-01_task-rest_bold.nii.gz",
+  );
   const [subjectSmoothResult, setSubjectSmoothResult] = useState<SubjectSmoothResult | null>(null);
-  const [subjectWrapperReportResult, setSubjectWrapperReportResult] = useState<SubjectWrapperReportResult | null>(null);
+  const [subjectWrapperReportResult, setSubjectWrapperReportResult] =
+    useState<SubjectWrapperReportResult | null>(null);
   const [loadingSubjectSmooth, setLoadingSubjectSmooth] = useState(false);
   const [loadingSubjectReport, setLoadingSubjectReport] = useState(false);
-  const [validationMatrixResult, setValidationMatrixResult] = useState<ValidationMatrixResult | null>(null);
+  const [validationMatrixResult, setValidationMatrixResult] =
+    useState<ValidationMatrixResult | null>(null);
   const [loadingValidationMatrix, setLoadingValidationMatrix] = useState(false);
-  const [templateLibraryResult, setTemplateLibraryResult] = useState<TemplateLibraryResult | null>(null);
+  const [templateLibraryResult, setTemplateLibraryResult] = useState<TemplateLibraryResult | null>(
+    null,
+  );
   const [loadingTemplateLibrary, setLoadingTemplateLibrary] = useState(false);
   const [templatesList, setTemplatesList] = useState<TemplateItem[]>([]);
   const [loadingTemplatesList, setLoadingTemplatesList] = useState(false);
-  const [templateInstanceResult, setTemplateInstanceResult] = useState<TemplateInstanceResult | null>(null);
+  const [templateInstanceResult, setTemplateInstanceResult] =
+    useState<TemplateInstanceResult | null>(null);
   const [loadingTemplateInstance, setLoadingTemplateInstance] = useState(false);
-  const [templateExecuteResult, setTemplateExecuteResult] = useState<TemplateExecuteResult | null>(null);
+  const [templateExecuteResult, setTemplateExecuteResult] = useState<TemplateExecuteResult | null>(
+    null,
+  );
   const [loadingTemplateExecute, setLoadingTemplateExecute] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("dpabi_y_smooth_subject_wrapper_template");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(
+    "dpabi_y_smooth_subject_wrapper_template",
+  );
   const [instanceId, setInstanceId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
@@ -655,7 +685,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
     setLoadingTemplatesList(true);
     setError(null);
     try {
-      const result = (await listDpabiTemplates(baseUrl, "./work")) as { templates?: TemplateItem[] };
+      const result = (await listDpabiTemplates(baseUrl, "./work")) as {
+        templates?: TemplateItem[];
+      };
       setTemplatesList(result.templates || []);
     } catch (e) {
       setError(String(e));
@@ -771,11 +803,7 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
         >
           {loadingCapability ? "Running..." : "Inspect DPABI Capabilities"}
         </button>
-        <button
-          onClick={handleRunScaffold}
-          disabled={loadingScaffold}
-          style={{ marginRight: 8 }}
-        >
+        <button onClick={handleRunScaffold} disabled={loadingScaffold} style={{ marginRight: 8 }}>
           {loadingScaffold ? "Running..." : "Generate Wrapper Scaffold"}
         </button>
         <button
@@ -785,18 +813,10 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
         >
           {loadingManifest ? "Running..." : "Build Input Manifest"}
         </button>
-        <button
-          onClick={handleRunPreflight}
-          disabled={loadingPreflight}
-          style={{ marginRight: 8 }}
-        >
+        <button onClick={handleRunPreflight} disabled={loadingPreflight} style={{ marginRight: 8 }}>
           {loadingPreflight ? "Running..." : "Run Preflight"}
         </button>
-        <button
-          onClick={handleRunRunPlan}
-          disabled={loadingRunPlan}
-          style={{ marginRight: 8 }}
-        >
+        <button onClick={handleRunRunPlan} disabled={loadingRunPlan} style={{ marginRight: 8 }}>
           {loadingRunPlan ? "Running..." : "Generate Run Plan"}
         </button>
         <button
@@ -917,7 +937,8 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
                 <li>Found: {capabilityResult.summary.found_count}</li>
                 <li>Missing: {capabilityResult.summary.missing_count}</li>
                 <li>
-                  DPABI Entrypoint Found: {capabilityResult.summary.dpabi_entrypoint_found ? "Yes" : "No"}
+                  DPABI Entrypoint Found:{" "}
+                  {capabilityResult.summary.dpabi_entrypoint_found ? "Yes" : "No"}
                 </li>
                 {capabilityResult.summary.dpabi_entrypoint_path && (
                   <li>Entrypoint Path: {capabilityResult.summary.dpabi_entrypoint_path}</li>
@@ -1006,7 +1027,8 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
                 <li>Found: {scaffoldResult.metrics.functions_found}</li>
                 <li>Missing: {scaffoldResult.metrics.functions_missing}</li>
                 <li>
-                  DPABI Entrypoint Found: {scaffoldResult.metrics.dpabi_entrypoint_found ? "Yes" : "No"}
+                  DPABI Entrypoint Found:{" "}
+                  {scaffoldResult.metrics.dpabi_entrypoint_found ? "Yes" : "No"}
                 </li>
               </ul>
             </div>
@@ -1067,10 +1089,18 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {manifestResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Dataset Index:</strong> {manifestResult.dataset_index}</p>
-          <p><strong>Workspace:</strong> {manifestResult.workspace_dir}</p>
-          <p><strong>Subjects Total:</strong> {manifestResult.subjects_total}</p>
-          <p><strong>Subjects Ready:</strong> {manifestResult.subjects_ready}</p>
+          <p>
+            <strong>Dataset Index:</strong> {manifestResult.dataset_index}
+          </p>
+          <p>
+            <strong>Workspace:</strong> {manifestResult.workspace_dir}
+          </p>
+          <p>
+            <strong>Subjects Total:</strong> {manifestResult.subjects_total}
+          </p>
+          <p>
+            <strong>Subjects Ready:</strong> {manifestResult.subjects_ready}
+          </p>
 
           {manifestResult.subjects && manifestResult.subjects.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -1105,7 +1135,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {manifestResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1116,7 +1148,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {manifestResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1136,7 +1170,12 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
           <div
             style={{
               padding: 12,
-              background: preflightResult.status === "PASS" ? "#e6f7e6" : preflightResult.status === "WARNING" ? "#fff3cd" : "#ffe6e6",
+              background:
+                preflightResult.status === "PASS"
+                  ? "#e6f7e6"
+                  : preflightResult.status === "WARNING"
+                    ? "#fff3cd"
+                    : "#ffe6e6",
               borderRadius: 4,
               marginBottom: 12,
             }}
@@ -1144,10 +1183,18 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {preflightResult.status}
           </div>
 
-          <p><strong>Subjects Ready:</strong> {preflightResult.subjects_ready}</p>
-          <p><strong>Capabilities:</strong> {preflightResult.capabilities_path}</p>
-          <p><strong>Manifest:</strong> {preflightResult.manifest_path}</p>
-          <p><strong>Batch Config Draft:</strong> {preflightResult.batch_config_draft}</p>
+          <p>
+            <strong>Subjects Ready:</strong> {preflightResult.subjects_ready}
+          </p>
+          <p>
+            <strong>Capabilities:</strong> {preflightResult.capabilities_path}
+          </p>
+          <p>
+            <strong>Manifest:</strong> {preflightResult.manifest_path}
+          </p>
+          <p>
+            <strong>Batch Config Draft:</strong> {preflightResult.batch_config_draft}
+          </p>
 
           {preflightResult.checks && preflightResult.checks.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -1208,7 +1255,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {preflightResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1219,7 +1268,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {preflightResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1233,7 +1284,12 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
           <div
             style={{
               padding: 12,
-              background: runPlanResult.status === "BLOCKED" ? "#ffe6e6" : runPlanResult.status === "WARNING" ? "#fff3e6" : "#e6f7e6",
+              background:
+                runPlanResult.status === "BLOCKED"
+                  ? "#ffe6e6"
+                  : runPlanResult.status === "WARNING"
+                    ? "#fff3e6"
+                    : "#e6f7e6",
               borderRadius: 4,
               marginBottom: 12,
             }}
@@ -1241,12 +1297,25 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {runPlanResult.status}
           </div>
 
-          <p><strong>Mode:</strong> {runPlanResult.mode}</p>
-          <p><strong>Subjects Ready:</strong> {runPlanResult.subjects_ready}</p>
-          <p><strong>Requires Approval:</strong> {runPlanResult.requires_approval ? "Yes" : "No"}</p>
-          <p><strong>Approved:</strong> {runPlanResult.approved ? "Yes" : "No"}</p>
-          <p><strong>Execution Allowed:</strong> {runPlanResult.execution_allowed ? "Yes" : "No"}</p>
-          <p><strong>DPABI Entrypoint Found:</strong> {runPlanResult.dpabi_entrypoint_found ? "Yes" : "No"}</p>
+          <p>
+            <strong>Mode:</strong> {runPlanResult.mode}
+          </p>
+          <p>
+            <strong>Subjects Ready:</strong> {runPlanResult.subjects_ready}
+          </p>
+          <p>
+            <strong>Requires Approval:</strong> {runPlanResult.requires_approval ? "Yes" : "No"}
+          </p>
+          <p>
+            <strong>Approved:</strong> {runPlanResult.approved ? "Yes" : "No"}
+          </p>
+          <p>
+            <strong>Execution Allowed:</strong> {runPlanResult.execution_allowed ? "Yes" : "No"}
+          </p>
+          <p>
+            <strong>DPABI Entrypoint Found:</strong>{" "}
+            {runPlanResult.dpabi_entrypoint_found ? "Yes" : "No"}
+          </p>
 
           {runPlanResult.planned_steps && runPlanResult.planned_steps.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -1279,7 +1348,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Blocking Errors</h4>
               <ul>
                 {runPlanResult.blocking_errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1290,7 +1361,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {runPlanResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1298,13 +1371,17 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
 
           {runPlanResult.run_plan_path && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Run Plan JSON:</strong> {runPlanResult.run_plan_path}</p>
+              <p>
+                <strong>Run Plan JSON:</strong> {runPlanResult.run_plan_path}
+              </p>
             </div>
           )}
 
           {runPlanResult.report_path && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Report Markdown:</strong> {runPlanResult.report_path}</p>
+              <p>
+                <strong>Report Markdown:</strong> {runPlanResult.report_path}
+              </p>
             </div>
           )}
         </div>
@@ -1324,10 +1401,18 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {sandboxResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Node ID:</strong> {sandboxResult.node_id}</p>
-          <p><strong>Backend:</strong> {sandboxResult.backend}</p>
-          <p><strong>MATLAB Version:</strong> {sandboxResult.matlab_version}</p>
-          <p><strong>Return Code:</strong> {sandboxResult.returncode}</p>
+          <p>
+            <strong>Node ID:</strong> {sandboxResult.node_id}
+          </p>
+          <p>
+            <strong>Backend:</strong> {sandboxResult.backend}
+          </p>
+          <p>
+            <strong>MATLAB Version:</strong> {sandboxResult.matlab_version}
+          </p>
+          <p>
+            <strong>Return Code:</strong> {sandboxResult.returncode}
+          </p>
 
           {sandboxResult.metrics && (
             <div style={{ marginTop: 12 }}>
@@ -1335,11 +1420,23 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <ul>
                 <li>y_Read found: {sandboxResult.metrics.y_Read_found ? "Yes" : "No"}</li>
                 <li>y_Write found: {sandboxResult.metrics.y_Write_found ? "Yes" : "No"}</li>
-                <li>rest_readfile found: {sandboxResult.metrics.rest_readfile_found ? "Yes" : "No"}</li>
-                <li>rest_writefile found: {sandboxResult.metrics.rest_writefile_found ? "Yes" : "No"}</li>
-                <li>spm_write_vol found: {sandboxResult.metrics.spm_write_vol_found ? "Yes" : "No"}</li>
-                <li>Read/Write test attempted: {sandboxResult.metrics.read_write_test_attempted ? "Yes" : "No"}</li>
-                <li>Read/Write test success: {sandboxResult.metrics.read_write_test_success ? "Yes" : "No"}</li>
+                <li>
+                  rest_readfile found: {sandboxResult.metrics.rest_readfile_found ? "Yes" : "No"}
+                </li>
+                <li>
+                  rest_writefile found: {sandboxResult.metrics.rest_writefile_found ? "Yes" : "No"}
+                </li>
+                <li>
+                  spm_write_vol found: {sandboxResult.metrics.spm_write_vol_found ? "Yes" : "No"}
+                </li>
+                <li>
+                  Read/Write test attempted:{" "}
+                  {sandboxResult.metrics.read_write_test_attempted ? "Yes" : "No"}
+                </li>
+                <li>
+                  Read/Write test success:{" "}
+                  {sandboxResult.metrics.read_write_test_success ? "Yes" : "No"}
+                </li>
                 {sandboxResult.metrics.used_function_family && (
                   <li>Used function family: {sandboxResult.metrics.used_function_family}</li>
                 )}
@@ -1362,19 +1459,25 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
 
           {sandboxResult.approval_record && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Approval Record:</strong> {sandboxResult.approval_record}</p>
+              <p>
+                <strong>Approval Record:</strong> {sandboxResult.approval_record}
+              </p>
             </div>
           )}
 
           {sandboxResult.audit_json && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Audit JSON:</strong> {sandboxResult.audit_json}</p>
+              <p>
+                <strong>Audit JSON:</strong> {sandboxResult.audit_json}
+              </p>
             </div>
           )}
 
           {sandboxResult.audit_report && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Audit Report:</strong> {sandboxResult.audit_report}</p>
+              <p>
+                <strong>Audit Report:</strong> {sandboxResult.audit_report}
+              </p>
             </div>
           )}
 
@@ -1383,7 +1486,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {sandboxResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1394,7 +1499,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {sandboxResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1416,9 +1523,15 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {signatureResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Node ID:</strong> {signatureResult.node_id}</p>
-          <p><strong>Backend:</strong> {signatureResult.backend}</p>
-          <p><strong>MATLAB Version:</strong> {signatureResult.matlab_version}</p>
+          <p>
+            <strong>Node ID:</strong> {signatureResult.node_id}
+          </p>
+          <p>
+            <strong>Backend:</strong> {signatureResult.backend}
+          </p>
+          <p>
+            <strong>MATLAB Version:</strong> {signatureResult.matlab_version}
+          </p>
 
           {signatureResult.summary && (
             <div style={{ marginTop: 12 }}>
@@ -1462,7 +1575,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
 
           {signatureResult.result_json && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Signatures JSON:</strong> {signatureResult.result_json}</p>
+              <p>
+                <strong>Signatures JSON:</strong> {signatureResult.result_json}
+              </p>
             </div>
           )}
 
@@ -1471,7 +1586,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {signatureResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1482,7 +1599,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {signatureResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1504,11 +1623,21 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {contractsResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Node ID:</strong> {contractsResult.node_id}</p>
-          <p><strong>Backend:</strong> {contractsResult.backend}</p>
-          <p><strong>Contracts Total:</strong> {contractsResult.contracts_total}</p>
-          <p><strong>Wrapper Candidates:</strong> {contractsResult.wrapper_candidates}</p>
-          <p><strong>Blocked Total:</strong> {contractsResult.blocked_total}</p>
+          <p>
+            <strong>Node ID:</strong> {contractsResult.node_id}
+          </p>
+          <p>
+            <strong>Backend:</strong> {contractsResult.backend}
+          </p>
+          <p>
+            <strong>Contracts Total:</strong> {contractsResult.contracts_total}
+          </p>
+          <p>
+            <strong>Wrapper Candidates:</strong> {contractsResult.wrapper_candidates}
+          </p>
+          <p>
+            <strong>Blocked Total:</strong> {contractsResult.blocked_total}
+          </p>
 
           {contractsResult.contracts && contractsResult.contracts.length > 0 && (
             <div style={{ marginTop: 12 }}>
@@ -1525,62 +1654,69 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
                 </thead>
                 <tbody>
                   {contractsResult.contracts
-                    .filter(c => c.wrapper_candidate)
+                    .filter((c) => c.wrapper_candidate)
                     .map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
-                      <td style={{ padding: 8 }}>{item.function_name}</td>
-                      <td style={{ padding: 8 }}>{item.category}</td>
-                      <td style={{ padding: 8 }}>{item.safety_classification}</td>
-                      <td style={{ padding: 8 }}>{item.nargin ?? "-"}</td>
-                      <td style={{ padding: 8 }}>{item.nargout ?? "-"}</td>
-                    </tr>
-                  ))}
+                      <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: 8 }}>{item.function_name}</td>
+                        <td style={{ padding: 8 }}>{item.category}</td>
+                        <td style={{ padding: 8 }}>{item.safety_classification}</td>
+                        <td style={{ padding: 8 }}>{item.nargin ?? "-"}</td>
+                        <td style={{ padding: 8 }}>{item.nargout ?? "-"}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
           )}
 
-          {contractsResult.contracts && contractsResult.contracts.filter(c => c.blocked_reason).length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <h4>Blocked Functions</h4>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid #ccc" }}>
-                    <th style={{ textAlign: "left", padding: 8 }}>Function</th>
-                    <th style={{ textAlign: "left", padding: 8 }}>Blocked Reason</th>
-                    <th style={{ textAlign: "left", padding: 8 }}>Next Step</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contractsResult.contracts
-                    .filter(c => c.blocked_reason)
-                    .map((item, idx) => (
-                    <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
-                      <td style={{ padding: 8 }}>{item.function_name}</td>
-                      <td style={{ padding: 8 }}>{item.blocked_reason}</td>
-                      <td style={{ padding: 8 }}>{item.recommended_next_step}</td>
+          {contractsResult.contracts &&
+            contractsResult.contracts.filter((c) => c.blocked_reason).length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <h4>Blocked Functions</h4>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #ccc" }}>
+                      <th style={{ textAlign: "left", padding: 8 }}>Function</th>
+                      <th style={{ textAlign: "left", padding: 8 }}>Blocked Reason</th>
+                      <th style={{ textAlign: "left", padding: 8 }}>Next Step</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  </thead>
+                  <tbody>
+                    {contractsResult.contracts
+                      .filter((c) => c.blocked_reason)
+                      .map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                          <td style={{ padding: 8 }}>{item.function_name}</td>
+                          <td style={{ padding: 8 }}>{item.blocked_reason}</td>
+                          <td style={{ padding: 8 }}>{item.recommended_next_step}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
           {contractsResult.contracts_json && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Contracts JSON:</strong> {contractsResult.contracts_json}</p>
+              <p>
+                <strong>Contracts JSON:</strong> {contractsResult.contracts_json}
+              </p>
             </div>
           )}
 
           {contractsResult.contracts_yaml && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Contracts YAML:</strong> {contractsResult.contracts_yaml}</p>
+              <p>
+                <strong>Contracts YAML:</strong> {contractsResult.contracts_yaml}
+              </p>
             </div>
           )}
 
           {contractsResult.report_md && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Report Markdown:</strong> {contractsResult.report_md}</p>
+              <p>
+                <strong>Report Markdown:</strong> {contractsResult.report_md}
+              </p>
             </div>
           )}
 
@@ -1589,7 +1725,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {contractsResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1600,7 +1738,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {contractsResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1622,20 +1762,38 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {singleFunctionResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Node ID:</strong> {singleFunctionResult.node_id}</p>
-          <p><strong>Backend:</strong> {singleFunctionResult.backend}</p>
-          <p><strong>Function Name:</strong> {singleFunctionResult.function_name}</p>
-          <p><strong>MATLAB Version:</strong> {singleFunctionResult.matlab_version}</p>
-          <p><strong>Return Code:</strong> {singleFunctionResult.returncode}</p>
+          <p>
+            <strong>Node ID:</strong> {singleFunctionResult.node_id}
+          </p>
+          <p>
+            <strong>Backend:</strong> {singleFunctionResult.backend}
+          </p>
+          <p>
+            <strong>Function Name:</strong> {singleFunctionResult.function_name}
+          </p>
+          <p>
+            <strong>MATLAB Version:</strong> {singleFunctionResult.matlab_version}
+          </p>
+          <p>
+            <strong>Return Code:</strong> {singleFunctionResult.returncode}
+          </p>
 
           {singleFunctionResult.metrics && (
             <div style={{ marginTop: 12 }}>
               <h4>Metrics</h4>
               <ul>
-                <li>Function found: {singleFunctionResult.metrics.function_found ? "Yes" : "No"}</li>
+                <li>
+                  Function found: {singleFunctionResult.metrics.function_found ? "Yes" : "No"}
+                </li>
                 <li>Input exists: {singleFunctionResult.metrics.input_exists ? "Yes" : "No"}</li>
-                <li>Wrapper call attempted: {singleFunctionResult.metrics.wrapper_call_attempted ? "Yes" : "No"}</li>
-                <li>Wrapper call success: {singleFunctionResult.metrics.wrapper_call_success ? "Yes" : "No"}</li>
+                <li>
+                  Wrapper call attempted:{" "}
+                  {singleFunctionResult.metrics.wrapper_call_attempted ? "Yes" : "No"}
+                </li>
+                <li>
+                  Wrapper call success:{" "}
+                  {singleFunctionResult.metrics.wrapper_call_success ? "Yes" : "No"}
+                </li>
                 {singleFunctionResult.metrics.call_pattern && (
                   <li>Call pattern: {singleFunctionResult.metrics.call_pattern}</li>
                 )}
@@ -1646,19 +1804,25 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
 
           {singleFunctionResult.approval_record && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Approval Record:</strong> {singleFunctionResult.approval_record}</p>
+              <p>
+                <strong>Approval Record:</strong> {singleFunctionResult.approval_record}
+              </p>
             </div>
           )}
 
           {singleFunctionResult.audit_json && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Audit JSON:</strong> {singleFunctionResult.audit_json}</p>
+              <p>
+                <strong>Audit JSON:</strong> {singleFunctionResult.audit_json}
+              </p>
             </div>
           )}
 
           {singleFunctionResult.audit_report && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Audit Report:</strong> {singleFunctionResult.audit_report}</p>
+              <p>
+                <strong>Audit Report:</strong> {singleFunctionResult.audit_report}
+              </p>
             </div>
           )}
 
@@ -1667,7 +1831,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {singleFunctionResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1678,7 +1844,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {singleFunctionResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1700,21 +1868,41 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {subjectSmoothResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Node ID:</strong> {subjectSmoothResult.node_id}</p>
-          <p><strong>Backend:</strong> {subjectSmoothResult.backend}</p>
-          <p><strong>Subject ID:</strong> {subjectSmoothResult.subject_id}</p>
-          <p><strong>Function Name:</strong> {subjectSmoothResult.function_name}</p>
-          <p><strong>Input NIfTI:</strong> {subjectSmoothResult.input_nii}</p>
-          <p><strong>Output NIfTI:</strong> {subjectSmoothResult.output_nii}</p>
-          <p><strong>Return Code:</strong> {subjectSmoothResult.returncode}</p>
+          <p>
+            <strong>Node ID:</strong> {subjectSmoothResult.node_id}
+          </p>
+          <p>
+            <strong>Backend:</strong> {subjectSmoothResult.backend}
+          </p>
+          <p>
+            <strong>Subject ID:</strong> {subjectSmoothResult.subject_id}
+          </p>
+          <p>
+            <strong>Function Name:</strong> {subjectSmoothResult.function_name}
+          </p>
+          <p>
+            <strong>Input NIfTI:</strong> {subjectSmoothResult.input_nii}
+          </p>
+          <p>
+            <strong>Output NIfTI:</strong> {subjectSmoothResult.output_nii}
+          </p>
+          <p>
+            <strong>Return Code:</strong> {subjectSmoothResult.returncode}
+          </p>
 
           {subjectSmoothResult.metrics && (
             <div style={{ marginTop: 12 }}>
               <h4>Metrics</h4>
               <ul>
                 <li>Function found: {subjectSmoothResult.metrics.function_found ? "Yes" : "No"}</li>
-                <li>Wrapper call attempted: {subjectSmoothResult.metrics.wrapper_call_attempted ? "Yes" : "No"}</li>
-                <li>Wrapper call success: {subjectSmoothResult.metrics.wrapper_call_success ? "Yes" : "No"}</li>
+                <li>
+                  Wrapper call attempted:{" "}
+                  {subjectSmoothResult.metrics.wrapper_call_attempted ? "Yes" : "No"}
+                </li>
+                <li>
+                  Wrapper call success:{" "}
+                  {subjectSmoothResult.metrics.wrapper_call_success ? "Yes" : "No"}
+                </li>
                 {subjectSmoothResult.metrics.call_pattern && (
                   <li>Call pattern: {subjectSmoothResult.metrics.call_pattern}</li>
                 )}
@@ -1731,7 +1919,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {subjectSmoothResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1742,7 +1932,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {subjectSmoothResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1764,19 +1956,29 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {subjectWrapperReportResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Total Subjects:</strong> {subjectWrapperReportResult.subjects_total}</p>
-          <p><strong>Success:</strong> {subjectWrapperReportResult.subjects_success}</p>
-          <p><strong>Failed:</strong> {subjectWrapperReportResult.subjects_failed}</p>
+          <p>
+            <strong>Total Subjects:</strong> {subjectWrapperReportResult.subjects_total}
+          </p>
+          <p>
+            <strong>Success:</strong> {subjectWrapperReportResult.subjects_success}
+          </p>
+          <p>
+            <strong>Failed:</strong> {subjectWrapperReportResult.subjects_failed}
+          </p>
 
           {subjectWrapperReportResult.summary_json && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Summary JSON:</strong> {subjectWrapperReportResult.summary_json}</p>
+              <p>
+                <strong>Summary JSON:</strong> {subjectWrapperReportResult.summary_json}
+              </p>
             </div>
           )}
 
           {subjectWrapperReportResult.report_md && (
             <div style={{ marginTop: 12 }}>
-              <p><strong>Report Markdown:</strong> {subjectWrapperReportResult.report_md}</p>
+              <p>
+                <strong>Report Markdown:</strong> {subjectWrapperReportResult.report_md}
+              </p>
             </div>
           )}
         </div>
@@ -1834,11 +2036,18 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
                       <td style={{ padding: 8 }}>{row.sandbox_passed ? "Yes" : "No"}</td>
                       <td style={{ padding: 8 }}>{row.subject_passed ? "Yes" : "No"}</td>
                       <td style={{ padding: 8 }}>
-                        <span style={{
-                          color: row.readiness === "PROMOTABLE_TO_TEMPLATE" ? "green" :
-                                 row.readiness === "BLOCKED" ? "red" :
-                                 row.readiness === "MANUAL_REVIEW_REQUIRED" ? "orange" : "inherit"
-                        }}>
+                        <span
+                          style={{
+                            color:
+                              row.readiness === "PROMOTABLE_TO_TEMPLATE"
+                                ? "green"
+                                : row.readiness === "BLOCKED"
+                                  ? "red"
+                                  : row.readiness === "MANUAL_REVIEW_REQUIRED"
+                                    ? "orange"
+                                    : "inherit",
+                          }}
+                        >
                           {row.readiness}
                         </span>
                       </td>
@@ -1855,7 +2064,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Generated Files</h4>
               <ul>
                 {validationMatrixResult.outputs.map((output, idx) => (
-                  <li key={idx}><code>{output}</code></li>
+                  <li key={idx}>
+                    <code>{output}</code>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1866,7 +2077,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {validationMatrixResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1877,7 +2090,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {validationMatrixResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1929,7 +2144,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
                       <td style={{ padding: 8 }}>{item.function_name}</td>
                       <td style={{ padding: 8 }}>{item.template_type}</td>
                       <td style={{ padding: 8 }}>{item.requires_approval ? "Yes" : "No"}</td>
-                      <td style={{ padding: 8 }}><code>{item.template_path}</code></td>
+                      <td style={{ padding: 8 }}>
+                        <code>{item.template_path}</code>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1955,7 +2172,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Generated Files</h4>
               <ul>
                 {templateLibraryResult.outputs.map((output, idx) => (
-                  <li key={idx}><code>{output}</code></li>
+                  <li key={idx}>
+                    <code>{output}</code>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1966,7 +2185,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Warnings</h4>
               <ul>
                 {templateLibraryResult.warnings.map((w, idx) => (
-                  <li key={idx} style={{ color: "orange" }}>{w}</li>
+                  <li key={idx} style={{ color: "orange" }}>
+                    {w}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1977,7 +2198,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {templateLibraryResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -2025,19 +2248,33 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {templateInstanceResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Template ID:</strong> {templateInstanceResult.template_id}</p>
-          <p><strong>Instance ID:</strong> {templateInstanceResult.instance_id}</p>
-          <p><strong>Run ID:</strong> {templateInstanceResult.run_id}</p>
-          <p><strong>Mode:</strong> {templateInstanceResult.mode}</p>
+          <p>
+            <strong>Template ID:</strong> {templateInstanceResult.template_id}
+          </p>
+          <p>
+            <strong>Instance ID:</strong> {templateInstanceResult.instance_id}
+          </p>
+          <p>
+            <strong>Run ID:</strong> {templateInstanceResult.run_id}
+          </p>
+          <p>
+            <strong>Mode:</strong> {templateInstanceResult.mode}
+          </p>
 
           {templateInstanceResult.pipeline_path && (
-            <p><strong>Pipeline:</strong> <code>{templateInstanceResult.pipeline_path}</code></p>
+            <p>
+              <strong>Pipeline:</strong> <code>{templateInstanceResult.pipeline_path}</code>
+            </p>
           )}
           {templateInstanceResult.manifest_path && (
-            <p><strong>Manifest:</strong> <code>{templateInstanceResult.manifest_path}</code></p>
+            <p>
+              <strong>Manifest:</strong> <code>{templateInstanceResult.manifest_path}</code>
+            </p>
           )}
           {templateInstanceResult.review_path && (
-            <p><strong>Review:</strong> <code>{templateInstanceResult.review_path}</code></p>
+            <p>
+              <strong>Review:</strong> <code>{templateInstanceResult.review_path}</code>
+            </p>
           )}
 
           {templateInstanceResult.outputs && templateInstanceResult.outputs.length > 0 && (
@@ -2045,7 +2282,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Generated Files</h4>
               <ul>
                 {templateInstanceResult.outputs.map((output, idx) => (
-                  <li key={idx}><code>{output}</code></li>
+                  <li key={idx}>
+                    <code>{output}</code>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -2056,7 +2295,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {templateInstanceResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -2078,17 +2319,27 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
             <strong>Status:</strong> {templateExecuteResult.ok ? "OK" : "Failed"}
           </div>
 
-          <p><strong>Instance ID:</strong> {templateExecuteResult.instance_id}</p>
-          <p><strong>Run ID:</strong> {templateExecuteResult.run_id}</p>
-          <p><strong>Status:</strong> {templateExecuteResult.status}</p>
-          <p><strong>Mode:</strong> {templateExecuteResult.mode}</p>
+          <p>
+            <strong>Instance ID:</strong> {templateExecuteResult.instance_id}
+          </p>
+          <p>
+            <strong>Run ID:</strong> {templateExecuteResult.run_id}
+          </p>
+          <p>
+            <strong>Status:</strong> {templateExecuteResult.status}
+          </p>
+          <p>
+            <strong>Mode:</strong> {templateExecuteResult.mode}
+          </p>
 
           {templateExecuteResult.outputs && templateExecuteResult.outputs.length > 0 && (
             <div style={{ marginTop: 12 }}>
               <h4>Generated Files</h4>
               <ul>
                 {templateExecuteResult.outputs.map((output, idx) => (
-                  <li key={idx}><code>{output}</code></li>
+                  <li key={idx}>
+                    <code>{output}</code>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -2097,7 +2348,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
           {templateExecuteResult.execution_summary && (
             <div style={{ marginTop: 12 }}>
               <h4>Execution Summary</h4>
-              <p><strong>Status:</strong> {templateExecuteResult.execution_summary.status}</p>
+              <p>
+                <strong>Status:</strong> {templateExecuteResult.execution_summary.status}
+              </p>
             </div>
           )}
 
@@ -2106,7 +2359,9 @@ export function DpabiCapabilityPanel({ baseUrl }: DpabiCapabilityPanelProps) {
               <h4>Errors</h4>
               <ul>
                 {templateExecuteResult.errors.map((e, idx) => (
-                  <li key={idx} style={{ color: "red" }}>{e}</li>
+                  <li key={idx} style={{ color: "red" }}>
+                    {e}
+                  </li>
                 ))}
               </ul>
             </div>

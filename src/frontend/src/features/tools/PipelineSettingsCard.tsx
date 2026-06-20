@@ -46,7 +46,10 @@ export function PipelineSettingsCard({
         ["Output", "Segmentation + metrics"],
         ["Dataset", dataset.health_status],
       ].map(([key, value]) => (
-        <div className="setting-line" key={key}><span>{key}</span><strong>{value}</strong></div>
+        <div className="setting-line" key={key}>
+          <span>{key}</span>
+          <strong>{value}</strong>
+        </div>
       ))}
       <div className="execution-mode-group" aria-label="Execution mode">
         {executionModes.map((item) => (

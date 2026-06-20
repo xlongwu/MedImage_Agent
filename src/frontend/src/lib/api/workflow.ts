@@ -28,14 +28,24 @@ export interface InventoryResult {
   subjects?: InventorySubject[];
 }
 
-export function inspectRealDataInventory(baseUrl: string, rawdataPath: string): Promise<InventoryResult> {
-  return postJson<InventoryResult>("/api/real-data/inventory", { rawdata_path: rawdataPath }, { baseUrl });
+export function inspectRealDataInventory(
+  baseUrl: string,
+  rawdataPath: string,
+): Promise<InventoryResult> {
+  return postJson<InventoryResult>(
+    "/api/real-data/inventory",
+    { rawdata_path: rawdataPath },
+    { baseUrl },
+  );
 }
 
 export function getLatestQuickstartDemo(baseUrl: string): Promise<WorkflowRunResult> {
   return getJson<WorkflowRunResult>("/api/quickstart-demo/latest", { baseUrl });
 }
 
-export function runWorkflow(baseUrl: string, payload: { data_source: string; dataset_path: string }): Promise<WorkflowRunResult> {
+export function runWorkflow(
+  baseUrl: string,
+  payload: { data_source: string; dataset_path: string },
+): Promise<WorkflowRunResult> {
   return postJson<WorkflowRunResult>("/api/workflow/run", payload, { baseUrl });
 }

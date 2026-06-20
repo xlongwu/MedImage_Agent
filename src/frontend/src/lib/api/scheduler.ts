@@ -39,10 +39,10 @@ export async function createSchedulerPlan(
   payload: {
     project_config_path: string;
     pipeline_path: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/scheduler/plan", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }

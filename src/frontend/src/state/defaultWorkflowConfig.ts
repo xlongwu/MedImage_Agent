@@ -11,7 +11,13 @@ export const defaultWorkflowConfig: WorkflowState = {
     segmentation: { enabled: true },
     normalization: { enabled: true, voxelSize: [3, 3, 3] },
     smoothing: { enabled: true, fwhm: [6, 6, 6] },
-    nuisanceRegression: { enabled: true, model: "friston24", includeWM: false, includeCSF: false, includeLinearTrend: true },
+    nuisanceRegression: {
+      enabled: true,
+      model: "friston24",
+      includeWM: false,
+      includeCSF: false,
+      includeLinearTrend: true,
+    },
     temporalFiltering: { enabled: true, lowHz: 0.01, highHz: 0.08 },
   },
   analysis: {

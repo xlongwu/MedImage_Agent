@@ -139,13 +139,7 @@ export function WarningList({ warnings }: { warnings?: string[] }) {
   );
 }
 
-export function SummaryMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value?: number | null;
-}) {
+export function SummaryMetric({ label, value }: { label: string; value?: number | null }) {
   return (
     <div
       style={{
@@ -156,9 +150,7 @@ export function SummaryMetric({
       }}
     >
       <span style={{ color: "#667085", fontSize: 11, fontWeight: 850 }}>{label}</span>
-      <strong style={{ display: "block", marginTop: 3, fontSize: 18 }}>
-        {value ?? "-"}
-      </strong>
+      <strong style={{ display: "block", marginTop: 3, fontSize: 18 }}>{value ?? "-"}</strong>
     </div>
   );
 }
@@ -178,23 +170,49 @@ export function ArtifactBadgeRow({
       <span style={{ ...artifactChipStyle, ...artifactTone(classification.category) }}>
         {classification.label}
       </span>
-      <span style={{ ...artifactChipStyle, ...artifactTone(artifact.exists ? artifact.kind : "missing") }}>
+      <span
+        style={{
+          ...artifactChipStyle,
+          ...artifactTone(artifact.exists ? artifact.kind : "missing"),
+        }}
+      >
         {artifact.kind}
       </span>
       {!artifact.exists ? (
         <span style={{ ...artifactChipStyle, ...artifactTone("missing") }}>missing</span>
       ) : null}
       {warnings.length ? (
-        <span style={{ ...artifactChipStyle, background: "#fff7ed", color: "#9a5a15", borderColor: "rgba(242, 153, 74, 0.28)" }}>
+        <span
+          style={{
+            ...artifactChipStyle,
+            background: "#fff7ed",
+            color: "#9a5a15",
+            borderColor: "rgba(242, 153, 74, 0.28)",
+          }}
+        >
           warnings
         </span>
       ) : null}
       {failedNode ? (
-        <span style={{ ...artifactChipStyle, background: "#ffebee", color: "#b53b3b", borderColor: "rgba(235, 87, 87, 0.26)" }}>
+        <span
+          style={{
+            ...artifactChipStyle,
+            background: "#ffebee",
+            color: "#b53b3b",
+            borderColor: "rgba(235, 87, 87, 0.26)",
+          }}
+        >
           failed node
         </span>
       ) : null}
-      <span style={{ ...artifactChipStyle, background: "#eef1f6", color: "#667085", borderColor: "rgba(137, 150, 171, 0.28)" }}>
+      <span
+        style={{
+          ...artifactChipStyle,
+          background: "#eef1f6",
+          color: "#667085",
+          borderColor: "rgba(137, 150, 171, 0.28)",
+        }}
+      >
         {isPreviewableArtifact(artifact) ? "previewable" : "metadata-only"}
       </span>
     </div>
@@ -550,7 +568,7 @@ export const markdownCodeStyle: CSSProperties = {
 
 export function artifactAttentionStyle(
   artifact: RunArtifactRecord,
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): CSSProperties {
   if (!artifact.exists) {
     return {

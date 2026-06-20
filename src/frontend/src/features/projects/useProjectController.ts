@@ -5,12 +5,22 @@ import type { WorkflowTab } from "../../lib/projectWorkflow";
 import type { StudyOverview, ProjectSummary } from "../../lib/types/project";
 import type { TaskLogEntry, TaskStatus } from "../../lib/types/task";
 import type { ExecutionMode } from "../../lib/types/pipeline";
-import type { ImagePlane, ImagePreview, ImageSources, ImageValidationReport } from "../../lib/types/image";
+import type {
+  ImagePlane,
+  ImagePreview,
+  ImageSources,
+  ImageValidationReport,
+} from "../../lib/types/image";
 import type { ModelStatus } from "../../lib/types/model";
 import type { DatasetSummary } from "../../lib/types/dataset";
 import type { ChatMessage } from "../../lib/types/assistant";
 import type { PresetPlanDraft } from "../../types";
-import { buildProjectInventory, isProjectNameConflict, mergeCreatedProjectIntoList, uniqueProjectName } from "../../lib/projectWorkflow";
+import {
+  buildProjectInventory,
+  isProjectNameConflict,
+  mergeCreatedProjectIntoList,
+  uniqueProjectName,
+} from "../../lib/projectWorkflow";
 import { createProjectFromDirectory, deleteProject, getApiBaseUrl } from "../../lib/api";
 import { useProject, useProjects } from "../../hooks/useProjects";
 import { useProjectOverview } from "../../hooks/useProjectOverview";
@@ -83,7 +93,9 @@ export function useProjectController(
 
   const [projectCreateLoading, setProjectCreateLoading] = useState(false);
   const [projectCreateError, setProjectCreateError] = useState("");
-  const [projectCreateResult, setProjectCreateResult] = useState<ProjectCreateResponse | null>(null);
+  const [projectCreateResult, setProjectCreateResult] = useState<ProjectCreateResponse | null>(
+    null,
+  );
   const [sequence, setSequence] = useState("T1");
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [plane, setPlane] = useState<ImagePlane>("axial");
@@ -98,7 +110,9 @@ export function useProjectController(
   const projectMetadataRef = project.data.metadata as Record<string, unknown> | undefined;
 
   const selectedProjectForPlanReview = useMemo(() => {
-    return selectedProjectIdRef && !project.fromFallback && projectDataRef.id === selectedProjectIdRef
+    return selectedProjectIdRef &&
+      !project.fromFallback &&
+      projectDataRef.id === selectedProjectIdRef
       ? projectDataRef
       : null;
   }, [selectedProjectIdRef, project.fromFallback, projectDataRef.id, projectDataRef]);
@@ -127,7 +141,9 @@ export function useProjectController(
   const selectedImageSource = useMemo(() => {
     const manifest = imageSources.data.manifest ?? [];
     return (
-      manifest.find((item) => item.subject_id === selectedSubjectId && item.sequence === sequence) ??
+      manifest.find(
+        (item) => item.subject_id === selectedSubjectId && item.sequence === sequence,
+      ) ??
       manifest.find((item) => item.subject_id === selectedSubjectId) ??
       null
     );
@@ -141,7 +157,9 @@ export function useProjectController(
     }
   }, [imageSources.data.subjects, selectedSubjectId]);
 
-  useEffect(() => { setSliceIndex(null); }, [projectDataRef.id, selectedSubjectId, sequence, plane]);
+  useEffect(() => {
+    setSliceIndex(null);
+  }, [projectDataRef.id, selectedSubjectId, sequence, plane]);
 
   const handleUploadData = useCallback(async () => {
     setProjectCreateError("");
@@ -163,7 +181,10 @@ export function useProjectController(
     setProjectCreateLoading(true);
     try {
       const uploadBaseUrl = await getApiBaseUrl();
-      const requestedProjectName = uniqueProjectName(directoryBasename(selectedPath), projectsRef.data);
+      const requestedProjectName = uniqueProjectName(
+        directoryBasename(selectedPath),
+        projectsRef.data,
+      );
       let effectiveProjectName = uniqueProjectName(requestedProjectName, projectsRef.data);
       const createWithName = (name: string) =>
         createProjectFromDirectory(uploadBaseUrl, {

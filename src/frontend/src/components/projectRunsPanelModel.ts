@@ -139,18 +139,24 @@ export const ARTIFACT_CATEGORIES = ARTIFACT_CATEGORY_DEFINITIONS.map(({ key, lab
   label,
 }));
 const ARTIFACT_CATEGORY_META = new Map(
-  ARTIFACT_CATEGORY_DEFINITIONS.map((item) => [item.key, item])
+  ARTIFACT_CATEGORY_DEFINITIONS.map((item) => [item.key, item]),
 );
 
-type WarningCarrier = {
-  warnings?: unknown;
-} | null | undefined;
+type WarningCarrier =
+  | {
+      warnings?: unknown;
+    }
+  | null
+  | undefined;
 
-type ExternalPathHost = {
-  medimage?: {
-    openExternalPath?: unknown;
-  };
-} | null | undefined;
+type ExternalPathHost =
+  | {
+      medimage?: {
+        openExternalPath?: unknown;
+      };
+    }
+  | null
+  | undefined;
 
 function cleanPath(value: string | null | undefined): string | null {
   return value && value.trim().length ? value : null;
@@ -177,16 +183,20 @@ function numberValue(value: unknown): number | null | undefined {
 function stringWarnings(source: unknown): string[] {
   if (Array.isArray(source)) {
     return source.filter(
-      (warning): warning is string => typeof warning === "string" && warning.trim().length > 0
+      (warning): warning is string => typeof warning === "string" && warning.trim().length > 0,
     );
   }
   if (!isRecord(source) || !Array.isArray(source.warnings)) return [];
   return source.warnings.filter(
-    (warning): warning is string => typeof warning === "string" && warning.trim().length > 0
+    (warning): warning is string => typeof warning === "string" && warning.trim().length > 0,
   );
 }
 
-function firstField(source: Record<string, unknown>, raw: Record<string, unknown>, names: string[]) {
+function firstField(
+  source: Record<string, unknown>,
+  raw: Record<string, unknown>,
+  names: string[],
+) {
   for (const name of names) {
     if (source[name] !== undefined) return source[name];
   }
@@ -292,9 +302,7 @@ function messageList(value: unknown): string[] {
       .filter((item): item is string => Boolean(item));
   }
   const items = Array.isArray(value) ? value : [value];
-  return items
-    .map((item) => printableScalar(item))
-    .filter((item): item is string => Boolean(item));
+  return items.map((item) => printableScalar(item)).filter((item): item is string => Boolean(item));
 }
 
 function boolValue(value: unknown): boolean | undefined {
@@ -335,7 +343,11 @@ function jsonStatusValue(value: unknown): string | number | boolean | null | und
   for (const key of ["status", "pipeline_status", "ok", "success"]) {
     const candidate = value[key];
     if (candidate === null) return null;
-    if (typeof candidate === "string" || typeof candidate === "number" || typeof candidate === "boolean") {
+    if (
+      typeof candidate === "string" ||
+      typeof candidate === "number" ||
+      typeof candidate === "boolean"
+    ) {
       return candidate;
     }
   }
@@ -412,7 +424,10 @@ function lowerArtifactText(artifact: Partial<RunArtifactRecord>): string {
 }
 
 function categoryMeta(category: RunArtifactCategoryKey) {
-  return ARTIFACT_CATEGORY_META.get(category) ?? ARTIFACT_CATEGORY_DEFINITIONS[ARTIFACT_CATEGORY_DEFINITIONS.length - 1];
+  return (
+    ARTIFACT_CATEGORY_META.get(category) ??
+    ARTIFACT_CATEGORY_DEFINITIONS[ARTIFACT_CATEGORY_DEFINITIONS.length - 1]
+  );
 }
 
 function hasAnyToken(text: string, tokens: string[]): boolean {
@@ -443,7 +458,7 @@ function artifactNodeId(artifact: RunArtifactRecord): string | null {
   const nodeStateMatch = /node_state:([^\\/]+?)(?:\.json)?$/i.exec(source);
   if (nodeStateMatch?.[1]) return nodeStateMatch[1];
   const statePathMatch = /(?:^|[/\\])states[/\\][^/\\]+[/\\]([^/\\]+?)(?:\.json)?$/i.exec(
-    artifact.relative_path || artifact.path || ""
+    artifact.relative_path || artifact.path || "",
   );
   return statePathMatch?.[1] || null;
 }
@@ -505,7 +520,7 @@ function collectRunErrorMessages(runSummary?: RunSummaryPreview | null): string[
 function compareArtifactRecords(
   a: RunArtifactRecord,
   b: RunArtifactRecord,
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): number {
   const aScore = artifactPriority(a, runSummary);
   const bScore = artifactPriority(b, runSummary);
@@ -517,7 +532,7 @@ function compareArtifactRecords(
 
 function artifactPriority(
   artifact: RunArtifactRecord,
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): number {
   const classification = classifyArtifact(artifact);
   let priority = classification.priority;
@@ -534,7 +549,7 @@ function isSummaryTable(artifact: RunArtifactRecord): boolean {
 
 function keyArtifactPriority(
   artifact: RunArtifactRecord,
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): number {
   const classification = classifyArtifact(artifact);
   const hasWarnings = getArtifactWarnings(artifact).length > 0;
@@ -571,7 +586,7 @@ export function getRunWarnings(run: WarningCarrier): string[] {
 
 export function extractRunPaths(
   run: Pick<RunLinkRecord, "pipeline_path" | "summary_path"> | null | undefined,
-  projectDir?: string | null
+  projectDir?: string | null,
 ): RunPathEntry[] {
   return [
     { label: "Pipeline YAML", path: cleanPath(run?.pipeline_path) },
@@ -584,7 +599,9 @@ export function canOpenExternalPath(host: ExternalPathHost): boolean {
   return typeof host?.medimage?.openExternalPath === "function";
 }
 
-export function artifactPath(artifact: Pick<RunArtifactRecord, "path"> | null | undefined): string | null {
+export function artifactPath(
+  artifact: Pick<RunArtifactRecord, "path"> | null | undefined,
+): string | null {
   return cleanPath(artifact?.path);
 }
 
@@ -592,7 +609,9 @@ export function isPreviewableArtifactName(name: string): boolean {
   return PREVIEWABLE_ARTIFACT_SUFFIXES.has(artifactSuffix(name));
 }
 
-export function isPreviewableArtifact(artifact: Pick<RunArtifactRecord, "name" | "previewable">): boolean {
+export function isPreviewableArtifact(
+  artifact: Pick<RunArtifactRecord, "name" | "previewable">,
+): boolean {
   return Boolean(artifact.previewable) && isPreviewableArtifactName(artifact.name);
 }
 
@@ -671,23 +690,24 @@ export function classifyArtifact(artifact: RunArtifactRecord): ArtifactClassific
 
 export function isFailedNodeArtifact(
   artifact: RunArtifactRecord,
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): boolean {
-  const text = `${lowerArtifactText(artifact)} ${getArtifactWarnings(artifact).join(" ")}`.toLowerCase();
+  const text =
+    `${lowerArtifactText(artifact)} ${getArtifactWarnings(artifact).join(" ")}`.toLowerCase();
   if (hasAnyToken(text, ["failed", "failure", "stderr", "error.log"])) return true;
   return failedNodeTokens(runSummary).some((token) => text.includes(token));
 }
 
 export function sortArtifacts(
   artifacts: RunArtifactRecord[],
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): RunArtifactRecord[] {
   return [...artifacts].sort((a, b) => compareArtifactRecords(a, b, runSummary));
 }
 
 export function groupArtifacts(
   artifacts: RunArtifactRecord[],
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): ArtifactGroup[] {
   const sorted = sortArtifacts(artifacts, runSummary);
   return ARTIFACT_CATEGORY_DEFINITIONS.map((definition) => ({
@@ -699,7 +719,7 @@ export function groupArtifacts(
 
 export function filterArtifacts(
   artifacts: RunArtifactRecord[],
-  filters: RunArtifactFilters = {}
+  filters: RunArtifactFilters = {},
 ): RunArtifactRecord[] {
   const category = filters.category ?? "all";
   const kind = filters.kind && filters.kind !== "all" ? filters.kind : "";
@@ -721,7 +741,7 @@ export function filterArtifacts(
 
 export function getKeyArtifactReason(
   artifact: RunArtifactRecord,
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): string {
   const classification = classifyArtifact(artifact);
   if (!artifact.exists) return "Missing artifact to resolve";
@@ -741,7 +761,7 @@ export function getKeyArtifactReason(
 export function getKeyArtifacts(
   artifacts: RunArtifactRecord[],
   runSummary?: RunSummaryPreview | null,
-  limit = 8
+  limit = 8,
 ): RunArtifactRecord[] {
   const sorted = sortArtifacts(artifacts, runSummary);
   const candidates = sorted.filter((artifact) => {
@@ -749,7 +769,8 @@ export function getKeyArtifacts(
     const hasWarnings = getArtifactWarnings(artifact).length > 0;
     if (!artifact.exists || hasWarnings) return true;
     if (["summary", "pipeline", "reports", "qc"].includes(classification.category)) return true;
-    if (classification.category === "logs" && isFailedNodeArtifact(artifact, runSummary)) return true;
+    if (classification.category === "logs" && isFailedNodeArtifact(artifact, runSummary))
+      return true;
     if (classification.category === "tables" && isSummaryTable(artifact)) return true;
     return false;
   });
@@ -799,13 +820,9 @@ export function getArtifactWarnings(artifact: { warnings?: unknown } | null | un
 
 export function normalizeCsvPreview(value: unknown): CsvPreviewTable | null {
   if (!isRecord(value)) return null;
-  const columns = Array.isArray(value.columns)
-    ? value.columns.map((item) => String(item))
-    : [];
+  const columns = Array.isArray(value.columns) ? value.columns.map((item) => String(item)) : [];
   const rows = Array.isArray(value.rows)
-    ? value.rows
-        .filter(Array.isArray)
-        .map((row) => row.map((item) => String(item)))
+    ? value.rows.filter(Array.isArray).map((row) => row.map((item) => String(item)))
     : [];
   return {
     columns,
@@ -818,7 +835,7 @@ export function normalizeCsvPreview(value: unknown): CsvPreviewTable | null {
 }
 
 export function normalizeJsonPreviewSummary(
-  preview: Pick<RunArtifactPreviewResponse, "json" | "json_summary"> | null | undefined
+  preview: Pick<RunArtifactPreviewResponse, "json" | "json_summary"> | null | undefined,
 ): JsonPreviewSummary | null {
   if (!preview) return null;
   if (isRecord(preview.json_summary)) {
@@ -904,7 +921,9 @@ function metricRowsFromJsonSummary(summary: JsonPreviewSummary | null): QcHighli
 }
 
 function qcStatusBooleans(status: unknown): { passed: boolean | null; failed: boolean | null } {
-  const normalized = String(status ?? "").trim().toUpperCase();
+  const normalized = String(status ?? "")
+    .trim()
+    .toUpperCase();
   if (["PASS", "PASSED", "SUCCESS", "OK", "TRUE"].includes(normalized)) {
     return { passed: true, failed: false };
   }
@@ -919,7 +938,10 @@ function isQcArtifact(artifact: RunArtifactRecord): boolean {
   if (classification.category === "qc") return true;
   const text = lowerArtifactText(artifact);
   if (classification.category === "reports" && hasAnyToken(text, ["qc", "quality"])) return true;
-  if (artifact.kind === "json" && hasAnyToken(text, ["qc", "quality", "motion", "mean_fd", "fd_", "metrics"])) {
+  if (
+    artifact.kind === "json" &&
+    hasAnyToken(text, ["qc", "quality", "motion", "mean_fd", "fd_", "metrics"])
+  ) {
     return true;
   }
   return false;
@@ -927,7 +949,7 @@ function isQcArtifact(artifact: RunArtifactRecord): boolean {
 
 function failedLogArtifacts(
   artifacts: RunArtifactRecord[],
-  runSummary?: RunSummaryPreview | null
+  runSummary?: RunSummaryPreview | null,
 ): RunArtifactRecord[] {
   return artifacts.filter((artifact) => {
     const classification = classifyArtifact(artifact);
@@ -938,13 +960,14 @@ function failedLogArtifacts(
 export function summarizeRunHealth(
   run: Pick<RunLinkRecord, "status" | "warnings"> | null | undefined,
   summaryPreview: RunSummaryPreview | null | undefined,
-  artifacts: RunArtifactRecord[] = []
+  artifacts: RunArtifactRecord[] = [],
 ): RunHealthSummary {
   const warningMessages = mergeSummaryWarnings(run, summaryPreview, ...artifacts);
   const errorMessages = collectRunErrorMessages(summaryPreview);
   const missingArtifactCount = artifacts.filter((artifact) => !artifact.exists).length;
   const failedLogCount = failedLogArtifacts(artifacts, summaryPreview).length;
-  const nodesFailed = summaryPreview?.nodes_failed ?? (summaryPreview?.failed_nodes?.length || null);
+  const nodesFailed =
+    summaryPreview?.nodes_failed ?? (summaryPreview?.failed_nodes?.length || null);
 
   return {
     status: summaryPreview?.status || run?.status || "UNKNOWN",
@@ -964,26 +987,30 @@ export function summarizeRunHealth(
   };
 }
 
-export function extractQcHighlights(
-  artifacts: RunArtifactRecord[] = []
-): QcArtifactHighlight[] {
+export function extractQcHighlights(artifacts: RunArtifactRecord[] = []): QcArtifactHighlight[] {
   const highlights: QcArtifactHighlight[] = [];
   for (const artifact of sortArtifacts(artifacts).filter(isQcArtifact)) {
-    const qcSummary: Record<string, unknown> = isRecord(artifact.qc_summary) ? artifact.qc_summary : {};
+    const qcSummary: Record<string, unknown> = isRecord(artifact.qc_summary)
+      ? artifact.qc_summary
+      : {};
     const jsonSummary = jsonSummaryFromArtifact(artifact);
     const status =
       firstPrintableField(qcSummary, ["status", "pipeline_status", "ok", "success"]) ??
       printableScalar(jsonSummary?.status) ??
       null;
     const statusBools = qcStatusBooleans(status);
-    const passed = boolValue(qcSummary.passed) ?? boolValue(qcSummary.ok) ?? boolValue(qcSummary.success) ?? statusBools.passed;
+    const passed =
+      boolValue(qcSummary.passed) ??
+      boolValue(qcSummary.ok) ??
+      boolValue(qcSummary.success) ??
+      statusBools.passed;
     const failed = boolValue(qcSummary.failed) ?? statusBools.failed;
     const warnings = Array.from(
       new Set([
         ...getArtifactWarnings(artifact),
         ...messageList(qcSummary.warnings),
         ...(jsonSummary?.warnings.sample ?? []),
-      ])
+      ]),
     );
     const metrics = metricRowsFromValue(qcSummary.metrics);
     const fallbackMetrics = metricRowsFromJsonSummary(jsonSummary);
@@ -1000,9 +1027,7 @@ export function extractQcHighlights(
       warnings,
       metrics: metrics.length ? metrics : fallbackMetrics,
       subjectId: firstPrintableField(qcSummary, ["subject_id", "subject"]) ?? null,
-      nodeId:
-        firstPrintableField(qcSummary, ["node_id", "node"]) ??
-        artifactNodeId(artifact),
+      nodeId: firstPrintableField(qcSummary, ["node_id", "node"]) ?? artifactNodeId(artifact),
       errorMessage:
         firstPrintableField(qcSummary, ["error_message", "error"]) ??
         messageList(qcSummary.errors)[0] ??
@@ -1017,7 +1042,7 @@ export function extractQcHighlights(
 
 export function extractFailedNodeHighlights(
   summaryPreview: RunSummaryPreview | null | undefined,
-  artifacts: RunArtifactRecord[] = []
+  artifacts: RunArtifactRecord[] = [],
 ): FailedNodeHighlight[] {
   const byNode = new Map<string, FailedNodeHighlight>();
   const failedNodes = summaryPreview?.failed_nodes ?? [];
@@ -1093,7 +1118,7 @@ export function extractFailedNodeHighlights(
 }
 
 export function buildArtifactProvenanceRows(
-  artifacts: RunArtifactRecord[] = []
+  artifacts: RunArtifactRecord[] = [],
 ): ArtifactProvenanceRow[] {
   return artifacts
     .map((artifact) => {
@@ -1120,14 +1145,14 @@ export function buildArtifactProvenanceRows(
     })
     .sort((a, b) =>
       `${a.source}|${a.nodeId || ""}|${a.kind}|${a.artifactName}`.localeCompare(
-        `${b.source}|${b.nodeId || ""}|${b.kind}|${b.artifactName}`
-      )
+        `${b.source}|${b.nodeId || ""}|${b.kind}|${b.artifactName}`,
+      ),
     );
 }
 
 export function markdownPreviewBlocks(
   content: string | null | undefined,
-  maxBlocks = 200
+  maxBlocks = 200,
 ): MarkdownPreviewBlock[] {
   if (!content || !content.trim()) return [];
   const blocks: MarkdownPreviewBlock[] = [];
@@ -1183,7 +1208,7 @@ export function missingSummaryWarning(summaryPath?: string | null): string {
 
 export function compactRawSummary(
   raw: unknown,
-  maxChars = RAW_SUMMARY_MAX_CHARS
+  maxChars = RAW_SUMMARY_MAX_CHARS,
 ): RawSummaryCompact {
   if (!isRecord(raw)) return { raw: undefined, raw_truncated: false };
   const encoded = JSON.stringify(raw);
@@ -1203,7 +1228,7 @@ export function compactRawSummary(
 
 export function normalizeRunSummaryPreview(
   value: unknown,
-  fallbackRun?: Pick<RunLinkRecord, "run_id" | "status" | "warnings">
+  fallbackRun?: Pick<RunLinkRecord, "run_id" | "status" | "warnings">,
 ): RunSummaryPreview | null {
   if (!isRecord(value)) return null;
 
@@ -1215,20 +1240,14 @@ export function normalizeRunSummaryPreview(
     (failedNodes ? failedNodes.length : undefined);
 
   return {
-    run_id:
-      stringValue(firstField(value, raw, ["run_id"])) ??
-      fallbackRun?.run_id,
+    run_id: stringValue(firstField(value, raw, ["run_id"])) ?? fallbackRun?.run_id,
     status:
-      stringValue(firstField(value, raw, ["status", "pipeline_status"])) ??
-      fallbackRun?.status,
-    started_at:
-      stringValue(firstField(value, raw, ["started_at", "start_time"])) ?? null,
+      stringValue(firstField(value, raw, ["status", "pipeline_status"])) ?? fallbackRun?.status,
+    started_at: stringValue(firstField(value, raw, ["started_at", "start_time"])) ?? null,
     finished_at:
       stringValue(firstField(value, raw, ["finished_at", "ended_at", "end_time"])) ?? null,
     nodes_total: numberValue(firstField(value, raw, ["nodes_total", "node_count"])),
-    nodes_succeeded: numberValue(
-      firstField(value, raw, ["nodes_succeeded", "nodes_success"])
-    ),
+    nodes_succeeded: numberValue(firstField(value, raw, ["nodes_succeeded", "nodes_success"])),
     nodes_failed: nodesFailed,
     nodes_skipped: numberValue(firstField(value, raw, ["nodes_skipped"])),
     warnings: mergeSummaryWarnings(value, raw, fallbackRun),

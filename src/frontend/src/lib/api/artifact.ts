@@ -42,16 +42,12 @@ export async function createBundle(
     include_reports?: boolean;
     include_artifact_index?: boolean;
     max_file_size_bytes?: number;
-  }
+  },
 ) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/bundles/create",
-    {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/bundles/create", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getArtifacts(baseUrl: string) {
@@ -61,7 +57,7 @@ export async function getArtifacts(baseUrl: string) {
 export async function inspectBundle(baseUrl: string, bundleId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/bundles/${encodeURIComponent(bundleId)}`
+    `/api/bundles/${encodeURIComponent(bundleId)}`,
   );
 }
 
@@ -70,20 +66,14 @@ export async function listBundles(baseUrl: string) {
 }
 
 export async function previewArtifact(baseUrl: string, path: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/artifacts/preview",
-    {
-      method: "POST",
-      body: JSON.stringify({ path })
-    }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/artifacts/preview", {
+    method: "POST",
+    body: JSON.stringify({ path }),
+  });
 }
 
 export async function refreshArtifacts(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/artifacts/refresh",
-    { method: "POST" }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/artifacts/refresh", {
+    method: "POST",
+  });
 }

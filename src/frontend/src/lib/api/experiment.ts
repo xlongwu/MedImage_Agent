@@ -39,16 +39,12 @@ export async function compareExperimentRuns(
   payload: {
     experiment_id: string;
     run_ids: string[];
-  }
+  },
 ) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/experiments/compare",
-    {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/experiments/compare", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function createExperimentRecord(
@@ -59,50 +55,35 @@ export async function createExperimentRecord(
     run_ids: string[];
     tags: string[];
     notes: string;
-  }
+  },
 ) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/experiments/record",
-    {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/experiments/record", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getExperimentComparison(baseUrl: string, experimentId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
-    `/api/experiments/comparison/${experimentId}`
+    `/api/experiments/comparison/${experimentId}`,
   );
 }
 
 export async function getExperimentDashboard(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/experiments/dashboard"
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/experiments/dashboard");
 }
 
 export async function getExperimentRecord(baseUrl: string, experimentId: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    `/api/experiments/record/${experimentId}`
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, `/api/experiments/record/${experimentId}`);
 }
 
 export async function getExperimentsRunIndex(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/experiments/run-index"
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/experiments/run-index");
 }
 
 export async function refreshExperimentDashboard(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/experiments/dashboard/refresh",
-    { method: "POST" }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/experiments/dashboard/refresh", {
+    method: "POST",
+  });
 }

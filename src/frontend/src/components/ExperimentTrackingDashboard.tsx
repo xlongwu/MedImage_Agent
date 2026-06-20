@@ -158,7 +158,10 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
         experiment_id: experimentId,
         name: experimentName,
         run_ids: selectedRunIds,
-        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+        tags: tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
         notes: notes,
       })) as ExperimentRecord;
       setExperimentRecord(result);
@@ -214,11 +217,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
       <h2>Experiment Tracking Dashboard</h2>
 
       <div className={styles.style002}>
-        <button
-          onClick={handleLoadRunIndex}
-          disabled={loadingIndex}
-          className={styles.style003}
-        >
+        <button onClick={handleLoadRunIndex} disabled={loadingIndex} className={styles.style003}>
           {loadingIndex ? "Loading..." : "Refresh Run Index"}
         </button>
         <button onClick={handleSelectAll} className={styles.style004}>
@@ -279,15 +278,9 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
                         onChange={() => handleToggleRunSelection(run.run_id || "")}
                       />
                     </td>
-                    <td className={styles.style024}>
-                      {run.run_id}
-                    </td>
+                    <td className={styles.style024}>{run.run_id}</td>
                     <td className={styles.style025}>
-                      <span
-                        className={styles.style026}
-                      >
-                        {run.run_type}
-                      </span>
+                      <span className={styles.style026}>{run.run_type}</span>
                     </td>
                     <td className={styles.style027}>{run.pipeline_id}</td>
                     <td className={styles.style028}>
@@ -298,9 +291,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
                         {run.status}
                       </span>
                     </td>
-                    <td className={styles.style030}>
-                      {formatDuration(run.duration_seconds)}
-                    </td>
+                    <td className={styles.style030}>{formatDuration(run.duration_seconds)}</td>
                     <td className={styles.style031}>
                       {run.scheduler_mode} ({run.max_workers}/{run.matlab_max_workers})
                     </td>
@@ -335,9 +326,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
 
       <div className={styles.style039}>
         <h3>Create Experiment Record</h3>
-        <p className={styles.style040}>
-          Selected runs: {selectedRunIds.length}
-        </p>
+        <p className={styles.style040}>Selected runs: {selectedRunIds.length}</p>
 
         <label className={styles.style041}>
           Experiment ID:
@@ -387,11 +376,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
           >
             {loadingCreate ? "Creating..." : "Create Experiment Record"}
           </button>
-          <button
-            onClick={handleCompareRuns}
-            disabled={loadingCompare}
-            className={styles.style047}
-          >
+          <button onClick={handleCompareRuns} disabled={loadingCompare} className={styles.style047}>
             {loadingCompare ? "Comparing..." : "Compare Runs"}
           </button>
         </div>
@@ -406,10 +391,18 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
       {experimentRecord && (
         <div className={styles.style049}>
           <h3>Experiment Record Created</h3>
-          <p><strong>Experiment ID:</strong> {experimentRecord.experiment_id}</p>
-          <p><strong>Name:</strong> {experimentRecord.name}</p>
-          <p><strong>Runs:</strong> {experimentRecord.run_ids?.length || 0}</p>
-          <p><strong>Tags:</strong> {experimentRecord.tags?.join(", ") || "None"}</p>
+          <p>
+            <strong>Experiment ID:</strong> {experimentRecord.experiment_id}
+          </p>
+          <p>
+            <strong>Name:</strong> {experimentRecord.name}
+          </p>
+          <p>
+            <strong>Runs:</strong> {experimentRecord.run_ids?.length || 0}
+          </p>
+          <p>
+            <strong>Tags:</strong> {experimentRecord.tags?.join(", ") || "None"}
+          </p>
           {experimentRecord.missing_run_ids && experimentRecord.missing_run_ids.length > 0 && (
             <p className={styles.style050}>
               <strong>Missing runs:</strong> {experimentRecord.missing_run_ids.join(", ")}
@@ -421,8 +414,12 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
       {comparisonResult && (
         <div className={styles.style051}>
           <h3>Comparison Result</h3>
-          <p><strong>Experiment ID:</strong> {comparisonResult.experiment_id}</p>
-          <p><strong>Runs compared:</strong> {comparisonResult.runs_compared}</p>
+          <p>
+            <strong>Experiment ID:</strong> {comparisonResult.experiment_id}
+          </p>
+          <p>
+            <strong>Runs compared:</strong> {comparisonResult.runs_compared}
+          </p>
 
           {comparisonResult.missing_run_ids && comparisonResult.missing_run_ids.length > 0 && (
             <p className={styles.style052}>
@@ -449,9 +446,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
                 <tbody>
                   {comparisonResult.rows.map((row, idx) => (
                     <tr key={idx} className={styles.style065}>
-                      <td className={styles.style066}>
-                        {row.run_id}
-                      </td>
+                      <td className={styles.style066}>{row.run_id}</td>
                       <td className={styles.style067}>{row.run_type}</td>
                       <td className={styles.style068}>{row.pipeline_id}</td>
                       <td className={styles.style069}>
@@ -462,9 +457,7 @@ export function ExperimentTrackingDashboard({ baseUrl }: ExperimentTrackingDashb
                           {row.status}
                         </span>
                       </td>
-                      <td className={styles.style071}>
-                        {formatDuration(row.duration_seconds)}
-                      </td>
+                      <td className={styles.style071}>{formatDuration(row.duration_seconds)}</td>
                       <td className={styles.style072}>
                         {row.scheduler_mode} ({row.max_workers}/{row.matlab_max_workers})
                       </td>

@@ -49,10 +49,10 @@ export async function runGpuBenchmark(
     prefer_gpu?: boolean;
     require_gpu?: boolean;
     benchmark_compare_cpu_gpu?: boolean;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/gpu/benchmark", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }

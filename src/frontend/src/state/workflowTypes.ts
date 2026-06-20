@@ -19,7 +19,13 @@ export interface PreprocessingConfig {
   segmentation: { enabled: boolean };
   normalization: { enabled: boolean; voxelSize: [number, number, number] };
   smoothing: { enabled: boolean; fwhm: [number, number, number] };
-  nuisanceRegression: { enabled: boolean; model: string; includeWM: boolean; includeCSF: boolean; includeLinearTrend: boolean };
+  nuisanceRegression: {
+    enabled: boolean;
+    model: string;
+    includeWM: boolean;
+    includeCSF: boolean;
+    includeLinearTrend: boolean;
+  };
   temporalFiltering: { enabled: boolean; lowHz: number; highHz: number };
 }
 

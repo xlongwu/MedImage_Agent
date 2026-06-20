@@ -97,9 +97,7 @@ export function RunLogsPanel({ baseUrl, projectId, runId, maxBytes }: Props) {
       <div style={{ ...headerStyle, marginBottom: 10 }}>
         <div>
           <h4 style={{ margin: 0, fontSize: 14 }}>Run Logs</h4>
-          <span style={subtitleStyle}>
-            {loading ? "Loading..." : `${logs.length} log(s)`}
-          </span>
+          <span style={subtitleStyle}>{loading ? "Loading..." : `${logs.length} log(s)`}</span>
         </div>
         {logs.length > 0 && (
           <button type="button" onClick={toggleAll} style={smallButtonStyle}>
@@ -127,21 +125,25 @@ export function RunLogsPanel({ baseUrl, projectId, runId, maxBytes }: Props) {
             >
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <strong style={{ fontSize: 13, overflowWrap: "anywhere" }}>{log.name}</strong>
-                <span style={{
-                  ...statusPillStyle,
-                  background: log.exists ? "#e8f5e9" : "#ffebee",
-                  color: log.exists ? "#176b3b" : "#b53b3b",
-                  borderColor: log.exists ? "rgba(33, 150, 83, 0.24)" : "rgba(235, 87, 87, 0.26)",
-                }}>
+                <span
+                  style={{
+                    ...statusPillStyle,
+                    background: log.exists ? "#e8f5e9" : "#ffebee",
+                    color: log.exists ? "#176b3b" : "#b53b3b",
+                    borderColor: log.exists ? "rgba(33, 150, 83, 0.24)" : "rgba(235, 87, 87, 0.26)",
+                  }}
+                >
                   {log.exists ? "exists" : "missing"}
                 </span>
                 {log.truncated ? (
-                  <span style={{
-                    ...statusPillStyle,
-                    background: "#fff7ed",
-                    color: "#9a5a15",
-                    borderColor: "rgba(242, 153, 74, 0.28)",
-                  }}>
+                  <span
+                    style={{
+                      ...statusPillStyle,
+                      background: "#fff7ed",
+                      color: "#9a5a15",
+                      borderColor: "rgba(242, 153, 74, 0.28)",
+                    }}
+                  >
                     truncated
                   </span>
                 ) : null}
@@ -150,9 +152,22 @@ export function RunLogsPanel({ baseUrl, projectId, runId, maxBytes }: Props) {
                 </span>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "60px minmax(0, 1fr)", gap: "2px 8px", fontSize: 11, color: "#667085" }}>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "60px minmax(0, 1fr)",
+                  gap: "2px 8px",
+                  fontSize: 11,
+                  color: "#667085",
+                }}
+              >
                 <span>path</span>
-                <b style={{ fontFamily: '"Cascadia Mono", "Consolas", monospace', overflowWrap: "anywhere" }}>
+                <b
+                  style={{
+                    fontFamily: '"Cascadia Mono", "Consolas", monospace',
+                    overflowWrap: "anywhere",
+                  }}
+                >
                   {log.relative_path || log.path}
                 </b>
                 <span>modified</span>

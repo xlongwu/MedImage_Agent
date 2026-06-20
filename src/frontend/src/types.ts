@@ -389,7 +389,13 @@ export type BidsValidationIssue = {
 };
 
 export type BidsRepairSuggestion = {
-  action_type: "rename_suggestion" | "move_suggestion" | "metadata_suggestion" | "missing_file_suggestion" | "manual_review" | "conversion_required";
+  action_type:
+    | "rename_suggestion"
+    | "move_suggestion"
+    | "metadata_suggestion"
+    | "missing_file_suggestion"
+    | "manual_review"
+    | "conversion_required";
   title: string;
   description: string;
   source_path?: string | null;
@@ -424,7 +430,11 @@ export type ConversionDryRunRequest = {
   target_layout?: "bids";
   output_root_name?: string;
   subject_mapping_strategy?: "infer_from_dicom" | "infer_from_filename" | "manual_required";
-  session_mapping_strategy?: "none" | "infer_from_dicom" | "infer_from_filename" | "manual_required";
+  session_mapping_strategy?:
+    | "none"
+    | "infer_from_dicom"
+    | "infer_from_filename"
+    | "manual_required";
   include_dicom?: boolean;
   include_loose_nifti?: boolean;
 };
@@ -675,7 +685,14 @@ export type MotionMetricsDraftResponse = {
 
 /** SPM realign dry-run types */
 export type SpmRealignPredictedOutput = {
-  kind: "realigned_bold" | "mean_bold" | "motion_params" | "stdout_log" | "stderr_log" | "provenance_json" | "node_state_json";
+  kind:
+    | "realigned_bold"
+    | "mean_bold"
+    | "motion_params"
+    | "stdout_log"
+    | "stderr_log"
+    | "provenance_json"
+    | "node_state_json";
   path: string;
   exists: boolean;
   would_overwrite: boolean;
@@ -1263,15 +1280,135 @@ export type PreprocessingPlanPreviewResponse = {
 };
 
 /** Phase 5B — Preprocessing run workspace */
-export type PreprocessingRunCreateResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; run_dir: string; preprocessing_input_dir: string; stage_count: number; python_stage_count: number; disabled_external_stage_count: number; warnings: string[]; blocking_issues: string[]; next_actions: string[]; safety_flags: Record<string, boolean>; };
-export type PreprocessingStageStatus = { stage_id: string; name: string; status: string; backend: string; requires_external_tool: boolean; enabled: boolean; optional: boolean; };
-export type PreprocessingRunExecuteResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; completed_stages: string[]; disabled_external_stages: string[]; stage_statuses: PreprocessingStageStatus[]; input_inventory_path: string; qc_preflight_summary_path: string; manifest_path: string; warnings: string[]; next_actions: string[]; safety_flags: Record<string, boolean>; };
-export type PreprocessingRunStatusResponse = { ok: boolean; project_id: string; preprocessing_run_id: string; run_dir: string; preprocessing_input_dir: string; status: string; stage_statuses: PreprocessingStageStatus[]; artifacts: Record<string, string>; warnings: string[]; safety_flags: Record<string, boolean>; };
+export type PreprocessingRunCreateResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  preprocessing_run_id: string;
+  run_dir: string;
+  preprocessing_input_dir: string;
+  stage_count: number;
+  python_stage_count: number;
+  disabled_external_stage_count: number;
+  warnings: string[];
+  blocking_issues: string[];
+  next_actions: string[];
+  safety_flags: Record<string, boolean>;
+};
+export type PreprocessingStageStatus = {
+  stage_id: string;
+  name: string;
+  status: string;
+  backend: string;
+  requires_external_tool: boolean;
+  enabled: boolean;
+  optional: boolean;
+};
+export type PreprocessingRunExecuteResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  preprocessing_run_id: string;
+  completed_stages: string[];
+  disabled_external_stages: string[];
+  stage_statuses: PreprocessingStageStatus[];
+  input_inventory_path: string;
+  qc_preflight_summary_path: string;
+  manifest_path: string;
+  warnings: string[];
+  next_actions: string[];
+  safety_flags: Record<string, boolean>;
+};
+export type PreprocessingRunStatusResponse = {
+  ok: boolean;
+  project_id: string;
+  preprocessing_run_id: string;
+  run_dir: string;
+  preprocessing_input_dir: string;
+  status: string;
+  stage_statuses: PreprocessingStageStatus[];
+  artifacts: Record<string, string>;
+  warnings: string[];
+  safety_flags: Record<string, boolean>;
+};
 /** Phase 5E — Sandbox execution */
-export type SpmSandboxExecutionResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; dry_run_id: string; execution_id: string; execution_dir: string; sandbox_input_dir: string; sandbox_output_dir: string; subjects_total: number; subjects_succeeded: number; command_template_path: string; stdout_log_path: string; stderr_log_path: string; manifest_path: string; provenance_path: string; warnings: string[]; blocking_issues: string[]; safety_flags: Record<string, boolean>; };
+export type SpmSandboxExecutionResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  preprocessing_run_id: string;
+  dry_run_id: string;
+  execution_id: string;
+  execution_dir: string;
+  sandbox_input_dir: string;
+  sandbox_output_dir: string;
+  subjects_total: number;
+  subjects_succeeded: number;
+  command_template_path: string;
+  stdout_log_path: string;
+  stderr_log_path: string;
+  manifest_path: string;
+  provenance_path: string;
+  warnings: string[];
+  blocking_issues: string[];
+  safety_flags: Record<string, boolean>;
+};
 /** Phase 5F */
-export type StageOutputRegistrationResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; execution_id: string; registered_stage_output_id: string; stage_output_dir: string; next_stage_input_dir: string; subject_count: number; registered_bold_outputs: string[]; missing_subject_outputs: string[]; motion_files: string[]; mean_images: string[]; warnings: string[]; blocking_issues: string[]; next_actions: string[]; safety_flags: Record<string, boolean>; };
+export type StageOutputRegistrationResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  preprocessing_run_id: string;
+  execution_id: string;
+  registered_stage_output_id: string;
+  stage_output_dir: string;
+  next_stage_input_dir: string;
+  subject_count: number;
+  registered_bold_outputs: string[];
+  missing_subject_outputs: string[];
+  motion_files: string[];
+  mean_images: string[];
+  warnings: string[];
+  blocking_issues: string[];
+  next_actions: string[];
+  safety_flags: Record<string, boolean>;
+};
 /** Phase 5K */
-export type NuisanceSandboxExecutionResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; dry_run_id: string; execution_id: string; execution_dir: string; sandbox_input_dir: string; sandbox_output_dir: string; subjects_total: number; subjects_succeeded: number; regressor_design_path: string; stdout_log_path: string; stderr_log_path: string; manifest_path: string; provenance_path: string; subject_status_path: string; warnings: string[]; blocking_issues: string[]; safety_flags: Record<string, boolean>; };
-export type FilteringDryRunResponse = { ok: boolean; status: string; project_id: string; preprocessing_run_id: string; dry_run_id: string; dry_run_dir: string; subject_count: number; planned_subjects: string[]; functional_input_count: number; filter_design_paths: string[]; planned_output_paths: string[]; warnings: string[]; blocking_issues: string[]; safety_flags: Record<string, boolean>; };
-
+export type NuisanceSandboxExecutionResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  preprocessing_run_id: string;
+  dry_run_id: string;
+  execution_id: string;
+  execution_dir: string;
+  sandbox_input_dir: string;
+  sandbox_output_dir: string;
+  subjects_total: number;
+  subjects_succeeded: number;
+  regressor_design_path: string;
+  stdout_log_path: string;
+  stderr_log_path: string;
+  manifest_path: string;
+  provenance_path: string;
+  subject_status_path: string;
+  warnings: string[];
+  blocking_issues: string[];
+  safety_flags: Record<string, boolean>;
+};
+export type FilteringDryRunResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  preprocessing_run_id: string;
+  dry_run_id: string;
+  dry_run_dir: string;
+  subject_count: number;
+  planned_subjects: string[];
+  functional_input_count: number;
+  filter_design_paths: string[];
+  planned_output_paths: string[];
+  warnings: string[];
+  blocking_issues: string[];
+  safety_flags: Record<string, boolean>;
+};

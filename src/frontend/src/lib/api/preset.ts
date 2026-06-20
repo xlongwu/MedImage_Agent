@@ -55,8 +55,5 @@ export async function instantiatePipelinePreset(
 }
 
 export async function listPipelinePresets(baseUrl: string) {
-  return requestJson<{ ok: boolean; presets: PipelinePreset[] }>(
-    baseUrl,
-    "/api/pipeline-presets",
-  );
+  return requestJson<{ ok: boolean; presets: PipelinePreset[] }>(baseUrl, "/api/pipeline-presets");
 }

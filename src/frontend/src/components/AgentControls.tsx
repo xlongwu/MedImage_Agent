@@ -1,9 +1,5 @@
 import { useState } from "react";
-import {
-  createAgentPlan,
-  executeAgentPlan,
-  getAgentRun
-} from "../lib/api/legacy";
+import { createAgentPlan, executeAgentPlan, getAgentRun } from "../lib/api/legacy";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 
@@ -13,17 +9,13 @@ type Props = {
   onAgentRunLoaded?: (value: unknown) => void;
 };
 
-export function AgentControls({
-  baseUrl,
-  selectedPipeline,
-  onAgentRunLoaded
-}: Props) {
+export function AgentControls({ baseUrl, selectedPipeline, onAgentRunLoaded }: Props) {
   const [agentRunId, setAgentRunId] = useState("agent_run_001");
   const [projectConfigPath, setProjectConfigPath] = useState(
-    "examples/project_config_dataset.yaml"
+    "examples/project_config_dataset.yaml",
   );
   const [pipelinePath, setPipelinePath] = useState(
-    selectedPipeline || "examples/pipeline_subject_preprocess.yaml"
+    selectedPipeline || "examples/pipeline_subject_preprocess.yaml",
   );
   const [plan, setPlan] = useState<unknown>(null);
   const [summary, setSummary] = useState<unknown>(null);
@@ -44,7 +36,7 @@ export function AgentControls({
       const result = await createAgentPlan(baseUrl, {
         agent_run_id: agentRunId,
         project_config_path: projectConfigPath,
-        pipeline_path: currentPipelinePath()
+        pipeline_path: currentPipelinePath(),
       });
       setPlan(result);
       setStatus("PLAN_READY");
@@ -56,7 +48,7 @@ export function AgentControls({
 
   async function handleExecute() {
     const confirmed = window.confirm(
-      "确认执行 pipeline？这会调用后端运行已批准的计划，并可能启动 MATLAB。"
+      "确认执行 pipeline？这会调用后端运行已批准的计划，并可能启动 MATLAB。",
     );
 
     if (!confirmed) {
@@ -71,7 +63,7 @@ export function AgentControls({
         agent_run_id: agentRunId,
         project_config_path: projectConfigPath,
         pipeline_path: currentPipelinePath(),
-        approved: true
+        approved: true,
       });
       setSummary(result);
       setStatus("EXECUTED");
@@ -97,10 +89,7 @@ export function AgentControls({
       <div className="formGrid">
         <label>
           Agent Run ID
-          <input
-            value={agentRunId}
-            onChange={(event) => setAgentRunId(event.target.value)}
-          />
+          <input value={agentRunId} onChange={(event) => setAgentRunId(event.target.value)} />
         </label>
 
         <label>

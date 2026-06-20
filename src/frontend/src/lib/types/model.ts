@@ -7,4 +7,3 @@ export interface ModelStatus {
   last_trained: string;
   metrics: Record<string, number>;
 }
-

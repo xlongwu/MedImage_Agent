@@ -32,15 +32,16 @@ export function PreprocessingWorkspace({
         <section className="workflow-empty-note">
           <h3>Preprocessing validation</h3>
           <p>Convert DICOM to BIDS/NIfTI before preprocessing validation.</p>
-          <button type="button" onClick={onOpenDataConversion}>Open Data & Conversion</button>
+          <button type="button" onClick={onOpenDataConversion}>
+            Open Data & Conversion
+          </button>
         </section>
       </div>
     );
   }
 
   const isMissingRegistration =
-    dataState === "empty" ||
-    (dataState === "converted_bids" && inventory.convertedSubjects === 0);
+    dataState === "empty" || (dataState === "converted_bids" && inventory.convertedSubjects === 0);
   const ctaTitle = isMissingRegistration
     ? "Register converted outputs before preprocessing"
     : "Create preprocessing run";
@@ -50,9 +51,7 @@ export function PreprocessingWorkspace({
   const ctaButtonText = isMissingRegistration
     ? "Open Data & Conversion"
     : "Configure Preprocessing Run";
-  const handleCtaClick = isMissingRegistration
-    ? onOpenDataConversion
-    : onOpenToolsDrawer;
+  const handleCtaClick = isMissingRegistration ? onOpenDataConversion : onOpenToolsDrawer;
 
   return (
     <div className="workspace-stack preprocessing-workspace">
@@ -65,7 +64,9 @@ export function PreprocessingWorkspace({
         <section className="workflow-empty-note">
           <h3>{ctaTitle}</h3>
           <p>{ctaDescription}</p>
-          <button type="button" onClick={handleCtaClick}>{ctaButtonText}</button>
+          <button type="button" onClick={handleCtaClick}>
+            {ctaButtonText}
+          </button>
         </section>
       )}
       <AdvancedPreprocessingPipelinePanel projectId={projectId} preprocessingRunId={null} />

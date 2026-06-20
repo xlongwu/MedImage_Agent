@@ -23,11 +23,16 @@ describe("getJson", () => {
     const fetchMock = mockFetch();
     fetchMock.mockResolvedValue(response('{"ok":true}'));
 
-    await expect(getJson<{ ok: boolean }>("/api/demo", { baseUrl: "http://api" })).resolves.toEqual({ ok: true });
+    await expect(getJson<{ ok: boolean }>("/api/demo", { baseUrl: "http://api" })).resolves.toEqual(
+      { ok: true },
+    );
 
-    expect(fetchMock).toHaveBeenCalledWith("http://api/api/demo", expect.objectContaining({
-      headers: expect.objectContaining({ "Content-Type": "application/json" }),
-    }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api/api/demo",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
+    );
   });
 
   it("throws with detail message on 500", async () => {
@@ -48,7 +53,9 @@ describe("getJson", () => {
     const fetchMock = mockFetch();
     fetchMock.mockResolvedValue(response("plain text"));
 
-    await expect(getJson("/api/text", { baseUrl: "http://api" })).resolves.toEqual({ detail: "plain text" });
+    await expect(getJson("/api/text", { baseUrl: "http://api" })).resolves.toEqual({
+      detail: "plain text",
+    });
   });
 });
 
@@ -59,10 +66,13 @@ describe("postJson", () => {
 
     await postJson("/api/items", { name: "demo" }, { baseUrl: "http://api" });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://api/api/items", expect.objectContaining({
-      method: "POST",
-      body: '{"name":"demo"}',
-    }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api/api/items",
+      expect.objectContaining({
+        method: "POST",
+        body: '{"name":"demo"}',
+      }),
+    );
   });
 
   it("handles network error", async () => {
@@ -78,11 +88,16 @@ describe("deleteJson", () => {
     const fetchMock = mockFetch();
     fetchMock.mockResolvedValue(response('{"deleted":true}'));
 
-    await expect(deleteJson<{ deleted: boolean }>("/api/items/1", { baseUrl: "http://api" })).resolves.toEqual({ deleted: true });
+    await expect(
+      deleteJson<{ deleted: boolean }>("/api/items/1", { baseUrl: "http://api" }),
+    ).resolves.toEqual({ deleted: true });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://api/api/items/1", expect.objectContaining({
-      method: "DELETE",
-    }));
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api/api/items/1",
+      expect.objectContaining({
+        method: "DELETE",
+      }),
+    );
   });
 });
 
@@ -114,12 +129,15 @@ describe("requestJson utilities", () => {
       headers: { "X-Test": "1" },
     });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://api/api/demo", expect.objectContaining({
-      headers: expect.objectContaining({
-        "Content-Type": "application/json",
-        "X-Test": "1",
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://api/api/demo",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "X-Test": "1",
+        }),
       }),
-    }));
+    );
   });
 
   it("converts HTTP API URLs to websocket URLs", () => {

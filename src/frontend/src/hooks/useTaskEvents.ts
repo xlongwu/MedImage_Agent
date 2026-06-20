@@ -13,4 +13,3 @@ export function useTaskEvents(taskId: string | null) {
 
   return useAsyncResource<TaskEvent[]>(loader, [], [taskId]);
 }
-

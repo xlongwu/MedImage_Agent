@@ -9,11 +9,7 @@ type Props = {
   onSelectPipeline: (value: string) => void;
 };
 
-export function PipelineExplorer({
-  baseUrl,
-  selectedPipeline,
-  onSelectPipeline
-}: Props) {
+export function PipelineExplorer({ baseUrl, selectedPipeline, onSelectPipeline }: Props) {
   const [pipelines, setPipelines] = useState<string[]>([]);
   const [pipelineDetail, setPipelineDetail] = useState<unknown>(null);
   const [status, setStatus] = useState<string>("IDLE");
@@ -63,9 +59,7 @@ export function PipelineExplorer({
         {pipelines.map((pipeline) => (
           <button
             key={pipeline}
-            className={
-              pipeline === selectedPipeline ? "listItem selected" : "listItem"
-            }
+            className={pipeline === selectedPipeline ? "listItem selected" : "listItem"}
             onClick={() => loadPipeline(pipeline)}
           >
             {pipeline}

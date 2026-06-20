@@ -6,7 +6,7 @@ export function getImagePreview(
   sequence: string,
   subjectId?: string,
   sliceIndex?: number | null,
-  plane: ImagePlane = "axial"
+  plane: ImagePlane = "axial",
 ): Promise<ImagePreview> {
   const params = new URLSearchParams({ project_id: projectId, sequence });
   params.set("plane", plane);

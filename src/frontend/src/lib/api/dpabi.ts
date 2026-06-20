@@ -44,16 +44,12 @@ export async function createDpabiTemplateWizardInstance(
     fwhm: number[];
     subjects: string[];
     scheduler: Record<string, unknown>;
-  }
+  },
 ) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/dpabi/template-wizard/create",
-    {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/template-wizard/create", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function executeDpabiTemplate(
@@ -65,11 +61,11 @@ export async function executeDpabiTemplate(
     instance_id?: string;
     approved?: boolean;
     approved_by?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/template-execute", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -77,11 +73,11 @@ export async function generateDpabiSubjectWrapperReport(
   baseUrl: string,
   payload: {
     project_config_path?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/subject-wrapper-report", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -91,11 +87,11 @@ export async function generateDpabiTemplateLibrary(
     project_config_path?: string;
     work_dir?: string;
     log_dir?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/template-library", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -105,11 +101,11 @@ export async function generateDpabiWrapperContracts(
     project_config_path?: string;
     work_dir?: string;
     log_dir?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/wrapper-contracts", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -123,26 +119,20 @@ export async function generateDpabiWrapperValidationMatrix(
     contracts_path?: string;
     sandbox_result_path?: string;
     subject_wrapper_summary_path?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/wrapper-validation-matrix", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
 export async function getDpabiTemplateWizardLatest(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/dpabi/template-wizard/latest"
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/template-wizard/latest");
 }
 
 export async function getDpabiTemplateWizardOptions(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/dpabi/template-wizard/options"
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/template-wizard/options");
 }
 
 export async function instantiateDpabiTemplate(
@@ -157,21 +147,22 @@ export async function instantiateDpabiTemplate(
     function_name?: string | null;
     fwhm?: number[] | null;
     subjects?: string[] | null;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/template-instantiate", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
-export async function listDpabiTemplates(
-  baseUrl: string,
-  workDir: string = "./work"
-) {
-  return requestJson<Record<string, unknown>>(baseUrl, `/api/dpabi/templates?work_dir=${encodeURIComponent(workDir)}`, {
-    method: "GET"
-  });
+export async function listDpabiTemplates(baseUrl: string, workDir: string = "./work") {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/dpabi/templates?work_dir=${encodeURIComponent(workDir)}`,
+    {
+      method: "GET",
+    },
+  );
 }
 
 export async function previewDpabiTemplateWizard(
@@ -184,16 +175,12 @@ export async function previewDpabiTemplateWizard(
     fwhm: number[];
     subjects: string[];
     scheduler: Record<string, unknown>;
-  }
+  },
 ) {
-  return requestJson<Record<string, unknown>>(
-    baseUrl,
-    "/api/dpabi/template-wizard/preview",
-    {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }
-  );
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/template-wizard/preview", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function runDpabiCapability(
@@ -202,11 +189,11 @@ export async function runDpabiCapability(
     project_config_path?: string;
     work_dir?: string;
     log_dir?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/capability", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -217,11 +204,11 @@ export async function runDpabiInputManifest(
     work_dir?: string;
     log_dir?: string;
     dataset_index?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/input-manifest", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -235,11 +222,11 @@ export async function runDpabiPreflight(
     capabilities_path?: string;
     manifest_path?: string;
     wrapper_config_template_path?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/preflight", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -253,11 +240,11 @@ export async function runDpabiRunPlan(
     manifest_path?: string;
     preflight_path?: string;
     params_path?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/run-plan", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -269,11 +256,11 @@ export async function runDpabiSandboxSmoke(
     log_dir?: string;
     approved?: boolean;
     approved_by?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/sandbox-smoke", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -283,11 +270,11 @@ export async function runDpabiScaffold(
     project_config_path?: string;
     work_dir?: string;
     log_dir?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/scaffold", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -297,11 +284,11 @@ export async function runDpabiSignatureProbe(
     project_config_path?: string;
     work_dir?: string;
     log_dir?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/signature-probe", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -314,11 +301,11 @@ export async function runDpabiSingleFunctionSandbox(
     function_name?: string;
     approved?: boolean;
     approved_by?: string;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/single-function-sandbox", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
 
@@ -333,10 +320,10 @@ export async function runDpabiSubjectSmooth(
     function_name?: string;
     fwhm?: number[];
     approved?: boolean;
-  }
+  },
 ) {
   return requestJson<Record<string, unknown>>(baseUrl, "/api/dpabi/subject-smooth", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 }
