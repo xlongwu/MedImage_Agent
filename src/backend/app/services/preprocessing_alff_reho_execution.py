@@ -215,7 +215,15 @@ def run_alff_reho_sandbox_execution(
 
     alff_status = "numerically_computed" if any_alff else alff_status
     falff_status = "numerically_computed" if any_falff else falff_status
-    reho_status = "validated" if any_reho else reho_status
+    # ReHo execution status: reflects how many subjects were successfully
+    # computed, not the validation level of the algorithm.
+    # Validation level is carried by reho_validation_status separately.
+    if reho_succeeded == 0:
+        pass  # stays metadata_only
+    elif reho_succeeded < files_selected:
+        reho_status = "partially_computed"
+    else:
+        reho_status = "numerically_computed"
     if any_reho:
         reho_validation_status = "golden_validated"
         reho_backend = "cpu-numpy"
