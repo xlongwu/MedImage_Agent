@@ -119,7 +119,11 @@ def run_alff_reho_sandbox_execution(
     # KCC kernel. No inline math: both metrics delegate to tools/*_compute.py.
     metadata_only = True
     alff_status = "metadata_only"; falff_status = "metadata_only"; reho_status = "metadata_only"
-    reho_validation_status = "unvalidated"; reho_backend = "none"
+    # reho_validation_status describes the scientific confidence level of the
+    # algorithm *implementation* (property of the configured backend), not
+    # whether this particular run succeeded. The formal service always uses
+    # the CPU ReHo backend which is golden-validated.
+    reho_validation_status = "golden_validated"; reho_backend = "none"
     any_alff = False; any_falff = False; any_reho = False
     alff_succeeded = 0; reho_succeeded = 0
     subjects_complete = 0; subjects_partial = 0
@@ -225,7 +229,6 @@ def run_alff_reho_sandbox_execution(
     else:
         reho_status = "numerically_computed"
     if any_reho:
-        reho_validation_status = "golden_validated"
         reho_backend = "cpu-numpy"
 
     # Per-subject aggregation: classify each subject as complete/partial/failed.

@@ -3,6 +3,7 @@
 Per the AGENTS Scientific Computing Contract, execution status (what the
 current run produced) must be kept separate from validation status (what
 level of scientific confidence the algorithm implementation has reached).
+Validation status is a property of the algorithm, not of this run's outcome.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -72,11 +73,13 @@ class TestRehoStatusSeparation:
         assert result.reho_computed is True
         assert result.reho_status == "numerically_computed", \
             f"Expected numerically_computed, got {result.reho_status}"
+        # Validation status: property of the algorithm, independent of run success
         assert result.reho_validation_status == "golden_validated"
         assert result.reho_backend == "cpu-numpy"
 
-    def test_partial_subjects_use_partially_computed(self, tmp_path, monkeypatch):
-        """Some ReHo subjects fail → execution status = partially_computed."""
+    def test_zero_subjects_use_metadata_only(self, tmp_path, monkeypatch):
+        """All ReHo subjects fail → execution status = metadata_only.
+        Validation status remains golden_validated (algorithm property)."""
         from src.backend.app.schemas.preprocessing_alff_reho_execution import (
             AlffRehoSandboxExecutionRequest,
         )
@@ -90,7 +93,7 @@ class TestRehoStatusSeparation:
             _make_bold(func_dir, subject=f"sub-{i:03d}")
         _make_dry_run(tmp_path)
 
-        # Mock ReHo kernel to fail for all subjects → 0 succeed
+        # Mock ReHo kernel to fail for all subjects
         def mock_fail(*a, **kw):
             return {"ok": False, "errors": ["mocked failure"]}
         monkeypatch.setattr(
@@ -105,10 +108,103 @@ class TestRehoStatusSeparation:
             "proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path),
         )
         assert result.ok
-        # ReHo computed flag is False since no ReHo succeeded
         assert result.reho_computed is False
         assert result.reho_status == "metadata_only", \
             f"Expected metadata_only when 0 succeed, got {result.reho_status}"
+        # Backend was never successfully used
+        assert result.reho_backend == "none"
+        # Validation status is a property of the configured algorithm,
+        # not of this run's outcome. The CPU ReHo implementation IS golden-validated.
+        assert result.reho_validation_status == "golden_validated", \
+            "Validation status must be 'golden_validated' even when all subjects fail: " \
+            "it describes the algorithm, not the run outcome."
+
+    def test_partial_subjects_use_partially_computed(self, tmp_path, monkeypatch):
+        """Some ReHo subjects succeed, some fail → execution status = partially_computed."""
+        from src.backend.app.schemas.preprocessing_alff_reho_execution import (
+            AlffRehoSandboxExecutionRequest,
+        )
+        from src.backend.app.services.preprocessing_alff_reho_execution import (
+            run_alff_reho_sandbox_execution,
+        )
+
+        _setup(tmp_path, monkeypatch)
+        func_dir = tmp_path / "func"; func_dir.mkdir()
+        for i in range(1, 6):
+            _make_bold(func_dir, subject=f"sub-{i:03d}")
+        _make_dry_run(tmp_path)
+
+        # Alternating mock: first 2 succeed, rest fail
+        calls = 0
+
+        def mock_partial(*a, **kw):
+            nonlocal calls
+            calls += 1
+            if calls <= 2:
+                return {
+                    "ok": True, "backend": "cpu-numpy",
+                    "reho": np.zeros((8, 8, 8), dtype=np.float32),
+                    "valid_voxel_count": 100, "skipped_voxel_count": 0,
+                    "warnings": [], "errors": [],
+                    "runtime_seconds": 0.1,
+                }
+            return {"ok": False, "errors": ["mock failure"]}
+
+        monkeypatch.setattr(
+            "src.backend.app.tools.reho_compute.compute_reho_backend", mock_partial,
+        )
+
+        req = AlffRehoSandboxExecutionRequest(
+            dry_run_id="dr-test", functional_input_dir=str(func_dir),
+            confirm_sandbox_copy=True,
+        )
+        result = run_alff_reho_sandbox_execution(
+            "proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path),
+        )
+        assert result.ok
+        assert result.reho_computed is True, \
+            "reho_computed should be True when at least one subject succeeds"
+        assert result.reho_status == "partially_computed", \
+            f"Expected partially_computed (2/5 succeed), got {result.reho_status}"
+        assert result.reho_validation_status == "golden_validated"
+        assert result.reho_backend == "cpu-numpy"
+
+    def test_validation_status_independent_of_runtime_success(self, tmp_path, monkeypatch):
+        """Validation status is always 'golden_validated' even when all ReHo fail.
+        The validation level describes the algorithm, not this run's artifacts."""
+        from src.backend.app.schemas.preprocessing_alff_reho_execution import (
+            AlffRehoSandboxExecutionRequest,
+        )
+        from src.backend.app.services.preprocessing_alff_reho_execution import (
+            run_alff_reho_sandbox_execution,
+        )
+
+        _setup(tmp_path, monkeypatch)
+        func_dir = tmp_path / "func"; func_dir.mkdir()
+        _make_bold(func_dir, subject="sub-001")
+        _make_dry_run(tmp_path)
+
+        def mock_fail(*a, **kw):
+            return {"ok": False, "errors": ["mock"]}
+        monkeypatch.setattr(
+            "src.backend.app.tools.reho_compute.compute_reho_backend", mock_fail,
+        )
+
+        req = AlffRehoSandboxExecutionRequest(
+            dry_run_id="dr-test", functional_input_dir=str(func_dir),
+            confirm_sandbox_copy=True,
+        )
+        result = run_alff_reho_sandbox_execution(
+            "proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path),
+        )
+        assert result.ok
+        assert result.reho_computed is False
+        assert result.reho_status == "metadata_only"
+        # The key assertion: validation status is independent of runtime outcome
+        assert result.reho_validation_status == "golden_validated", \
+            "reho_validation_status must be 'golden_validated' regardless of " \
+            "whether this run succeeded. It describes the algorithm implementation, " \
+            "not the runtime outcome."
         assert result.reho_backend == "none"
 
     def test_manifest_has_separate_status_dimensions(self, tmp_path, monkeypatch):
@@ -149,36 +245,3 @@ class TestRehoStatusSeparation:
         # Old key "status" should NOT exist
         assert "status" not in reho, \
             "Legacy 'status' key should not exist in manifest.reho"
-
-    def test_validation_status_unchanged_when_reho_fails(self, tmp_path, monkeypatch):
-        """When no ReHo succeeds, validation_status stays 'unvalidated'."""
-        from src.backend.app.schemas.preprocessing_alff_reho_execution import (
-            AlffRehoSandboxExecutionRequest,
-        )
-        from src.backend.app.services.preprocessing_alff_reho_execution import (
-            run_alff_reho_sandbox_execution,
-        )
-
-        _setup(tmp_path, monkeypatch)
-        func_dir = tmp_path / "func"; func_dir.mkdir()
-        _make_bold(func_dir, subject="sub-001")
-        _make_dry_run(tmp_path)
-
-        def mock_fail(*a, **kw):
-            return {"ok": False, "errors": ["mock"]}
-        monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute.compute_reho_backend", mock_fail,
-        )
-
-        req = AlffRehoSandboxExecutionRequest(
-            dry_run_id="dr-test", functional_input_dir=str(func_dir),
-            confirm_sandbox_copy=True,
-        )
-        result = run_alff_reho_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL, project_dir=str(tmp_path),
-        )
-        assert result.ok
-        assert result.reho_computed is False
-        assert result.reho_status == "metadata_only"
-        assert result.reho_validation_status == "unvalidated"
-        assert result.reho_backend == "none"

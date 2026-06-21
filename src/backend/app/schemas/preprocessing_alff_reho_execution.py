@@ -34,8 +34,9 @@ class AlffRehoSandboxExecutionResponse(BaseModel):
     reho_status: str = "metadata_only"
 
     # Validation level (separate from execution status per AGENTS contract).
-    # e.g. "unvalidated", "golden_validated", "reference_validated".
-    reho_validation_status: str = "unvalidated"
+    # Property of the algorithm implementation, not of this run's outcome.
+    # The formal service always uses the CPU ReHo backend (golden-validated).
+    reho_validation_status: str = "golden_validated"
     # Backend used for ReHo computation, e.g. "none", "cpu-numpy", "gpu-cupy".
     reho_backend: str = "none"
     # Aggregate TR source: "bids_json", "default", or "mixed".
