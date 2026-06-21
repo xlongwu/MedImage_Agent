@@ -2,6 +2,10 @@
 
 Per AGENTS.md §2.5: "Historical release notes remain tied to their tags
 and must not be rewritten with the current main-branch version."
+
+Tests skip gracefully when the tag is unavailable (e.g. shallow CI clone
+without tags). The guard is intentional: we cannot verify integrity
+without the tag, but we must not silently pass either.
 """
 from __future__ import annotations
 import hashlib
@@ -11,6 +15,18 @@ import pytest
 
 # Git root relative to this test file
 _PROJECT = Path(__file__).resolve().parents[2]
+
+
+def _tag_exists(tag: str) -> bool:
+    """Check whether a git tag exists in the current clone."""
+    try:
+        subprocess.check_output(
+            ["git", "rev-parse", "--verify", f"refs/tags/{tag}"],
+            cwd=str(_PROJECT), stderr=subprocess.DEVNULL, text=True,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
 
 def _git_show_file(ref: str, path: str) -> str:
@@ -35,6 +51,11 @@ class TestReleaseNoteTagIntegrity:
     @pytest.mark.parametrize("tag,path", RELEASE_NOTES)
     def test_release_note_matches_tag(self, tag, path):
         """Release note file content must be identical to the tagged version."""
+        if not _tag_exists(tag):
+            pytest.skip(
+                f"Tag '{tag}' not found in this clone (shallow clone without "
+                f"tags?). Cannot verify release note integrity without the tag."
+            )
         tagged_content = _git_show_file(tag, path)
         current_content = (_PROJECT / path).read_text(encoding="utf-8")
 
