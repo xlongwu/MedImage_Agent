@@ -90,7 +90,7 @@ export default function DicomConversionExecutePanel({
   // Show the confirm button only when readiness passes OR the prepare
   // workflow reports technical readiness.
   const canShowConfirm =
-    featureEnabled && (readinessReady && gatesFull || workflow.technicalReady);
+    featureEnabled && ((readinessReady && gatesFull) || workflow.technicalReady);
 
   function toggleConfirm(key: string) {
     setConfirmChecks((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -235,9 +235,9 @@ export default function DicomConversionExecutePanel({
               Prepare conversion (unified workflow)
             </h4>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
-              Runs all system validations, persists the approval package, and reserves a
-              conversion run directory in a single call. Review the operator confirmations
-              below before preparing.
+              Runs all system validations, persists the approval package, and reserves a conversion
+              run directory in a single call. Review the operator confirmations below before
+              preparing.
             </div>
             {PREPARE_CONFIRMATIONS.map((c) => (
               <label
@@ -277,9 +277,7 @@ export default function DicomConversionExecutePanel({
             {workflow.prepareResponse && (
               <div style={{ fontSize: 10, color: "#176b3b", marginTop: 4 }}>
                 Status: {workflow.status} | next: {workflow.nextAction}
-                {workflow.conversionRunId && (
-                  <> | run: {workflow.conversionRunId}</>
-                )}
+                {workflow.conversionRunId && <> | run: {workflow.conversionRunId}</>}
               </div>
             )}
             <button

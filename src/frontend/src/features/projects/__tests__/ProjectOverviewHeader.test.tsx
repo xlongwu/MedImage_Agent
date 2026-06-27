@@ -71,7 +71,9 @@ describe("ProjectOverviewHeader", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Check preprocessing validation" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Check preprocessing validation" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Review QC report status" })).toBeInTheDocument();
     expect(screen.getByText("24")).toBeInTheDocument();
   });
@@ -116,6 +118,8 @@ describe("ProjectOverviewHeader", () => {
     );
 
     expect(screen.getByRole("button", { name: "Import dataset" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Check environment health" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Check environment health" }),
+    ).not.toBeInTheDocument();
   });
 });

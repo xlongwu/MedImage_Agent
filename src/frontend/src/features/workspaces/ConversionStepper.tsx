@@ -21,11 +21,7 @@ export interface ConversionStepperProps {
   inventory: ProjectInventory;
 }
 
-export function ConversionStepper({
-  dryRun,
-  error,
-  inventory,
-}: ConversionStepperProps) {
+export function ConversionStepper({ dryRun, error, inventory }: ConversionStepperProps) {
   const steps = buildSteps(inventory, dryRun);
 
   return (
@@ -144,7 +140,9 @@ function buildSteps(
       label: "Series Mapping",
       state: mappingState,
       input: "Dry-run mapping preview",
-      output: hasMappings ? `${dryRun?.mapping_preview.length ?? 0} suggested mapping(s)` : "Mapping not generated",
+      output: hasMappings
+        ? `${dryRun?.mapping_preview.length ?? 0} suggested mapping(s)`
+        : "Mapping not generated",
       writes: "No writes",
       approval: "Mapping review required",
       blocker: hasManualMappings
@@ -169,7 +167,11 @@ function buildSteps(
       output: "Approval package and operator confirmations",
       writes: "Plan/audit metadata only",
       approval: "Required",
-      blocker: hasBlocking ? firstBlockingIssue : hasDryRun ? "" : "Dry-run preview is required first.",
+      blocker: hasBlocking
+        ? firstBlockingIssue
+        : hasDryRun
+          ? ""
+          : "Dry-run preview is required first.",
     },
     {
       label: "Approved Conversion",
@@ -178,7 +180,8 @@ function buildSteps(
       output: "BIDS/NIfTI files from external converter",
       writes: "Writes outputs only after gate",
       approval: "Approval Gate",
-      blocker: "External conversion remains disabled by default until explicitly enabled and approved.",
+      blocker:
+        "External conversion remains disabled by default until explicitly enabled and approved.",
     },
     {
       label: "Output Registration",

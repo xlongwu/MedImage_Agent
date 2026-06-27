@@ -140,9 +140,7 @@ function QcDashboardOverview() {
         <div className={styles.cardHeader}>
           <div>
             <h3>Evidence-first QC dashboard</h3>
-            <p>
-              Summary lanes stay conservative until project-scoped backend evidence exists.
-            </p>
+            <p>Summary lanes stay conservative until project-scoped backend evidence exists.</p>
           </div>
           <EvidenceBadge level="backend_required" />
         </div>
@@ -167,8 +165,8 @@ function QcDashboardOverview() {
           </thead>
           <tbody>
             <TableEmpty colSpan={5}>
-              Subject rows appear only after dashboard reports or QC snapshots load reviewed
-              project evidence. No pass, fail, or outlier count is inferred locally.
+              Subject rows appear only after dashboard reports or QC snapshots load reviewed project
+              evidence. No pass, fail, or outlier count is inferred locally.
             </TableEmpty>
           </tbody>
         </Table>
@@ -178,7 +176,9 @@ function QcDashboardOverview() {
         <div className={styles.cardHeader}>
           <div>
             <h3>Outlier focus</h3>
-            <p>Panels below provide the source data; this overview avoids inferred pass/fail counts.</p>
+            <p>
+              Panels below provide the source data; this overview avoids inferred pass/fail counts.
+            </p>
           </div>
         </div>
         <ol className={styles.findingList} aria-label="QC outlier focus areas">

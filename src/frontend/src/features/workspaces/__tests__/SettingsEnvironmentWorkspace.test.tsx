@@ -26,7 +26,13 @@ vi.mock("../../../components/DesktopSettingsPanel", () => ({
 }));
 
 vi.mock("../../../components/ImportDiagnosticsPanel", () => ({
-  default: ({ projectId, rawdataDir }: { projectId?: string | null; rawdataDir?: string | null }) => (
+  default: ({
+    projectId,
+    rawdataDir,
+  }: {
+    projectId?: string | null;
+    rawdataDir?: string | null;
+  }) => (
     <div data-testid="import-diagnostics-panel">
       Import diagnostics panel {projectId} {rawdataDir}
     </div>
@@ -68,17 +74,15 @@ describe("SettingsEnvironmentWorkspace", () => {
       "Diagnostics",
     );
     expect(screen.getByRole("heading", { name: "Settings map" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Settings domains" })).toHaveTextContent(
-      "Safety",
-    );
+    expect(screen.getByRole("table", { name: "Settings domains" })).toHaveTextContent("Safety");
     expect(screen.getByRole("heading", { name: "General and integrations" })).toBeInTheDocument();
     expect(screen.getByRole("radiogroup", { name: "Theme preference" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "General and integration controls" })).toHaveTextContent(
-      "Language / theme",
-    );
-    expect(screen.getByRole("table", { name: "General and integration controls" })).toHaveTextContent(
-      "LLM provider",
-    );
+    expect(
+      screen.getByRole("table", { name: "General and integration controls" }),
+    ).toHaveTextContent("Language / theme");
+    expect(
+      screen.getByRole("table", { name: "General and integration controls" }),
+    ).toHaveTextContent("LLM provider");
     expect(screen.getByRole("heading", { name: "Safety gates" })).toBeInTheDocument();
     expect(screen.getAllByText("Backend gated").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Safety policy matrix" })).toBeInTheDocument();

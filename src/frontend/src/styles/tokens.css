@@ -46,8 +46,8 @@
 
   /* Typography */
   --font-family-ui:
-    -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI",
-    "Microsoft YaHei UI", "Aptos", "Bahnschrift", sans-serif;
+    -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI",
+    "Aptos", "Bahnschrift", sans-serif;
   --font-family-mono: "Cascadia Mono", "Consolas", "SFMono-Regular", monospace;
   --font-size-display: 32px;
   --font-size-page: 26px;

@@ -163,18 +163,10 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
           </svg>
         </span>
         <span className={styles.label}>
-          <span className={styles.current}>
-            {selected ? selected.name : "Select project"}
-          </span>
+          <span className={styles.current}>{selected ? selected.name : "Select project"}</span>
           <small className={styles.meta}>{metaLabel}</small>
         </span>
-        <svg
-          className={styles.caret}
-          viewBox="0 0 16 16"
-          width="12"
-          height="12"
-          aria-hidden="true"
-        >
+        <svg className={styles.caret} viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
           <path
             fill="none"
             stroke="currentColor"

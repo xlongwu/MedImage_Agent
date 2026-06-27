@@ -256,11 +256,7 @@ export function MedicalImageViewer({
             </select>
           </label>
         </div>
-        <div
-          className={styles.planeSegmented}
-          role="tablist"
-          aria-label="Anatomical plane"
-        >
+        <div className={styles.planeSegmented} role="tablist" aria-label="Anatomical plane">
           {planeOptions.map((item) => (
             <button
               key={item.value}
@@ -353,11 +349,7 @@ export function MedicalImageViewer({
             icon: (
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                <path
-                  fill="currentColor"
-                  d="M8 2.5a5.5 5.5 0 0 0 0 11z"
-                  opacity="0.55"
-                />
+                <path fill="currentColor" d="M8 2.5a5.5 5.5 0 0 0 0 11z" opacity="0.55" />
               </svg>
             ),
           },

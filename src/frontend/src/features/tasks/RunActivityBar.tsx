@@ -57,10 +57,7 @@ export const RunActivityBar = memo(function RunActivityBar({
     () => tasks.filter((task) => task.status === "running" || task.status === "pending"),
     [tasks],
   );
-  const failedTasks = useMemo(
-    () => tasks.filter((task) => task.status === "failed"),
-    [tasks],
-  );
+  const failedTasks = useMemo(() => tasks.filter((task) => task.status === "failed"), [tasks]);
 
   // Hide entirely when no active or failed tasks per design 2.8.8
   if (activeTasks.length === 0 && failedTasks.length === 0) {
@@ -162,10 +159,7 @@ export const RunActivityBar = memo(function RunActivityBar({
           </span>
         ) : null}
         {hasMultiple ? (
-          <span
-            className={styles.count}
-            title={`${activeTasks.length + failedTasks.length} runs`}
-          >
+          <span className={styles.count} title={`${activeTasks.length + failedTasks.length} runs`}>
             +{activeTasks.length + failedTasks.length - 1}
           </span>
         ) : null}
@@ -191,11 +185,7 @@ export const RunActivityBar = memo(function RunActivityBar({
         </button>
       </div>
       {expanded ? (
-        <div
-          id="run-activity-drawer"
-          className={styles.drawer}
-          aria-label="Run activity drawer"
-        >
+        <div id="run-activity-drawer" className={styles.drawer} aria-label="Run activity drawer">
           <div className={styles.drawerHeader}>
             <div>
               <strong>Run activity</strong>
@@ -279,7 +269,9 @@ export const RunActivityBar = memo(function RunActivityBar({
               ) : null}
               <div className={styles.latestLog} aria-label="Latest run log">
                 <strong>Latest log</strong>
-                <p>{focusedTask.logs?.[focusedTask.logs.length - 1] ?? "No run events recorded."}</p>
+                <p>
+                  {focusedTask.logs?.[focusedTask.logs.length - 1] ?? "No run events recorded."}
+                </p>
               </div>
               {focusedTask.status === "failed" ? (
                 <div className={styles.failureNote} role="alert">

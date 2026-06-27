@@ -1,13 +1,6 @@
 import type { ReactNode } from "react";
 
-import {
-  Badge,
-  Button,
-  Card,
-  type BadgeProps,
-  type ButtonProps,
-  type CardProps,
-} from "../../ui";
+import { Badge, Button, Card, type BadgeProps, type ButtonProps, type CardProps } from "../../ui";
 import { EvidenceBadge } from "../EvidenceBadge";
 import type { EvidenceLevel } from "../../../lib/evidence";
 import styles from "./TechnicalModuleSection.module.css";

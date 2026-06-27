@@ -151,7 +151,9 @@ function getOverviewAction(
   };
 }
 
-function getStatusTone(inventory: ProjectInventory | null): "neutral" | "info" | "success" | "warning" {
+function getStatusTone(
+  inventory: ProjectInventory | null,
+): "neutral" | "info" | "success" | "warning" {
   if (!inventory) return "neutral";
   if (inventory.dataState === "converted_bids") return "success";
   if (inventory.dataState === "raw_dicom" || inventory.dataState === "mixed") return "warning";

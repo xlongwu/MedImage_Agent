@@ -144,9 +144,7 @@ export function deriveReportValidationEvidence(
   }
 
   const passed = ["passed", "pass", "success", "ok", "valid", "validated"].includes(status);
-  const zeroCounts =
-    counts.every((count) => count === 0) &&
-    zipTestOk !== false;
+  const zeroCounts = counts.every((count) => count === 0) && zipTestOk !== false;
 
   if (passed && zeroCounts) {
     return {

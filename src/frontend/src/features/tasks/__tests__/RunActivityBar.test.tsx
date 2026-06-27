@@ -36,13 +36,7 @@ describe("RunActivityBar", () => {
   it("shows running progress and expands the run drawer", async () => {
     const user = userEvent.setup();
     const handleSelect = vi.fn();
-    render(
-      <RunActivityBar
-        tasks={[task()]}
-        selectedTaskId={null}
-        onSelectTask={handleSelect}
-      />,
-    );
+    render(<RunActivityBar tasks={[task()]} selectedTaskId={null} onSelectTask={handleSelect} />);
 
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("42%")).toBeInTheDocument();
@@ -89,13 +83,7 @@ describe("RunActivityBar", () => {
       value: { writeText },
     });
 
-    render(
-      <RunActivityBar
-        tasks={[task()]}
-        selectedTaskId={null}
-        onSelectTask={vi.fn()}
-      />,
-    );
+    render(<RunActivityBar tasks={[task()]} selectedTaskId={null} onSelectTask={vi.fn()} />);
 
     await user.click(screen.getByRole("button", { name: /expand run activity/i }));
     await user.click(screen.getByRole("button", { name: /copy diagnostics/i }));
@@ -130,15 +118,7 @@ describe("RunActivityBar", () => {
       <RunActivityBar
         tasks={[
           task({
-            logs: [
-              "event 1",
-              "event 2",
-              "event 3",
-              "event 4",
-              "event 5",
-              "event 6",
-              "event 7",
-            ],
+            logs: ["event 1", "event 2", "event 3", "event 4", "event 5", "event 6", "event 7"],
           }),
         ]}
         selectedTaskId={null}

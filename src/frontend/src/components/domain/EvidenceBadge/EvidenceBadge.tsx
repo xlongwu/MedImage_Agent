@@ -1,8 +1,5 @@
 import { Badge, type BadgeProps } from "../../ui";
-import {
-  evidenceDefinition,
-  type EvidenceLevel,
-} from "../../../lib/evidence";
+import { evidenceDefinition, type EvidenceLevel } from "../../../lib/evidence";
 
 export type EvidenceBadgeProps = Omit<BadgeProps, "tone"> & {
   level: EvidenceLevel;

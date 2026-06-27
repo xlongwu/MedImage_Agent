@@ -112,11 +112,7 @@ describe("ProjectLifecycleSidebar", () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
     render(
-      <ProjectLifecycleSidebar
-        activeTab="plan"
-        dataState="raw_dicom"
-        onChange={handleChange}
-      />,
+      <ProjectLifecycleSidebar activeTab="plan" dataState="raw_dicom" onChange={handleChange} />,
     );
 
     screen.getByRole("button", { name: "Plan, Available" }).focus();
@@ -129,13 +125,7 @@ describe("ProjectLifecycleSidebar", () => {
   it("uses Home and End to move only to reachable lifecycle stages", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
-    render(
-      <ProjectLifecycleSidebar
-        activeTab="data"
-        dataState="empty"
-        onChange={handleChange}
-      />,
-    );
+    render(<ProjectLifecycleSidebar activeTab="data" dataState="empty" onChange={handleChange} />);
 
     screen.getByRole("button", { name: "Data & Conversion, Current" }).focus();
     await user.keyboard("{End}");
@@ -147,13 +137,7 @@ describe("ProjectLifecycleSidebar", () => {
   });
 
   it("links lifecycle buttons to the active workspace region", () => {
-    render(
-      <ProjectLifecycleSidebar
-        activeTab="data"
-        dataState="raw_dicom"
-        onChange={vi.fn()}
-      />,
-    );
+    render(<ProjectLifecycleSidebar activeTab="data" dataState="raw_dicom" onChange={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: /data & conversion, current/i })).toHaveAttribute(
       "aria-controls",

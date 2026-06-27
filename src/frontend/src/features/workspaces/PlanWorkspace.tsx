@@ -26,7 +26,13 @@ export interface PlanWorkspaceProps {
 }
 
 type PlanStatus = "needs-project" | "needs-config" | "draft" | "needs-review" | "validated";
-type StepState = "current" | "completed" | "available" | "attention" | "pending-evidence" | "locked";
+type StepState =
+  | "current"
+  | "completed"
+  | "available"
+  | "attention"
+  | "pending-evidence"
+  | "locked";
 
 type NormalizedPlanNode = {
   backend: string;
@@ -63,7 +69,12 @@ export function PlanWorkspace({
   const validation = initialPresetDraft?.validation ?? {};
   const nodes = useMemo(() => normalizePlanNodes(plan, validation), [plan, validation]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(nodes[0]?.id ?? null);
-  const status = derivePlanStatus(projectId, selectedProject, projectConfigPath, initialPresetDraft);
+  const status = derivePlanStatus(
+    projectId,
+    selectedProject,
+    projectConfigPath,
+    initialPresetDraft,
+  );
   const summary = summarizePlan(status, initialPresetDraft, nodes.length, validation);
   const hasProjectContext = Boolean(projectId && selectedProject);
   const validationIssues = countValidationIssues(validation);
@@ -381,7 +392,8 @@ function summarizePlan(
   if (status === "needs-review") {
     return {
       badge: "Needs review",
-      description: "A draft exists, but review issues or missing validation metadata need attention.",
+      description:
+        "A draft exists, but review issues or missing validation metadata need attention.",
       title: "Review the draft before approval",
       tone: "info",
       validationText,
@@ -443,7 +455,11 @@ function planReviewSteps(status: PlanStatus, validation: Record<string, unknown>
   const issueCount = countValidationIssues(validation);
   const validationOk = validation.ok === true;
   const approved = approvalEvidenceSignal(validation);
-  const dryRunPassed = booleanSignal(validation, ["dry_run_passed", "dry_run_ok", "dry_run_completed"]);
+  const dryRunPassed = booleanSignal(validation, [
+    "dry_run_passed",
+    "dry_run_ok",
+    "dry_run_completed",
+  ]);
   const readyToExecute = booleanSignal(validation, ["ready_to_execute", "execution_ready"]);
   const executed = booleanSignal(validation, ["executed", "execution_succeeded"]);
 
@@ -550,7 +566,12 @@ function stringifyValue(value: unknown): string {
 }
 
 function approvalEvidenceSignal(record: Record<string, unknown>): boolean {
-  return booleanSignal(record, ["approved", "approval_passed", "approval_gate_passed", "approval_result"]);
+  return booleanSignal(record, [
+    "approved",
+    "approval_passed",
+    "approval_gate_passed",
+    "approval_result",
+  ]);
 }
 
 function booleanSignal(record: Record<string, unknown>, keys: string[]): boolean {

@@ -97,7 +97,11 @@ export function ProjectCreateSheet({
       description="Create a research project by referencing an existing local data directory. Source files remain read-only."
       footer={
         <div className={styles.footer}>
-          <Button disabled={loading || selecting} onClick={() => onOpenChange(false)} variant="ghost">
+          <Button
+            disabled={loading || selecting}
+            onClick={() => onOpenChange(false)}
+            variant="ghost"
+          >
             Cancel
           </Button>
           <div className={styles.footerGroup}>
@@ -196,9 +200,7 @@ export function ProjectCreateSheet({
               <Button disabled={selecting || loading} onClick={handleSelectDirectory}>
                 {selecting ? "Selecting..." : "Select directory"}
               </Button>
-              <span className={styles.pathValue}>
-                {selectedPath || "No directory selected"}
-              </span>
+              <span className={styles.pathValue}>{selectedPath || "No directory selected"}</span>
             </div>
           </>
         ) : null}
@@ -211,9 +213,7 @@ export function ProjectCreateSheet({
             </div>
             <div>
               <dt>Inspection focus</dt>
-              <dd>
-                {inspectionFocus === "raw_dicom" ? "Raw DICOM" : "BIDS or derivatives"}
-              </dd>
+              <dd>{inspectionFocus === "raw_dicom" ? "Raw DICOM" : "BIDS or derivatives"}</dd>
             </div>
             <div>
               <dt>Directory</dt>
@@ -229,14 +229,17 @@ export function ProjectCreateSheet({
             </div>
             <div>
               <dt>Safety</dt>
-              <dd>Source data is referenced read-only; no conversion or preprocessing is executed</dd>
+              <dd>
+                Source data is referenced read-only; no conversion or preprocessing is executed
+              </dd>
             </div>
           </dl>
         ) : null}
 
         {visibleError ? (
           <div className={styles.error} role="alert">
-            Project was not created. Review the selected directory and name, then retry. {visibleError}
+            Project was not created. Review the selected directory and name, then retry.{" "}
+            {visibleError}
           </div>
         ) : null}
       </div>

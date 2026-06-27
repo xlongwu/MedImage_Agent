@@ -1,9 +1,4 @@
-import {
-  type HTMLAttributes,
-  type ReactNode,
-  type Ref,
-  type TableHTMLAttributes,
-} from "react";
+import { type HTMLAttributes, type ReactNode, type Ref, type TableHTMLAttributes } from "react";
 
 import styles from "./table.module.css";
 

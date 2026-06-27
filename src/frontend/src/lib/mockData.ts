@@ -5,8 +5,7 @@ import type { ModelStatus } from "./types/model";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "./types/project";
 import type { TaskLogEntry } from "./types/task";
 
-export const fallbackProjects: ProjectSummary[] = [
-];
+export const fallbackProjects: ProjectSummary[] = [];
 
 export const fallbackProjectDetail: ProjectDetail = {
   id: "unselected-project",
@@ -55,8 +54,7 @@ export const fallbackModelStatus: ModelStatus = {
   metrics: {},
 };
 
-export const fallbackTasks: TaskLogEntry[] = [
-];
+export const fallbackTasks: TaskLogEntry[] = [];
 
 export const fallbackImagePreview: ImagePreview = {
   project_id: "unselected-project",

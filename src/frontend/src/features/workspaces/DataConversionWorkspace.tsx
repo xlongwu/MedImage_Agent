@@ -39,7 +39,8 @@ export function DataConversionWorkspace({
   const [detailedChecksOpen, setDetailedChecksOpen] = useState(false);
   const dryRunRequestRef = useRef(0);
   const isConverted = inventory.dataState === "converted_bids";
-  const isRawConversionState = inventory.dataState === "raw_dicom" || inventory.dataState === "mixed";
+  const isRawConversionState =
+    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed";
 
   useEffect(() => {
     if (!projectId || !isRawConversionState) {
@@ -190,11 +191,7 @@ export function DataConversionWorkspace({
             />
           </div>
           <aside className={styles.rawAside} aria-label="Conversion readiness">
-            <ConversionStepper
-              dryRun={dryRun}
-              error={dryRunError}
-              inventory={inventory}
-            />
+            <ConversionStepper dryRun={dryRun} error={dryRunError} inventory={inventory} />
           </aside>
         </div>
       ) : (
@@ -308,7 +305,9 @@ function ConvertedInventorySummary({ inventory }: { inventory: ProjectInventory 
             <td>Converted subjects</td>
             <td>{inventory.convertedSubjects}</td>
             <td>
-              <Badge tone="success" size="sm">Registered</Badge>
+              <Badge tone="success" size="sm">
+                Registered
+              </Badge>
             </td>
             <td>Check preprocessing validation</td>
           </tr>

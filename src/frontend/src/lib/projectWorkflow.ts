@@ -213,7 +213,8 @@ function hasActiveOrFailedRun(tasks: DefaultWorkflowTaskSignal[] | null | undefi
 function booleanSignal(value: unknown): boolean {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value > 0;
-  if (typeof value === "string") return /^(true|yes|required|attention|review|warning|failed)$/i.test(value);
+  if (typeof value === "string")
+    return /^(true|yes|required|attention|review|warning|failed)$/i.test(value);
   return false;
 }
 

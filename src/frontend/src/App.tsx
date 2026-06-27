@@ -44,7 +44,10 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const projectController = useProjectController(selectedProjectId, setSelectedProjectId) as ProjectController;
+  const projectController = useProjectController(
+    selectedProjectId,
+    setSelectedProjectId,
+  ) as ProjectController;
   const taskController = useTaskController(
     selectedTaskId,
     setSelectedTaskId,
@@ -146,7 +149,10 @@ export default function App() {
     const higherPrioritySignal =
       route.reason === "active_or_failed_run" || route.reason === "qc_attention";
 
-    if (projectChanged || (userStayedOnAutomaticTab && higherPrioritySignal && route.tab !== previous?.tab)) {
+    if (
+      projectChanged ||
+      (userStayedOnAutomaticTab && higherPrioritySignal && route.tab !== previous?.tab)
+    ) {
       autoNavigationRef.current = {
         projectId: selectedProjectId,
         reason: route.reason,

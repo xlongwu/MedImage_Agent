@@ -54,7 +54,12 @@ export function Dialog({
         role="dialog"
         tabIndex={-1}
       >
-        <OverlayHeader closeLabel={closeLabel} onClose={() => onOpenChange(false)} title={title} titleId={titleId} />
+        <OverlayHeader
+          closeLabel={closeLabel}
+          onClose={() => onOpenChange(false)}
+          title={title}
+          titleId={titleId}
+        />
         {description ? (
           <p className={styles.description} id={descriptionId}>
             {description}
@@ -104,7 +109,12 @@ export function Sheet({
         role="dialog"
         tabIndex={-1}
       >
-        <OverlayHeader closeLabel={closeLabel} onClose={() => onOpenChange(false)} title={title} titleId={titleId} />
+        <OverlayHeader
+          closeLabel={closeLabel}
+          onClose={() => onOpenChange(false)}
+          title={title}
+          titleId={titleId}
+        />
         {description ? (
           <p className={styles.description} id={descriptionId}>
             {description}
@@ -131,7 +141,13 @@ function OverlayHeader({
   return (
     <header className={styles.header}>
       <h2 id={titleId}>{title}</h2>
-      <Button aria-label={closeLabel} className={styles.closeButton} onClick={onClose} size="sm" variant="ghost">
+      <Button
+        aria-label={closeLabel}
+        className={styles.closeButton}
+        onClick={onClose}
+        size="sm"
+        variant="ghost"
+      >
         <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
           <path
             fill="none"
@@ -147,10 +163,7 @@ function OverlayHeader({
   );
 }
 
-function closeOnBackdrop(
-  event: MouseEvent<HTMLDivElement>,
-  onOpenChange: (open: boolean) => void,
-) {
+function closeOnBackdrop(event: MouseEvent<HTMLDivElement>, onOpenChange: (open: boolean) => void) {
   if (event.target === event.currentTarget) {
     onOpenChange(false);
   }

@@ -138,7 +138,9 @@ describe("DicomSeriesTable", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "DICOM series" }));
 
-    expect(screen.getByRole("table", { name: /2 visible row/i })).toHaveTextContent("shared-series");
+    expect(screen.getByRole("table", { name: /2 visible row/i })).toHaveTextContent(
+      "shared-series",
+    );
 
     fireEvent.click(screen.getAllByLabelText("Select shared-series")[0]);
     fireEvent.click(screen.getAllByLabelText("Select shared-series")[1]);

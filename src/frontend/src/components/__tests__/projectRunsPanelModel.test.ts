@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  getArtifactPresenceState,
-  summarizeRunHealth,
-} from "../projectRunsPanelModel";
+import { getArtifactPresenceState, summarizeRunHealth } from "../projectRunsPanelModel";
 import type { RunArtifactRecord, RunLinkRecord } from "../../types";
 
 function artifact(overrides: Partial<RunArtifactRecord> = {}): RunArtifactRecord {

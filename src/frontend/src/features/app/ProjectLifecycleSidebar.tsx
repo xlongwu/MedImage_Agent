@@ -168,13 +168,7 @@ function nextReachableIndex(
   return null;
 }
 
-function LifecycleGlyph({
-  state,
-  index,
-}: {
-  state: WorkflowLifecycleState;
-  index: number;
-}) {
+function LifecycleGlyph({ state, index }: { state: WorkflowLifecycleState; index: number }) {
   if (state === "completed") {
     return (
       <svg viewBox="0 0 16 16" width="13" height="13">

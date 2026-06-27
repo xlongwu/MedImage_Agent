@@ -69,7 +69,9 @@ describe("QCReportsWorkspace", () => {
   it("shows a unified QC dashboard before detailed modules", () => {
     renderWorkspace();
 
-    expect(screen.getByRole("heading", { name: "Evidence-first QC dashboard" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Evidence-first QC dashboard" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("QC summary states")).toHaveTextContent("Evidence");
     expect(screen.getByLabelText("QC summary states")).toHaveTextContent("No pass/fail decision");
     expect(screen.getByRole("table", { name: "Subject-level QC status" })).toHaveTextContent(
@@ -113,7 +115,9 @@ describe("QCReportsWorkspace", () => {
     expect(screen.getByText("Select a project before QC review")).toBeInTheDocument();
     expect(screen.getByText("QC modules are waiting for project context")).toBeInTheDocument();
     expect(screen.queryByTestId("qc-dashboard-summary-panel")).not.toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "Subject-level QC status" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("table", { name: "Subject-level QC status" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open derived modules" })).toBeDisabled();
   });
 

@@ -93,8 +93,8 @@ export function ProjectsPage({
             Projects
           </h1>
           <p className={styles.subtitle}>
-            Browse local research projects, review pipeline readiness, and open the current
-            project context without touching source imaging data.
+            Browse local research projects, review pipeline readiness, and open the current project
+            context without touching source imaging data.
           </p>
         </div>
         <Button onClick={onCreateProject} variant="primary">

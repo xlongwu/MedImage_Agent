@@ -73,9 +73,7 @@ describe("ConversionStepper", () => {
 
     const dryRunStep = screen.getByText("Dry Run Preview").closest("li");
 
-    expect(screen.getByLabelText("Dry-run stepper status")).toHaveTextContent(
-      "1 blocking issue",
-    );
+    expect(screen.getByLabelText("Dry-run stepper status")).toHaveTextContent("1 blocking issue");
     expect(dryRunStep).toHaveTextContent("blocked");
     expect(dryRunStep).toHaveTextContent("Output root is outside the safe project directory.");
   });
@@ -114,15 +112,11 @@ describe("ConversionStepper", () => {
   });
 
   it("keeps the dry-run action owned by the DICOM series browser", () => {
-    render(
-      <ConversionStepper
-        dryRun={null}
-        error=""
-        inventory={inventory()}
-      />,
-    );
+    render(<ConversionStepper dryRun={null} error="" inventory={inventory()} />);
 
     expect(screen.queryByRole("button", { name: /dry-run/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/Start the no-write dry-run from the DICOM series browser/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Start the no-write dry-run from the DICOM series browser/i),
+    ).toBeInTheDocument();
   });
 });

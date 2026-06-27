@@ -33,7 +33,10 @@ function readCssSources(dir = srcDir): Array<{ content: string; path: string }> 
     return [
       {
         content: readFileSync(entryPath, "utf8"),
-        path: entryPath.replace(srcDir, "").replace(/^[\\/]/, "").replace(/\\/g, "/"),
+        path: entryPath
+          .replace(srcDir, "")
+          .replace(/^[\\/]/, "")
+          .replace(/\\/g, "/"),
       },
     ];
   });
@@ -83,9 +86,7 @@ function parseHexColor(value: string): Rgb {
 function toLinearChannel(channel: number): number {
   const normalized = channel / 255;
 
-  return normalized <= 0.03928
-    ? normalized / 12.92
-    : ((normalized + 0.055) / 1.055) ** 2.4;
+  return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
 }
 
 function relativeLuminance(color: Rgb): number {
@@ -251,7 +252,7 @@ describe("design system stylesheets", () => {
     expect(motion).toContain("animation-delay: 0ms !important");
     expect(motion).toContain("transition-delay: 0ms !important");
     expect(motion).toContain("scroll-behavior: auto");
-    expect(motion).toContain(":where(button, [role=\"button\"]):hover");
+    expect(motion).toContain(':where(button, [role="button"]):hover');
     expect(topBarBlock).toContain("position: relative");
     expect(topBarBlock).not.toContain("position: sticky");
     expect(sideRailBlock).toContain("--shell-topbar-height");

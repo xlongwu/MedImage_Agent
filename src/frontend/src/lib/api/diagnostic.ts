@@ -34,10 +34,7 @@ import type {
 } from "../../types";
 import { requestJson } from "./legacyCore";
 
-export async function createImportDiagnosticsPackage(
-  baseUrl: string,
-  projectId: string,
-) {
+export async function createImportDiagnosticsPackage(baseUrl: string, projectId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
     `/api/datasets/diagnostics/package?project_id=${encodeURIComponent(projectId)}`,
@@ -59,10 +56,7 @@ export async function getDatasetImportHistory(baseUrl: string, projectId: string
   );
 }
 
-export async function getLatestImportDiagnosticsPackage(
-  baseUrl: string,
-  projectId: string,
-) {
+export async function getLatestImportDiagnosticsPackage(baseUrl: string, projectId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
     `/api/datasets/diagnostics/package/latest?project_id=${encodeURIComponent(projectId)}`,
@@ -119,10 +113,7 @@ export async function retryExecute(
   });
 }
 
-export async function verifyImportDiagnosticsPackage(
-  baseUrl: string,
-  projectId: string,
-) {
+export async function verifyImportDiagnosticsPackage(baseUrl: string, projectId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
     `/api/datasets/diagnostics/package/verify?project_id=${encodeURIComponent(projectId)}`,

@@ -14,7 +14,11 @@ describe("ui primitives", () => {
     const handleClick = vi.fn();
 
     render(
-      <Button leadingIcon={<span aria-hidden="true">+</span>} onClick={handleClick} variant="primary">
+      <Button
+        leadingIcon={<span aria-hidden="true">+</span>}
+        onClick={handleClick}
+        variant="primary"
+      >
         Review plan
       </Button>,
     );

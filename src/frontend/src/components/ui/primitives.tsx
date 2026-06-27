@@ -197,7 +197,10 @@ export function Tooltip({ children, className, label, placement = "top", ...prop
       <span
         id={tooltipId}
         role="tooltip"
-        className={cx(styles.tooltipBubble, placement === "bottom" ? styles.tooltipBottom : styles.tooltipTop)}
+        className={cx(
+          styles.tooltipBubble,
+          placement === "bottom" ? styles.tooltipBottom : styles.tooltipTop,
+        )}
       >
         {label}
       </span>

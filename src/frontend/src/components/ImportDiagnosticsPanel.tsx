@@ -461,9 +461,9 @@ export default function ImportDiagnosticsPanel({
       </div>
       {!dicomInputConfigured ? (
         <div className="empty" style={{ marginTop: 8 }}>
-          DICOM diagnostics input is not configured. A 0 sources / 0 DICOM files preflight in
-          this module means no diagnostics root has been supplied here; it does not mean the
-          active project has no raw DICOM data.
+          DICOM diagnostics input is not configured. A 0 sources / 0 DICOM files preflight in this
+          module means no diagnostics root has been supplied here; it does not mean the active
+          project has no raw DICOM data.
         </div>
       ) : null}
       <div className="row">

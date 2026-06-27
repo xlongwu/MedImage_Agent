@@ -121,7 +121,9 @@ export function PreprocessingWorkspace({
               </li>
               <li data-state={resolvedInventory.hasConvertedData ? "complete" : "blocked"}>
                 <span>Converted data evidence</span>
-                <strong>{resolvedInventory.hasConvertedData ? "Detected" : "Not registered"}</strong>
+                <strong>
+                  {resolvedInventory.hasConvertedData ? "Detected" : "Not registered"}
+                </strong>
               </li>
               <li data-state={hasRegisteredConvertedInput ? "complete" : "blocked"}>
                 <span>Registered input</span>
@@ -221,7 +223,11 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     description: "Confirm registered BIDS/NIfTI input, subject scope, and read-only source policy.",
     basic: [
       { label: "Input dataset", value: "Registered BIDS/NIfTI", note: "Required before planning." },
-      { label: "Subject scope", value: "All registered subjects", note: "Review exclusions later." },
+      {
+        label: "Subject scope",
+        value: "All registered subjects",
+        note: "Review exclusions later.",
+      },
     ],
     advanced: [
       { label: "BIDS filter", value: "func/*bold", note: "Default functional input pattern." },
@@ -232,7 +238,12 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     name: "Slice timing",
     description: "Prepare timing metadata before motion-sensitive processing.",
     basic: [
-      { label: "TR", value: "from sidecar", unit: "s", note: "Loaded from BIDS JSON when present." },
+      {
+        label: "TR",
+        value: "from sidecar",
+        unit: "s",
+        note: "Loaded from BIDS JSON when present.",
+      },
       { label: "Reference slice", value: "middle", note: "Common default for review." },
     ],
     advanced: [
@@ -266,7 +277,8 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
   },
   {
     name: "Segmentation",
-    description: "Prepare tissue-class references needed by later nuisance and normalization steps.",
+    description:
+      "Prepare tissue-class references needed by later nuisance and normalization steps.",
     basic: [
       { label: "Tissue classes", value: "GM / WM / CSF", note: "Used by nuisance model." },
       { label: "T1w source", value: "registered anatomical", note: "Required for segmentation." },
@@ -302,7 +314,8 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
   },
   {
     name: "Nuisance regression",
-    description: "Define confound handling without executing external preprocessing from this page.",
+    description:
+      "Define confound handling without executing external preprocessing from this page.",
     basic: [
       { label: "Motion model", value: "6 motion parameters", note: "Basic confound model." },
       { label: "Physiology", value: "WM + CSF", note: "Requires masks." },
@@ -394,7 +407,9 @@ function PreprocessingTechnicalSections({
         onToggle={onToggleDetailedValidation}
         openLabel="Open validation checks"
         safetyNote="Opening validation checks does not run MATLAB, SPM, DPABI, or write outputs."
-        status={isMissingRegistration ? "Input required" : showDetailedValidation ? "Open" : "On demand"}
+        status={
+          isMissingRegistration ? "Input required" : showDetailedValidation ? "Open" : "On demand"
+        }
         statusTone={isMissingRegistration ? "warning" : "info"}
         title="Detailed validation"
       >
@@ -412,7 +427,9 @@ function PreprocessingTechnicalSections({
         onToggle={onToggleTechnicalModules}
         openLabel="Open SPM modules"
         safetyNote="Opening this section does not run MATLAB, SPM, or DPABI by itself."
-        status={isMissingRegistration ? "Input required" : showTechnicalModules ? "Open" : "On demand"}
+        status={
+          isMissingRegistration ? "Input required" : showTechnicalModules ? "Open" : "On demand"
+        }
         statusTone={isMissingRegistration ? "warning" : "info"}
         title="SPM technical modules"
       >
@@ -499,7 +516,9 @@ function PreprocessingStageOverview({
               The page follows the rs-fMRI setup order before any reviewed runtime action is used.
             </p>
           </div>
-          <Badge tone={isMissingRegistration ? "warning" : hasPreprocessingRun ? "info" : "success"}>
+          <Badge
+            tone={isMissingRegistration ? "warning" : hasPreprocessingRun ? "info" : "success"}
+          >
             {isMissingRegistration ? "Input required" : hasPreprocessingRun ? "Review" : "Ready"}
           </Badge>
         </div>

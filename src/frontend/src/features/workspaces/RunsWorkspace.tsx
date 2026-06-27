@@ -94,8 +94,7 @@ export function RunsWorkspace({
           ].some((value) => value.toLowerCase().includes(query));
         const matchesStatus =
           statusFilter === "all" ||
-          (statusFilter === "active" &&
-            (task.status === "running" || task.status === "pending")) ||
+          (statusFilter === "active" && (task.status === "running" || task.status === "pending")) ||
           (statusFilter === "failed" && task.status === "failed") ||
           (statusFilter === "completed" && task.status === "completed");
 
@@ -142,8 +141,8 @@ export function RunsWorkspace({
             <div>
               <h3>Execution runs</h3>
               <p>
-                Review / audit packages without an execution record stay in their source
-                workspace; this page lists backend task runs only.
+                Review / audit packages without an execution record stay in their source workspace;
+                this page lists backend task runs only.
               </p>
             </div>
             <div className={styles.headerActions}>
@@ -187,7 +186,9 @@ export function RunsWorkspace({
             </div>
           ) : null}
 
-          {loading && tasks.length ? <div className={styles.loadingLine}>Refreshing runs...</div> : null}
+          {loading && tasks.length ? (
+            <div className={styles.loadingLine}>Refreshing runs...</div>
+          ) : null}
           {error ? (
             <div className={styles.errorLine}>
               {tasks.length ? "Run refresh failed; showing last loaded rows. " : ""}
@@ -480,7 +481,10 @@ function RunDetailPanel({
             {error ? <div className={styles.errorLine}>{error}</div> : null}
             <div className={styles.eventList}>
               {latestEvents.map((event) => (
-                <div className={styles.eventRow} key={`${event.id}-${event.timestamp}-${event.message}`}>
+                <div
+                  className={styles.eventRow}
+                  key={`${event.id}-${event.timestamp}-${event.message}`}
+                >
                   <span>{event.timestamp}</span>
                   <strong>{clampProgress(event.progress)}%</strong>
                   <p>{event.message}</p>
@@ -564,10 +568,20 @@ function RunDetailPanel({
             {hasDiagnostics ? (
               <div className={styles.diagnosticsList}>
                 {diagnostics.errors.map((message, index) => (
-                  <DiagnosticItem key={`error-${index}`} tone="danger" label="Error" message={message} />
+                  <DiagnosticItem
+                    key={`error-${index}`}
+                    tone="danger"
+                    label="Error"
+                    message={message}
+                  />
                 ))}
                 {diagnostics.warnings.map((message, index) => (
-                  <DiagnosticItem key={`warning-${index}`} tone="warning" label="Warning" message={message} />
+                  <DiagnosticItem
+                    key={`warning-${index}`}
+                    tone="warning"
+                    label="Warning"
+                    message={message}
+                  />
                 ))}
                 {diagnostics.diagnosis.slice(0, DIAGNOSIS_RENDER_LIMIT).map((item, index) => (
                   <DiagnosticItem
@@ -669,7 +683,12 @@ function RunDetailPanel({
                 title="Audit package not generated"
                 description="Request backend audit package generation from the selected run when evidence export is needed."
                 action={
-                  <Button size="sm" variant="secondary" onClick={onGenerateAudit} disabled={auditLoading}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={onGenerateAudit}
+                    disabled={auditLoading}
+                  >
                     {auditLoading ? "Requesting" : "Request Audit Package"}
                   </Button>
                 }
@@ -701,7 +720,9 @@ function RunsOverview({ tasks }: { tasks: TaskLogEntry[] }) {
         <div className={styles.summaryItem}>
           <span>Active</span>
           <strong>{running + pending}</strong>
-          <small>{running} running / {pending} pending</small>
+          <small>
+            {running} running / {pending} pending
+          </small>
         </div>
       </Card>
       <Card>
@@ -845,11 +866,7 @@ function formatArtifactValue(value: unknown): string {
   return String(value);
 }
 
-function buildNodeInspector(
-  task: TaskLogEntry,
-  diagnostics: TaskDiagnostics,
-  events: TaskEvent[],
-) {
+function buildNodeInspector(task: TaskLogEntry, diagnostics: TaskDiagnostics, events: TaskEvent[]) {
   const diagnostic = pickPrimaryDiagnostic(diagnostics);
   const node =
     firstStringValue(diagnostic, ["node_id", "node", "node_name", "stage", "step_id", "code"]) ||

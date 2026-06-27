@@ -85,7 +85,13 @@ describe("ImportDiagnosticsPanel", () => {
     render(<ImportDiagnosticsPanel baseUrl="http://localhost" />);
 
     expect(screen.getByText(/DICOM diagnostics input is not configured/i)).toBeInTheDocument();
-    expect(screen.getByText(/does not mean the active project has no raw DICOM data/i)).toBeInTheDocument();
-    expect(screen.getByText(/No DICOM series metadata loaded because diagnostics input is not configured/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/does not mean the active project has no raw DICOM data/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /No DICOM series metadata loaded because diagnostics input is not configured/i,
+      ),
+    ).toBeInTheDocument();
   });
 });

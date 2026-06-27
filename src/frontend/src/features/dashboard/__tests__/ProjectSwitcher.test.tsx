@@ -202,9 +202,7 @@ describe("ProjectSwitcher", () => {
 
     await user.click(screen.getByRole("button", { name: /select project/i }));
 
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "The project list could not be loaded",
-    );
+    expect(screen.getByRole("status")).toHaveTextContent("The project list could not be loaded");
     expect(screen.queryByRole("option")).not.toBeInTheDocument();
   });
 });

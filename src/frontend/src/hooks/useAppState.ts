@@ -38,9 +38,8 @@ function applyThemePreference(themePreference: ThemePreference): void {
 }
 
 export function useAppState() {
-  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(
-    readStoredThemePreference,
-  );
+  const [themePreference, setThemePreferenceState] =
+    useState<ThemePreference>(readStoredThemePreference);
 
   useEffect(() => {
     applyThemePreference(themePreference);

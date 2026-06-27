@@ -107,7 +107,9 @@ describe("TechnicalModuleSection", () => {
       </TechnicalModuleSection>,
     );
 
-    expect(screen.getByText("Artifact modules are waiting for project context")).toBeInTheDocument();
+    expect(
+      screen.getByText("Artifact modules are waiting for project context"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Artifact body")).not.toBeInTheDocument();
   });
 });

@@ -185,7 +185,10 @@ export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
       </Card>
 
       <div className={styles.summaryGrid} aria-label="Artifact index summary">
-        <SummaryTile label="Artifacts" value={String(indexMeta?.artifacts_total ?? allArtifacts.length)} />
+        <SummaryTile
+          label="Artifacts"
+          value={String(indexMeta?.artifacts_total ?? allArtifacts.length)}
+        />
         <SummaryTile label="Previewable" value={String(previewableTotal)} />
         <SummaryTile label="Types" value={String(categories.length)} />
         <SummaryTile label="Generated" value={generatedAt} />
@@ -208,7 +211,10 @@ export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
         <div className={styles.filterBar} aria-label="Artifact filters">
           <label>
             <span>Type</span>
-            <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+            >
               <option value="all">All types</option>
               {categories.map((category) => (
                 <option key={category} value={category}>
@@ -277,7 +283,11 @@ export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
                   </td>
                   <td>
                     {artifact.preview_supported ? (
-                      <Button size="sm" variant="secondary" onClick={() => handlePreview(artifact.path)}>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handlePreview(artifact.path)}
+                      >
                         Preview
                       </Button>
                     ) : (
@@ -310,7 +320,9 @@ export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
           <div className={styles.cardHeader}>
             <div>
               <h3>Provenance</h3>
-              <p>Run, subject, type, and stage are displayed only from indexed artifact metadata.</p>
+              <p>
+                Run, subject, type, and stage are displayed only from indexed artifact metadata.
+              </p>
             </div>
           </div>
           <dl className={styles.provenanceList} aria-label="Artifact provenance fields">
@@ -439,5 +451,7 @@ function inferStage(artifact: ArtifactRecord): string {
     "report",
     "results",
   ];
-  return knownStages.find((stage) => normalizedPath.includes(stage)) ?? artifact.category ?? "unknown";
+  return (
+    knownStages.find((stage) => normalizedPath.includes(stage)) ?? artifact.category ?? "unknown"
+  );
 }

@@ -224,10 +224,10 @@ export function AppShellView({
   });
   const hasSystemMessages = Boolean(
     app.notice ||
-      projectController.projectCreateResult ||
-      projectController.projectCreateLoading ||
-      projectController.projectCreateError ||
-      taskStream.error,
+    projectController.projectCreateResult ||
+    projectController.projectCreateLoading ||
+    projectController.projectCreateError ||
+    taskStream.error,
   );
 
   useEffect(() => {
@@ -430,88 +430,88 @@ export function AppShellView({
           }
           workspaceLabel={`${activePageLabel} workspace`}
         >
-            <Suspense fallback={<WorkspaceSuspenseFallback label="Loading workspace..." />}>
-              {app.activeWorkflow === "data" ? (
-                <DataConversionWorkspace
-                  baseUrl={baseUrl}
-                  projectId={selectedProjectId}
-                  inventory={projectInventory}
-                  onSelectedDataSeriesChange={onSelectedDataSeriesChange}
-                />
-              ) : app.activeWorkflow === "plan" ? (
-                <PlanWorkspace
-                  baseUrl={baseUrl}
-                  projectId={selectedProjectId}
-                  selectedProject={selectedProject?.data ?? null}
-                  projectConfigPath={selectedProject?.data.metadata?.project_config_path}
-                  datasetIndexPath={selectedProject?.data.metadata?.dataset_index_path}
-                  rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
-                  projectDir={projectDir}
-                  initialPresetDraft={app.presetPlanDraft}
-                  onSelectedNodeChange={onSelectedPlanNodeChange}
-                  onOpenDataConversion={() => app.setActiveWorkflow("data")}
-                  onOpenEnvironment={() => app.setActiveWorkflow("environment")}
-                />
-              ) : app.activeWorkflow === "preprocessing" ? (
-                <PreprocessingWorkspace
-                  baseUrl={baseUrl}
-                  projectId={selectedProjectId}
-                  dataState={projectInventory?.dataState ?? "raw_dicom"}
-                  inventory={projectInventory}
-                  hasPreprocessingRun={taskController.hasPreprocessingRun}
-                  onOpenDataConversion={() => app.setActiveWorkflow("data")}
-                  onOpenToolsDrawer={() => app.setDrawerOpen(true)}
-                />
-              ) : app.activeWorkflow === "runs" ? (
-                <RunsWorkspace
-                  projectId={selectedProjectId}
-                  tasks={taskController.tasks}
-                  loading={taskController.tasksLoading}
-                  error={taskController.tasksError}
-                  onRetryTasks={taskController.reloadTasks}
-                  selectedTaskId={selectedTaskId}
-                  onSelectTask={setSelectedTaskId}
-                  selectedTask={taskController.selectedTask}
-                  events={taskController.taskEvents}
-                  eventsLoading={taskController.taskEventsLoading}
-                  eventsError={taskController.taskEventsError}
-                  diagnostics={taskController.taskDiagnosticsData}
-                  streamConnected={taskController.taskStreamConnected}
-                  taskApprovalName={approval.taskApprovalName}
-                  auditPackage={
-                    approval.auditPackage as import("../../lib/types/task").TaskAuditPackage | null
-                  }
-                  auditLoading={approval.auditLoading}
-                  onApprovalNameChange={approval.setTaskApprovalName}
-                  onApprove={handleApproveSelectedTask}
-                  onGenerateAudit={handleGenerateAuditPackage}
-                  onRetryEvents={taskController.reloadTaskEvents}
-                  onReconnect={handleReconnectTaskStream}
-                />
-              ) : app.activeWorkflow === "reports" ? (
-                <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
-              ) : app.activeWorkflow === "results" ? (
-                <ResultsWorkspace
-                  baseUrl={baseUrl}
-                  projectId={selectedProjectId}
-                  onSelectedArtifactChange={onSelectedArtifactChange}
-                />
-              ) : (
-                <SettingsEnvironmentWorkspace
-                  baseUrl={baseUrl}
-                  projectId={selectedProjectId}
-                  rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
-                  themePreference={appState.themePreference}
-                  onThemePreferenceChange={appState.setThemePreference}
-                  onReviewDraft={(draft: PresetPlanDraft) => {
-                    app.setActiveWorkflow("plan");
-                    app.setNotice(
-                      "Preset draft loaded into the Plan workspace. Review and save before dry-run.",
-                    );
-                  }}
-                />
-              )}
-            </Suspense>
+          <Suspense fallback={<WorkspaceSuspenseFallback label="Loading workspace..." />}>
+            {app.activeWorkflow === "data" ? (
+              <DataConversionWorkspace
+                baseUrl={baseUrl}
+                projectId={selectedProjectId}
+                inventory={projectInventory}
+                onSelectedDataSeriesChange={onSelectedDataSeriesChange}
+              />
+            ) : app.activeWorkflow === "plan" ? (
+              <PlanWorkspace
+                baseUrl={baseUrl}
+                projectId={selectedProjectId}
+                selectedProject={selectedProject?.data ?? null}
+                projectConfigPath={selectedProject?.data.metadata?.project_config_path}
+                datasetIndexPath={selectedProject?.data.metadata?.dataset_index_path}
+                rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
+                projectDir={projectDir}
+                initialPresetDraft={app.presetPlanDraft}
+                onSelectedNodeChange={onSelectedPlanNodeChange}
+                onOpenDataConversion={() => app.setActiveWorkflow("data")}
+                onOpenEnvironment={() => app.setActiveWorkflow("environment")}
+              />
+            ) : app.activeWorkflow === "preprocessing" ? (
+              <PreprocessingWorkspace
+                baseUrl={baseUrl}
+                projectId={selectedProjectId}
+                dataState={projectInventory?.dataState ?? "raw_dicom"}
+                inventory={projectInventory}
+                hasPreprocessingRun={taskController.hasPreprocessingRun}
+                onOpenDataConversion={() => app.setActiveWorkflow("data")}
+                onOpenToolsDrawer={() => app.setDrawerOpen(true)}
+              />
+            ) : app.activeWorkflow === "runs" ? (
+              <RunsWorkspace
+                projectId={selectedProjectId}
+                tasks={taskController.tasks}
+                loading={taskController.tasksLoading}
+                error={taskController.tasksError}
+                onRetryTasks={taskController.reloadTasks}
+                selectedTaskId={selectedTaskId}
+                onSelectTask={setSelectedTaskId}
+                selectedTask={taskController.selectedTask}
+                events={taskController.taskEvents}
+                eventsLoading={taskController.taskEventsLoading}
+                eventsError={taskController.taskEventsError}
+                diagnostics={taskController.taskDiagnosticsData}
+                streamConnected={taskController.taskStreamConnected}
+                taskApprovalName={approval.taskApprovalName}
+                auditPackage={
+                  approval.auditPackage as import("../../lib/types/task").TaskAuditPackage | null
+                }
+                auditLoading={approval.auditLoading}
+                onApprovalNameChange={approval.setTaskApprovalName}
+                onApprove={handleApproveSelectedTask}
+                onGenerateAudit={handleGenerateAuditPackage}
+                onRetryEvents={taskController.reloadTaskEvents}
+                onReconnect={handleReconnectTaskStream}
+              />
+            ) : app.activeWorkflow === "reports" ? (
+              <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
+            ) : app.activeWorkflow === "results" ? (
+              <ResultsWorkspace
+                baseUrl={baseUrl}
+                projectId={selectedProjectId}
+                onSelectedArtifactChange={onSelectedArtifactChange}
+              />
+            ) : (
+              <SettingsEnvironmentWorkspace
+                baseUrl={baseUrl}
+                projectId={selectedProjectId}
+                rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
+                themePreference={appState.themePreference}
+                onThemePreferenceChange={appState.setThemePreference}
+                onReviewDraft={(draft: PresetPlanDraft) => {
+                  app.setActiveWorkflow("plan");
+                  app.setNotice(
+                    "Preset draft loaded into the Plan workspace. Review and save before dry-run.",
+                  );
+                }}
+              />
+            )}
+          </Suspense>
         </ProjectShell>
       )}
     </AppShell>

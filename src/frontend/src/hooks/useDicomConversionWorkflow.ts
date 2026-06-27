@@ -4,10 +4,7 @@ import {
   type DicomConversionPrepareConfirmations,
   type DicomConversionPrepareRequest,
 } from "../lib/api/dicom";
-import type {
-  DicomConversionPrepareResponse,
-  DicomConversionPrepareStatus,
-} from "../types";
+import type { DicomConversionPrepareResponse, DicomConversionPrepareStatus } from "../types";
 
 /**
  * 实现dcm2nii任务方案.md §16 — DICOM conversion workflow hook.
@@ -30,22 +27,20 @@ export function useDicomConversionWorkflow(
   projectId: string,
   initialConversionRunId: string = "",
 ) {
-  const [prepareResponse, setPrepareResponse] =
-    useState<DicomConversionPrepareResponse | null>(null);
-  const [conversionRunId, setConversionRunId] = useState<string>(
-    initialConversionRunId,
+  const [prepareResponse, setPrepareResponse] = useState<DicomConversionPrepareResponse | null>(
+    null,
   );
-  const [confirmations, setConfirmations] =
-    useState<DicomConversionPrepareConfirmations>({
-      mappings_reviewed: false,
-      rawdata_readonly: false,
-      research_use_only: false,
-      no_clinical_use: false,
-      external_converter: false,
-      rollback_policy: false,
-      risk_acknowledgement: false,
-      confirm_execution: false,
-    });
+  const [conversionRunId, setConversionRunId] = useState<string>(initialConversionRunId);
+  const [confirmations, setConfirmations] = useState<DicomConversionPrepareConfirmations>({
+    mappings_reviewed: false,
+    rawdata_readonly: false,
+    research_use_only: false,
+    no_clinical_use: false,
+    external_converter: false,
+    rollback_policy: false,
+    risk_acknowledgement: false,
+    confirm_execution: false,
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>("");
 
@@ -58,12 +53,9 @@ export function useDicomConversionWorkflow(
   const missingConfirmations = prepareResponse?.missing_confirmations ?? [];
   const warnings = prepareResponse?.warnings ?? [];
 
-  const toggleConfirmation = useCallback(
-    (key: keyof DicomConversionPrepareConfirmations) => {
-      setConfirmations((prev) => ({ ...prev, [key]: !prev[key] }));
-    },
-    [],
-  );
+  const toggleConfirmation = useCallback((key: keyof DicomConversionPrepareConfirmations) => {
+    setConfirmations((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   const setAllConfirmations = useCallback((value: boolean) => {
     setConfirmations({

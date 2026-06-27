@@ -81,7 +81,9 @@ describe("DataConversionWorkspace", () => {
     );
 
     expect(screen.getByRole("heading", { name: "DICOM series browser" })).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Refresh dry-run preview" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Refresh dry-run preview" }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/refresh is required/i)).toBeInTheDocument();
     expect(screen.getByLabelText("DICOM inventory summary")).toHaveTextContent("Refresh required");
     expect(screen.getByLabelText("Conversion readiness")).toHaveTextContent(
@@ -91,7 +93,9 @@ describe("DataConversionWorkspace", () => {
       "Project inventory summary",
     );
     expect(screen.getByLabelText("DICOM conversion steps")).toHaveTextContent("Source Detection");
-    expect(screen.getByLabelText("DICOM conversion steps")).toHaveTextContent("Approved Conversion");
+    expect(screen.getByLabelText("DICOM conversion steps")).toHaveTextContent(
+      "Approved Conversion",
+    );
     expect(screen.getByLabelText("Detailed data checks")).toBeInTheDocument();
     expect(screen.getByLabelText("Detailed data checks")).toHaveTextContent(
       "Backend gates remain authoritative",
@@ -171,8 +175,12 @@ describe("DataConversionWorkspace", () => {
       expect(runConversionDryRun).toHaveBeenCalledWith("http://localhost", "project-1"),
     );
     expect(await screen.findByText("sub-01")).toBeInTheDocument();
-    expect(screen.getByText("sub-01/ses-01/func/sub-01_ses-01_task-rest_bold.nii.gz")).toBeInTheDocument();
-    expect(screen.getByLabelText("DICOM conversion steps")).toHaveTextContent("1 suggested mapping");
+    expect(
+      screen.getByText("sub-01/ses-01/func/sub-01_ses-01_task-rest_bold.nii.gz"),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("DICOM conversion steps")).toHaveTextContent(
+      "1 suggested mapping",
+    );
   });
 
   it("restores persisted dry-run mappings on project load", async () => {
@@ -215,7 +223,9 @@ describe("DataConversionWorkspace", () => {
     );
 
     expect(await screen.findByText("sub-01")).toBeInTheDocument();
-    expect(screen.getByLabelText("DICOM conversion steps")).toHaveTextContent("1 suggested mapping");
+    expect(screen.getByLabelText("DICOM conversion steps")).toHaveTextContent(
+      "1 suggested mapping",
+    );
     expect(runConversionDryRun).not.toHaveBeenCalled();
   });
 
@@ -238,11 +248,15 @@ describe("DataConversionWorkspace", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Converted imaging inventory" })).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Converted data readiness summary" })).toHaveTextContent(
-      "Converted subjects",
-    );
-    expect(screen.queryByRole("heading", { name: "DICOM inventory summary" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Converted imaging inventory" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: "Converted data readiness summary" }),
+    ).toHaveTextContent("Converted subjects");
+    expect(
+      screen.queryByRole("heading", { name: "DICOM inventory summary" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("bids-validation-panel")).toBeInTheDocument();
     expect(screen.queryByTestId("preprocessing-validation-panel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("qc-summary-panel")).not.toBeInTheDocument();
@@ -266,7 +280,9 @@ describe("DataConversionWorkspace", () => {
     );
 
     expect(screen.getByText("No imaging inventory yet")).toBeInTheDocument();
-    expect(screen.queryByRole("table", { name: "Raw DICOM readiness summary" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("table", { name: "Raw DICOM readiness summary" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByTestId("conversion-dry-run-panel")).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Open detailed checks" }));

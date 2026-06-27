@@ -26,7 +26,10 @@ export function SegmentedControl({
   const enabledOptions = options.filter((option) => !option.disabled);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) || enabledOptions.length === 0) {
+    if (
+      !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key) ||
+      enabledOptions.length === 0
+    ) {
       return;
     }
 

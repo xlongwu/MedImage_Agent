@@ -62,8 +62,7 @@ export function SettingsEnvironmentWorkspace({
             <div>
               <h3>Settings map</h3>
               <p>
-                Project-safe setup and diagnostics surfaces are grouped here for environment
-                review.
+                Project-safe setup and diagnostics surfaces are grouped here for environment review.
               </p>
             </div>
             <Badge tone="info">Migrated</Badge>
@@ -97,8 +96,8 @@ export function SettingsEnvironmentWorkspace({
             <div>
               <h3>General and integrations</h3>
               <p>
-                User-facing preferences and provider connections are cataloged here without
-                enabling hidden execution paths.
+                User-facing preferences and provider connections are cataloged here without enabling
+                hidden execution paths.
               </p>
             </div>
             <Badge tone="neutral">Config surface</Badge>
@@ -165,10 +164,7 @@ export function SettingsEnvironmentWorkspace({
               <dd>Loaded on demand to avoid accidental heavy checks during normal setup.</dd>
             </div>
           </dl>
-          <Button
-            variant="secondary"
-            onClick={() => setShowDiagnostics((value) => !value)}
-          >
+          <Button variant="secondary" onClick={() => setShowDiagnostics((value) => !value)}>
             {showDiagnostics ? "Hide diagnostics modules" : "Open diagnostics modules"}
           </Button>
         </Card>
@@ -250,8 +246,8 @@ export function SettingsEnvironmentWorkspace({
             <div>
               <h3>System diagnostics</h3>
               <p>
-                Desktop settings, import diagnostics, external smoke readiness, and release
-                checks stay grouped here.
+                Desktop settings, import diagnostics, external smoke readiness, and release checks
+                stay grouped here.
               </p>
             </div>
             <EvidenceBadge level="backend_required">On demand</EvidenceBadge>

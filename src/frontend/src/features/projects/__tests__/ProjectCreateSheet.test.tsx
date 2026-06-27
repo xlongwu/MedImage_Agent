@@ -42,7 +42,9 @@ describe("ProjectCreateSheet", () => {
     expect(screen.getByText("Reference existing files")).toBeInTheDocument();
     expect(screen.getByText("Required; backend determines project data state")).toBeInTheDocument();
     expect(
-      screen.getByText("Source data is referenced read-only; no conversion or preprocessing is executed"),
+      screen.getByText(
+        "Source data is referenced read-only; no conversion or preprocessing is executed",
+      ),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Create project" }));

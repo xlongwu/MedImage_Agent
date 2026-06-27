@@ -147,11 +147,15 @@ describe("PlanWorkspace", () => {
 
     const stateMachine = screen.getByLabelText("Plan state machine");
 
-    expect(within(stateMachine).getByLabelText("Approved: backend evidence required")).toBeInTheDocument();
+    expect(
+      within(stateMachine).getByLabelText("Approved: backend evidence required"),
+    ).toBeInTheDocument();
     expect(within(stateMachine).getByLabelText("Dry-run Passed: locked")).toBeInTheDocument();
     expect(within(stateMachine).getByLabelText("Ready to Execute: locked")).toBeInTheDocument();
     expect(screen.getByLabelText("Plan review facts")).toHaveTextContent("Approval evidence");
-    expect(screen.getByLabelText("Plan review facts")).toHaveTextContent("Backend evidence required");
+    expect(screen.getByLabelText("Plan review facts")).toHaveTextContent(
+      "Backend evidence required",
+    );
   });
 
   it("shows later plan gates only when backend evidence is present", () => {
@@ -176,7 +180,9 @@ describe("PlanWorkspace", () => {
     expect(within(stateMachine).getByLabelText("Approved: completed")).toBeInTheDocument();
     expect(within(stateMachine).getByLabelText("Dry-run Passed: completed")).toBeInTheDocument();
     expect(within(stateMachine).getByLabelText("Ready to Execute: completed")).toBeInTheDocument();
-    expect(within(stateMachine).getByLabelText("Executed: backend evidence required")).toBeInTheDocument();
+    expect(
+      within(stateMachine).getByLabelText("Executed: backend evidence required"),
+    ).toBeInTheDocument();
   });
 
   it("updates the inspector and shared selection context when a pipeline node is selected", async () => {

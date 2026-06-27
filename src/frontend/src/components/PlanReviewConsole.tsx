@@ -89,7 +89,10 @@ function providerStatusMessage(provider: string): string {
 }
 
 function providerFailureMessage(provider: string, errors: string[]): string {
-  if (provider === "openai_compatible" && errors.some((item) => item.includes("LLM_API_KEY_MISSING"))) {
+  if (
+    provider === "openai_compatible" &&
+    errors.some((item) => item.includes("LLM_API_KEY_MISSING"))
+  ) {
     return "LLM provider disabled: API key not configured. MEDIMAGE_LLM_API_KEY is missing, so openai_compatible generation was blocked before any external API call. Select mock/rule_based for local deterministic planning or configure the key before using openai_compatible.";
   }
   return errors[0] || "Plan generation did not produce a valid reviewed plan.";
@@ -334,7 +337,9 @@ export default function PlanReviewConsole({
     const restoredPlan = record.payload.plan;
     const planIssues = reviewedPlanIssues(restoredPlan);
     if (planIssues.length > 0) {
-      setPlanHistoryError(`Stored reviewed plan is incomplete. ${invalidReviewedPlanMessage(planIssues)}`);
+      setPlanHistoryError(
+        `Stored reviewed plan is incomplete. ${invalidReviewedPlanMessage(planIssues)}`,
+      );
       return;
     }
     const restoredValidation =
@@ -424,10 +429,7 @@ export default function PlanReviewConsole({
         return;
       }
       setPlanJson(JSON.stringify(plan, null, 2));
-      await persistReviewedPlan(
-        plan,
-        (data?.validation ?? {}) as Record<string, unknown>,
-      );
+      await persistReviewedPlan(plan, (data?.validation ?? {}) as Record<string, unknown>);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

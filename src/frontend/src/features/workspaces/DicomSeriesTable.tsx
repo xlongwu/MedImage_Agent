@@ -147,19 +147,14 @@ export function DicomSeriesTable({
       Math.max(0, Math.floor(tableScrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN),
       maxStartIndex,
     );
-    const endIndex = Math.min(
-      filteredRows.length,
-      startIndex + visibleRows + VIRTUAL_OVERSCAN * 2,
-    );
+    const endIndex = Math.min(filteredRows.length, startIndex + visibleRows + VIRTUAL_OVERSCAN * 2);
 
     return { endIndex, startIndex };
   }, [filteredRows.length, tableScrollTop, usesVirtualization]);
   const renderedRows = usesVirtualization
     ? filteredRows.slice(virtualRange.startIndex, virtualRange.endIndex)
     : filteredRows;
-  const topSpacerHeight = usesVirtualization
-    ? virtualRange.startIndex * VIRTUAL_ROW_HEIGHT
-    : 0;
+  const topSpacerHeight = usesVirtualization ? virtualRange.startIndex * VIRTUAL_ROW_HEIGHT : 0;
   const bottomSpacerHeight = usesVirtualization
     ? (filteredRows.length - virtualRange.endIndex) * VIRTUAL_ROW_HEIGHT
     : 0;
@@ -200,7 +195,10 @@ export function DicomSeriesTable({
             Per-series file totals are shown only when the backend returns verified detail.
           </p>
         </div>
-        <Button disabled={!projectId || loading || !inventory.hasRawDicom} onClick={onGenerateDryRun}>
+        <Button
+          disabled={!projectId || loading || !inventory.hasRawDicom}
+          onClick={onGenerateDryRun}
+        >
           {loading
             ? restoreState === "loading"
               ? "Loading preview..."
@@ -332,7 +330,9 @@ export function DicomSeriesTable({
                 {renderedRows.map((row, index) => (
                   <DicomSeriesRow
                     key={row.id}
-                    ariaRowIndex={usesVirtualization ? virtualRange.startIndex + index + 2 : undefined}
+                    ariaRowIndex={
+                      usesVirtualization ? virtualRange.startIndex + index + 2 : undefined
+                    }
                     checked={selectedIds.has(row.id)}
                     onToggle={toggleRow}
                     row={row}
@@ -396,7 +396,8 @@ function ReviewSummary({
   warningMessages: string[];
 }) {
   const hasIssues = status !== "ready" || warningMessages.length > 0 || blockingMessages.length > 0;
-  const statusTone = blockingMessages.length > 0 ? "danger" : status === "warning" ? "warning" : "success";
+  const statusTone =
+    blockingMessages.length > 0 ? "danger" : status === "warning" ? "warning" : "success";
 
   return (
     <div className={styles.reviewSummary} aria-label="Dry-run review summary">

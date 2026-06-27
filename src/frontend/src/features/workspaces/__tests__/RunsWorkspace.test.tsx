@@ -4,12 +4,7 @@ import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { RunsWorkspace } from "../RunsWorkspace";
-import type {
-  TaskDiagnostics,
-  TaskEvent,
-  TaskLogEntry,
-  TaskStatus,
-} from "../../../lib/types/task";
+import type { TaskDiagnostics, TaskEvent, TaskLogEntry, TaskStatus } from "../../../lib/types/task";
 
 function task(overrides: Partial<TaskLogEntry> = {}): TaskLogEntry {
   return {

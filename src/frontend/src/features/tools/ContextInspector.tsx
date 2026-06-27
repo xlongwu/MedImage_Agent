@@ -185,9 +185,9 @@ export function ContextInspector({
           <div>
             <h4>Configuration boundary</h4>
             <p>
-              Change execution mode, environment readiness, external smoke approval, and other
-              setup controls in Settings / Environment. The Inspector does not run, approve,
-              export, or alter safety policy.
+              Change execution mode, environment readiness, external smoke approval, and other setup
+              controls in Settings / Environment. The Inspector does not run, approve, export, or
+              alter safety policy.
             </p>
           </div>
           <Button variant="secondary" onClick={onConfigure}>

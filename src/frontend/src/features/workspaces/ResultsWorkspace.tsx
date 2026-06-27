@@ -286,7 +286,8 @@ const ARTIFACT_BOUNDARY_ROWS = [
   },
   {
     state: "Missing provenance",
-    evidence: "Artifact exists but run, node, input, parameter, checksum, or warning data is absent",
+    evidence:
+      "Artifact exists but run, node, input, parameter, checksum, or warning data is absent",
     behavior: "Flag provenance gap before handoff",
   },
   {
@@ -345,7 +346,8 @@ const PROVENANCE_CHECKS = [
   },
   {
     label: "Checksum and warnings",
-    description: "Checksums and warnings should be visible when available and explicitly pending when absent.",
+    description:
+      "Checksums and warnings should be visible when available and explicitly pending when absent.",
   },
   {
     label: "Package integrity",

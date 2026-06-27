@@ -14,12 +14,14 @@ function renderInspector(isOpen = true) {
       executionMode="simulated"
       externalSmokeApprovedBy=""
       externalSmokeApprovedRun={false}
-      inventory={{
-        dataState: "converted_bids",
-        dataStateLabel: "Converted BIDS/NIfTI",
-        metadataOnlyNiftiInventory: false,
-        modality: "rs-fMRI",
-      } as never}
+      inventory={
+        {
+          dataState: "converted_bids",
+          dataStateLabel: "Converted BIDS/NIfTI",
+          metadataOnlyNiftiInventory: false,
+          modality: "rs-fMRI",
+        } as never
+      }
       isOpen={isOpen}
       model={{ model_name: "Planner", version: "0.6" } as never}
       onConfigure={onConfigure}
@@ -76,7 +78,9 @@ describe("ContextInspector", () => {
     renderInspector();
 
     expect(screen.getByLabelText("Context inspector")).toBeInTheDocument();
-    expect(screen.getByText("Read-only project, workspace, run, and execution context")).toBeInTheDocument();
+    expect(
+      screen.getByText("Read-only project, workspace, run, and execution context"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Project context")).toBeInTheDocument();
     expect(screen.getByText("Demo Project")).toBeInTheDocument();
     expect(screen.getAllByText("Converted BIDS/NIfTI").length).toBeGreaterThan(0);

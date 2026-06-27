@@ -174,12 +174,18 @@ describe("deriveDefaultWorkflowRoute", () => {
         tasks: [{ status: "running" }],
       }),
     ).toEqual({ reason: "active_or_failed_run", tab: "runs" });
-    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "raw_dicom" }, tasks: [{ status: "pending" }] })).toBe(
-      "runs",
-    );
-    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "empty" }, tasks: [{ status: "failed" }] })).toBe(
-      "runs",
-    );
+    expect(
+      deriveDefaultWorkflowTab({
+        inventory: { dataState: "raw_dicom" },
+        tasks: [{ status: "pending" }],
+      }),
+    ).toBe("runs");
+    expect(
+      deriveDefaultWorkflowTab({
+        inventory: { dataState: "empty" },
+        tasks: [{ status: "failed" }],
+      }),
+    ).toBe("runs");
   });
 
   it("routes explicit QC attention to QC after a preprocessing run exists", () => {

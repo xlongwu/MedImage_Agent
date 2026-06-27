@@ -79,9 +79,7 @@ describe("AssistantSheet", () => {
     expect(screen.getByLabelText("Assistant context")).toHaveTextContent(
       "Mock provider: no external API used; real LLM disabled until API key is configured",
     );
-    expect(screen.getByLabelText("Assistant suggestions")).toHaveTextContent(
-      "Suggested prompts",
-    );
+    expect(screen.getByLabelText("Assistant suggestions")).toHaveTextContent("Suggested prompts");
     expect(screen.getByLabelText("Assistant suggestions")).toHaveTextContent(
       "Explain which QC evidence is still pending",
     );
@@ -92,7 +90,9 @@ describe("AssistantSheet", () => {
   it("copies suggested prompts into the assistant input", () => {
     const { onInput } = renderSheet();
 
-    fireEvent.click(screen.getByRole("button", { name: "Draft a non-executing QC review checklist" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Draft a non-executing QC review checklist" }),
+    );
 
     expect(onInput).toHaveBeenCalledWith("Draft a non-executing QC review checklist");
   });

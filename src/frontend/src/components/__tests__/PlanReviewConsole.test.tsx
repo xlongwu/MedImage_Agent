@@ -83,7 +83,9 @@ describe("PlanReviewConsole", () => {
     await user.type(screen.getByRole("textbox"), "motion correction");
     await user.click(screen.getByRole("button", { name: "Generate Plan" }));
 
-    expect(await screen.findByText(/Generated plan is invalid and was not persisted/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Generated plan is invalid and was not persisted/i),
+    ).toBeInTheDocument();
     expect(saveReviewedPlan).not.toHaveBeenCalled();
   });
 
@@ -110,7 +112,9 @@ describe("PlanReviewConsole", () => {
     await user.type(screen.getByRole("textbox"), "motion correction");
     await user.click(screen.getByRole("button", { name: "Generate Plan" }));
 
-    expect(await screen.findByText(/LLM provider disabled: API key not configured/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/LLM provider disabled: API key not configured/i),
+    ).toBeInTheDocument();
     expect(saveReviewedPlan).not.toHaveBeenCalled();
   });
 

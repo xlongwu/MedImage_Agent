@@ -18,9 +18,7 @@ vi.mock("../../../components/RsfmriGroupSummaryPanel", () => ({
 }));
 
 vi.mock("../../../components/RsfmriReportExporterPanel", () => ({
-  RsfmriReportExporterPanel: () => (
-    <div data-testid="rsfmri-report-exporter">Report exporter</div>
-  ),
+  RsfmriReportExporterPanel: () => <div data-testid="rsfmri-report-exporter">Report exporter</div>,
 }));
 
 vi.mock("../../../components/RsfmriReportValidatorPanel", () => ({
@@ -38,12 +36,8 @@ describe("ResultsWorkspace", () => {
     renderWorkspace();
 
     expect(screen.getByRole("heading", { name: "Artifact evidence boundary" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent(
-      "Planned",
-    );
-    expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent(
-      "Planned only",
-    );
+    expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent("Planned");
+    expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent("Planned only");
     expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent(
       "Backend evidence required",
     );

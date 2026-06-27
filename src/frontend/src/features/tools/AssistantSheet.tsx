@@ -123,7 +123,9 @@ export function AssistantSheet({
           </div>
           <div>
             <span>Provider</span>
-            <strong>Mock provider: no external API used; real LLM disabled until API key is configured</strong>
+            <strong>
+              Mock provider: no external API used; real LLM disabled until API key is configured
+            </strong>
           </div>
         </section>
 
@@ -150,10 +152,10 @@ export function AssistantSheet({
         <div className={styles.actionBoundary}>
           <strong>Execution boundary</strong>
           <p>
-            Assistant responses can explain, summarize, or draft plans. Running pipelines,
-            approving tasks, and changing external-tool settings remain in their reviewed
-            workspaces. Mock provider mode uses the local safe default and no external API. A real
-            LLM provider stays disabled until an API key is configured.
+            Assistant responses can explain, summarize, or draft plans. Running pipelines, approving
+            tasks, and changing external-tool settings remain in their reviewed workspaces. Mock
+            provider mode uses the local safe default and no external API. A real LLM provider stays
+            disabled until an API key is configured.
           </p>
         </div>
 
