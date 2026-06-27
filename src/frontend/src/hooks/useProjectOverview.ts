@@ -5,7 +5,7 @@ import { useAsyncResource } from "./useAsyncResource";
 
 export function useProjectOverview(studyId: string | null) {
   return useAsyncResource<StudyOverview>(
-    () => (studyId ? getStudyOverview(studyId) : Promise.resolve(fallbackOverview)),
+    studyId ? () => getStudyOverview(studyId) : null,
     fallbackOverview,
     [studyId],
   );

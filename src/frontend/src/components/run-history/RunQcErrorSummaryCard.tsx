@@ -90,10 +90,16 @@ export function RunQcErrorSummaryCard({
         <span
           style={{
             ...artifactChipStyle,
-            ...artifactTone(health.hasMissingArtifacts ? "missing" : "ok"),
+            ...artifactTone(
+              health.artifactPresenceState === "missing"
+                ? "missing"
+                : health.artifactPresenceState === "present"
+                  ? "ok"
+                  : "neutral",
+            ),
           }}
         >
-          {health.hasMissingArtifacts ? "missing artifacts" : "artifacts present"}
+          {health.artifactPresenceLabel}
         </span>
         <span
           style={{

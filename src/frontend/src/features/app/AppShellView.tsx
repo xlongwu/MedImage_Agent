@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { ExecutionMode } from "../../lib/types/pipeline";
 import type { ChatMessage } from "../../lib/types/assistant";
 import type {
@@ -8,42 +8,50 @@ import type {
   ImageValidationReport,
 } from "../../lib/types/image";
 import type { ProjectDetail } from "../../lib/types/project";
-import type { TaskEvent, TaskLogEntry, TaskStreamMessage } from "../../lib/types/task";
 import type { PresetPlanDraft } from "../../types";
 import type { ModelStatus } from "../../lib/types/model";
 import type { DatasetSummary } from "../../lib/types/dataset";
 import type { AppController } from "../app/useAppController";
 import type { ProjectController } from "../projects/useProjectController";
 import type { TaskController } from "../tasks/useTaskController";
+import type { ThemePreference } from "../../hooks/useAppState";
 import type { ProjectInventory } from "../../lib/projectWorkflow";
 import type { WorkflowTab } from "../../lib/projectWorkflow";
-import {
-  ProjectHeroPanel,
-  ProjectList,
-  ReadinessStatusStrip,
-  RecommendedNextStepCard,
-  TopBar,
-  WorkflowTabs,
-  WorkspaceSuspenseFallback,
-} from "../dashboard/DashboardChrome";
-import AdvancedModePanel from "../../components/workflow/AdvancedModePanel";
-import PlanReviewConsole from "../../components/PlanReviewConsole";
-import ProjectRunsPanel from "../../components/ProjectRunsPanel";
+import type {
+  ArtifactSelection,
+  DataSeriesSelection,
+  PlanNodeSelection,
+  WorkspaceSelectionContext,
+} from "../../lib/workspaceSelection";
+import { TopBar, WorkspaceSuspenseFallback } from "../dashboard/DashboardChrome";
+import { ProjectOverviewHeader } from "../projects/ProjectOverviewHeader";
+import { ProjectCreateSheet } from "../projects/ProjectCreateSheet";
+import { ProjectsPage } from "../projects/ProjectsPage";
+import { ProjectSwitcher } from "../dashboard/ProjectSwitcher";
 import { DataConversionWorkspace } from "../workspaces/DataConversionWorkspace";
+import { PlanWorkspace } from "../workspaces/PlanWorkspace";
 import { PreprocessingWorkspace } from "../workspaces/PreprocessingWorkspace";
+import { RunsWorkspace } from "../workspaces/RunsWorkspace";
 import { QCReportsWorkspace } from "../workspaces/QCReportsWorkspace";
+import { ResultsWorkspace } from "../workspaces/ResultsWorkspace";
 import { SettingsEnvironmentWorkspace } from "../workspaces/SettingsEnvironmentWorkspace";
 import { ProjectCreateResultPanel } from "./ProjectCreateResultPanel";
-import { CompactTaskLog } from "../tasks/CompactTaskLog";
-import { TaskDetailsPanel } from "../tasks/TaskDetailsPanel";
+import { RunActivityBar } from "../tasks/RunActivityBar";
 import { MedicalImageViewer } from "./MedicalImageViewer";
-import { SecondaryToolsDrawer } from "../tools/SecondaryToolsDrawer";
+import { ProjectLifecycleSidebar } from "./ProjectLifecycleSidebar";
+import { AssistantSheet } from "../tools/AssistantSheet";
+import { ContextInspector } from "../tools/ContextInspector";
+import { AppShell } from "../../layouts/AppShell";
+import { ProjectShell } from "../../layouts/ProjectShell";
+import { shouldRenderProjectImageViewer } from "./viewerVisibility";
+import styles from "./AppShellView.module.css";
 
 export type AppShellViewProps = {
-  mode: AppController["mode"];
   baseUrl: string;
   drawerOpen: boolean;
+  health: boolean | null;
   selectedProjectId: string | null;
+  onSelectProject: (id: string) => void;
   project: { data: ProjectDetail };
   projectInventory: ProjectInventory | null;
   projectController: Pick<
@@ -57,7 +65,8 @@ export type AppShellViewProps = {
     | "projectsLoading"
     | "projectsError"
     | "handleDeleteProject"
-    | "handleUploadData"
+    | "selectProjectDirectory"
+    | "createProjectFromDirectoryPath"
   >;
   taskController: Pick<
     TaskController,
@@ -80,19 +89,22 @@ export type AppShellViewProps = {
     AppController,
     | "notice"
     | "setNotice"
+    | "apiError"
     | "activeWorkflow"
     | "setActiveWorkflow"
+    | "checkHealth"
     | "handleScrollToPanel"
     | "setDrawerOpen"
-    | "handleRunPipeline"
     | "handleApproveTask"
     | "handleGenerateAuditPackage"
     | "handleReconnectTaskStream"
     | "handleAssistantSubmit"
-    | "handleQuickAction"
-    | "pipelineLoading"
     | "presetPlanDraft"
   >;
+  appState: {
+    themePreference: ThemePreference;
+    setThemePreference: (themePreference: ThemePreference) => void;
+  };
   image: {
     sequence: string;
     setSequence: (seq: string) => void;
@@ -131,33 +143,34 @@ export type AppShellViewProps = {
   setExternalSmokeApprovedBy: (by: string) => void;
   model: ModelStatus | null;
   dataset: DatasetSummary | null;
-  setMode: AppController["setMode"];
   setExecutionMode: (mode: ExecutionMode) => void;
   onToggleDrawer: () => void;
-  handleRunPipelineWrapper: () => Promise<void>;
   handleApproveSelectedTask: () => Promise<void>;
   handleGenerateAuditPackage: () => Promise<void>;
   handleReconnectTaskStream: () => void;
   handleAssistantSubmit: (event: React.FormEvent) => Promise<void>;
-  handleQuickAction: (action: string) => void;
   onNewChat: () => void;
   selectedTaskId: string | null;
   setSelectedTaskId: (id: string | null) => void;
-  activeTaskId: string | null;
-  setActiveTaskId: (id: string | null) => void;
+  selectionContext: WorkspaceSelectionContext;
+  onSelectedArtifactChange: (artifact: ArtifactSelection | null) => void;
+  onSelectedDataSeriesChange: (selection: DataSeriesSelection | null) => void;
+  onSelectedPlanNodeChange: (node: PlanNodeSelection | null) => void;
 };
 
 export function AppShellView({
-  mode,
   baseUrl,
   drawerOpen,
+  health,
   selectedProjectId,
+  onSelectProject,
   project,
   projectInventory,
   projectController,
   taskController,
   taskStream,
   app,
+  appState,
   image,
   assistant,
   approval,
@@ -168,160 +181,216 @@ export function AppShellView({
   setExternalSmokeApprovedBy,
   model,
   dataset,
-  setMode,
   setExecutionMode,
   onToggleDrawer,
-  handleRunPipelineWrapper,
   handleApproveSelectedTask,
   handleGenerateAuditPackage,
   handleReconnectTaskStream,
   handleAssistantSubmit,
-  handleQuickAction,
   onNewChat,
   selectedTaskId,
   setSelectedTaskId,
-  activeTaskId,
-  setActiveTaskId,
+  selectionContext,
+  onSelectedArtifactChange,
+  onSelectedDataSeriesChange,
+  onSelectedPlanNodeChange,
 }: AppShellViewProps) {
-  if (mode === "advanced") {
-    return (
-      <div className="windows-workstation advanced-workstation">
-        <TopBar
-          health={null}
-          apiError={null}
-          onRetry={() => {}}
-          onToggleMode={() => setMode("dashboard")}
-          modeLabel="Dashboard"
-        />
-        <Suspense fallback={<WorkspaceSuspenseFallback label="Loading advanced console..." />}>
-          <AdvancedModePanel baseUrl={baseUrl} />
-        </Suspense>
-      </div>
-    );
-  }
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [projectCreateOpen, setProjectCreateOpen] = useState(false);
+  const [projectsPageOpen, setProjectsPageOpen] = useState(false);
+  const selectedProject = selectedProjectId ? project : null;
+  const projectDir =
+    typeof selectedProject?.data.metadata?.project_dir === "string"
+      ? selectedProject.data.metadata.project_dir
+      : null;
+  const workflowLabels: Record<WorkflowTab, string> = {
+    data: "Data & Conversion",
+    plan: "Plan",
+    preprocessing: "Preprocessing",
+    runs: "Runs",
+    reports: "QC",
+    results: "Results",
+    environment: "Settings / Environment",
+  };
+  const activePageLabel = projectsPageOpen
+    ? "Projects"
+    : (workflowLabels[app.activeWorkflow as WorkflowTab] ?? "Workspace");
+  const topBarProjectName = projectsPageOpen
+    ? "Project Library"
+    : (projectInventory?.projectName ?? project.data.name);
+  const showImageViewer = shouldRenderProjectImageViewer({
+    activeWorkflow: app.activeWorkflow as WorkflowTab,
+    inventory: projectInventory,
+  });
+  const hasSystemMessages = Boolean(
+    app.notice ||
+      projectController.projectCreateResult ||
+      projectController.projectCreateLoading ||
+      projectController.projectCreateError ||
+      taskStream.error,
+  );
 
-  if (mode === "planner") {
-    const selectedProject = selectedProjectId ? project : null;
-    const projectDir =
-      typeof selectedProject?.data.metadata?.project_dir === "string"
-        ? selectedProject.data.metadata.project_dir
-        : null;
-    return (
-      <div className="windows-workstation">
-        <TopBar
-          health={null}
-          apiError={null}
-          onRetry={() => {}}
-          onToggleMode={() => setMode("dashboard")}
-          modeLabel="Dashboard"
-        />
-        <Suspense fallback={<WorkspaceSuspenseFallback label="Loading planning tools..." />}>
-          <PlanReviewConsole
-            selectedProjectId={selectedProjectId}
-            selectedProject={selectedProject?.data}
-            projectConfigPath={selectedProject?.data.metadata?.project_config_path}
-            datasetIndexPath={selectedProject?.data.metadata?.dataset_index_path}
-            rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
-            initialPresetDraft={app.presetPlanDraft}
-          />
-          <ProjectRunsPanel
-            baseUrl={baseUrl}
-            projectId={selectedProjectId}
-            projectDir={projectDir}
-          />
-        </Suspense>
-      </div>
-    );
-  }
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        setAssistantOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
-    <div className="windows-workstation">
-      <TopBar
-        health={null}
-        apiError={null}
-        onRetry={() => {}}
-        onToggleMode={() => setMode("advanced")}
-        modeLabel="Advanced Console"
-      />
-      <button onClick={() => setMode("planner")}>Plan Review</button>
-      {app.notice ? (
-        <div className="toast-line">
-          {app.notice}
-          <button onClick={() => app.setNotice("")}>Dismiss</button>
-        </div>
-      ) : null}
-      <ProjectCreateResultPanel
-        result={projectController.projectCreateResult}
-        loading={projectController.projectCreateLoading}
-        error={projectController.projectCreateError}
-        onDismiss={() => {
-          projectController.setProjectCreateResult(null);
-          projectController.setProjectCreateError("");
-        }}
-      />
-      {taskStream.error ? (
-        <div className="api-banner stream-banner">
-          Task stream disconnected: {taskStream.error}
-          <button onClick={handleReconnectTaskStream}>Reconnect</button>
-        </div>
-      ) : null}
-      <div className={`dashboard-frame ${drawerOpen ? "drawer-open" : "drawer-collapsed"}`}>
-        <aside className="side-rail">
-          <div className="brand-block">
-            <div className="brand-glyph">M</div>
-            <div>
-              <strong>MedImage</strong>
-              <span>Desktop workstation</span>
-            </div>
-          </div>
-          <nav className="nav-stack" aria-label="Primary">
-            {[
-              ["Dashboard", "D"],
-              ["Projects", "P"],
-              ["Datasets", "S"],
-              ["Pipeline", "N"],
-              ["Results", "R"],
-              ["Settings", "G"],
-            ].map(([label, glyph], index) => (
-              <button
-                key={label}
-                className={`nav-item ${index === 0 ? "active" : ""}`}
-                onClick={() =>
-                  label === "Settings"
-                    ? setMode("advanced")
-                    : app.setNotice(`${label} view is connected to the dashboard shell.`)
-                }
-                aria-current={index === 0 ? "page" : undefined}
-              >
-                <span>{glyph}</span>
-                {label}
-              </button>
-            ))}
-          </nav>
-          <ProjectList
+    <AppShell
+      topBar={
+        <TopBar
+          health={health}
+          apiError={app.apiError}
+          onRetry={app.checkHealth}
+          projectName={topBarProjectName}
+          activePageLabel={activePageLabel}
+          onOpenAssistant={() => setAssistantOpen(true)}
+          onOpenInspector={() => app.setDrawerOpen(true)}
+        />
+      }
+      systemMessages={
+        hasSystemMessages ? (
+          <>
+            {app.notice ? (
+              <div className={styles.toastLine}>
+                {app.notice}
+                <button onClick={() => app.setNotice("")}>Dismiss</button>
+              </div>
+            ) : null}
+            <ProjectCreateResultPanel
+              result={projectController.projectCreateResult}
+              loading={projectController.projectCreateLoading}
+              error={projectController.projectCreateError}
+              onDismiss={() => {
+                projectController.setProjectCreateResult(null);
+                projectController.setProjectCreateError("");
+              }}
+            />
+            {taskStream.error ? (
+              <div className={styles.streamBanner}>
+                Task stream disconnected: {taskStream.error}
+                <button onClick={handleReconnectTaskStream}>Reconnect</button>
+              </div>
+            ) : null}
+          </>
+        ) : undefined
+      }
+      sidebar={
+        <aside className={styles.sideRail}>
+          <ProjectSwitcher
             projects={projectController.projects.data}
             selectedProjectId={selectedProjectId || project.data.id}
             loading={projectController.projectsLoading}
             error={projectController.projectsError}
             deletingProjectId={null}
-            onSelect={setSelectedTaskId}
+            onSelect={(projectId) => {
+              onSelectProject(projectId);
+              setProjectsPageOpen(false);
+            }}
+            onCreateProject={() => setProjectCreateOpen(true)}
+            onOpenProjects={() => setProjectsPageOpen(true)}
             onDelete={projectController.handleDeleteProject}
           />
-          <div className="license-card">
-            <div className="diamond-mark" />
-            <strong>Research Plan</strong>
-            <p>{project.data.subjects_count} subjects tracked locally</p>
-            <div className="meter">
-              <span style={{ width: `${Math.min(project.data.subjects_count, 200) / 2}%` }} />
-            </div>
-            <button onClick={() => setMode("advanced")}>Manage</button>
+          <ProjectLifecycleSidebar
+            activeTab={app.activeWorkflow as WorkflowTab}
+            dataState={projectInventory?.dataState}
+            hasPreprocessingRun={taskController.hasPreprocessingRun}
+            projectsPageOpen={projectsPageOpen}
+            onChange={app.setActiveWorkflow}
+            onOpenWorkspace={() => setProjectsPageOpen(false)}
+          />
+          <div className={styles.sideRailFooter}>
+            <span className={styles.researchOnlyTag}>Research Only</span>
+            <span className={styles.versionTag}>v0.6</span>
           </div>
         </aside>
+      }
+      mainClassName={styles.workflowMain}
+      inspector={
+        drawerOpen ? (
+          <ContextInspector
+            activePageLabel={activePageLabel}
+            inventory={projectInventory}
+            isOpen={true}
+            onToggle={onToggleDrawer}
+            project={project.data}
+            model={model}
+            dataset={dataset}
+            executionMode={executionMode}
+            externalSmokeApprovedRun={externalSmokeApprovedRun}
+            externalSmokeApprovedBy={externalSmokeApprovedBy}
+            selectionContext={selectionContext}
+            onConfigure={() => {
+              setProjectsPageOpen(false);
+              app.setActiveWorkflow("environment");
+            }}
+          />
+        ) : null
+      }
+      inspectorOpen={drawerOpen}
+      runActivity={
+        <RunActivityBar
+          tasks={taskController.tasks}
+          selectedTaskId={selectedTaskId}
+          onSelectTask={(taskId) => {
+            setSelectedTaskId(taskId);
+            setProjectsPageOpen(false);
+            app.setActiveWorkflow("runs");
+          }}
+          onOpenRuns={() => {
+            setProjectsPageOpen(false);
+            app.setActiveWorkflow("runs");
+          }}
+        />
+      }
+    >
+      <AssistantSheet
+        activePageLabel={activePageLabel}
+        error={assistant.error}
+        input={assistant.input}
+        loading={assistant.loading}
+        messages={assistant.messages}
+        onInput={assistant.setInput}
+        onNewChat={onNewChat}
+        onOpenChange={setAssistantOpen}
+        onSubmit={handleAssistantSubmit}
+        open={assistantOpen}
+        projectName={projectInventory?.projectName ?? project.data.name}
+        selectionContext={selectionContext}
+      />
 
-        <main className="workflow-main">
-          <section className="project-overview-grid" aria-label="Project overview">
-            <ProjectHeroPanel inventory={projectInventory} />
-            <RecommendedNextStepCard
+      <ProjectCreateSheet
+        error={projectController.projectCreateError}
+        loading={projectController.projectCreateLoading}
+        onCreate={projectController.createProjectFromDirectoryPath}
+        onOpenChange={setProjectCreateOpen}
+        onSelectDirectory={projectController.selectProjectDirectory}
+        open={projectCreateOpen}
+      />
+
+      {projectsPageOpen ? (
+        <ProjectsPage
+          deletingProjectId={null}
+          error={projectController.projectsError}
+          loading={projectController.projectsLoading}
+          onClose={() => setProjectsPageOpen(false)}
+          onCreateProject={() => setProjectCreateOpen(true)}
+          onDeleteProject={projectController.handleDeleteProject}
+          onSelectProject={onSelectProject}
+          projects={projectController.projects.data}
+          selectedProjectId={selectedProjectId}
+        />
+      ) : (
+        <ProjectShell
+          overview={
+            <ProjectOverviewHeader
               inventory={projectInventory}
               hasPreprocessingRun={taskController.hasPreprocessingRun}
               onPrimaryAction={() => {
@@ -337,52 +406,55 @@ export function AppShellView({
                 window.setTimeout(() => app.handleScrollToPanel("workflow-workspace"), 0);
               }}
             />
-          </section>
-
-          <ReadinessStatusStrip
-            inventory={projectInventory}
-            health={null}
-            hasPreprocessingRun={taskController.hasPreprocessingRun}
-          />
-
-          <MedicalImageViewer
-            project={project.data}
-            sequence={image.sequence}
-            plane={image.plane}
-            sequenceOptions={image.sequenceOptions}
-            imageSources={image.imageSources.data}
-            validation={image.imageValidation.data}
-            subjectId={image.selectedSubjectId}
-            preview={image.imagePreview.data}
-            sourceFile={image.selectedImageSource}
-            loading={image.imagePreview.loading}
-            onSequenceChange={image.setSequence}
-            onPlaneChange={image.setPlane}
-            onSubjectChange={image.setSelectedSubjectId}
-            onSliceChange={image.setSliceIndex}
-          />
-
-          <WorkflowTabs
-            activeTab={app.activeWorkflow as WorkflowTab}
-            onChange={app.setActiveWorkflow}
-          />
-
-          <section
-            id="workflow-workspace"
-            className="workflow-workspace"
-            role="tabpanel"
-            aria-live="polite"
-            aria-labelledby={`workflow-tab-${app.activeWorkflow}`}
-          >
+          }
+          viewer={
+            showImageViewer ? (
+              <MedicalImageViewer
+                project={project.data}
+                sequence={image.sequence}
+                plane={image.plane}
+                sequenceOptions={image.sequenceOptions}
+                imageSources={image.imageSources.data}
+                validation={image.imageValidation.data}
+                subjectId={image.selectedSubjectId}
+                preview={image.imagePreview.data}
+                sourceFile={image.selectedImageSource}
+                loading={image.imagePreview.loading}
+                dataState={projectInventory?.dataState}
+                onSequenceChange={image.setSequence}
+                onPlaneChange={image.setPlane}
+                onSubjectChange={image.setSelectedSubjectId}
+                onSliceChange={image.setSliceIndex}
+              />
+            ) : undefined
+          }
+          workspaceLabel={`${activePageLabel} workspace`}
+        >
             <Suspense fallback={<WorkspaceSuspenseFallback label="Loading workspace..." />}>
               {app.activeWorkflow === "data" ? (
                 <DataConversionWorkspace
                   baseUrl={baseUrl}
                   projectId={selectedProjectId}
                   inventory={projectInventory}
+                  onSelectedDataSeriesChange={onSelectedDataSeriesChange}
+                />
+              ) : app.activeWorkflow === "plan" ? (
+                <PlanWorkspace
+                  baseUrl={baseUrl}
+                  projectId={selectedProjectId}
+                  selectedProject={selectedProject?.data ?? null}
+                  projectConfigPath={selectedProject?.data.metadata?.project_config_path}
+                  datasetIndexPath={selectedProject?.data.metadata?.dataset_index_path}
+                  rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
+                  projectDir={projectDir}
+                  initialPresetDraft={app.presetPlanDraft}
+                  onSelectedNodeChange={onSelectedPlanNodeChange}
+                  onOpenDataConversion={() => app.setActiveWorkflow("data")}
+                  onOpenEnvironment={() => app.setActiveWorkflow("environment")}
                 />
               ) : app.activeWorkflow === "preprocessing" ? (
                 <PreprocessingWorkspace
+                  baseUrl={baseUrl}
                   projectId={selectedProjectId}
                   dataState={projectInventory?.dataState ?? "raw_dicom"}
                   inventory={projectInventory}
@@ -390,77 +462,58 @@ export function AppShellView({
                   onOpenDataConversion={() => app.setActiveWorkflow("data")}
                   onOpenToolsDrawer={() => app.setDrawerOpen(true)}
                 />
+              ) : app.activeWorkflow === "runs" ? (
+                <RunsWorkspace
+                  projectId={selectedProjectId}
+                  tasks={taskController.tasks}
+                  loading={taskController.tasksLoading}
+                  error={taskController.tasksError}
+                  onRetryTasks={taskController.reloadTasks}
+                  selectedTaskId={selectedTaskId}
+                  onSelectTask={setSelectedTaskId}
+                  selectedTask={taskController.selectedTask}
+                  events={taskController.taskEvents}
+                  eventsLoading={taskController.taskEventsLoading}
+                  eventsError={taskController.taskEventsError}
+                  diagnostics={taskController.taskDiagnosticsData}
+                  streamConnected={taskController.taskStreamConnected}
+                  taskApprovalName={approval.taskApprovalName}
+                  auditPackage={
+                    approval.auditPackage as import("../../lib/types/task").TaskAuditPackage | null
+                  }
+                  auditLoading={approval.auditLoading}
+                  onApprovalNameChange={approval.setTaskApprovalName}
+                  onApprove={handleApproveSelectedTask}
+                  onGenerateAudit={handleGenerateAuditPackage}
+                  onRetryEvents={taskController.reloadTaskEvents}
+                  onReconnect={handleReconnectTaskStream}
+                />
               ) : app.activeWorkflow === "reports" ? (
                 <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
+              ) : app.activeWorkflow === "results" ? (
+                <ResultsWorkspace
+                  baseUrl={baseUrl}
+                  projectId={selectedProjectId}
+                  onSelectedArtifactChange={onSelectedArtifactChange}
+                />
               ) : (
                 <SettingsEnvironmentWorkspace
                   baseUrl={baseUrl}
                   projectId={selectedProjectId}
+                  rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
+                  themePreference={appState.themePreference}
+                  onThemePreferenceChange={appState.setThemePreference}
                   onReviewDraft={(draft: PresetPlanDraft) => {
-                    app.setActiveWorkflow("settings" as WorkflowTab);
+                    app.setActiveWorkflow("plan");
                     app.setNotice(
-                      "Preset draft loaded into Plan Review Console. Review and save before dry-run.",
+                      "Preset draft loaded into the Plan workspace. Review and save before dry-run.",
                     );
                   }}
                 />
               )}
             </Suspense>
-          </section>
-
-          <CompactTaskLog
-            tasks={taskController.tasks}
-            loading={taskController.tasksLoading}
-            error={taskController.tasksError}
-            onRetry={taskController.reloadTasks}
-            selectedTaskId={selectedTaskId}
-            onSelectTask={setSelectedTaskId}
-          />
-          <TaskDetailsPanel
-            task={taskController.selectedTask}
-            events={taskController.taskEvents}
-            diagnostics={taskController.taskDiagnosticsData}
-            loading={taskController.taskEventsLoading}
-            error={taskController.taskEventsError}
-            streamConnected={taskController.taskStreamConnected}
-            approvalName={approval.taskApprovalName}
-            auditPackage={
-              approval.auditPackage as import("../../lib/types/task").TaskAuditPackage | null
-            }
-            auditLoading={approval.auditLoading}
-            onApprovalNameChange={approval.setTaskApprovalName}
-            onApprove={handleApproveSelectedTask}
-            onGenerateAudit={handleGenerateAuditPackage}
-            onRetry={taskController.reloadTaskEvents}
-            onReconnect={handleReconnectTaskStream}
-          />
-        </main>
-      </div>
-
-      <SecondaryToolsDrawer
-        isOpen={drawerOpen}
-        onToggle={onToggleDrawer}
-        onSetMode={setMode}
-        project={project.data}
-        model={model}
-        dataset={dataset}
-        executionMode={executionMode}
-        externalSmokeApprovedRun={externalSmokeApprovedRun}
-        externalSmokeApprovedBy={externalSmokeApprovedBy}
-        assistantMessages={assistant.messages}
-        assistantInput={assistant.input}
-        assistantLoading={assistant.loading}
-        assistantError={assistant.error}
-        pipelineLoading={app.pipelineLoading}
-        onExecutionModeChange={setExecutionMode}
-        onExternalSmokeApprovedRunChange={setExternalSmokeApprovedRun}
-        onExternalSmokeApprovedByChange={setExternalSmokeApprovedBy}
-        onConfigure={() => setMode("advanced")}
-        onAssistantInput={assistant.setInput}
-        onAssistantSubmit={handleAssistantSubmit}
-        onNewChat={onNewChat}
-        onQuickAction={handleQuickAction}
-        projectId={selectedProjectId}
-      />
-    </div>
+        </ProjectShell>
+      )}
+    </AppShell>
   );
 }

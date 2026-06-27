@@ -1,0 +1,217 @@
+.browser {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.hero,
+.browserCard,
+.previewCard,
+.provenanceCard {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.heroCopy,
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hero h2,
+.cardHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.hero p,
+.cardHeader p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.actionRow,
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summaryTile {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.summaryTile span,
+.filterBar span,
+.provenanceList dt,
+.previewMeta dt {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.summaryTile strong {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: 18px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.filterBar {
+  align-items: end;
+}
+
+.filterBar label {
+  display: grid;
+  gap: 6px;
+  min-width: min(180px, 100%);
+}
+
+.searchField {
+  flex: 1;
+}
+
+.filterBar select,
+.filterBar input {
+  width: 100%;
+  min-height: 36px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.filterBar select:focus,
+.filterBar input:focus {
+  border-color: var(--color-focus-ring);
+  outline: 3px solid rgba(0, 122, 255, 0.14);
+}
+
+.artifactName,
+.artifactPath {
+  display: block;
+  min-width: 0;
+}
+
+.artifactName {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.artifactPath {
+  color: var(--color-text-tertiary);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.helperText {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.lowerGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.72fr) minmax(0, 1.28fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.provenanceList,
+.previewMeta {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.previewMeta {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.provenanceList div,
+.previewMeta div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.provenanceList dd,
+.previewMeta dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.previewPanel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.errorLine {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(217, 45, 32, 0.24);
+  border-radius: var(--radius);
+  background: rgba(255, 242, 240, 0.86);
+  color: var(--color-danger);
+}
+
+.errorLine strong {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.errorLine span {
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1120px) {
+  .summaryGrid,
+  .lowerGrid,
+  .previewMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .heroCopy,
+  .cardHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

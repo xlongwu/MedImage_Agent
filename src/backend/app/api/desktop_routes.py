@@ -9,6 +9,7 @@ from src.backend.app.api.models import DesktopConfigSaveRequest
 from src.backend.app.runtime.desktop_config import (
     get_desktop_config,
     get_desktop_health,
+    get_dicom_conversion_capability,
     save_desktop_config,
 )
 
@@ -36,3 +37,15 @@ def api_desktop_save_config(request: DesktopConfigSaveRequest) -> dict[str, Any]
 @router.get("/api/desktop/health")
 def api_desktop_health() -> dict[str, Any]:
     return get_desktop_health()
+
+
+@router.get("/api/desktop/capabilities/dicom-conversion")
+def api_desktop_dicom_conversion_capability() -> dict[str, Any]:
+    """Return DICOM conversion capability info per 实现dcm2nii任务方案.md §10.2."""
+    return {"ok": True, "capability": get_dicom_conversion_capability()}
+
+
+@router.post("/api/desktop/capabilities/dicom-conversion/detect")
+def api_desktop_dicom_conversion_detect() -> dict[str, Any]:
+    """Re-run dcm2niix detection and return the refreshed capability."""
+    return {"ok": True, "capability": get_dicom_conversion_capability()}

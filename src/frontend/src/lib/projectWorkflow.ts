@@ -1,9 +1,127 @@
 import type { ProjectCreateResponse } from "../types";
+import type { TaskStatus } from "./types/task";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "./types/project";
 
-export type WorkflowTab = "data" | "preprocessing" | "reports" | "environment";
+export type WorkflowTab =
+  | "data"
+  | "plan"
+  | "preprocessing"
+  | "runs"
+  | "reports"
+  | "results"
+  | "environment";
 
 export type ProjectDataState = "raw_dicom" | "converted_bids" | "empty" | "mixed" | "unknown";
+
+export type WorkflowLifecycleState = "current" | "completed" | "available" | "blocked";
+
+export type WorkflowTabItem = {
+  id: WorkflowTab;
+  label: string;
+  description: string;
+};
+
+export const workflowTabItems: WorkflowTabItem[] = [
+  { id: "data", label: "Data & Conversion", description: "DICOM, BIDS, dry-run" },
+  { id: "plan", label: "Plan", description: "Review and approve" },
+  { id: "preprocessing", label: "Preprocessing", description: "Validation and reports" },
+  { id: "runs", label: "Runs", description: "Events and diagnostics" },
+  { id: "reports", label: "QC", description: "Quality review" },
+  { id: "results", label: "Results", description: "Artifacts and exports" },
+  { id: "environment", label: "Settings / Environment", description: "Planning tools" },
+];
+
+export function deriveWorkflowLifecycleState(
+  tabId: WorkflowTab,
+  dataState: ProjectDataState | undefined,
+  hasPreprocessingRun: boolean,
+): WorkflowLifecycleState {
+  const isConverted = dataState === "converted_bids" || dataState === "mixed";
+  const isEmpty = dataState === "empty" || !dataState;
+
+  switch (tabId) {
+    case "data":
+      if (isConverted) return "completed";
+      return "current";
+    case "plan":
+      if (isEmpty) return "blocked";
+      if (hasPreprocessingRun) return "completed";
+      return "available";
+    case "preprocessing":
+      if (isConverted && hasPreprocessingRun) return "completed";
+      if (isConverted) return "current";
+      return "blocked";
+    case "runs":
+      if (isEmpty) return "blocked";
+      return "available";
+    case "reports":
+      if (isConverted && hasPreprocessingRun) return "current";
+      if (isConverted) return "available";
+      return "blocked";
+    case "results":
+      if (isConverted && hasPreprocessingRun) return "available";
+      return "blocked";
+    case "environment":
+      return "available";
+    default:
+      return "available";
+  }
+}
+
+export function isWorkflowTabBlocked(
+  tabId: WorkflowTab,
+  dataState: ProjectDataState | undefined,
+  hasPreprocessingRun: boolean,
+): boolean {
+  return deriveWorkflowLifecycleState(tabId, dataState, hasPreprocessingRun) === "blocked";
+}
+
+export type DefaultWorkflowRouteReason =
+  | "active_or_failed_run"
+  | "qc_attention"
+  | "converted_data"
+  | "data_review";
+
+export type DefaultWorkflowRoute = {
+  reason: DefaultWorkflowRouteReason;
+  tab: WorkflowTab;
+};
+
+export type DefaultWorkflowTaskSignal = {
+  status?: TaskStatus | string | null;
+};
+
+export type DefaultWorkflowInput = {
+  diagnostics?: SignalRecord | null;
+  hasPreprocessingRun?: boolean;
+  inventory?: Pick<ProjectInventory, "dataState"> | null;
+  tasks?: DefaultWorkflowTaskSignal[] | null;
+};
+
+export function deriveDefaultWorkflowRoute({
+  diagnostics,
+  hasPreprocessingRun = false,
+  inventory,
+  tasks = [],
+}: DefaultWorkflowInput): DefaultWorkflowRoute {
+  if (hasActiveOrFailedRun(tasks)) {
+    return { reason: "active_or_failed_run", tab: "runs" };
+  }
+
+  if (hasQcAttentionSignal(diagnostics) && hasPreprocessingRun) {
+    return { reason: "qc_attention", tab: "reports" };
+  }
+
+  if (inventory?.dataState === "converted_bids" || inventory?.dataState === "mixed") {
+    return { reason: "converted_data", tab: "preprocessing" };
+  }
+
+  return { reason: "data_review", tab: "data" };
+}
+
+export function deriveDefaultWorkflowTab(input: DefaultWorkflowInput): WorkflowTab {
+  return deriveDefaultWorkflowRoute(input).tab;
+}
 
 export type ProjectInventory = {
   projectName: string;
@@ -81,6 +199,49 @@ function textSignal(value: unknown): string {
 
 function isMetadataOnlySignal(...values: unknown[]): boolean {
   return /metadata[-_\s]?only|Metadata-/.test(values.map(textSignal).join(" "));
+}
+
+function hasActiveOrFailedRun(tasks: DefaultWorkflowTaskSignal[] | null | undefined): boolean {
+  return Boolean(
+    tasks?.some((task) => {
+      const status = String(task.status ?? "").toLowerCase();
+      return status === "running" || status === "pending" || status === "failed";
+    }),
+  );
+}
+
+function booleanSignal(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value > 0;
+  if (typeof value === "string") return /^(true|yes|required|attention|review|warning|failed)$/i.test(value);
+  return false;
+}
+
+function hasQcAttentionSignal(diagnostics: SignalRecord | null | undefined): boolean {
+  const record = asSignalRecord(diagnostics);
+  const qcRecord = asSignalRecord(record.qc ?? record.quality ?? record.qc_dashboard);
+  const statusText = textSignal([
+    record.qc_status,
+    record.qc_health,
+    record.quality_status,
+    qcRecord.status,
+    qcRecord.health,
+  ]);
+  return (
+    booleanSignal(record.qc_attention_required) ||
+    booleanSignal(record.qc_attention) ||
+    booleanSignal(record.qc_requires_review) ||
+    maxNumericSignal(
+      record.qc_failed_count,
+      record.qc_warning_count,
+      record.qc_outlier_count,
+      record.outlier_count,
+      qcRecord.failed_count,
+      qcRecord.warning_count,
+      qcRecord.outlier_count,
+    ) > 0 ||
+    /attention|required|review|warning|failed|fail|outlier/i.test(statusText)
+  );
 }
 
 export function deriveProjectWorkflowState(

@@ -11,10 +11,9 @@ export function useImagePreview(
   plane: ImagePlane = "axial",
 ) {
   return useAsyncResource<ImagePreview>(
-    () =>
-      projectId
-        ? getImagePreview(projectId, sequence, subjectId || undefined, sliceIndex, plane)
-        : Promise.resolve(fallbackImagePreview),
+    projectId
+      ? () => getImagePreview(projectId, sequence, subjectId || undefined, sliceIndex, plane)
+      : null,
     { ...fallbackImagePreview, sequence, subject_id: subjectId, plane },
     [projectId, sequence, subjectId, sliceIndex, plane],
   );

@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from src.backend.app.main import app
+from src.backend.app.planner.llm_planner import generate_plan_from_goal
 
 client = TestClient(app)
 EXAMPLE_CONFIG = str(Path("examples/project_config_dataset.yaml").resolve())
@@ -183,9 +184,31 @@ def test_mock_provider_regression():
     assert data["ok"] is True
     assert data["provider"] == "mock"
     assert data["plan"]["pipeline_id"] == "planned_motion_qc"
+    assert data["plan"]["goal"] == "motion correction"
+    assert isinstance(data["plan"].get("project_context"), dict)
+    assert isinstance(data["plan"].get("metadata"), dict)
+    assert data["plan"]["metadata"]["provider"] == "mock"
+    assert data["plan"]["metadata"]["external_api_used"] is False
+    assert data["plan"]["metadata"]["execution_enabled"] is False
+    assert data["plan"]["nodes"]
 
 
-# ── 18. rule_based provider still works (regression) ──
+def test_mock_generator_returns_minimal_reviewed_plan_shape():
+    response = generate_plan_from_goal("motion correction", provider="mock")
+    data = response.to_dict()
+
+    assert data["ok"] is True
+    assert data["provider"] == "mock"
+    assert data["plan"]["pipeline_id"] == "planned_motion_qc"
+    assert isinstance(data["plan"].get("project_context"), dict)
+    assert data["plan"]["project_context"]["source"] == "planner_minimal_mock"
+    assert data["plan"]["goal"] == "motion correction"
+    assert data["plan"]["nodes"]
+    assert data["plan"]["metadata"]["external_api_used"] is False
+    assert data["plan"]["metadata"]["execution_enabled"] is False
+
+
+# ── 19. rule_based provider still works (regression) ──
 
 def test_rule_based_provider_regression():
     resp = _post_plan({
@@ -198,7 +221,7 @@ def test_rule_based_provider_regression():
     assert data["provider"] == "rule_based"
 
 
-# ── 19. openai_compatible provider error not fallback to ok ──
+# ── 20. openai_compatible provider error not fallback to ok ──
 
 def test_openai_compatible_error_not_fallback(monkeypatch):
     """When provider=openai_compatible and API key is missing,

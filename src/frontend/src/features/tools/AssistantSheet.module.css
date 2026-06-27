@@ -1,0 +1,130 @@
+.sheetBody {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.contextPanel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.contextPanel div,
+.actionBoundary {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.contextPanel span {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.contextPanel strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.suggestionPanel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panelHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.panelHeader p {
+  margin: 2px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.promptGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.promptGrid button {
+  display: grid;
+  gap: 3px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  color: var(--color-text-primary);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.promptGrid button span {
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.promptGrid button strong {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.promptGrid button:hover {
+  border-color: var(--color-focus-ring);
+  background: var(--color-selection);
+}
+
+.actionBoundary {
+  border-color: rgba(185, 107, 0, 0.28);
+  background: rgba(255, 248, 232, 0.78);
+}
+
+.actionBoundary strong {
+  color: var(--color-text-primary);
+  font-size: 13px;
+}
+
+.actionBoundary p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .contextPanel {
+    grid-template-columns: 1fr;
+  }
+}

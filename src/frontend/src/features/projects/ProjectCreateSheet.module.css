@@ -1,0 +1,207 @@
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.step {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  color: var(--color-text-secondary);
+}
+
+.stepActive {
+  border-color: var(--color-focus-ring);
+  background: var(--color-selection);
+  color: var(--color-text-primary);
+}
+
+.step strong {
+  font-size: 12px;
+}
+
+.step span {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.body {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+}
+
+.field label,
+.sectionLabel {
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.hint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.noteBox {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(35, 97, 146, 0.16);
+  border-radius: var(--radius-control);
+  background: rgba(35, 97, 146, 0.05);
+}
+
+.noteBox strong {
+  color: var(--color-text-primary);
+  font-size: 12px;
+}
+
+.noteBox span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sourceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sourceOption {
+  display: grid;
+  gap: 4px;
+  min-height: 74px;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sourceOption[aria-pressed="true"] {
+  border-color: var(--color-focus-ring);
+  background: var(--color-selection);
+}
+
+.sourceOption strong {
+  font-size: 13px;
+}
+
+.sourceOption span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pathBox {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.pathValue {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirmList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.confirmList div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+}
+
+.confirmList dt {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.confirmList dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.error {
+  padding: 9px 10px;
+  border: 1px solid rgba(217, 45, 32, 0.28);
+  border-radius: var(--radius-control);
+  background: rgba(255, 242, 240, 0.86);
+  color: var(--color-danger);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+.footerGroup {
+  display: flex;
+  gap: 8px;
+}
+
+@media (max-width: 520px) {
+  .sourceGrid,
+  .steps {
+    grid-template-columns: 1fr;
+  }
+
+  .confirmList div {
+    grid-template-columns: 1fr;
+  }
+}

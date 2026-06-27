@@ -46,6 +46,24 @@ def _read_project_workflow():
 def _read_dashboard_chrome():
     return _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
 
+def _read_project_switcher():
+    return _read("src/frontend/src/features/dashboard/ProjectSwitcher.tsx")
+
+def _read_project_switcher_styles():
+    return _read("src/frontend/src/features/dashboard/ProjectSwitcher.module.css")
+
+def _read_project_overview_header():
+    return _read("src/frontend/src/features/projects/ProjectOverviewHeader.tsx")
+
+def _read_dicom_series_table():
+    return _read("src/frontend/src/features/workspaces/DicomSeriesTable.tsx")
+
+def _read_run_activity_bar():
+    return _read("src/frontend/src/features/tasks/RunActivityBar.tsx")
+
+def _read_viewer_styles():
+    return _read("src/frontend/src/features/app/MedicalImageViewer.module.css")
+
 def _read_legacy_api():
     return _read("src/frontend/src/lib/api/legacy.ts")
 
@@ -160,17 +178,19 @@ def test_project_state_helper_exists():
     assert "deriveProjectWorkflowState" in app, "deriveProjectWorkflowState helper must exist"
 
 def test_raw_dicom_state_exists():
-    app = _read_app()
-    assert "raw_dicom" in app, "raw_dicom state must exist"
+    workflow = _read_project_workflow()
+    assert "raw_dicom" in workflow, "raw_dicom state must exist"
 
 def test_converted_bids_state_exists():
-    app = _read_app()
-    assert "converted_bids" in app, "converted_bids state must exist"
+    workflow = _read_project_workflow()
+    assert "converted_bids" in workflow, "converted_bids state must exist"
 
 def test_default_tab_selection_logic_exists():
     app = _read_app()
+    workflow = _read_project_workflow()
     assert "setActiveWorkflow" in app, "Tab selection logic must set workflow state"
-    assert "dataState" in app, "Tab selection must inspect dataState"
+    assert "deriveDefaultWorkflowRoute" in app, "Tab selection must use the default workflow helper"
+    assert "dataState" in workflow, "Default workflow helper must inspect dataState"
 
 def test_created_project_is_optimistically_merged_into_sidebar():
     controller = _read_project_controller()
@@ -188,14 +208,14 @@ def test_created_project_is_optimistically_merged_into_sidebar():
 
 def test_recent_projects_can_be_removed_from_sidebar_without_file_delete():
     controller = _read_project_controller()
-    chrome = _read_dashboard_chrome()
+    switcher = _read_project_switcher()
+    switcher_styles = _read_project_switcher_styles()
     projects_api = _read("src/frontend/src/lib/api/projects.ts")
     client_api = _read("src/frontend/src/lib/api/client.ts")
-    styles = _read_styles()
     assert "deleteProject" in controller, "Recent project delete handler must call the project delete API"
     assert "projectCreateLoading" in controller, "Recent project delete action must have a loading guard"
-    assert "project-delete-button" in chrome and "project-delete-button" in styles, "Recent project rows need a delete control"
-    assert "will not delete rawdata or project files" in controller, "Delete confirmation must preserve rawdata safety boundary"
+    assert "handleDeleteRequest" in switcher and "moreButton" in switcher_styles, "Recent project rows need a delete control"
+    assert "data on disk is preserved" in switcher, "Delete confirmation must preserve rawdata safety boundary"
     assert "deleteJson" in client_api and 'method: "DELETE"' in client_api, "API client must support DELETE"
     assert 'deleteJson<ProjectDeleteResponse>(`/api/projects/${encodeURIComponent(projectId)}`)' in projects_api
 
@@ -215,20 +235,31 @@ def test_converted_bids_copy():
 def test_raw_dicom_copy():
     shell = _read_app_shell()
     workspace = _read_data_conversion_workspace()
-    assert "Generate conversion dry-run" in shell or "Generate conversion dry-run" in workspace
+    overview = _read_project_overview_header()
+    series_table = _read_dicom_series_table()
+    combined = shell + workspace + overview + series_table
+    assert "Generate conversion dry-run" in combined or "Generate dry-run preview" in combined
 
 def test_raw_dicom_preprocessing_placeholder():
     workspace = _read_preprocessing_workspace()
-    assert "Convert DICOM to BIDS/NIfTI before preprocessing validation" in workspace
+    assert "Complete data" in workspace
+    assert "conversion before preprocessing validation" in workspace
 
 def test_tools_drawer_collapsed_by_default():
-    app = _read_app()
-    assert "drawerOpen" in app
-    assert "useState(false)" in app or "useState<boolean>(false)" in app
+    controller = _read("src/frontend/src/features/app/useAppController.ts")
+    shell = _read_app_shell()
+    assert "drawerOpen" in controller
+    assert "useState(false)" in controller or "useState<boolean>(false)" in controller
+    assert "ContextInspector" in shell
+    assert "drawerOpen ? (" in shell
 
 def test_recent_activity_collapsed():
-    task_log = _read("src/frontend/src/features/tasks/CompactTaskLog.tsx")
-    assert "details" in task_log or "details className=" in task_log, "Recent activity should use details block or collapse"
+    run_activity = _read_run_activity_bar()
+    shell = _read_app_shell()
+    assert "RunActivityBar" in shell, "Run activity must be mounted from AppShellView"
+    assert "return null" in run_activity, "Run activity bar must be hidden when no active or failed tasks exist"
+    assert "setExpanded" in run_activity and "run-activity-drawer" in run_activity, \
+        "Run activity details must be collapsed behind the drawer"
 
 def test_no_train_classifier():
     for src in [_read_app(), _read_advanced_panel(), _read_api()]:
@@ -251,12 +282,12 @@ def test_no_backend_api_path_changes():
 
 # State consistency polish tests
 def test_converted_bids_tab_routing():
-    app = _read_app()
-    assert '"preprocessing"' in app and '"converted_bids"' in app, "converted_bids must default to preprocessing"
+    workflow = _read_project_workflow()
+    assert '"preprocessing"' in workflow and '"converted_bids"' in workflow, "converted_bids must default to preprocessing"
 
 def test_raw_dicom_tab_routing():
-    app = _read_app()
-    assert '"data"' in app and '"raw_dicom"' in app, "raw_dicom must default to data tab"
+    workflow = _read_project_workflow()
+    assert '"data"' in workflow and '"raw_dicom"' in workflow, "raw_dicom must default to data tab"
 
 def test_converted_bids_data_conversion_not_primary():
     shell = _read_app_shell()
@@ -293,7 +324,10 @@ def test_metadata_only_does_not_prove_converted_bids():
 def test_raw_dicom_primary_action_not_preprocessing_validation():
     shell = _read_app_shell()
     workspace = _read_data_conversion_workspace()
-    assert "Generate conversion dry-run" in shell or "Generate conversion dry-run" in workspace, "raw_dicom primary action must be conversion dry-run"
+    overview = _read_project_overview_header()
+    series_table = _read_dicom_series_table()
+    combined = shell + workspace + overview + series_table
+    assert "Generate conversion dry-run" in combined or "Generate dry-run preview" in combined, "raw_dicom primary action must be conversion dry-run"
 
 def test_nifti_metric_stays_numeric_when_metadata_only():
     bids = _read_bids_panel()
@@ -324,13 +358,19 @@ def test_generate_conversion_dry_run_wording():
     """'Generate conversion dry-run' must remain the primary recommended action for raw DICOM."""
     shell = _read_app_shell()
     workspace = _read_data_conversion_workspace()
-    assert "Generate conversion dry-run" in shell or "Generate conversion dry-run" in workspace, "Generate conversion dry-run must be present"
+    overview = _read_project_overview_header()
+    series_table = _read_dicom_series_table()
+    combined = shell + workspace + overview + series_table
+    assert "Generate conversion dry-run" in combined or "Generate dry-run preview" in combined, "Generate conversion dry-run must be present"
 
 def test_review_conversion_readiness_wording():
     """'Review conversion readiness' or 'Generate conversion dry-run' must remain as secondary action wording."""
     shell = _read_app_shell()
     workspace = _read_data_conversion_workspace()
-    assert "Review conversion readiness" in shell or "Generate conversion dry-run" in shell or "Review conversion readiness" in workspace or "Generate conversion dry-run" in workspace, "Conversion readiness or dry-run wording must be present"
+    overview = _read_project_overview_header()
+    series_table = _read_dicom_series_table()
+    combined = shell + workspace + overview + series_table
+    assert "Review conversion readiness" in combined or "Generate conversion dry-run" in combined or "Generate dry-run preview" in combined, "Conversion readiness or dry-run wording must be present"
 
 def test_no_run_dicom_to_bids_conversion_unsafe_wording():
     """'Run DICOM-to-BIDS conversion' must not appear as a user-facing action button."""
@@ -371,20 +411,20 @@ def test_expandable_mapping_preview():
 
 def test_sidebar_project_name_truncation():
     """Project names in sidebar must use a truncating CSS class or title attribute."""
-    chrome = _read_dashboard_chrome()
-    assert 'title={item.name}' in chrome, "project-pill must expose full name via title attribute in DashboardChrome"
-    assert "project-pill-name" in chrome, "project-pill-name class must be used for truncation in DashboardChrome"
+    switcher = _read_project_switcher()
+    assert 'title={item.name}' in switcher, "ProjectSwitcher must expose full project names via title attribute"
+    assert "itemName" in switcher, "ProjectSwitcher must use the itemName truncation class"
 
 def test_sidebar_project_name_css_truncation():
     """CSS must define truncation for project pill names."""
-    styles = _read_styles()
-    assert "project-pill-name" in styles, "CSS must define project-pill-name truncation"
+    styles = _read_project_switcher_styles()
+    assert ".itemName" in styles, "ProjectSwitcher CSS must define itemName truncation"
     assert "text-overflow: ellipsis" in styles, "CSS must use ellipsis truncation"
 
 def test_viewer_height_reduced():
     """Viewer card min-height must be at most 400px (reduced from 430px)."""
-    styles = _read_styles()
-    match = re.search(r'\.viewer-card\s*\{[^}]*min-height:\s*(\d+)px', styles)
+    styles = _read_viewer_styles()
+    match = re.search(r'\.viewerCard\s*\{[^}]*min-height:\s*(\d+)px', styles)
     assert match is not None, "viewer-card must have a min-height"
     height = int(match.group(1))
     assert height <= 400, f"viewer-card min-height should be ≤400px for compact view, got {height}px"

@@ -136,8 +136,14 @@ def _infer_backend(node_id: str) -> str:
     return "python"
 
 
-def _build_plan(pipeline_id: str, node_ids: list[str]) -> dict[str, Any]:
-    """Build a minimal pipeline plan dict from a node sequence."""
+def _build_plan(
+    pipeline_id: str,
+    node_ids: list[str],
+    *,
+    goal: str,
+    provider: str,
+) -> dict[str, Any]:
+    """Build a minimal reviewed-plan-shaped dict from a node sequence."""
     nodes: list[dict[str, Any]] = []
     for nid in node_ids:
         node: dict[str, Any] = {
@@ -156,7 +162,23 @@ def _build_plan(pipeline_id: str, node_ids: list[str]) -> dict[str, Any]:
 
     return {
         "pipeline_id": pipeline_id,
+        "project_context": {
+            "project_id": None,
+            "project_config_path": None,
+            "rawdata_dir": None,
+            "dataset_index_path": None,
+            "source": "planner_minimal_mock",
+            "diagnostics": {},
+        },
+        "goal": goal,
         "nodes": nodes,
+        "metadata": {
+            "planner": "deterministic_keyword_mock",
+            "provider": provider,
+            "capability_level": "metadata_only",
+            "external_api_used": False,
+            "execution_enabled": False,
+        },
     }
 
 
@@ -261,7 +283,12 @@ def generate_plan_from_goal(
         )
 
     _, pipeline_id, node_ids = best_match
-    plan = _build_plan(pipeline_id, node_ids)
+    plan = _build_plan(
+        pipeline_id,
+        node_ids,
+        goal=stripped,
+        provider=provider,
+    )
     validation = validate_plan(plan)
 
     # ── Build response ──

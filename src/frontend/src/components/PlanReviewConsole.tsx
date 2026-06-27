@@ -50,6 +50,51 @@ type CatalogItem = {
   tags: string[];
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function reviewedPlanIssues(plan: unknown): string[] {
+  if (!isRecord(plan)) {
+    return ["plan object"];
+  }
+  const issues: string[] = [];
+  if (!isRecord(plan.project_context)) {
+    issues.push("project_context");
+  }
+  if (typeof plan.goal !== "string" || !plan.goal.trim()) {
+    issues.push("goal");
+  }
+  if (!Array.isArray(plan.nodes) || plan.nodes.length === 0) {
+    issues.push("nodes");
+  }
+  if (!isRecord(plan.metadata)) {
+    issues.push("metadata");
+  }
+  return issues;
+}
+
+function invalidReviewedPlanMessage(issues: string[]): string {
+  return `Generated plan is invalid and was not persisted. Missing or empty: ${issues.join(", ")}.`;
+}
+
+function providerStatusMessage(provider: string): string {
+  if (provider === "openai_compatible") {
+    return "Real LLM provider selected: requires MEDIMAGE_LLM_API_KEY. If the key is missing, the backend blocks generation before any external API call.";
+  }
+  if (provider === "rule_based") {
+    return "Rule-based provider: local deterministic planner, no external API used.";
+  }
+  return "Mock provider: no external API used. Generates a deterministic metadata-only reviewed-plan draft.";
+}
+
+function providerFailureMessage(provider: string, errors: string[]): string {
+  if (provider === "openai_compatible" && errors.some((item) => item.includes("LLM_API_KEY_MISSING"))) {
+    return "LLM provider disabled: API key not configured. MEDIMAGE_LLM_API_KEY is missing, so openai_compatible generation was blocked before any external API call. Select mock/rule_based for local deterministic planning or configure the key before using openai_compatible.";
+  }
+  return errors[0] || "Plan generation did not produce a valid reviewed plan.";
+}
+
 export default function PlanReviewConsole({
   selectedProjectId,
   selectedProject,
@@ -255,6 +300,13 @@ export default function PlanReviewConsole({
     plan: Record<string, unknown>,
     validationResult: Record<string, unknown>,
   ) {
+    const planIssues = reviewedPlanIssues(plan);
+    if (planIssues.length > 0) {
+      setReviewedPlanId(null);
+      setPlanSaveStatus("");
+      setPlanHistoryError(invalidReviewedPlanMessage(planIssues));
+      return;
+    }
     if (explicitDemoMode || !selectedProjectId || !effectiveProjectConfigPath) return;
     setPlanSaveStatus("Saving reviewed plan...");
     setPlanHistoryError("");
@@ -280,8 +332,9 @@ export default function PlanReviewConsole({
 
   function restoreReviewedPlan(record: ReviewedPlanRecord) {
     const restoredPlan = record.payload.plan;
-    if (!restoredPlan || typeof restoredPlan !== "object") {
-      setPlanHistoryError("Stored reviewed plan payload is unavailable.");
+    const planIssues = reviewedPlanIssues(restoredPlan);
+    if (planIssues.length > 0) {
+      setPlanHistoryError(`Stored reviewed plan is incomplete. ${invalidReviewedPlanMessage(planIssues)}`);
       return;
     }
     const restoredValidation =
@@ -359,14 +412,22 @@ export default function PlanReviewConsole({
         project_config_path: effectiveProjectConfigPath,
       });
       setResult(data);
-      const plan = data?.plan;
-      if (plan && typeof plan === "object") {
-        setPlanJson(JSON.stringify(plan, null, 2));
-        await persistReviewedPlan(
-          plan as Record<string, unknown>,
-          (data?.validation ?? {}) as Record<string, unknown>,
-        );
+      const responseErrors = Array.isArray(data?.errors) ? (data.errors as string[]) : [];
+      if (data?.ok !== true) {
+        setError(providerFailureMessage(provider, responseErrors));
+        return;
       }
+      const plan = data?.plan;
+      const planIssues = reviewedPlanIssues(plan);
+      if (planIssues.length > 0 || !isRecord(plan)) {
+        setError(invalidReviewedPlanMessage(planIssues));
+        return;
+      }
+      setPlanJson(JSON.stringify(plan, null, 2));
+      await persistReviewedPlan(
+        plan,
+        (data?.validation ?? {}) as Record<string, unknown>,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -382,6 +443,11 @@ export default function PlanReviewConsole({
       plan = JSON.parse(planJson);
     } catch (e) {
       setJsonError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    const planIssues = reviewedPlanIssues(plan);
+    if (planIssues.length > 0) {
+      setJsonError(invalidReviewedPlanMessage(planIssues));
       return;
     }
     setValidateLoading(true);
@@ -696,7 +762,7 @@ export default function PlanReviewConsole({
 
   return (
     <div className={styles.style001}>
-      <h2>Plan Review Console</h2>
+      <h2>Technical Plan Review</h2>
 
       {loadedPresetBanner ? <div className={styles.style002}>{loadedPresetBanner}</div> : null}
 
@@ -832,6 +898,10 @@ export default function PlanReviewConsole({
       </div>
 
       {catalogError && <div className={styles.style023}>⚠️ {catalogError}</div>}
+
+      <div className={styles.providerStatus} role="status">
+        {providerStatusMessage(provider)}
+      </div>
 
       {error && <div className={styles.style024}>{error}</div>}
 
@@ -1379,7 +1449,9 @@ export default function PlanReviewConsole({
               }}
             >
               <strong>
-                {result.ok ? "✓ Plan generated and validated" : "✗ Plan generation failed"}
+                {result.ok
+                  ? "Plan generated and validated"
+                  : "Plan generation did not produce a valid reviewed plan"}
               </strong>
               {result.provider && <span> — provider: {String(result.provider)}</span>}
             </div>

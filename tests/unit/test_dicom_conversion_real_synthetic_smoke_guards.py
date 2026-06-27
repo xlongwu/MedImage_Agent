@@ -70,16 +70,15 @@ def test_synthetic_tmp_path_allowed():
     from src.backend.app.services.dicom_conversion_execution import (
         run_real_dcm2niix_synthetic_smoke,
     )
+    # Per §11.1, MATLAB/SPM/real-preprocessing flags are NOT required.
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
         "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE": "1",
         "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE": "1",
         "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION": "1",
         "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     # Path is under a pytest tmpdir — should pass path safety
     result = run_real_dcm2niix_synthetic_smoke(
@@ -146,11 +145,16 @@ def test_spm_dpabi_matlab_still_disabled():
 
 
 def test_canonical_flag_list_has_9_flags():
-    """The canonical required-flags constant must have exactly 9 entries."""
+    """The canonical required-flags constant must have exactly 7 entries.
+
+    Per 实现dcm2nii任务方案.md §11.1, MATLAB/SPM/real-preprocessing flags
+    are intentionally NOT required for DICOM conversion. The canonical
+    flag list has been reduced from 9 to 7 entries.
+    """
     from src.backend.app.services.dicom_conversion_execution import (
         REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
     )
-    assert len(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS) == 9
+    assert len(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS) == 7
     assert "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE" in REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS
 
 

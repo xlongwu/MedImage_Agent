@@ -1,0 +1,170 @@
+.settingsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.domainNav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.domainNav a {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.76);
+  color: inherit;
+  text-decoration: none;
+}
+
+.domainNav a:hover,
+.domainNav a:focus-visible {
+  border-color: var(--color-focus-ring);
+  background: var(--surface-solid);
+}
+
+.domainNav span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domainNav small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapCard,
+.generalCard,
+.safetyCard,
+.policyCard {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mapCard {
+  grid-row: span 2;
+}
+
+.cardHeader,
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cardHeader h3,
+.sectionHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.cardHeader p,
+.sectionHeader p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.preferenceStack {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface-secondary);
+}
+
+.preferenceRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.preferenceLabel {
+  display: block;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.preferenceRow p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.safetyList {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.safetyList div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface-secondary);
+}
+
+.safetyList dt {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.safetyList dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sectionStack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+@media (max-width: 1120px) {
+  .settingsGrid,
+  .domainNav {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .preferenceRow {
+    grid-template-columns: 1fr;
+  }
+}

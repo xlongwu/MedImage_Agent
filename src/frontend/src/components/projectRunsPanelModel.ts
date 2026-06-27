@@ -62,6 +62,9 @@ export type RunHealthSummary = {
   nodesSucceeded: number | null;
   nodesFailed: number | null;
   nodesSkipped: number | null;
+  artifactRecordsCount: number;
+  artifactPresenceLabel: "no artifact records" | "missing artifacts" | "artifacts present";
+  artifactPresenceState: "none" | "missing" | "present";
   warningsCount: number;
   errorsCount: number;
   missingArtifactCount: number;
@@ -818,6 +821,19 @@ export function getArtifactWarnings(artifact: { warnings?: unknown } | null | un
   return mergeSummaryWarnings(artifact);
 }
 
+export function getArtifactPresenceState(artifacts: RunArtifactRecord[]): {
+  label: RunHealthSummary["artifactPresenceLabel"];
+  state: RunHealthSummary["artifactPresenceState"];
+} {
+  if (!artifacts.length) {
+    return { label: "no artifact records", state: "none" };
+  }
+  if (artifacts.some((artifact) => !artifact.exists)) {
+    return { label: "missing artifacts", state: "missing" };
+  }
+  return { label: "artifacts present", state: "present" };
+}
+
 export function normalizeCsvPreview(value: unknown): CsvPreviewTable | null {
   if (!isRecord(value)) return null;
   const columns = Array.isArray(value.columns) ? value.columns.map((item) => String(item)) : [];
@@ -966,6 +982,7 @@ export function summarizeRunHealth(
   const errorMessages = collectRunErrorMessages(summaryPreview);
   const missingArtifactCount = artifacts.filter((artifact) => !artifact.exists).length;
   const failedLogCount = failedLogArtifacts(artifacts, summaryPreview).length;
+  const artifactPresence = getArtifactPresenceState(artifacts);
   const nodesFailed =
     summaryPreview?.nodes_failed ?? (summaryPreview?.failed_nodes?.length || null);
 
@@ -976,6 +993,9 @@ export function summarizeRunHealth(
     nodesSucceeded: summaryPreview?.nodes_succeeded ?? null,
     nodesFailed,
     nodesSkipped: summaryPreview?.nodes_skipped ?? null,
+    artifactRecordsCount: artifacts.length,
+    artifactPresenceLabel: artifactPresence.label,
+    artifactPresenceState: artifactPresence.state,
     warningsCount: warningMessages.length,
     errorsCount: errorMessages.length,
     missingArtifactCount,

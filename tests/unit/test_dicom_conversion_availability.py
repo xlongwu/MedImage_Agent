@@ -74,7 +74,9 @@ def test_availability_missing_env_flags_disabled() -> None:
     check = check_dcm2niix_availability(env={})
     assert check.status == "disabled"
     assert check.env_enabled is False
-    assert len(check.missing_env_flags) == 5
+    # Per 实现dcm2nii任务方案.md §11.1, only 3 DICOM-specific flags are
+    # required (MATLAB/SPM/real-preprocessing are intentionally NOT required).
+    assert len(check.missing_env_flags) == 3
 
 
 def test_availability_partial_env_flags_disabled() -> None:
@@ -82,16 +84,15 @@ def test_availability_partial_env_flags_disabled() -> None:
     check = check_dcm2niix_availability(env=env)
     assert check.status == "disabled"
     assert check.env_enabled is False
-    assert len(check.missing_env_flags) == 4
+    assert len(check.missing_env_flags) == 2
 
 
 def test_availability_all_env_flags_but_no_dcm2niix() -> None:
+    # Per §11.1, only 3 DICOM-specific flags are required.
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     # dcm2niix is unlikely to be on PATH in CI
     check = check_dcm2niix_availability(env=env)
@@ -125,10 +126,8 @@ def _fake_runner(argv):
 def test_availability_with_fake_runner() -> None:
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     check = check_dcm2niix_availability(env=env, runner=_fake_runner)
     assert check.status in {"available", "missing", "version_failed"}
@@ -151,10 +150,8 @@ def test_availability_fake_runner_uses_argv_list(monkeypatch) -> None:
 
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     check = check_dcm2niix_availability(env=env, runner=assert_argv)
     assert check.status == "available"
@@ -179,10 +176,8 @@ def test_availability_finds_dcm2niix_in_active_mamba_env(tmp_path) -> None:
     env = {
         "CONDA_PREFIX": str(fake_prefix),
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     check = check_dcm2niix_availability(env=env, runner=fake_runner)
 
@@ -203,10 +198,8 @@ def test_availability_fake_runner_exception(monkeypatch) -> None:
 
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     check = check_dcm2niix_availability(env=env, runner=failing_runner)
     assert check.status == "version_failed"
@@ -391,10 +384,8 @@ def test_availability_check_respects_env_flags() -> None:
     """Even with all env flags, if dcm2niix isn't on PATH, it's 'missing' not 'available' for real exec."""
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     check = check_dcm2niix_availability(env=env)
     # Without a runner, version can't be queried

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { PresetPlanDraft } from "./types";
-import { getApiBaseUrl } from "./lib/api";
 import { useDatasetSummary } from "./hooks/useDatasetSummary";
 import { useImagePreview } from "./hooks/useImagePreview";
 import { useImageSources } from "./hooks/useImageSources";
@@ -9,13 +8,10 @@ import { useImageValidation } from "./hooks/useImageValidation";
 import { useModelStatus } from "./hooks/useModelStatus";
 import { useProject, useProjects } from "./hooks/useProjects";
 import { useProjectOverview } from "./hooks/useProjectOverview";
-import { useRunPipeline } from "./hooks/useRunPipeline";
-import { useTaskEvents } from "./hooks/useTaskEvents";
-import { useTaskDiagnostics } from "./hooks/useTaskDiagnostics";
 import { useTaskStream } from "./hooks/useTaskStream";
-import { useTasks } from "./hooks/useTasks";
-import { buildProjectInventory } from "./lib/projectWorkflow";
-import type { ProjectInventory } from "./lib/projectWorkflow";
+import { useAppState } from "./hooks/useAppState";
+import { buildProjectInventory, deriveDefaultWorkflowRoute } from "./lib/projectWorkflow";
+import type { ProjectInventory, WorkflowTab } from "./lib/projectWorkflow";
 import type { ChatMessage } from "./lib/types/assistant";
 import type {
   ImagePlane,
@@ -27,46 +23,34 @@ import type { ModelStatus } from "./lib/types/model";
 import type { ExecutionMode } from "./lib/types/pipeline";
 import type { ProjectDetail } from "./lib/types/project";
 import type { TaskEvent, TaskLogEntry, TaskStreamMessage } from "./lib/types/task";
+import type {
+  ArtifactSelection,
+  DataSeriesSelection,
+  PlanNodeSelection,
+} from "./lib/workspaceSelection";
 import { fallbackChat } from "./lib/mockData";
 import { useAppController } from "./features/app/useAppController";
 import { useProjectController } from "./features/projects/useProjectController";
 import { useTaskController } from "./features/tasks/useTaskController";
 import type { ProjectController } from "./features/projects/useProjectController";
 import type { TaskController } from "./features/tasks/useTaskController";
-import { useToolsDrawerController } from "./features/tools/useToolsDrawerController";
 import { AppShellView } from "./features/app/AppShellView";
 
 export { deriveProjectWorkflowState } from "./lib/projectWorkflow";
 
 export default function App() {
+  const appState = useAppState();
   const app = useAppController();
-  const projectController = useProjectController() as ProjectController;
-  const taskController = useTaskController() as TaskController;
-  const toolsDrawer = useToolsDrawerController(
-    app.setMode,
-    async () => {
-      await projectController.handleUploadData();
-    },
-    () =>
-      app.handleRunPipeline({
-        projectId: projectController.project.id,
-        pipelineId: projectController.project.current_pipeline_id,
-        modelId: projectController.project.current_model_id,
-        sequences: projectController.project.sequences,
-        executionMode: "simulated",
-        externalSmokeApproved: false,
-        externalSmokeApprovedBy: "",
-        onTaskStarted: () => {},
-      }),
-    async () => {
-      await app.handleQuickAction("view-results");
-    },
-    app.pipelineLoading,
-  );
-
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const projectController = useProjectController(selectedProjectId, setSelectedProjectId) as ProjectController;
+  const taskController = useTaskController(
+    selectedTaskId,
+    setSelectedTaskId,
+    setActiveTaskId,
+  ) as TaskController;
+
   const [executionMode, setExecutionMode] = useState<ExecutionMode>("simulated");
   const [externalSmokeApprovedRun, setExternalSmokeApprovedRun] = useState(false);
   const [externalSmokeApprovedBy, setExternalSmokeApprovedBy] = useState("");
@@ -77,12 +61,25 @@ export default function App() {
   const [plane, setPlane] = useState<ImagePlane>("axial");
   const [sliceIndex, setSliceIndex] = useState<number | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [selectedDataSeries, setSelectedDataSeries] = useState<DataSeriesSelection | null>(null);
+  const [selectedPlanNode, setSelectedPlanNode] = useState<PlanNodeSelection | null>(null);
+  const [selectedArtifact, setSelectedArtifact] = useState<ArtifactSelection | null>(null);
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantError, setAssistantError] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(fallbackChat);
 
+  // Track the last automatic workspace choice so backend signals can refine
+  // first-entry routing without overriding a user's manual tab selection.
+  const autoNavigationRef = useRef<{
+    projectId: string | null;
+    reason: string;
+    tab: WorkflowTab;
+  } | null>(null);
+
   const project = useProject(selectedProjectId);
+  const activeProjectId = selectedProjectId && !project.fromFallback ? project.data.id : null;
+  const activeStudyId = !project.fromFallback ? project.data.study_id : null;
   const selectedProjectForPlanReview = useMemo(
     () =>
       selectedProjectId && !project.fromFallback && project.data.id === selectedProjectId
@@ -101,27 +98,23 @@ export default function App() {
       : {};
   }, [projectController.projectCreateResult, selectedProjectId, selectedProjectMetadata]);
 
-  const overview = useProjectOverview(project.data.study_id);
+  const overview = useProjectOverview(activeStudyId);
   const projectInventory = useMemo(
     () => buildProjectInventory(project.data, overview.data, projectDiagnostics),
     [project.data, overview.data, projectDiagnostics],
   );
 
-  const dataset = useDatasetSummary(project.data.id);
-  const model = useModelStatus(project.data.id);
-  const imageSources = useImageSources(project.data.id);
-  const imageValidation = useImageValidation(project.data.id);
+  const dataset = useDatasetSummary(activeProjectId);
+  const model = useModelStatus(activeProjectId);
+  const imageSources = useImageSources(activeProjectId);
+  const imageValidation = useImageValidation(activeProjectId);
   const imagePreview = useImagePreview(
-    project.data.id,
+    activeProjectId,
     sequence,
     selectedSubjectId,
     sliceIndex,
     plane,
   );
-  const pipeline = useRunPipeline();
-  const taskEvents = useTaskEvents(selectedTaskId);
-  const taskDiagnostics = useTaskDiagnostics(selectedTaskId);
-
   const sequenceOptions = useMemo(
     () => Array.from(new Set([...project.data.sequences, ...imageSources.data.sequences])),
     [imageSources.data.sequences, project.data.sequences],
@@ -139,28 +132,37 @@ export default function App() {
   }, [imageSources.data.manifest, selectedSubjectId, sequence]);
 
   useEffect(() => {
-    let active = true;
-    getApiBaseUrl()
-      .then((url) => {
-        if (active) app.setBaseUrl(url);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [app]);
+    if (!projectInventory) return;
 
-  useEffect(() => {
-    app.checkHealth();
-  }, [app.baseUrl, app.checkHealth]);
+    const route = deriveDefaultWorkflowRoute({
+      diagnostics: projectDiagnostics,
+      hasPreprocessingRun: taskController.hasPreprocessingRun,
+      inventory: projectInventory,
+      tasks: taskController.tasks,
+    });
+    const previous = autoNavigationRef.current;
+    const projectChanged = selectedProjectId !== previous?.projectId;
+    const userStayedOnAutomaticTab = previous ? app.activeWorkflow === previous.tab : false;
+    const higherPrioritySignal =
+      route.reason === "active_or_failed_run" || route.reason === "qc_attention";
 
-  useEffect(() => {
-    if (projectInventory) {
-      if (projectInventory.dataState === "converted_bids") app.setActiveWorkflow("preprocessing");
-      else if (projectInventory.dataState === "raw_dicom") app.setActiveWorkflow("data");
-      else app.setActiveWorkflow("data");
+    if (projectChanged || (userStayedOnAutomaticTab && higherPrioritySignal && route.tab !== previous?.tab)) {
+      autoNavigationRef.current = {
+        projectId: selectedProjectId,
+        reason: route.reason,
+        tab: route.tab,
+      };
+      app.setActiveWorkflow(route.tab);
     }
-  }, [selectedProjectId, projectInventory, app]);
+  }, [
+    app,
+    app.activeWorkflow,
+    projectDiagnostics,
+    projectInventory,
+    selectedProjectId,
+    taskController.hasPreprocessingRun,
+    taskController.tasks,
+  ]);
 
   useEffect(() => {
     if (!projectController.projects.data.length) return;
@@ -185,6 +187,16 @@ export default function App() {
   useEffect(() => {
     setSliceIndex(null);
   }, [project.data.id, selectedSubjectId, sequence, plane]);
+
+  useEffect(() => {
+    setSelectedSubjectId(null);
+    setSelectedDataSeries(null);
+    setSelectedPlanNode(null);
+    setSelectedArtifact(null);
+    setSelectedTaskId(null);
+    setSequence("");
+    setSliceIndex(null);
+  }, [project.data.id]);
 
   useEffect(() => {
     taskController.setAuditPackage?.(null);
@@ -222,22 +234,6 @@ export default function App() {
   );
 
   const taskStream = useTaskStream(activeTaskId, handleTaskMessage);
-
-  const handleRunPipeline = useCallback(async () => {
-    await app.handleRunPipeline({
-      projectId: project.data.id,
-      pipelineId: project.data.current_pipeline_id,
-      modelId: project.data.current_model_id,
-      sequences: project.data.sequences,
-      executionMode,
-      externalSmokeApproved: externalSmokeApprovedRun,
-      externalSmokeApprovedBy,
-      onTaskStarted: (taskId) => {
-        setActiveTaskId(taskId);
-        setSelectedTaskId(taskId);
-      },
-    });
-  }, [app, project.data, executionMode, externalSmokeApprovedRun, externalSmokeApprovedBy]);
 
   const handleApproveSelectedTask = useCallback(async () => {
     if (!selectedTaskId) {
@@ -301,27 +297,54 @@ export default function App() {
     [project.data.id, assistantInput, app],
   );
 
-  const handleQuickAction = useCallback(
-    (action: string) => {
-      app.handleQuickAction(action);
-      if (action === "upload-data") void projectController.handleUploadData();
-      if (action === "run-pipeline") void handleRunPipeline();
-    },
-    [app, projectController, handleRunPipeline],
+  const selectionContext = useMemo(
+    () => ({
+      artifact: selectedArtifact,
+      dataSeries: selectedDataSeries,
+      image: {
+        plane,
+        series: sequence || null,
+        source: selectedImageSource?.relative_path ?? selectedImageSource?.file_path ?? null,
+        subjectId: selectedSubjectId,
+      },
+      planNode: selectedPlanNode,
+      run: {
+        id: selectedTaskId,
+        name: taskController.selectedTask?.run_name ?? null,
+        pipeline: taskController.selectedTask?.pipeline ?? null,
+        status: taskController.selectedTask?.status ?? null,
+      },
+    }),
+    [
+      plane,
+      selectedArtifact,
+      selectedDataSeries,
+      selectedImageSource?.file_path,
+      selectedImageSource?.relative_path,
+      selectedPlanNode,
+      selectedSubjectId,
+      selectedTaskId,
+      sequence,
+      taskController.selectedTask?.pipeline,
+      taskController.selectedTask?.run_name,
+      taskController.selectedTask?.status,
+    ],
   );
 
   return (
     <AppShellView
-      mode={app.mode}
       baseUrl={app.baseUrl}
       drawerOpen={app.drawerOpen}
+      health={app.health}
       selectedProjectId={selectedProjectId}
+      onSelectProject={setSelectedProjectId}
       project={project}
       projectInventory={projectInventory}
       projectController={projectController}
       taskController={taskController}
       taskStream={taskStream}
       app={app}
+      appState={appState}
       image={{
         sequence,
         setSequence,
@@ -360,20 +383,19 @@ export default function App() {
       setExternalSmokeApprovedBy={setExternalSmokeApprovedBy}
       model={model.data}
       dataset={dataset.data}
-      setMode={app.setMode}
       setExecutionMode={setExecutionMode}
       onToggleDrawer={() => app.setDrawerOpen(!app.drawerOpen)}
-      handleRunPipelineWrapper={handleRunPipeline}
       handleApproveSelectedTask={handleApproveSelectedTask}
       handleGenerateAuditPackage={handleGenerateAuditPackage}
       handleReconnectTaskStream={handleReconnectTaskStream}
       handleAssistantSubmit={handleAssistantSubmit}
-      handleQuickAction={handleQuickAction}
       onNewChat={() => setChatMessages(fallbackChat)}
       selectedTaskId={selectedTaskId}
       setSelectedTaskId={setSelectedTaskId}
-      activeTaskId={activeTaskId}
-      setActiveTaskId={setActiveTaskId}
+      selectionContext={selectionContext}
+      onSelectedArtifactChange={setSelectedArtifact}
+      onSelectedDataSeriesChange={setSelectedDataSeries}
+      onSelectedPlanNodeChange={setSelectedPlanNode}
     />
   );
 }

@@ -18,11 +18,29 @@ if _library_bin.is_dir():
         if _dll_path.is_file():
             _ssl_binaries.append((str(_dll_path), "."))
 
+# ── Collect bundled dcm2niix resources ───────────────────────────────────
+# Per 实现dcm2nii任务方案.md §9.1, the bundled dcm2niix binary lives at
+# desktop/resources/tools/windows-x64/dcm2niix.exe and is shipped inside
+# the PyInstaller bundle under resources/tools/.
+_datas = []
+_bundled_tools_dir = repo_root / "desktop" / "resources" / "tools"
+_bundled_win_dir = _bundled_tools_dir / "windows-x64"
+if _bundled_win_dir.is_dir():
+    for _resource_file in _bundled_win_dir.iterdir():
+        if _resource_file.is_file():
+            _datas.append(
+                (str(_resource_file), str(Path("resources") / "tools" / "windows-x64"))
+            )
+elif _bundled_tools_dir.is_dir():
+    for _resource_file in _bundled_tools_dir.iterdir():
+        if _resource_file.is_file():
+            _datas.append((str(_resource_file), str(Path("resources") / "tools")))
+
 a = Analysis(
     [str(entry)],
     pathex=[str(repo_root)],
     binaries=_ssl_binaries,
-    datas=[],
+    datas=_datas,
     hiddenimports=[
         "uvicorn.logging",
         "uvicorn.loops",

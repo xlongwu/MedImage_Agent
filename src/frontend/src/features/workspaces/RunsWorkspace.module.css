@@ -1,0 +1,572 @@
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summaryItem {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.summaryItem span {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.summaryItem strong {
+  color: var(--color-text-primary);
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.summaryItem small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 0.88fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.runListCard,
+.detailCard {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.sectionHeader p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.runControls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.searchField {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.searchField span {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.searchField input {
+  width: 100%;
+  min-height: 36px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.searchField input:focus {
+  border-color: var(--color-focus-ring);
+  outline: 3px solid rgba(0, 122, 255, 0.14);
+}
+
+.runName,
+.runMeta {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runName {
+  color: var(--color-text-primary);
+  font-size: 13px;
+}
+
+.runMeta {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+}
+
+.selectedRow {
+  background: var(--color-selection);
+}
+
+.progressCell {
+  display: grid;
+  grid-template-columns: minmax(52px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 94px;
+}
+
+.progressCell strong {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.progressTrack {
+  overflow: hidden;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: rgba(60, 60, 67, 0.12);
+}
+
+.progressFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-neuro-cyan));
+}
+
+.detailPanel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.detailSummary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.detailTitleBlock {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.kicker,
+.panelHeader span,
+.detailFacts span,
+.nodeGrid span,
+.artifactPath span,
+.artifactRow span,
+.auditRecord span,
+.auditPackage span,
+.approvalBox span {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.detailTitleBlock strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 18px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detailTitleBlock small,
+.panelHeader small {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.detailActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.streamChip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-pill);
+  background: var(--surface-muted);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.online {
+  border-color: rgba(52, 199, 89, 0.3);
+  background: rgba(232, 247, 237, 0.9);
+  color: var(--color-success);
+}
+
+.idle {
+  border-color: rgba(90, 90, 95, 0.18);
+  background: var(--surface-muted);
+  color: var(--color-text-tertiary);
+}
+
+.detailFacts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detailFacts div,
+.nodeGrid div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.detailFacts strong,
+.nodeGrid strong {
+  min-width: 0;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.timelinePanel,
+.nodeInspector,
+.tabPanel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.nodeGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.timeline {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline li {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) minmax(92px, auto);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+}
+
+.timeline li[data-status="failed"] {
+  border-color: rgba(217, 45, 32, 0.24);
+}
+
+.timeline li[data-status="completed"] {
+  border-color: rgba(52, 199, 89, 0.26);
+}
+
+.timeline span {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.timeline p,
+.eventRow p,
+.logList p,
+.diagnosticItem p,
+.auditPackage p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.timeline small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eventList,
+.logList,
+.diagnosticsList,
+.artifactList,
+.auditPanel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.eventRow {
+  display: grid;
+  grid-template-columns: minmax(116px, 0.8fr) 52px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+}
+
+.eventRow span,
+.eventRow strong {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.logList p {
+  padding: 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+}
+
+.failureBanner {
+  padding: 10px;
+  border: 1px solid rgba(217, 45, 32, 0.28);
+  border-radius: var(--radius);
+  background: rgba(255, 242, 240, 0.86);
+  color: var(--color-danger);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.failureActions {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(217, 45, 32, 0.22);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.failureActions strong {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.failureActions p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.failureActions small {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.failureButtonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.failureExplanation {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.failureExplanation span {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.diagnosticItem {
+  display: grid;
+  gap: 5px;
+  padding: 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+}
+
+.diagnosticItem[data-tone="danger"] {
+  border-color: rgba(217, 45, 32, 0.26);
+}
+
+.diagnosticItem[data-tone="warning"] {
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+.diagnosticItem[data-tone="info"] {
+  border-color: rgba(0, 122, 255, 0.22);
+}
+
+.diagnosticItem span {
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.artifactPath,
+.artifactRow,
+.auditRecord,
+.auditPackage,
+.approvalBox {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--surface-solid);
+}
+
+.artifactPath strong,
+.artifactRow strong,
+.auditRecord strong,
+.auditPackage strong,
+.approvalBox strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approvalBox {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.approvalBox label {
+  display: grid;
+  gap: 5px;
+}
+
+.approvalBox input {
+  min-height: 34px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.loadingLine,
+.errorLine,
+.trimNote {
+  padding: 10px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.loadingLine {
+  background: var(--surface-muted);
+  color: var(--color-text-secondary);
+}
+
+.errorLine {
+  border: 1px solid rgba(217, 45, 32, 0.24);
+  background: rgba(255, 242, 240, 0.86);
+  color: var(--color-danger);
+}
+
+.trimNote {
+  border: 1px solid var(--color-divider);
+  background: var(--surface-muted);
+  color: var(--color-text-secondary);
+}
+
+@media (max-width: 1120px) {
+  .summaryGrid,
+  .runLayout,
+  .runControls,
+  .detailFacts,
+  .nodeGrid,
+  .timeline li,
+  .eventRow {
+    grid-template-columns: 1fr;
+  }
+
+  .detailSummary,
+  .panelHeader,
+  .sectionHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .detailActions,
+  .headerActions {
+    justify-content: flex-start;
+  }
+}

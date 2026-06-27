@@ -37,7 +37,9 @@ def test_capture_reports_required_flags(monkeypatch):
     _clear_smoke_flags(monkeypatch)
     evidence = capture_synthetic_smoke_evidence()
     assert "required_flags" in evidence
-    assert len(evidence["required_flags"]) == 9
+    # Per §11.1, MATLAB/SPM/real-preprocessing flags are NOT required.
+    # The canonical flag list has been reduced from 9 to 7 entries.
+    assert len(evidence["required_flags"]) == 7
 
 
 def test_capture_is_import_safe():

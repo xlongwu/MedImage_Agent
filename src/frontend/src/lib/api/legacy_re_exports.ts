@@ -172,6 +172,7 @@ export {
 
 export {
   getDicomPreflight,
+  getLatestConversionDryRun,
   getProjectBidsValidation,
   getProjectDataReadiness,
   getProjectDicomConversionReleaseReadiness,

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { runProjectDicomConversionExecute } from "../lib/api/legacy";
+import { registerProjectDicomConversionResult } from "../lib/api/dicom";
+import { useDicomConversionWorkflow } from "../hooks/useDicomConversionWorkflow";
 import type {
   DicomConversionExecutionUiState,
   DicomConversionPublicExecutionResponse,
@@ -27,6 +29,22 @@ const CONFIRMATIONS: { key: string; label: string }[] = [
     label: "I understand SPM/DPABI/MATLAB preprocessing is not part of this action.",
   },
   { key: "confirm_dicom_only", label: "I understand this only runs DICOM-to-NIfTI conversion." },
+];
+
+// 实现dcm2nii任务方案.md §16.4 — Prepare-flow confirmation labels.
+// These mirror the backend DicomConversionPrepareConfirmations schema.
+const PREPARE_CONFIRMATIONS: {
+  key: keyof import("../types").DicomConversionPrepareConfirmations;
+  label: string;
+}[] = [
+  { key: "mappings_reviewed", label: "I have reviewed the conversion mappings." },
+  { key: "rawdata_readonly", label: "I confirm rawdata must remain read-only." },
+  { key: "research_use_only", label: "I understand this is for research use only." },
+  { key: "no_clinical_use", label: "I understand this is not for clinical use." },
+  { key: "external_converter", label: "I acknowledge dcm2niix is an external converter." },
+  { key: "rollback_policy", label: "I acknowledge the rollback policy." },
+  { key: "risk_acknowledgement", label: "I acknowledge the conversion risks." },
+  { key: "confirm_execution", label: "I confirm execution of the conversion." },
 ];
 
 const pill: React.CSSProperties = {
@@ -61,12 +79,18 @@ export default function DicomConversionExecutePanel({
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // 实现dcm2nii任务方案.md §16 — unified prepare workflow hook.
+  // The hook manages operator confirmations and the prepare API call.
+  const workflow = useDicomConversionWorkflow(baseUrl, projectId, conversionRunId);
+
   // Determine if readiness allows execution
   const readinessReady = readiness?.status === "ready_for_human_release_review";
   const gatesFull = readiness != null && readiness.gates_met >= readiness.gates_total;
 
-  // Show the confirm button only when readiness passes
-  const canShowConfirm = featureEnabled && readinessReady && gatesFull;
+  // Show the confirm button only when readiness passes OR the prepare
+  // workflow reports technical readiness.
+  const canShowConfirm =
+    featureEnabled && (readinessReady && gatesFull || workflow.technicalReady);
 
   function toggleConfirm(key: string) {
     setConfirmChecks((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -82,8 +106,11 @@ export default function DicomConversionExecutePanel({
     setResponse(null);
 
     try {
+      // 实现dcm2nii任务方案.md §16.5 — prefer the conversion_run_id
+      // reserved by the prepare workflow; fall back to the prop value.
+      const runId = workflow.conversionRunId || conversionRunId;
       const body: Record<string, unknown> = {
-        conversion_run_id: conversionRunId,
+        conversion_run_id: runId,
         release_approval_id: `frontend-${Date.now()}`,
         confirm_user_data_conversion: confirmChecks.confirm_dicom_only ?? false,
         confirm_rawdata_readonly: confirmChecks.confirm_rawdata_readonly ?? false,
@@ -113,6 +140,24 @@ export default function DicomConversionExecutePanel({
         setUiState("blocked");
       } else {
         setUiState("failed");
+      }
+
+      // 实现dcm2nii任务方案.md §17 — register conversion result into
+      // project metadata so Dashboard/Viewer/project state can refresh.
+      // Fire-and-forget; failures here do not block the UI flow.
+      if (resp.ok && (resp.status === "succeeded" || resp.status === "partial")) {
+        try {
+          await registerProjectDicomConversionResult(baseUrl, projectId, {
+            conversion_run_id: runId,
+            output_root: resp.output_root,
+            execution_status: resp.status,
+            manifest_path: resp.manifest_path,
+            provenance_path: resp.provenance_path,
+            checksum_verified: resp.checksum_verified,
+          });
+        } catch {
+          // Registration failure is non-fatal; the conversion itself succeeded.
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -178,6 +223,83 @@ export default function DicomConversionExecutePanel({
           >
             Approve and request conversion
           </button>
+        )}
+
+        {/* 实现dcm2nii任务方案.md §16.3 — Prepare workflow entry point.
+            The prepare button is shown whenever the feature flag is on,
+            allowing the operator to validate preconditions and reserve a
+            conversion run even before traditional release readiness is met. */}
+        {featureEnabled && (
+          <div style={{ marginTop: 12, padding: 10, border: "1px solid #e0e0e0", borderRadius: 4 }}>
+            <h4 style={{ margin: "0 0 6px 0", fontSize: 12, fontWeight: 700 }}>
+              Prepare conversion (unified workflow)
+            </h4>
+            <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
+              Runs all system validations, persists the approval package, and reserves a
+              conversion run directory in a single call. Review the operator confirmations
+              below before preparing.
+            </div>
+            {PREPARE_CONFIRMATIONS.map((c) => (
+              <label
+                key={c.key}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 11,
+                  marginBottom: 4,
+                  cursor: "pointer",
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={workflow.confirmations[c.key]}
+                  onChange={() => workflow.toggleConfirmation(c.key)}
+                />
+                {c.label}
+              </label>
+            ))}
+            {workflow.missingConfirmations.length > 0 && (
+              <div style={{ fontSize: 10, color: "#b53b3b", marginTop: 4 }}>
+                Missing: {workflow.missingConfirmations.join(", ")}
+              </div>
+            )}
+            {workflow.blockingIssues.length > 0 && (
+              <div style={{ fontSize: 10, color: "#b53b3b", marginTop: 4 }}>
+                Blocking: {workflow.blockingIssues.join("; ")}
+              </div>
+            )}
+            {workflow.error && (
+              <div style={{ fontSize: 10, color: "#b53b3b", marginTop: 4 }}>
+                Error: {workflow.error}
+              </div>
+            )}
+            {workflow.prepareResponse && (
+              <div style={{ fontSize: 10, color: "#176b3b", marginTop: 4 }}>
+                Status: {workflow.status} | next: {workflow.nextAction}
+                {workflow.conversionRunId && (
+                  <> | run: {workflow.conversionRunId}</>
+                )}
+              </div>
+            )}
+            <button
+              onClick={workflow.prepare}
+              disabled={workflow.submitting}
+              style={{
+                marginTop: 8,
+                padding: "6px 14px",
+                background: workflow.submitting ? "#ccc" : "#1976d2",
+                color: "#fff",
+                border: "none",
+                borderRadius: 4,
+                cursor: workflow.submitting ? "not-allowed" : "pointer",
+                fontWeight: 600,
+                fontSize: 11,
+              }}
+            >
+              {workflow.submitting ? "Preparing..." : "Prepare conversion"}
+            </button>
+          </div>
         )}
       </section>
     );

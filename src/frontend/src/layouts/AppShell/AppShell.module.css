@@ -1,0 +1,73 @@
+.shell {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--shell-gap);
+  min-height: 100vh;
+  padding: var(--shell-padding);
+  background: linear-gradient(180deg, #fbfbfd 0%, var(--color-bg-app) 100%);
+}
+
+.topBarSlot,
+.systemMessages,
+.body,
+.runActivitySlot {
+  min-width: 0;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: var(--shell-sidebar-width) minmax(0, 1fr);
+  gap: var(--shell-gap);
+  align-items: start;
+  min-height: 0;
+}
+
+.shell[data-inspector="open"] .body {
+  grid-template-columns: var(--shell-sidebar-width) minmax(0, 1fr) minmax(280px, 340px);
+}
+
+.sidebarSlot,
+.mainSlot,
+.inspectorSlot {
+  min-width: 0;
+}
+
+.mainSlot {
+  min-height: 0;
+}
+
+.inspectorSlot {
+  min-height: 0;
+}
+
+.runActivitySlot {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+}
+
+@media (max-width: 1320px) {
+  .body,
+  .shell[data-inspector="open"] .body {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .inspectorSlot {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 1040px) {
+  .shell {
+    padding: 12px;
+  }
+
+  .body,
+  .shell[data-inspector="open"] .body {
+    grid-template-columns: 1fr;
+  }
+
+  .inspectorSlot {
+    grid-column: auto;
+  }
+}

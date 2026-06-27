@@ -1,0 +1,7 @@
+# SHA256 of the bundled dcm2niix.exe binary.
+# Update this value whenever the binary is replaced.
+# Format: <sha256-hex>  dcm2niix.exe
+#
+# Pinned release: v1.0.20260416 (64-bit Windows)
+# Source: pip package dcm2niix (site-packages/bin/dcm2niix.exe)
+db4759fa5e9d5e08ff367d29af2d2dacb55623661df5a2e5a475a2d12e0e1978  dcm2niix.exe

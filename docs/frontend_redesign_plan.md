@@ -1,5 +1,12 @@
 # MedImage Agent 前端重构方案
 
+> 历史状态：本文件是早期前端重构方案，保留用于理解从旧 Dashboard /
+> AdvancedMode 结构迁移到当前 AppShell / Workspace 架构的背景。当前 UI
+> 收口任务以仓库根目录的 `项目前端UI优化设计方案.md`、
+> `前端UI重构未完成任务清单.md` 以及现行代码/测试为准。本文中
+> `AdvancedModePanel`、旧 workflow shell、旧 Dashboard 平铺结构等引用不再是
+> 当前实现要求。
+
 > 目标：将当前“开发者调试台式”的复杂前端，重构为面向研究人员和普通用户的简洁工作流界面。  
 > 核心原则：默认展示主流程；底层 pipeline、agent、node、API、日志等调试信息移入“高级模式 / 开发者模式”。
 

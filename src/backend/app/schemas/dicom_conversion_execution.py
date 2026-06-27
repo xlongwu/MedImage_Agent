@@ -32,10 +32,15 @@ DicomConversionMode = Literal[
     "execute",
 ]
 
+# Note: The task plan (§12) mentions an `unavailable` state. It is represented
+# here by `blocked` (when dcm2niix is missing/unknown) or `disabled` (when the
+# feature flag is off). See `_map_availability_to_conversion_status` in
+# dicom_conversion_execution.py for the canonical mapping.
 DicomConversionStatus = Literal[
     "pending",
     "running",
     "ready",
+    "review_required",
     "blocked",
     "warning",
     "disabled",
@@ -66,13 +71,22 @@ DicomConversionOutputKind = Literal[
 # ═══════════════════════════════════════════════════════════════════════
 # 2. Required environment flags for real execution
 # ═══════════════════════════════════════════════════════════════════════
-
+#
+# Per 实现dcm2nii任务方案.md §11.1, DICOM→NIfTI conversion must NOT be
+# blocked by MATLAB/SPM/real-preprocessing flags. Those flags belong to
+# the downstream preprocessing module only. The minimal required flags
+# for DICOM conversion are:
+#   - MEDIMAGE_ENABLE_DICOM_CONVERSION
+#   - MEDIMAGE_ENABLE_REVIEWED_EXECUTION
+#   - MEDIMAGE_ALLOW_USER_DATA_CONVERSION
+#
+# MEDIMAGE_MATLAB_ENABLED, MEDIMAGE_SPM_SMOKE_ENABLED and
+# MEDIMAGE_ENABLE_REAL_PREPROCESSING are intentionally NOT required here.
+# "MATLAB/SPM not enabled" is a safe state and must not block conversion.
 _REQUIRED_CONVERSION_ENV_FLAGS: frozenset[str] = frozenset({
     "MEDIMAGE_ENABLE_DICOM_CONVERSION",
-    "MEDIMAGE_MATLAB_ENABLED",
-    "MEDIMAGE_SPM_SMOKE_ENABLED",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+    "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
 })
 
 # ═══════════════════════════════════════════════════════════════════════

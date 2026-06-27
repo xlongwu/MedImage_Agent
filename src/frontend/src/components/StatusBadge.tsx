@@ -1,3 +1,5 @@
+import { Badge, type BadgeProps } from "./ui";
+
 type Props = {
   status?: string | boolean | null;
 };
@@ -7,14 +9,14 @@ export function StatusBadge({ status }: Props) {
 
   const normalized = String(text).toUpperCase();
 
-  let className = "badge";
+  let tone: BadgeProps["tone"] = "neutral";
   if (["OK", "SUCCESS", "HEALTHY"].includes(normalized)) {
-    className += " badgeSuccess";
+    tone = "success";
   } else if (["FAILED", "ERROR", "INVALID"].includes(normalized)) {
-    className += " badgeError";
+    tone = "danger";
   } else if (["PARTIAL", "WARNING", "MANUAL_REVIEW"].includes(normalized)) {
-    className += " badgeWarning";
+    tone = "warning";
   }
 
-  return <span className={className}>{text}</span>;
+  return <Badge tone={tone}>{text}</Badge>;
 }

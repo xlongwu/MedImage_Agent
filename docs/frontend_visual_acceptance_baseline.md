@@ -1,0 +1,169 @@
+# Frontend Visual Acceptance Baseline
+
+> Established: 2026-06-26
+> Scope: Manual visual acceptance for MedImage Agent frontend UI changes.
+> Status: Baseline established; no-new-dependency decision recorded. Automated screenshot comparison is a future dependency-approval task, not a current unfinished UI cleanup item.
+
+## Purpose
+
+This baseline defines the repeatable manual visual checks required before UI work is handed off. It is intentionally lightweight: no new frontend dependencies, no backend API changes, and no claim of automated visual regression coverage.
+
+## Automated Visual Regression Research
+
+Phase 6 reviewed the visual-regression path and keeps the current project on a no-new-dependency baseline until a separate dependency task is approved. The 2026-06-27 non-visual UI cleanup keeps this decision unchanged and does not add Playwright, Storybook, screenshot capture, or image-diff tooling.
+
+Current approved approach:
+
+- Keep manual viewport and Windows scaling records in this document.
+- Keep Vitest and CSS contract checks for focus, reduced motion, contrast, shell overlap, and legacy global-style regressions.
+- Do not commit screenshots, generated videos, `src/frontend/dist/`, coverage, or local runtime artifacts.
+- Do not modify `package.json` or lockfiles for Playwright, Storybook, Electron screenshot capture, or image diff tooling without maintainer approval.
+
+Future approval package should compare:
+
+- Playwright screenshot checks for selected shell/workspace routes.
+- Storybook stories for isolated UI states.
+- Electron smoke screenshots for packaged desktop layout risk.
+- CI artifact retention, privacy risk for research data, and screenshot redaction rules.
+
+Recommended minimum viable automation after approval:
+
+- Start with Playwright screenshots for a synthetic, repository-owned fixture state only: Raw DICOM empty state, converted-with-preview, health offline, failed run, and Inspector open/closed at 1280 x 720, 1440 x 900, and 1600 x 950.
+- Keep screenshots out of the repository by default; store CI artifacts with short retention and no user research data, raw DICOM, BIDS, or NIfTI paths.
+- Continue Vitest and CSS contract checks for focus, reduced motion, contrast, shell overlap, evidence truth-level copy, and no-preview viewer behavior.
+
+Rejected for the next dependency task:
+
+- Full Storybook rollout before the current component boundaries stabilize.
+- Electron packaged screenshot smoke as the first automation step, because it mixes visual regression with packaging/toolchain risk.
+- Image diff baselines captured from local real research data or local desktop databases.
+
+This research does not claim automated visual regression coverage is implemented, and that absence is not treated as an open item for the current no-new-dependency UI cleanup.
+
+## Required Viewports
+
+Review each required scenario at these viewport sizes:
+
+| Viewport | Purpose |
+| --- | --- |
+| 1280 x 720 | Minimum desktop workstation height |
+| 1440 x 900 | Common laptop / desktop baseline |
+| 1600 x 950 | Wide workstation baseline |
+
+Electron scale checks at 125% and 150% are Phase 5 manual acceptance records; they are not automated by this baseline.
+
+When Phase 5 UI hardening is in scope, also record Windows desktop scaling:
+
+| Scale | Purpose |
+| --- | --- |
+| 125% | Common Windows laptop scaling; catches cramped TopBar, inspector, and table states |
+| 150% | High-DPI accessibility scaling; catches clipped controls and viewer/status overflow |
+
+## Required Scenarios
+
+Each UI PR or handoff that changes shell, workspace, viewer, or workflow presentation should record these scenarios where applicable:
+
+| Scenario | Required state |
+| --- | --- |
+| Raw DICOM project first screen | Data / Conversion is primary; no fake NIfTI or MRI preview appears |
+| Converted BIDS/NIfTI first screen | Project overview and workflow state are consistent with converted data |
+| Empty project first screen | Import/data reference is primary; viewer, preprocessing, and conversion actions are not presented as available |
+| Mixed project first screen | Raw DICOM and converted evidence are both visible; conversion review remains required before preprocessing confidence |
+| Health offline | Offline state, retry, and diagnostics are visible without covering primary content |
+| Run failed | Run Activity Bar summary is visible and does not obscure workspace content |
+| Inspector closed | Main layout remains aligned and primary content is not clipped |
+| Inspector open | Inspector column fits without overlapping TopBar, sidebar, viewer, or run activity |
+| Viewer with real preview | `<img>` preview renders only from a real `preview_url`; controls and status bar remain inside the viewer shell |
+| Viewer without real preview | Empty state renders no medical image, no disabled pseudo-CTA, and no stale previous preview |
+| Data detailed checks collapsed/open | Detailed checks are secondary, collapsed by default, and explicitly state no execution or writes |
+| Plan no project | Project-scoped empty state is visible; no global planner or execution state is implied |
+| Plan missing config | Settings / Environment is the next step; plan execution gates remain locked |
+| Plan draft with nodes | Goal, data scope, nodes, validation, graph, and inspector are visible without opening raw JSON |
+| Plan backend evidence missing | Approved, Dry-run Passed, Ready to Execute, and Executed are not shown as completed without backend evidence |
+| Plan technical tools collapsed/open | Technical plan tools are secondary, collapsed by default, and state backend gates remain authoritative |
+| Preprocessing raw DICOM blocked | Compact dependency prompt points back to Data & Conversion; full preprocessing setup is not rendered |
+| Preprocessing input required | Missing or metadata-only converted input shows input requirements; technical modules are disabled |
+| Preprocessing ready to configure | Stage-based Basic / Advanced parameters are visible without implying execution or computed outputs |
+| Preprocessing technical modules | Detailed validation and SPM modules stay gated and on demand |
+| Runs loading / empty / error | Loading, empty, backend-error-without-rows, backend-error-with-rows, and filtered-empty states are visually distinct |
+| Runs active / failed detail | Selected run detail shows timeline, node evidence, diagnostics, artifacts, audit, and backend-owned retry/approval boundaries |
+| RunActivityBar collapsed / expanded | Only active, pending, failed, or recently changed summaries appear; full detail routes to Runs workspace |
+| QC no project / no evidence | QC overview is project-scoped; detailed QC modules do not load without project context |
+| QC evidence dashboard | Summary, subject table, outlier focus, and chart shell do not infer pass/fail counts without backend evidence |
+| QC derived modules collapsed / open | Derived metric modules do not imply computed ALFF, ReHo, FC, filtering, or motion artifacts |
+| QC image comparison no artifact / partial / ready | No medical image, fake overlay, or synchronized controls render until artifact evidence is available |
+| Results no project / empty index | Artifact modules are project-scoped; empty tables do not claim generated artifacts |
+| Results artifact boundaries | Planned output, created artifact, preview-only, missing provenance, and validation-failed states remain visually distinct |
+| Results report modules collapsed / open | Report modules remain project-scoped and backend-owned |
+| Settings domains | General, Environment, Integrations, Safety, and Diagnostics are discoverable; heavy diagnostics are on demand |
+| Assistant closed / open | Prompt helpers are workspace-aware and only fill input; they do not run, approve, export, or alter settings |
+| Inspector closed / open | Inspector is a read-only context summary; configuration changes route to Settings / Environment |
+| Keyboard path: TopBar | Assistant, Inspector, backend health retry, and diagnostics actions are reachable by Tab and have stable accessible names |
+| Keyboard path: Project Switcher | Open, select, close with Escape, remove-confirm Dialog, and focus return work without a mouse |
+| Keyboard path: Lifecycle Sidebar | Arrow navigation skips locked stages or keeps them explicitly locked without moving the user into unavailable workspaces |
+| Keyboard path: Dialog / Sheet | Focus enters the overlay, Tab wraps inside it, Escape closes it, and focus returns to the trigger |
+| Keyboard path: Viewer | Viewer shell is focusable when a real preview exists; arrow shortcuts do not trap Tab or persist in no-preview states |
+| Workspace skeleton / loading | Loading UI preserves workspace structure without implying computed, validated, exported, or executed status |
+| Large table / long log budget | Tables and logs show a bounded row count, filter/search affordance, or explicit "showing first/latest N" note |
+
+## Pass Criteria
+
+- TopBar does not cover sidebar or workspace content.
+- The same page does not show duplicate product branding.
+- Page-top actions are owned by the current workflow context.
+- Raw DICOM states do not show fake medical imagery.
+- Empty and converted-without-preview states do not keep stale image previews or disabled pseudo-actions.
+- Mixed states do not hide raw DICOM review risk behind converted-data summary.
+- Current stage, recommended action, and blocked state do not conflict.
+- The first viewport has no more than one visually primary action area.
+- Floating controls do not appear in the middle of the page or at unrelated page bottoms.
+- Complete card count in a single viewport is not excessive for scanability.
+- Key body text remains at least 13 px by token or component style.
+- Error text does not permanently cover the viewer canvas.
+- Technical module sections state that backend gates remain authoritative.
+- Opening a technical section does not imply execution, computation, export, or validation success.
+- Plan status does not mark approval, dry-run, readiness, or execution as completed without explicit backend evidence.
+- Preprocessing does not render full configuration panels when registered converted input is missing.
+- Runs errors do not fabricate successful rows, audit packages, retry eligibility, or approval success.
+- RunActivityBar remains a summary surface and provides a clear path to the Runs workspace for full diagnostics.
+- QC does not show fake charts, fake medical imagery, or pass/fail counts without backend evidence.
+- QC image comparison shows no synchronized controls until the ready artifact state.
+- Results does not present planned outputs, preview-only rows, exports, or validation records as created artifacts.
+- Settings does not expose client-side bypass actions for external execution, rawdata policy, approval, or overwrite behavior.
+- Assistant suggestions are explanation, summary, or draft prompts only.
+- Inspector does not contain execution mode toggles or external smoke approval inputs.
+- Dialogs and sheets do not leave keyboard focus behind the overlay and restore focus when closed.
+- Project Switcher state and delete confirmation can be completed with keyboard-only navigation.
+- Workspace skeletons use neutral loading structure and never fabricate scientific data, artifacts, QC pass/fail, or execution completion.
+- DICOM, artifact, and run-history tables do not render unbounded rows in the first viewport.
+- Long run logs are capped with a visible rendering-budget note.
+
+## Record Format
+
+Use this compact record in the PR description or completion report:
+
+```markdown
+### Visual Acceptance
+
+- Viewports checked: 1280x720, 1440x900, 1600x950
+- Scenarios checked: Raw DICOM, Converted BIDS/NIfTI, Health offline, Run failed, Inspector closed/open
+- Technical sections checked: Plan, Preprocessing, QC, Results, Settings
+- Phase 4 checked: QC evidence/no artifact, Results boundaries, Settings domains, Assistant prompts, Inspector read-only
+- Phase 5 checked: keyboard focus paths, Dialog/Sheet focus return, responsive shell, skeleton loading, large table/log budgets
+- Data states checked: Empty, Raw DICOM, Mixed, Converted BIDS/NIfTI
+- Viewer states checked: real preview, no preview
+- Windows scale checked: 125%, 150% / Not executed
+- Keyboard paths checked: TopBar, ProjectSwitcher, Lifecycle Sidebar, Dialog/Sheet, RunActivityBar, Viewer
+- Inspector / RunActivity / Viewer checked:
+- Result: Pass / Needs follow-up
+- Notes:
+  - ...
+```
+
+Manual screenshots may be attached to a PR or task record. Do not commit generated screenshots or local runtime artifacts unless a dedicated fixture or release task explicitly approves them.
+
+## Current Baseline Notes
+
+As of 2026-06-27, `TechnicalModuleSection` provides the shared presentation contract for migrated technical areas in Plan, Preprocessing, QC, Results, and Data detailed checks. Report viewer/export/validator panels use shared evidence truth-level language without treating request success as export or validation success, and artifact/run-history surfaces distinguish metadata, preview-only, created, missing, and validated evidence. The component-level and workspace tests verify collapsed/default, disabled, on-demand, evidence-copy, keyboard, and bounded-output behavior; this document covers the remaining manual visual review contract.
+
+Phase 2 adds explicit manual review of Projects, Project Create Sheet, Project Overview, Data & Conversion, DICOM Series Browser, Conversion Stepper, and Viewer empty/real-preview states. Phase 3 adds Plan state evidence, Plan node inspector, Preprocessing input/ready states, Runs list/detail diagnostics, and RunActivityBar alignment checks. Phase 4 adds QC evidence boundaries, artifact-gated image comparison, Results artifact/provenance boundaries, Settings domain navigation, workspace-aware Assistant prompts, and read-only Inspector checks. Phase 5 adds keyboard focus paths, Dialog/Sheet focus return, responsive shell and Windows scale checks, skeleton loading structure, and bounded table/log rendering checks. These checks remain manual and source-backed; no generated screenshots are committed by default.

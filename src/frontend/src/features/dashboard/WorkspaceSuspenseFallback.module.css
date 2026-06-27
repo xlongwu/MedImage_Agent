@@ -1,0 +1,63 @@
+.fallback {
+  display: grid;
+  min-height: 320px;
+  gap: 16px;
+  padding: 20px;
+  border: 1px dashed rgba(137, 150, 171, 0.32);
+  border-radius: var(--radius);
+  background: rgba(248, 250, 253, 0.82);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+  font-weight: 750;
+}
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: 10px;
+}
+
+.loadingDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--blue);
+  box-shadow: 0 0 0 6px rgba(10, 132, 255, 0.12);
+}
+
+.skeletonHeader,
+.skeletonPanel {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+}
+
+.skeletonMetrics,
+.skeletonGrid {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.skeletonMetrics {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.skeletonGrid {
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+}
+
+.skeletonPanel {
+  padding: 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+@media (max-width: 920px) {
+  .skeletonMetrics,
+  .skeletonGrid {
+    grid-template-columns: 1fr;
+  }
+}

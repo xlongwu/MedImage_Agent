@@ -165,12 +165,16 @@ class TestMissingEnvFlags:
     def test_empty_env_fails(self):
         ok, missing = validate_public_execution_env_flags({})
         assert not ok
-        assert len(missing) == 5
+        # Per §11.1, only 4 DICOM-specific flags are required for public execution
+        # (MATLAB/SPM/real-preprocessing are intentionally NOT required).
+        assert len(missing) == 4
 
     def test_none_env_fails(self):
         ok, missing = validate_public_execution_env_flags(None)
         assert not ok
-        assert len(missing) == 5
+        # Per §11.1, only 4 DICOM-specific flags are required for public execution
+        # (MATLAB/SPM/real-preprocessing are intentionally NOT required).
+        assert len(missing) == 4
 
 
 # ── Group 3: Release approval validation ────────────────────────────────

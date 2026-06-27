@@ -1,0 +1,77 @@
+.rawWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.rawMain,
+.rawAside {
+  min-width: 0;
+}
+
+.rawAside {
+  position: sticky;
+  top: 16px;
+}
+
+.summaryCard {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.cardHeader p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.technicalPanelSection {
+  display: grid;
+  gap: 12px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+}
+
+.sectionHeader p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 1040px) {
+  .rawWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .rawAside {
+    position: static;
+  }
+}

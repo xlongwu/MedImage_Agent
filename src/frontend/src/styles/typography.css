@@ -1,0 +1,35 @@
+:root {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-family-mono);
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  letter-spacing: var(--letter-spacing-ui);
+}
+
+h1 {
+  font-size: var(--font-size-display);
+  line-height: var(--line-height-tight);
+}
+
+h2 {
+  font-size: var(--font-size-page);
+  line-height: var(--line-height-title);
+}
+
+h3 {
+  font-size: var(--font-size-section);
+  line-height: var(--line-height-title);
+}

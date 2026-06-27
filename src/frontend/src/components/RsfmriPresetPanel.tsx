@@ -282,7 +282,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
                     fontWeight: 600,
                   }}
                 >
-                  Review this plan in Plan Review Console
+                  Review this plan in the Plan workspace
                 </button>
               )}
             </>

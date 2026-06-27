@@ -11,8 +11,9 @@ export default defineConfig({
   },
   build: {
     target: "es2020",
-    cssMinify: true,
-    sourcemap: false,
+    minify: false,
+    cssMinify: false,
+    sourcemap: true,
     reportCompressedSize: true,
     chunkSizeWarningLimit: 500,
     rollupOptions: {

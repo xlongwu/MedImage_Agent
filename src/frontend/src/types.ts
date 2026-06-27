@@ -520,7 +520,7 @@ export type PipelinePresetInstantiateResponse = {
   safety_flags: Record<string, boolean>;
 };
 
-/** Draft handoff from preset instantiation to Plan Review Console */
+/** Draft handoff from preset instantiation to the Plan workspace */
 export type PresetPlanDraft = {
   preset_id: string;
   project_id: string;
@@ -1216,6 +1216,106 @@ export type DicomConversionPublicExecutionResponse = {
   errors: string[];
   blocking_issues: string[];
   safety_flags: DicomConversionPublicExecutionSafetyFlags;
+};
+
+/** 实现dcm2nii任务方案.md §13 — Prepare response types */
+
+export type DicomConversionPrepareStatus =
+  | "ready"
+  | "review_required"
+  | "blocked"
+  | "disabled"
+  | "partial"
+  | "failed";
+
+export type DicomConversionPrepareConfirmations = {
+  mappings_reviewed: boolean;
+  rawdata_readonly: boolean;
+  research_use_only: boolean;
+  no_clinical_use: boolean;
+  external_converter: boolean;
+  rollback_policy: boolean;
+  risk_acknowledgement: boolean;
+  confirm_execution: boolean;
+};
+
+export type DicomConversionPrepareSystemChecks = {
+  preflight_ok: boolean;
+  dcm2niix_available: boolean;
+  dcm2niix_path: string | null;
+  dcm2niix_version: string | null;
+  dcm2niix_sha256: string | null;
+  dcm2niix_strategy: string | null;
+  mappings_complete: boolean;
+  mapping_count: number;
+  output_root_safe: boolean;
+  output_root: string | null;
+  rawdata_dir: string | null;
+  project_dir: string | null;
+  disk_space_ok: boolean;
+  disk_free_bytes: number | null;
+  disk_required_bytes: number | null;
+  checksum_before_exists: boolean;
+  checksum_before_path: string | null;
+  rollback_plan_exists: boolean;
+  rollback_plan_path: string | null;
+  env_gates_ok: boolean;
+  missing_env_flags: string[];
+};
+
+export type DicomConversionPrepareResponse = {
+  ok: boolean;
+  status: DicomConversionPrepareStatus;
+  project_id: string;
+  conversion_run_id: string;
+  approval_id: string;
+  technical_ready: boolean;
+  approval_ready: boolean;
+  execution_ready: boolean;
+  next_action: string;
+  system_checks: DicomConversionPrepareSystemChecks;
+  operator_confirmations: DicomConversionPrepareConfirmations;
+  missing_confirmations: string[];
+  blocking_issues: string[];
+  warnings: string[];
+  errors: string[];
+  run_dir: string | null;
+  approval_record_path: string | null;
+  audit_preview_path: string | null;
+  preflight_snapshot_path: string | null;
+  mapping_snapshot_path: string | null;
+  command_templates_path: string | null;
+  checksum_before_path: string | null;
+  rollback_plan_path: string | null;
+  review_package_path: string | null;
+};
+
+/** 实现dcm2nii任务方案.md §17 — Conversion result registration response */
+
+export type DicomConversionResultRegistrationResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  conversion_run_id: string;
+  output_root: string;
+  execution_status: string;
+  mapping_count: number;
+  nifti_count: number;
+  bold_count: number;
+  t1w_count: number;
+  subject_count: number;
+  subjects: string[];
+  manifest_path: string | null;
+  provenance_path: string | null;
+  checksum_verified: boolean;
+  preprocessing_registered: boolean;
+  project_metadata_updated: boolean;
+  dashboard_refresh_required: boolean;
+  viewer_refresh_required: boolean;
+  warnings: string[];
+  errors: string[];
+  blocking_issues: string[];
+  safety_flags: Record<string, boolean>;
 };
 
 /** Phase 4L-4 — Local UI state for execute panel */

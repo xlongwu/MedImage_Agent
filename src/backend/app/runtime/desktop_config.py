@@ -33,6 +33,13 @@ DEFAULT_DESKTOP_CONFIG: dict[str, Any] = {
         "provider": "mock",
         "approved": False,
     },
+    "dicom_conversion": {
+        "enabled": False,
+        "dcm2niix_path": "",
+        "prefer_bundled": True,
+        "overwrite_policy": "fail_if_exists",
+        "timeout_seconds": 1800,
+    },
 }
 
 
@@ -259,3 +266,48 @@ def _pipeline_adapters_check() -> dict[str, Any]:
     except Exception:
         adapters["rsfmri_python"] = False
     return {"name": "pipeline_adapters", "ok": any(adapters.values()), "adapters": adapters}
+
+
+def get_dicom_conversion_capability() -> dict[str, Any]:
+    """Return DICOM conversion capability info for the Settings page and capability API.
+
+    Per 实现dcm2nii任务方案.md §10.2, returns:
+      enabled, converter_available, converter_name, converter_path,
+      converter_version, converter_sha256, execution_supported.
+    """
+    config = get_desktop_config(redacted=True)
+    dc = config.get("dicom_conversion", {}) or {}
+
+    try:
+        from src.backend.app.services.dicom_conversion_execution import (
+            _detect_dcm2niix_runtime,
+        )
+        detection = _detect_dcm2niix_runtime()
+        available = bool(detection.get("found"))
+        path = detection.get("executable_path")
+        version = detection.get("version")
+        sha256 = detection.get("sha256")
+        strategy = detection.get("strategy")
+        error = detection.get("error")
+    except Exception as exc:
+        available = False
+        path = None
+        version = None
+        sha256 = None
+        strategy = "none"
+        error = f"dcm2niix detection failed: {exc}"
+
+    return {
+        "enabled": bool(dc.get("enabled", False)),
+        "converter_available": available,
+        "converter_name": "dcm2niix",
+        "converter_path": path,
+        "converter_version": version,
+        "converter_sha256": sha256,
+        "converter_strategy": strategy,
+        "execution_supported": available,
+        "prefer_bundled": bool(dc.get("prefer_bundled", True)),
+        "overwrite_policy": dc.get("overwrite_policy", "fail_if_exists"),
+        "timeout_seconds": dc.get("timeout_seconds", 1800),
+        "error": error if not available else None,
+    }

@@ -191,6 +191,72 @@ def test_mapping_confidence_fields_present(tmp_path, monkeypatch):
         assert "suggested_relative_path" in mapping
 
 
+def test_latest_dry_run_restores_persisted_mapping_snapshot(tmp_path, monkeypatch):
+    _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+    created = _create_project(client, tmp_path)
+    project_dir = Path(created["project_dir"])
+    run_dir = project_dir / "conversion_runs" / "conv-restored"
+    run_dir.mkdir(parents=True)
+    (run_dir / "mapping_snapshot.json").write_text(
+        json.dumps(
+            {
+                "created_at": "2026-06-25T00:00:00Z",
+                "mappings": [
+                    {
+                        "source_path": str(project_dir / "rawdata" / "sub-01" / "REST"),
+                        "source_type": "dicom_series",
+                        "subject_id": "sub-01",
+                        "session_id": "ses-01",
+                        "modality": "func",
+                        "suffix": "bold",
+                        "task": "rest",
+                        "suggested_relative_path": "sub-01/ses-01/func/sub-01_task-rest_bold.nii.gz",
+                        "confidence": "high",
+                        "warnings": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "preflight_snapshot.json").write_text(
+        json.dumps(
+            {
+                "status": "ready",
+                "checked_at": "2026-06-25T00:00:00Z",
+                "output_root_name": "converted_bids",
+                "source_summaries": [
+                    {
+                        "source_id": "source-1",
+                        "source_type": "dicom",
+                        "root": str(project_dir / "rawdata"),
+                        "exists": True,
+                        "file_count": 12,
+                        "subject_candidates": ["sub-01"],
+                        "series_count": 1,
+                        "warnings": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resp = client.get(f"/api/projects/{created['project_id']}/conversion/dry-run/latest")
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["status"] == "ready"
+    assert body["mapping_preview"][0]["source_type"] == "dicom_series"
+    assert body["mapping_preview"][0]["subject_id"] == "sub-01"
+    assert body["safety_flags"]["dry_run_only"] is True
+    assert body["safety_flags"]["no_external_tools_executed"] is True
+    assert body["safety_flags"]["restored_from_persisted_review_package"] is True
+    assert any("Restored dry-run mappings" in warning for warning in body["warnings"])
+
+
 def test_output_root_preview_is_scoped(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)

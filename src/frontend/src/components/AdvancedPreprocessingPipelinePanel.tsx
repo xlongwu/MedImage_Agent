@@ -1,5 +1,9 @@
 import { useState } from "react";
-import { DEFAULT_API_BASE } from "../lib/api/legacy";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import {
+  getPreprocessingPipelineReport,
+  getPreprocessingPipelineValidation,
+} from "../lib/api/preprocessing";
 import { CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = { projectId: string | null; preprocessingRunId: string | null };
@@ -107,7 +111,6 @@ export default function AdvancedPreprocessingPipelinePanel({
     setValError("");
     setValResult(null);
     try {
-      const { getPreprocessingPipelineValidation } = await import("../lib/api/legacy");
       const res = await getPreprocessingPipelineValidation(
         DEFAULT_API_BASE,
         projectId,
@@ -126,7 +129,6 @@ export default function AdvancedPreprocessingPipelinePanel({
     setRepLoading(true);
     setRepResult(null);
     try {
-      const { getPreprocessingPipelineReport } = await import("../lib/api/legacy");
       const res = await getPreprocessingPipelineReport(
         DEFAULT_API_BASE,
         projectId,

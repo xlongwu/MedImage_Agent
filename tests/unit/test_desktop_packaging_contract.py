@@ -171,6 +171,13 @@ def test_desktop_dist_wrapper_uses_workspace_caches():
     assert "NsisArchive" in build_all
     assert "NsisResourcesArchive" in build_desktop
     assert "NsisResourcesArchive" in build_all
+    assert "Clear-PackagingResiduals" in build_all
+    assert '".pytest_*"' in build_all
+    assert '"_MEI*"' in build_all
+    assert "Unable to remove generated packaging/test residual directories" in build_all
+    assert "Processes that may hold locks" in build_all
+    assert "Unable to inspect local process list" in build_all
+    assert "Close running pytest, Python, PyInstaller, or MedImage Agent processes" in build_all
     assert "DirOnly" in build_desktop
     assert "DirOnly" in build_all
     assert "LASTEXITCODE" in build_desktop

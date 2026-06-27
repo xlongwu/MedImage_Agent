@@ -36,7 +36,7 @@ import { requestJson } from "./legacyCore";
 
 export async function createImportDiagnosticsPackage(
   baseUrl: string,
-  projectId = "brain-tumor-study",
+  projectId: string,
 ) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
@@ -52,7 +52,7 @@ export async function diagnoseRun(baseUrl: string, runId: string) {
   );
 }
 
-export async function getDatasetImportHistory(baseUrl: string, projectId = "brain-tumor-study") {
+export async function getDatasetImportHistory(baseUrl: string, projectId: string) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
     `/api/datasets/imports?project_id=${encodeURIComponent(projectId)}`,
@@ -61,7 +61,7 @@ export async function getDatasetImportHistory(baseUrl: string, projectId = "brai
 
 export async function getLatestImportDiagnosticsPackage(
   baseUrl: string,
-  projectId = "brain-tumor-study",
+  projectId: string,
 ) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
@@ -121,7 +121,7 @@ export async function retryExecute(
 
 export async function verifyImportDiagnosticsPackage(
   baseUrl: string,
-  projectId = "brain-tumor-study",
+  projectId: string,
 ) {
   return requestJson<Record<string, unknown>>(
     baseUrl,

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildProjectInventory,
+  deriveDefaultWorkflowRoute,
+  deriveDefaultWorkflowTab,
   deriveProjectWorkflowState,
   directoryBasename,
   isProjectNameConflict,
@@ -149,6 +151,55 @@ describe("project inventory helpers", () => {
   it("extracts directory basename across separators", () => {
     expect(directoryBasename("D:\\data\\StudyA\\")).toBe("StudyA");
     expect(directoryBasename("/tmp/StudyB")).toBe("StudyB");
+  });
+});
+
+describe("deriveDefaultWorkflowRoute", () => {
+  it("routes raw and empty projects to Data & Conversion", () => {
+    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "raw_dicom" } })).toBe("data");
+    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "empty" } })).toBe("data");
+  });
+
+  it("routes converted and mixed projects to Preprocessing", () => {
+    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "converted_bids" } })).toBe(
+      "preprocessing",
+    );
+    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "mixed" } })).toBe("preprocessing");
+  });
+
+  it("routes running, pending, and failed tasks to Runs before data-state defaults", () => {
+    expect(
+      deriveDefaultWorkflowRoute({
+        inventory: { dataState: "converted_bids" },
+        tasks: [{ status: "running" }],
+      }),
+    ).toEqual({ reason: "active_or_failed_run", tab: "runs" });
+    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "raw_dicom" }, tasks: [{ status: "pending" }] })).toBe(
+      "runs",
+    );
+    expect(deriveDefaultWorkflowTab({ inventory: { dataState: "empty" }, tasks: [{ status: "failed" }] })).toBe(
+      "runs",
+    );
+  });
+
+  it("routes explicit QC attention to QC after a preprocessing run exists", () => {
+    expect(
+      deriveDefaultWorkflowRoute({
+        diagnostics: { qc_attention_required: true },
+        hasPreprocessingRun: true,
+        inventory: { dataState: "converted_bids" },
+      }),
+    ).toEqual({ reason: "qc_attention", tab: "reports" });
+  });
+
+  it("keeps converted data in Preprocessing when QC attention is not backed by run evidence", () => {
+    expect(
+      deriveDefaultWorkflowRoute({
+        diagnostics: { qc_attention_required: true },
+        hasPreprocessingRun: false,
+        inventory: { dataState: "converted_bids" },
+      }),
+    ).toEqual({ reason: "converted_data", tab: "preprocessing" });
   });
 });
 

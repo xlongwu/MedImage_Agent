@@ -182,28 +182,28 @@ def test_env_flags_all_missing_blocks_execution() -> None:
     """All flags missing → execution disabled."""
     ok, missing = is_conversion_execution_enabled({})
     assert ok is False
-    assert len(missing) == 5
+    # Per 实现dcm2nii任务方案.md §11.1, only 3 DICOM-specific flags are
+    # required (MATLAB/SPM/real-preprocessing are intentionally NOT required).
+    assert len(missing) == 3
 
 
 def test_env_flags_partial_blocks_execution() -> None:
     """Partial flags → execution still disabled."""
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
     }
     ok, missing = is_conversion_execution_enabled(env)
     assert ok is False
-    assert len(missing) == 3
+    assert len(missing) == 2
 
 
 def test_env_flags_all_set_enables_preflight_only() -> None:
     """All flags set → preflight readiness, NOT real execution."""
+    # Per §11.1, only 3 DICOM-specific flags are required.
     env = {
         "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-        "MEDIMAGE_MATLAB_ENABLED": "1",
-        "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
     }
     ok, missing = is_conversion_execution_enabled(env)
     assert ok is True
@@ -214,10 +214,8 @@ def test_env_flags_empty_string_not_accepted() -> None:
     """Empty string is not '1'."""
     env = {f: "" for f in [
         "MEDIMAGE_ENABLE_DICOM_CONVERSION",
-        "MEDIMAGE_MATLAB_ENABLED",
-        "MEDIMAGE_SPM_SMOKE_ENABLED",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
     ]}
     ok, _ = is_conversion_execution_enabled(env)
     assert ok is False

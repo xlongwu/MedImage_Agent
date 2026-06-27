@@ -5,7 +5,7 @@ import { useAsyncResource } from "./useAsyncResource";
 
 export function useDatasetSummary(projectId: string | null) {
   return useAsyncResource<DatasetSummary>(
-    () => (projectId ? getDatasetSummary(projectId) : Promise.resolve(fallbackDatasetSummary)),
+    projectId ? () => getDatasetSummary(projectId) : null,
     fallbackDatasetSummary,
     [projectId],
   );

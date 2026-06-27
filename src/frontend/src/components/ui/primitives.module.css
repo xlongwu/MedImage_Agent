@@ -1,0 +1,301 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: var(--control-height-md);
+  padding: 0 12px;
+  border-radius: var(--radius);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.buttonLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.variantPrimary {
+  border-color: transparent;
+  background: var(--color-accent);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(10, 132, 255, 0.2);
+}
+
+.variantPrimary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  box-shadow: 0 12px 26px rgba(10, 132, 255, 0.26);
+}
+
+.variantSecondary {
+  border-color: var(--color-divider);
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+}
+
+.variantSecondary:hover:not(:disabled) {
+  background: var(--color-surface-secondary);
+  box-shadow: none;
+}
+
+.variantGhost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+  box-shadow: none;
+}
+
+.variantGhost:hover:not(:disabled) {
+  background: var(--color-selection);
+  color: var(--color-text-primary);
+  box-shadow: none;
+}
+
+.variantDanger {
+  border-color: rgba(217, 45, 32, 0.24);
+  background: rgba(217, 45, 32, 0.08);
+  color: var(--color-danger);
+}
+
+.variantDanger:hover:not(:disabled) {
+  background: rgba(217, 45, 32, 0.12);
+  box-shadow: 0 10px 24px rgba(217, 45, 32, 0.12);
+}
+
+.sizeSm {
+  min-height: var(--control-height-sm);
+  padding: 0 10px;
+  font-size: var(--font-size-caption);
+}
+
+.sizeMd {
+  min-height: var(--control-height-md);
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.iconSlot,
+.iconOnly {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.iconSlot {
+  width: 16px;
+  height: 16px;
+}
+
+.iconButton {
+  width: var(--control-height-md);
+  min-width: var(--control-height-md);
+  padding: 0;
+  aspect-ratio: 1;
+}
+
+.iconButton.sizeSm {
+  width: var(--control-height-sm);
+  min-width: var(--control-height-sm);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-caption);
+  font-weight: 700;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge.sizeSm {
+  min-height: 20px;
+  padding: 0 7px;
+  font-size: var(--font-size-micro);
+}
+
+.badgeNeutral {
+  border-color: var(--color-divider);
+  background: rgba(110, 110, 115, 0.08);
+  color: var(--color-text-secondary);
+}
+
+.badgeInfo {
+  border-color: rgba(10, 132, 255, 0.22);
+  background: rgba(10, 132, 255, 0.1);
+  color: #0759ac;
+}
+
+.badgeSuccess {
+  border-color: rgba(36, 138, 61, 0.22);
+  background: rgba(36, 138, 61, 0.1);
+  color: var(--color-success);
+}
+
+.badgeWarning {
+  border-color: rgba(185, 107, 0, 0.24);
+  background: rgba(185, 107, 0, 0.1);
+  color: var(--color-warning);
+}
+
+.badgeDanger {
+  border-color: rgba(217, 45, 32, 0.24);
+  background: rgba(217, 45, 32, 0.1);
+  color: var(--color-danger);
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: var(--color-surface-primary);
+}
+
+.cardDefault {
+  box-shadow: var(--shadow-card);
+}
+
+.cardMuted {
+  background: var(--surface-muted);
+}
+
+.cardElevated {
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-popover);
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 26px;
+  border: 1px dashed var(--color-divider-strong);
+  border-radius: var(--radius);
+  background: var(--color-surface-secondary);
+  text-align: center;
+}
+
+.emptyStateIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius);
+  background: var(--color-selection);
+  color: var(--color-accent);
+}
+
+.emptyStateText {
+  display: grid;
+  gap: 6px;
+  max-width: 420px;
+}
+
+.emptyStateText strong {
+  color: var(--color-text-primary);
+  font-size: 15px;
+}
+
+.emptyStateText p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-secondary);
+}
+
+.emptyStateAction {
+  display: flex;
+  justify-content: center;
+}
+
+.skeleton {
+  display: inline-block;
+  overflow: hidden;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, rgba(60, 60, 67, 0.06), rgba(60, 60, 67, 0.12), rgba(60, 60, 67, 0.06)),
+    rgba(60, 60, 67, 0.06);
+  background-size: 220% 100%;
+  animation: uiSkeletonPulse 1.2s var(--ease-standard) infinite;
+}
+
+.tooltipRoot {
+  position: relative;
+  display: inline-flex;
+}
+
+.tooltipAnchor {
+  display: inline-flex;
+}
+
+.tooltipBubble {
+  position: absolute;
+  z-index: 80;
+  width: max-content;
+  max-width: min(220px, calc(100vw - 32px));
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: rgba(11, 18, 32, 0.92);
+  color: #ffffff;
+  font-size: var(--font-size-caption);
+  line-height: 1.35;
+  opacity: 0;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-duration-fast) var(--ease-standard),
+    transform var(--motion-duration-fast) var(--ease-standard);
+}
+
+.tooltipRoot:hover .tooltipBubble,
+.tooltipRoot:focus-within .tooltipBubble {
+  opacity: 1;
+}
+
+.tooltipTop {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+}
+
+.tooltipRoot:hover .tooltipTop,
+.tooltipRoot:focus-within .tooltipTop {
+  transform: translate(-50%, 0);
+}
+
+.tooltipBottom {
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, -4px);
+}
+
+.tooltipRoot:hover .tooltipBottom,
+.tooltipRoot:focus-within .tooltipBottom {
+  transform: translate(-50%, 0);
+}
+
+@keyframes uiSkeletonPulse {
+  from {
+    background-position: 120% 0;
+  }
+
+  to {
+    background-position: -120% 0;
+  }
+}

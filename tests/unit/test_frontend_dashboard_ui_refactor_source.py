@@ -10,34 +10,48 @@ def _read(path: str) -> str:
         return handle.read()
 
 
-def test_apple_style_dashboard_structure_exists():
+def test_app_shell_workspace_structure_exists():
     app = _read("src/frontend/src/App.tsx")
     shell = _read("src/frontend/src/features/app/AppShellView.tsx")
     chrome = _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
-    styles = _read("src/frontend/src/styles.css")
+    app_shell = _read("src/frontend/src/layouts/AppShell/AppShell.tsx")
+    project_shell = _read("src/frontend/src/layouts/ProjectShell/ProjectShell.tsx")
     app_components = [
+        "AppShellView",
+        "deriveDefaultWorkflowRoute",
+    ]
+    shell_components = [
+        "AppShell",
+        "ProjectShell",
+        "TopBar",
+        "ProjectSwitcher",
+        "ProjectLifecycleSidebar",
+        "ProjectOverviewHeader",
+        "RunActivityBar",
+        "ContextInspector",
+        "AssistantSheet",
+        "MedicalImageViewer",
         "DataConversionWorkspace",
+        "PlanWorkspace",
         "PreprocessingWorkspace",
         "QCReportsWorkspace",
-        "SecondaryToolsDrawer",
-        "CompactTaskLog",
     ]
     chrome_components = [
-        "ProjectHeroPanel",
-        "ProjectList",
-        "RecommendedNextStepCard",
-        "ReadinessStatusStrip",
-        "WorkflowTabs",
+        "TopBar",
+        "WorkspaceHeader",
+        "WorkspaceSuspenseFallback",
     ]
     for component in app_components:
+        assert component in app, f"{component} must be wired from App.tsx"
+    for component in shell_components:
         assert component in shell, f"{component} must exist in AppShellView"
     for component in chrome_components:
         assert component in shell or component in chrome, f"{component} must exist in AppShellView or DashboardChrome"
-    assert "ProjectInventorySummary" in chrome, "ProjectInventorySummary must exist in DashboardChrome"
-    assert "Recommended Next Step" in (app + shell + chrome)
-    assert "readiness-status-strip" in styles
-    assert "workflow-tabs" in styles
-    assert "workflow-workspace" in styles
+    assert "topBarSlot" in app_shell
+    assert "sidebarSlot" in app_shell
+    assert "inspectorSlot" in app_shell
+    assert "runActivitySlot" in app_shell
+    assert 'workspaceId = "workflow-workspace"' in project_shell
 
 
 def test_advanced_preprocessing_placeholder_text_exists():
@@ -68,15 +82,18 @@ def test_next_actions_cleanup_helper_exists():
     assert "rawDicomPriority" in helper
 
 
-def test_default_dashboard_does_not_render_planning_tools_as_full_cards():
+def test_app_shell_does_not_render_technical_tools_as_default_cards():
     shell = _read("src/frontend/src/features/app/AppShellView.tsx")
-    start = shell.index('<main className="workflow-main">')
-    end = shell.index("<SecondaryToolsDrawer", start)
-    default_main = shell[start:end]
-    assert "DashboardGroup" not in default_main
-    assert "SpmRealignDryRunPanel" not in default_main
-    assert "SpmRealignWrapperSkeletonPanel" not in default_main
-    assert "EnvironmentHealthPanel" not in default_main
+    plan_workspace = _read("src/frontend/src/features/workspaces/PlanWorkspace.tsx")
+    preprocessing_workspace = _read("src/frontend/src/features/workspaces/PreprocessingWorkspace.tsx")
+    assert "SecondaryToolsDrawer" not in shell
+    assert "CompactTaskLog" not in shell
+    assert "PlanReviewConsole" not in shell
+    assert "SpmRealignDryRunPanel" not in shell
+    assert "SpmRealignWrapperSkeletonPanel" not in shell
+    assert "EnvironmentHealthPanel" not in shell
+    assert "PlanReviewConsole" in plan_workspace
+    assert "TechnicalModuleSection" in preprocessing_workspace
 
 
 def test_advanced_preprocessing_mounts_once_and_not_in_review_panel():

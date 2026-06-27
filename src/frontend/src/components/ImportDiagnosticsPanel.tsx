@@ -13,6 +13,8 @@ import { TextViewer } from "./TextViewer";
 
 type Props = {
   baseUrl: string;
+  projectId?: string | null;
+  rawdataDir?: string | null;
 };
 
 type ValidationIssue = {
@@ -108,15 +110,19 @@ function severityTone(severity: string | undefined) {
   return "#2563eb";
 }
 
-export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
-  const [projectId, setProjectId] = useState("brain-tumor-study");
+export default function ImportDiagnosticsPanel({
+  baseUrl,
+  projectId: activeProjectId,
+  rawdataDir,
+}: Props) {
+  const [projectId, setProjectId] = useState(activeProjectId ?? "");
   const [validation, setValidation] = useState<Record<string, unknown> | null>(null);
   const [manifest, setManifest] = useState<Record<string, unknown> | null>(null);
   const [importHistory, setImportHistory] = useState<Record<string, unknown> | null>(null);
   const [handoffPackage, setHandoffPackage] = useState<Record<string, unknown> | null>(null);
   const [verifyResult, setVerifyResult] = useState<Record<string, unknown> | null>(null);
   const [dicomPreflight, setDicomPreflight] = useState<Record<string, unknown> | null>(null);
-  const [dicomPath, setDicomPath] = useState("data/DemoData");
+  const [dicomPath, setDicomPath] = useState(rawdataDir ?? "");
   const [dicomMaxFiles, setDicomMaxFiles] = useState(2000);
   const [busy, setBusy] = useState(false);
   const [packaging, setPackaging] = useState(false);
@@ -126,11 +132,44 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    void refresh();
+    if (projectId.trim()) {
+      void refresh();
+    }
   }, [baseUrl]);
 
+  useEffect(() => {
+    setProjectId(activeProjectId ?? "");
+    setDicomPath(rawdataDir ?? "");
+    if (activeProjectId || rawdataDir) {
+      setNotice("Active project context loaded. Run diagnostics when ready.");
+      setError("");
+    }
+  }, [activeProjectId, rawdataDir]);
+
+  function useActiveProjectContext() {
+    setProjectId(activeProjectId ?? "");
+    setDicomPath(rawdataDir ?? "");
+    setNotice(
+      activeProjectId
+        ? "Active project context applied. Run diagnostics when ready."
+        : "No active project context is available.",
+    );
+    setError("");
+  }
+
+  function getRequestedProjectId(action: string) {
+    const trimmedProjectId = projectId.trim();
+    if (!trimmedProjectId) {
+      setError(`Enter a project ID before ${action}.`);
+      setNotice("");
+      return null;
+    }
+    return trimmedProjectId;
+  }
+
   async function refresh() {
-    const trimmedProjectId = projectId.trim() || "brain-tumor-study";
+    const trimmedProjectId = getRequestedProjectId("loading import diagnostics");
+    if (!trimmedProjectId) return;
     setBusy(true);
     setError("");
     setNotice("");
@@ -180,7 +219,8 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
   }
 
   async function generatePackage() {
-    const trimmedProjectId = projectId.trim() || "brain-tumor-study";
+    const trimmedProjectId = getRequestedProjectId("generating an import diagnostics package");
+    if (!trimmedProjectId) return;
     setPackaging(true);
     setError("");
     setNotice("");
@@ -197,7 +237,8 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
   }
 
   async function verifyPackage() {
-    const trimmedProjectId = projectId.trim() || "brain-tumor-study";
+    const trimmedProjectId = getRequestedProjectId("verifying an import diagnostics package");
+    if (!trimmedProjectId) return;
     setVerifying(true);
     setError("");
     setNotice("");
@@ -217,7 +258,8 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
   }
 
   async function runDicomMetadataPreflight() {
-    const trimmedProjectId = projectId.trim() || "brain-tumor-study";
+    const trimmedProjectId = getRequestedProjectId("running DICOM metadata preflight");
+    if (!trimmedProjectId) return;
     setDicomBusy(true);
     setError("");
     setNotice("");
@@ -261,6 +303,8 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
   const dicomReportText = String(dicomPreflight?.report_text || "");
   const dicomWarnings = stringList(dicomPreflight?.warnings);
   const dicomErrors = stringList(dicomPreflight?.errors);
+  const hasProjectId = Boolean(projectId.trim());
+  const dicomInputConfigured = Boolean(dicomPath.trim());
 
   return (
     <div>
@@ -273,7 +317,22 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
       <div className="formGrid">
         <label>
           Project ID
-          <input value={projectId} onChange={(event) => setProjectId(event.target.value)} />
+          <input
+            placeholder="Enter project ID"
+            value={projectId}
+            onChange={(event) => setProjectId(event.target.value)}
+          />
+        </label>
+        <label>
+          Active project context
+          <input
+            readOnly
+            value={
+              activeProjectId
+                ? `${activeProjectId}${rawdataDir ? ` | ${rawdataDir}` : ""}`
+                : "No active project selected"
+            }
+          />
         </label>
         <label>
           Validation report
@@ -290,7 +349,10 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
       </div>
 
       <div className="row">
-        <button onClick={refresh} disabled={busy}>
+        <button onClick={useActiveProjectContext} disabled={!activeProjectId && !rawdataDir}>
+          Use current project context
+        </button>
+        <button onClick={refresh} disabled={busy || !hasProjectId}>
           {busy ? "Refreshing..." : "Revalidate imports"}
         </button>
         <button
@@ -308,7 +370,7 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
         >
           Open manifest
         </button>
-        <button onClick={generatePackage} disabled={packaging}>
+        <button onClick={generatePackage} disabled={packaging || !hasProjectId}>
           {packaging ? "Packaging..." : "Generate handoff package"}
         </button>
         <button
@@ -372,7 +434,11 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
       <div className="formGrid">
         <label>
           DICOM root
-          <input value={dicomPath} onChange={(event) => setDicomPath(event.target.value)} />
+          <input
+            placeholder="Optional DICOM root path"
+            value={dicomPath}
+            onChange={(event) => setDicomPath(event.target.value)}
+          />
         </label>
         <label>
           Max files sampled
@@ -393,8 +459,15 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
           <input readOnly value={dicomJsonPath || "Not generated yet"} />
         </label>
       </div>
+      {!dicomInputConfigured ? (
+        <div className="empty" style={{ marginTop: 8 }}>
+          DICOM diagnostics input is not configured. A 0 sources / 0 DICOM files preflight in
+          this module means no diagnostics root has been supplied here; it does not mean the
+          active project has no raw DICOM data.
+        </div>
+      ) : null}
       <div className="row">
-        <button onClick={runDicomMetadataPreflight} disabled={dicomBusy}>
+        <button onClick={runDicomMetadataPreflight} disabled={dicomBusy || !hasProjectId}>
           {dicomBusy ? "Checking DICOM..." : "Run DICOM preflight"}
         </button>
         <button
@@ -486,7 +559,11 @@ export default function ImportDiagnosticsPanel({ baseUrl }: Props) {
           ))}
         </div>
       ) : (
-        <div className="empty">No DICOM series metadata loaded yet</div>
+        <div className="empty">
+          {dicomInputConfigured
+            ? "No DICOM series metadata loaded yet"
+            : "No DICOM series metadata loaded because diagnostics input is not configured."}
+        </div>
       )}
       {dicomWarnings.length || dicomErrors.length ? (
         <div style={{ display: "grid", gap: 6, marginTop: 12 }}>

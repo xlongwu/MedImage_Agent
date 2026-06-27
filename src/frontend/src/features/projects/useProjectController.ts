@@ -74,7 +74,11 @@ export interface ProjectController {
   projectCreateResult: ProjectCreateResponse | null;
   setProjectCreateResult: (r: ProjectCreateResponse | null) => void;
   setProjectCreateError: (e: string) => void;
-  handleUploadData: () => Promise<void>;
+  selectProjectDirectory: () => Promise<string | null>;
+  createProjectFromDirectoryPath: (
+    path: string,
+    options?: { projectName?: string },
+  ) => Promise<ProjectCreateResponse | null>;
   handleDeleteProject: (projectId: string, projectName: string) => Promise<void>;
 }
 
@@ -161,73 +165,78 @@ export function useProjectController(
     setSliceIndex(null);
   }, [projectDataRef.id, selectedSubjectId, sequence, plane]);
 
-  const handleUploadData = useCallback(async () => {
+  const selectProjectDirectory = useCallback(async () => {
     setProjectCreateError("");
-    setProjectCreateResultRef(null);
-    let selectedPath: string | null = null;
     try {
       if (window.medimage?.selectDirectory) {
-        selectedPath = await window.medimage.selectDirectory();
-      } else {
-        selectedPath = window.prompt("Enter a local BIDS / rawdata directory path");
+        const selectedPath = await window.medimage.selectDirectory();
+        return selectedPath?.trim() ? selectedPath.trim() : null;
       }
+      const selectedPath = window.prompt("Enter a local BIDS / rawdata directory path");
+      return selectedPath?.trim() ? selectedPath.trim() : null;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setProjectCreateError(message);
-      return;
+      return null;
     }
-    if (!selectedPath?.trim()) return;
+  }, []);
 
-    setProjectCreateLoading(true);
-    try {
-      const uploadBaseUrl = await getApiBaseUrl();
-      const requestedProjectName = uniqueProjectName(
-        directoryBasename(selectedPath),
-        projectsRef.data,
-      );
-      let effectiveProjectName = uniqueProjectName(requestedProjectName, projectsRef.data);
-      const createWithName = (name: string) =>
-        createProjectFromDirectory(uploadBaseUrl, {
-          project_name: name,
-          rawdata_dir: selectedPath.trim(),
-          copy_mode: "reference",
-          run_inspection: true,
-          overwrite: false,
-        });
-      let result: ProjectCreateResponse;
+  const createProjectFromDirectoryPath = useCallback(
+    async (path: string, options?: { projectName?: string }) => {
+      const selectedPath = path.trim();
+      if (!selectedPath) return null;
+      setProjectCreateError("");
+      setProjectCreateResultRef(null);
+      setProjectCreateLoading(true);
       try {
-        result = await createWithName(effectiveProjectName);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (!isProjectNameConflict(message)) throw err;
-        effectiveProjectName = uniqueProjectName(
-          `${requestedProjectName} ${new Date().toISOString().slice(0, 10)}`,
+        const uploadBaseUrl = await getApiBaseUrl();
+        const requestedProjectName = uniqueProjectName(
+          options?.projectName?.trim() || directoryBasename(selectedPath),
           projectsRef.data,
         );
-        result = await createWithName(effectiveProjectName);
+        let effectiveProjectName = uniqueProjectName(requestedProjectName, projectsRef.data);
+        const createWithName = (name: string) =>
+          createProjectFromDirectory(uploadBaseUrl, {
+            project_name: name,
+            rawdata_dir: selectedPath,
+            copy_mode: "reference",
+            run_inspection: true,
+            overwrite: false,
+          });
+        let result: ProjectCreateResponse;
+        try {
+          result = await createWithName(effectiveProjectName);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (!isProjectNameConflict(message)) throw err;
+          effectiveProjectName = uniqueProjectName(
+            `${requestedProjectName} ${new Date().toISOString().slice(0, 10)}`,
+            projectsRef.data,
+          );
+          result = await createWithName(effectiveProjectName);
+        }
+        const refreshedProjects = await projectsRef.reload();
+        const listSource = refreshedProjects ?? projectsRef.data;
+        projectsRef.setData(mergeCreatedProjectIntoList(result, listSource));
+        setSelectedProjectIdRef(result.project_id);
+        setSelectedSubjectId(null);
+        setSliceIndex(null);
+        setProjectCreateResultRef(result);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setProjectCreateError(message);
+        return null;
+      } finally {
+        setProjectCreateLoading(false);
       }
-      const refreshedProjects = await projectsRef.reload();
-      const listSource = refreshedProjects ?? projectsRef.data;
-      projectsRef.setData(mergeCreatedProjectIntoList(result, listSource));
-      setSelectedProjectIdRef(result.project_id);
-      setSelectedSubjectId(null);
-      setSliceIndex(null);
-      setProjectCreateResultRef(result);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setProjectCreateError(message);
-    } finally {
-      setProjectCreateLoading(false);
-    }
-  }, [projectsRef, setSelectedProjectIdRef]);
+    },
+    [projectsRef, setSelectedProjectIdRef],
+  );
 
   const handleDeleteProject = useCallback(
-    async (projectId: string, projectName: string) => {
+    async (projectId: string, _projectName: string) => {
       if (projectCreateLoading) return;
-      const confirmed = window.confirm(
-        `Remove "${projectName}" from Recent projects? This will not delete rawdata or project files.`,
-      );
-      if (!confirmed) return;
 
       setProjectCreateLoading(true);
       try {
@@ -290,7 +299,8 @@ export function useProjectController(
     projectCreateResult,
     setProjectCreateResult,
     setProjectCreateError,
-    handleUploadData,
+    selectProjectDirectory,
+    createProjectFromDirectoryPath,
     handleDeleteProject,
   };
 }

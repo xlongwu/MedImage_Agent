@@ -165,6 +165,82 @@ def _detect_dcm2niix() -> dict[str, Any]:
     }
 
 
+def _bundled_dcm2niix_candidates() -> list[Path]:
+    """Return candidate paths for the bundled dcm2niix binary.
+
+    Covers development and PyInstaller-packaged layouts:
+      - desktop/resources/tools/windows-x64/dcm2niix.exe (dev)
+      - <repo_root>/tools/dcm2niix.exe (legacy dev)
+      - <exe_dir>/resources/tools/dcm2niix.exe (PyInstaller one-file)
+      - <exe_dir>/resources/tools/windows-x64/dcm2niix.exe (PyInstaller alt)
+      - <_MEIPASS>/resources/tools/dcm2niix.exe (PyInstaller onedir temp)
+    """
+    candidates: list[Path] = []
+
+    # PyInstaller _MEIPASS (onedir / one-file temp extraction)
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        base = Path(meipass)
+        candidates.extend([
+            base / "resources" / "tools" / "dcm2niix.exe",
+            base / "resources" / "tools" / "windows-x64" / "dcm2niix.exe",
+        ])
+
+    # Directory of the running executable (PyInstaller onedir / desktop install)
+    exe_dir = Path(sys.executable).resolve().parent
+    candidates.extend([
+        exe_dir / "resources" / "tools" / "dcm2niix.exe",
+        exe_dir / "resources" / "tools" / "windows-x64" / "dcm2niix.exe",
+    ])
+
+    # Development layout: walk up from this file to repo root
+    current = Path(__file__).resolve().parent
+    for _ in range(10):
+        candidates.extend([
+            current / "desktop" / "resources" / "tools" / "windows-x64" / "dcm2niix.exe",
+            current / "desktop" / "resources" / "tools" / "dcm2niix.exe",
+            current / "tools" / "dcm2niix.exe",
+        ])
+        if current == current.parent:
+            break
+        current = current.parent
+
+    return candidates
+
+
+def _desktop_config_dcm2niix_path() -> str | None:
+    """Return the dcm2niix path configured in desktop config, if any."""
+    try:
+        from src.backend.app.runtime.desktop_config import get_desktop_config
+        config = get_desktop_config(redacted=True)
+        dc = config.get("dicom_conversion", {}) or {}
+        path = dc.get("dcm2niix_path") or ""
+        return path if path else None
+    except Exception:
+        return None
+
+
+def _map_availability_to_conversion_status(availability_status: str) -> str:
+    """Map a Dcm2niixAvailabilityStatus to a DicomConversionStatus.
+
+    The task plan (§12) mentions an `unavailable` state. Since
+    DicomConversionStatus does not include `unavailable`, it is represented
+    by `blocked` (missing/unknown) or `disabled` (feature flag off / version
+    mismatch). This function is the canonical mapping referenced by the
+    DicomConversionStatus type definition.
+
+    Note: `available` is not mapped here because availability is only checked
+    when conversion is gated. Callers should short-circuit on `available`
+    before invoking this function.
+    """
+    return {
+        "missing": "blocked",
+        "version_failed": "disabled",
+        "disabled": "disabled",
+        "unknown": "blocked",
+    }.get(availability_status, "blocked")
+
+
 def _detect_dcm2niix_runtime(
     *,
     executable: str = "dcm2niix",
@@ -173,8 +249,15 @@ def _detect_dcm2niix_runtime(
 ) -> dict[str, Any]:
     """Detect dcm2niix for Phase 6 real execution.
 
-    Resolution order: MEDIMAGE_DCM2NIIX_PATH, active mamba/conda env,
-    PATH, bundled binary, explicit not-found error.
+    Resolution order (per 实现dcm2nii任务方案.md §9.3):
+      1. Desktop config dicom_conversion.dcm2niix_path
+      2. MEDIMAGE_DCM2NIIX_PATH env var
+      3. Active mamba/conda env
+      4. System PATH
+      5. Bundled resource (desktop/resources/tools/windows-x64/dcm2niix.exe
+         or PyInstaller-packaged resources/tools/dcm2niix.exe)
+      6. Legacy dev tools/dcm2niix.exe
+      7. Not found — return clear error
     """
     from src.backend.app.schemas.dicom_conversion_execution import (
         parse_dcm2niix_version,
@@ -238,28 +321,35 @@ def _detect_dcm2niix_runtime(
             ])
         return candidates
 
+    # 1. Desktop config path
+    config_path = _desktop_config_dcm2niix_path()
+    if config_path and Path(config_path).exists():
+        return _result(str(Path(config_path)), "desktop_config")
+    if config_path:
+        warnings.append(f"Desktop config dcm2niix_path does not exist: {config_path}")
+
+    # 2. Env var
     env_path = effective_env.get("MEDIMAGE_DCM2NIIX_PATH")
     if env_path:
         if Path(env_path).exists():
             return _result(str(Path(env_path)), "env_var")
         warnings.append(f"MEDIMAGE_DCM2NIIX_PATH does not exist: {env_path}")
 
+    # 3. Mamba/conda env
     for candidate in _mamba_env_candidates():
         if candidate.exists():
             return _result(str(candidate), "mamba_env")
 
+    # 4. System PATH
     exe_path = shutil.which(executable)
     if exe_path:
         return _result(exe_path, "path")
 
-    current = Path(__file__).resolve().parent
-    for _ in range(10):
-        bundled = current / "tools" / "dcm2niix.exe"
+    # 5 & 6. Bundled resource (desktop/resources or PyInstaller resources)
+    for bundled in _bundled_dcm2niix_candidates():
         if bundled.exists():
-            return _result(str(bundled), "bundled")
-        if current == current.parent:
-            break
-        current = current.parent
+            strategy = "bundled_resource" if "resources" in bundled.parts else "bundled"
+            return _result(str(bundled), strategy)
 
     return {
         "found": False,
@@ -267,9 +357,10 @@ def _detect_dcm2niix_runtime(
         "version": None,
         "sha256": None,
         "error": (
-            "dcm2niix not found. Set MEDIMAGE_DCM2NIIX_PATH, run the backend "
-            "with the mamba environment that provides dcm2niix, add dcm2niix "
-            "to PATH, or place a bundled binary at project_root/tools/dcm2niix.exe."
+            "dcm2niix not found. Set desktop config dicom_conversion.dcm2niix_path, "
+            "set MEDIMAGE_DCM2NIIX_PATH, run the backend with the mamba environment "
+            "that provides dcm2niix, add dcm2niix to PATH, or place a bundled binary "
+            "at desktop/resources/tools/windows-x64/dcm2niix.exe."
         ),
         "warnings": warnings,
         "strategy": "none",
@@ -366,13 +457,14 @@ def run_conversion_preflight(
     project_dir = str(metadata.get("project_dir") or "")
 
     # ── 1. Environment flag check ──
+    # Per 实现dcm2nii任务方案.md §11.1, only DICOM-specific flags are
+    # required. MATLAB/SPM/real-preprocessing flags must NOT block
+    # DICOM→NIfTI conversion.
     env_flags: dict[str, str] = {}
     for flag in [
         "MEDIMAGE_ENABLE_DICOM_CONVERSION",
-        "MEDIMAGE_MATLAB_ENABLED",
-        "MEDIMAGE_SPM_SMOKE_ENABLED",
         "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-        "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
     ]:
         value = os.environ.get(flag, "")
         env_flags[flag] = value
@@ -482,14 +574,21 @@ def run_conversion_preflight(
         command_templates.append(template)
 
     # ── 7. Determine status ──
-    if blocking:
-        status: str = "blocked" if not env_ok else "disabled"
-    elif not env_ok:
-        status = "disabled"
+    # Per 实现dcm2nii任务方案.md §12, the preflight status distinguishes:
+    #   - unavailable: dcm2niix missing
+    #   - disabled: conversion feature flag not enabled
+    #   - blocked: input/output/safety/mapping invalid
+    #   - review_required: technical checks pass, awaiting user approval
+    #   - ready: technical checks AND approval both pass (set by prepare)
+    if not env_ok:
+        status: str = "disabled"
     elif not tool_available:
-        status = "disabled"
+        status = "blocked"
+    elif blocking:
+        status = "blocked"
     elif output_safe and mappings:
-        status = "ready"
+        # Technical checks pass; approval is still required before execution.
+        status = "review_required"
     else:
         status = "warning"
 
@@ -639,14 +738,30 @@ def run_conversion_execute(
 
     Phase 6B: Real execution enabled with full safety gates.
     Calls dcm2niix via argv list, shell=False, output only in workspace.
+
+    Per 实现dcm2nii任务方案.md §12, preflight returns ``review_required``
+    when technical checks pass.  Execution requires either ``ready``
+    (approval already obtained via prepare) or ``review_required`` plus
+    explicit ``confirm_execution`` on the request.
     """
     preflight = run_conversion_preflight(project_id, request)
 
-    # ── Block if preflight not ready ──
-    if preflight.status != "ready":
+    # ── Block if preflight is not in an executable state ──
+    # ``ready`` = approval already obtained; ``review_required`` = technical
+    # checks pass, execution allowed only when caller confirms explicitly.
+    executable_states = {"ready", "review_required"}
+    if preflight.status not in executable_states:
         return build_disabled_conversion_response(
             project_id=project_id,
             reason=f"DICOM conversion blocked: {', '.join(preflight.blocking_issues or ['unknown'])}",
+            missing_env_flags=preflight.missing_env_flags,
+        )
+
+    # If only review_required, require explicit execution confirmation
+    if preflight.status == "review_required" and not request.confirm_execution:
+        return build_disabled_conversion_response(
+            project_id=project_id,
+            reason="DICOM conversion requires explicit confirm_execution before running.",
             missing_env_flags=preflight.missing_env_flags,
         )
 
@@ -1042,10 +1157,8 @@ _SYNTHETIC_SMOKE_ENV_FLAGS: frozenset[str] = frozenset({
     "MEDIMAGE_ENABLE_DICOM_CONVERSION",
     "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
     "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
-    "MEDIMAGE_MATLAB_ENABLED",
-    "MEDIMAGE_SPM_SMOKE_ENABLED",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+    "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
 })
 
 
@@ -1149,13 +1262,7 @@ def run_synthetic_dcm2niix_smoke(
     )
 
     if availability.status != "available":
-        # Map availability status to DicomConversionStatus
-        mapped_status: str = {
-            "missing": "blocked",
-            "version_failed": "disabled",
-            "disabled": "disabled",
-            "unknown": "blocked",
-        }.get(availability.status, "blocked")
+        mapped_status = _map_availability_to_conversion_status(availability.status)
 
         return DicomConversionSandboxResult(
             ok=False,
@@ -1320,10 +1427,8 @@ REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS = (
     "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
     "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION",
     "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE",
-    "MEDIMAGE_MATLAB_ENABLED",
-    "MEDIMAGE_SPM_SMOKE_ENABLED",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+    "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
 )
 
 _REAL_SMOKE_ENV_FLAGS: frozenset[str] = frozenset(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)
@@ -1535,10 +1640,8 @@ _PERSISTED_SYNTHETIC_ENV_FLAGS: frozenset[str] = frozenset({
     "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE",
     "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE",
     "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION",
-    "MEDIMAGE_MATLAB_ENABLED",
-    "MEDIMAGE_SPM_SMOKE_ENABLED",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+    "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
 })
 
 
@@ -1778,10 +1881,8 @@ _INTERNAL_CONVERSION_FLAGS: frozenset[str] = frozenset({
     "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION",
     "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE",
     "MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE",
-    "MEDIMAGE_MATLAB_ENABLED",
-    "MEDIMAGE_SPM_SMOKE_ENABLED",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+    "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
 })
 
 

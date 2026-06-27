@@ -60,10 +60,8 @@ _ALL_SMOKE_FLAGS = {
     "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
     "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE": "1",
     "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE": "1",
-    "MEDIMAGE_MATLAB_ENABLED": "1",
-    "MEDIMAGE_SPM_SMOKE_ENABLED": "1",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-    "MEDIMAGE_ENABLE_REAL_PREPROCESSING": "1",
+    "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
 }
 
 
@@ -99,7 +97,9 @@ def test_synthetic_smoke_env_flag_helper():
 
     ok, missing = _is_synthetic_smoke_enabled({})
     assert ok is False
-    assert len(missing) == 7
+    # Per §11.1, only 5 DICOM-specific flags are required for synthetic smoke
+    # (MATLAB/SPM/real-preprocessing are intentionally NOT required).
+    assert len(missing) == 5
 
 
 # ═══════════════════════════════════════════════════════════════════════

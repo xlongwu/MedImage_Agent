@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { getImageValidation } from "../lib/api";
 import type { ImageValidationReport } from "../lib/types/image";
 import { useAsyncResource } from "./useAsyncResource";
@@ -19,12 +18,9 @@ const emptyValidation: ImageValidationReport = {
 };
 
 export function useImageValidation(projectId: string | null) {
-  const loader = useCallback(() => {
-    if (!projectId) {
-      return Promise.resolve(emptyValidation);
-    }
-    return getImageValidation(projectId);
-  }, [projectId]);
-
-  return useAsyncResource<ImageValidationReport>(loader, emptyValidation, [projectId]);
+  return useAsyncResource<ImageValidationReport>(
+    projectId ? () => getImageValidation(projectId) : null,
+    emptyValidation,
+    [projectId],
+  );
 }

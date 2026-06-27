@@ -1,0 +1,26 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
+}
+
+.compact {
+  align-items: center;
+}
+
+.header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-section);
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.header p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: 650;
+}

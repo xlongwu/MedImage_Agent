@@ -7,7 +7,10 @@ a later task.
 """
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from src.backend.app.api.dependencies import ProjectStore
@@ -30,6 +33,210 @@ def run_conversion_dry_run(
 ) -> dict[str, Any]:
     from src.backend.app.services.conversion_planner import plan_conversion
     return plan_conversion(project_id, request)
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {}
+
+
+def _blocked_latest_dry_run_response(
+    project_id: str,
+    message: str,
+    *,
+    checked_at: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "ok": False,
+        "project_id": project_id,
+        "status": "blocked",
+        "dry_run": True,
+        "checked_at": checked_at or _utc_now(),
+        "target_layout": "bids",
+        "output_root_name": "converted_bids",
+        "output_root_preview": None,
+        "source_summaries": [],
+        "mapping_preview": [],
+        "blocking_issues": [message],
+        "warnings": [],
+        "next_actions": ["Refresh the conversion dry-run preview for the active project."],
+        "safety_flags": {
+            "dry_run_only": True,
+            "rawdata_read_only": True,
+            "no_files_written": True,
+            "no_external_tools_executed": True,
+            "requires_user_review_before_conversion": True,
+            "output_path_is_preview_only": True,
+            "restored_from_persisted_review_package": False,
+        },
+    }
+
+
+def _normalize_source_summary(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    source_type = str(raw.get("source_type") or "unknown")
+    if source_type not in {"dicom", "loose_nifti", "bids", "unknown"}:
+        source_type = "unknown"
+    return {
+        "source_id": str(raw.get("source_id") or raw.get("root") or "source"),
+        "source_type": source_type,
+        "root": str(raw.get("root") or ""),
+        "exists": bool(raw.get("exists", False)),
+        "file_count": int(raw.get("file_count") or 0),
+        "subject_candidates": [
+            str(item) for item in raw.get("subject_candidates", []) if item is not None
+        ] if isinstance(raw.get("subject_candidates"), list) else [],
+        "series_count": int(raw.get("series_count") or 0),
+        "warnings": [str(item) for item in raw.get("warnings", [])]
+        if isinstance(raw.get("warnings"), list)
+        else [],
+    }
+
+
+def _normalize_mapping_preview(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    source_type = str(raw.get("source_type") or "dicom_series")
+    if source_type not in {"dicom_series", "nifti_file"}:
+        source_type = "dicom_series"
+    confidence = str(raw.get("confidence") or "manual_required")
+    if confidence not in {"high", "medium", "low", "manual_required"}:
+        confidence = "manual_required"
+    warnings_raw = raw.get("warnings", [])
+    return {
+        "source_path": raw.get("source_path"),
+        "source_series_uid": raw.get("source_series_uid"),
+        "source_type": source_type,
+        "subject_id": raw.get("subject_id"),
+        "session_id": raw.get("session_id"),
+        "modality": raw.get("modality"),
+        "suffix": raw.get("suffix"),
+        "task": raw.get("task"),
+        "suggested_relative_path": raw.get("suggested_relative_path"),
+        "confidence": confidence,
+        "warnings": [str(item) for item in warnings_raw] if isinstance(warnings_raw, list) else [],
+    }
+
+
+def run_get_latest_conversion_dry_run(
+    store: ProjectStore,
+    project_id: str,
+) -> dict[str, Any]:
+    """Restore the latest persisted dry-run mapping snapshot without executing conversion."""
+    project_dir_raw, _rawdata_dir = _project_dirs(store, project_id)
+    if not project_dir_raw:
+        return _blocked_latest_dry_run_response(
+            project_id,
+            "Project directory is unavailable; refresh is required before mappings can be shown.",
+        )
+
+    project_dir = Path(project_dir_raw).resolve()
+    conversion_root = project_dir / "conversion_runs"
+    if not conversion_root.exists():
+        return _blocked_latest_dry_run_response(
+            project_id,
+            "No persisted dry-run review package was found; refresh is required.",
+        )
+
+    candidates: list[Path] = []
+    for run_dir in conversion_root.iterdir():
+        if run_dir.is_dir() and (run_dir / "mapping_snapshot.json").exists():
+            candidates.append(run_dir)
+    candidates.sort(
+        key=lambda path: (path / "mapping_snapshot.json").stat().st_mtime,
+        reverse=True,
+    )
+
+    for run_dir in candidates:
+        resolved_run_dir = run_dir.resolve()
+        if not _is_relative_to(resolved_run_dir, project_dir):
+            continue
+        mapping_path = resolved_run_dir / "mapping_snapshot.json"
+        preflight_path = resolved_run_dir / "preflight_snapshot.json"
+        try:
+            mapping_snapshot = _read_json_object(mapping_path)
+            preflight_snapshot = _read_json_object(preflight_path) if preflight_path.exists() else {}
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        mappings_raw = mapping_snapshot.get("mappings", [])
+        if not isinstance(mappings_raw, list):
+            mappings_raw = []
+        mapping_preview = [
+            item
+            for item in (_normalize_mapping_preview(raw) for raw in mappings_raw)
+            if item is not None
+        ]
+        if not mapping_preview:
+            continue
+
+        sources_raw = preflight_snapshot.get("source_summaries", [])
+        source_summaries = [
+            item
+            for item in (_normalize_source_summary(raw) for raw in sources_raw)
+            if item is not None
+        ] if isinstance(sources_raw, list) else []
+        warnings_raw = preflight_snapshot.get("warnings", [])
+        blocking_raw = preflight_snapshot.get("blocking_issues", [])
+        checked_at = str(
+            preflight_snapshot.get("checked_at")
+            or mapping_snapshot.get("created_at")
+            or datetime.fromtimestamp(mapping_path.stat().st_mtime, timezone.utc).isoformat()
+        )
+        output_root_name = str(preflight_snapshot.get("output_root_name") or "converted_bids")
+        status = str(preflight_snapshot.get("status") or "warning")
+        if status not in {"ready", "warning", "blocked", "unknown"}:
+            status = "warning"
+        return {
+            "ok": True,
+            "project_id": project_id,
+            "status": status,
+            "dry_run": True,
+            "checked_at": checked_at,
+            "target_layout": "bids",
+            "output_root_name": output_root_name,
+            "output_root_preview": preflight_snapshot.get("output_root_preview"),
+            "source_summaries": source_summaries,
+            "mapping_preview": mapping_preview,
+            "blocking_issues": [str(item) for item in blocking_raw]
+            if isinstance(blocking_raw, list)
+            else [],
+            "warnings": [
+                f"Restored dry-run mappings from persisted review package {resolved_run_dir.name}."
+            ]
+            + ([str(item) for item in warnings_raw] if isinstance(warnings_raw, list) else []),
+            "next_actions": [
+                "Review restored mappings before using them as approval material.",
+                "Refresh dry-run preview if rawdata or project metadata changed.",
+            ],
+            "safety_flags": {
+                "dry_run_only": True,
+                "rawdata_read_only": True,
+                "no_files_written": True,
+                "no_external_tools_executed": True,
+                "requires_user_review_before_conversion": True,
+                "output_path_is_preview_only": True,
+                "restored_from_persisted_review_package": True,
+            },
+        }
+
+    return _blocked_latest_dry_run_response(
+        project_id,
+        "Persisted review packages exist but no usable dry-run mapping snapshot was found; refresh is required.",
+    )
 
 
 def run_conversion_preflight(
