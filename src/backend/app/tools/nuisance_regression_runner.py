@@ -14,7 +14,35 @@ def _find_smoothed_functional(subject_id: str, derivatives_dir: str) -> Path | N
     candidates = sorted(func_dir.glob("swr*.nii"))
     return candidates[0] if candidates else None
 
-def _find_motion_params(subject_id: str, derivatives_dir: str) -> Path | None:
+def _find_realigned_functional(subject_id: str, derivatives_dir: str) -> Path | None:
+    func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
+    if not func_dir.exists(): return None
+    preferred = [
+        func_dir / f"r{subject_id}_bold.nii",
+        func_dir / f"ra{subject_id}_bold.nii",
+        func_dir / f"r{subject_id}_bold.nii.gz",
+        func_dir / f"ra{subject_id}_bold.nii.gz",
+    ]
+    for path in preferred:
+        if path.exists(): return path
+    candidates = sorted(
+        path for path in func_dir.glob("r*.nii*")
+        if path.is_file() and ("bold" in path.name.lower() or "rest" in path.name.lower())
+    )
+    return candidates[0] if candidates else None
+
+def _find_functional_for_nuisance(subject_id: str, derivatives_dir: str, input_nii: str | None = None) -> Path | None:
+    if input_nii:
+        return Path(input_nii)
+    return _find_smoothed_functional(subject_id, derivatives_dir) or _find_realigned_functional(subject_id, derivatives_dir)
+
+def _find_motion_params(
+    subject_id: str,
+    derivatives_dir: str,
+    motion_parameter_file: str | None = None,
+) -> Path | None:
+    if motion_parameter_file:
+        return Path(motion_parameter_file)
     func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
     if not func_dir.exists(): return None
     candidates = sorted(func_dir.glob("rp_*.txt"))
@@ -22,21 +50,34 @@ def _find_motion_params(subject_id: str, derivatives_dir: str) -> Path | None:
 
 def _is_safe_subject_func_path(path: Path, subject_id: str, derivatives_dir: str) -> bool:
     func_dir = (Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func").resolve()
-    try: path.resolve().relative_to(func_dir)
-    except ValueError: return False
-    return True
+    resolved = path.resolve()
+    if any(part.lower() == "rawdata" for part in resolved.parts):
+        return False
+    try:
+        resolved.relative_to(func_dir)
+        return True
+    except ValueError:
+        pass
+    project_root = Path(derivatives_dir).resolve().parent
+    try:
+        resolved.relative_to(project_root / "preprocessing_runs")
+        return True
+    except ValueError:
+        return False
 
 def run_nuisance_regression_subject(
     subject_id: str, derivatives_dir: str, backend: str = "python",
     model: str = "friston24", include_intercept: bool = True,
     include_linear_trend: bool = True, include_global_signal: bool = False,
+    input_nii: str | None = None,
+    motion_parameter_file: str | None = None,
     prefer_gpu: bool = True, require_gpu: bool = False,
 ) -> dict[str, Any]:
     if backend == "gpu":
-        input_func = _find_smoothed_functional(subject_id, derivatives_dir)
+        input_func = _find_functional_for_nuisance(subject_id, derivatives_dir, input_nii=input_nii)
         if not input_func:
-            return {"ok": False, "node_id": "nuisance_regression_subject", "backend": backend, "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No smoothed functional input found for subject {subject_id}."]}
-        motion = _find_motion_params(subject_id, derivatives_dir)
+            return {"ok": False, "node_id": "nuisance_regression_subject", "backend": backend, "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No realigned or smoothed functional input found for subject {subject_id}."]}
+        motion = _find_motion_params(subject_id, derivatives_dir, motion_parameter_file=motion_parameter_file)
         if not motion:
             return {"ok": False, "node_id": "nuisance_regression_subject", "backend": backend, "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No motion parameter file found for subject {subject_id}."]}
         confounds = build_confound_matrix_for_subject(subject_id=subject_id, motion_parameter_file=str(motion), output_dir=derivatives_dir, model=model, include_intercept=include_intercept, include_linear_trend=include_linear_trend, include_global_signal=include_global_signal)
@@ -50,13 +91,13 @@ def run_nuisance_regression_subject(
     if backend != "python":
         return {"ok": False, "node_id": "nuisance_regression_subject", "backend": backend, "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"Unsupported nuisance regression backend: {backend}"]}
 
-    input_func = _find_smoothed_functional(subject_id, derivatives_dir)
+    input_func = _find_functional_for_nuisance(subject_id, derivatives_dir, input_nii=input_nii)
     if not input_func:
-        return {"ok": False, "node_id": "nuisance_regression_subject", "backend": "python", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No smoothed functional input found for subject {subject_id}."]}
-    if not _is_safe_subject_func_path(input_func, subject_id, derivatives_dir) or not input_func.name.startswith("swr"):
-        return {"ok": False, "node_id": "nuisance_regression_subject", "backend": "python", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"Unsafe smoothed functional input: {input_func}"]}
+        return {"ok": False, "node_id": "nuisance_regression_subject", "backend": "python", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No realigned or smoothed functional input found for subject {subject_id}."]}
+    if not _is_safe_subject_func_path(input_func, subject_id, derivatives_dir) or not input_func.name.startswith(("swr", "swra", "r", "ra", "realigned_")):
+        return {"ok": False, "node_id": "nuisance_regression_subject", "backend": "python", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"Unsafe nuisance functional input: {input_func}"]}
 
-    motion = _find_motion_params(subject_id, derivatives_dir)
+    motion = _find_motion_params(subject_id, derivatives_dir, motion_parameter_file=motion_parameter_file)
     if not motion:
         return {"ok": False, "node_id": "nuisance_regression_subject", "backend": "python", "subject_id": subject_id, "outputs": [], "warnings": [], "errors": [f"No motion parameter file found for subject {subject_id}."]}
     if not _is_safe_subject_func_path(motion, subject_id, derivatives_dir):

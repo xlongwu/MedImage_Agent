@@ -9,6 +9,7 @@ class SpmSandboxExecutionRequest(BaseModel):
     confirm_no_converted_input_modification: bool = False
     confirm_slice_timing_realign_only: bool = False; confirm_no_full_preprocessing: bool = False
     confirm_research_use_only: bool = False
+    preview_limit: int | None = Field(default=None, ge=1)
     matlab_executable: str = "matlab"; spm_path: str = ""; timeout_seconds: int = 600
 
 
@@ -17,6 +18,9 @@ class SpmSandboxExecutionResponse(BaseModel):
     preprocessing_run_id: str = ""; dry_run_id: str = ""; execution_id: str = ""
     execution_dir: str = ""; sandbox_input_dir: str = ""; sandbox_output_dir: str = ""
     subjects_total: int = 0; subjects_succeeded: int = 0; subjects_failed: int = 0
+    subjects_discovered: int = 0; subjects_selected: int = 0
+    preview_only: bool = False; partial: bool = False
+    selection_policy: str = "all"
     command_template_path: str = ""; batch_script_path: str = ""
     stdout_log_path: str = ""; stderr_log_path: str = ""
     manifest_path: str = ""; provenance_path: str = ""; subject_status_path: str = ""

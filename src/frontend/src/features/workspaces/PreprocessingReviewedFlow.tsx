@@ -1,0 +1,882 @@
+import { useMemo, useState } from "react";
+
+import { executeReviewedPreprocessingPipeline } from "../../lib/api/preprocessing";
+import type {
+  PreprocessingPipelineExecuteRequest,
+  PreprocessingPipelineExecuteResponse,
+  PreprocessingPipelineStageResult,
+} from "../../types";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  SegmentedControl,
+  Table,
+  TableEmpty,
+} from "../../components/ui";
+import type { BadgeProps } from "../../components/ui";
+import type { ProjectInventory } from "../../lib/projectWorkflow";
+import styles from "./PreprocessingWorkspace.module.css";
+
+type Profile = NonNullable<PreprocessingPipelineExecuteRequest["pipeline_profile"]>;
+type ConfirmationKey = keyof NonNullable<PreprocessingPipelineExecuteRequest["confirmations"]>;
+
+type Props = {
+  baseUrl: string;
+  hasPreprocessingRun: boolean;
+  inventory: ProjectInventory;
+  preprocessingRunId?: string | null;
+  projectId: string | null;
+  onOpenDataConversion: () => void;
+};
+
+const PROFILE_OPTIONS = [
+  { label: "Minimal FC", value: "fc_minimal" },
+  { label: "DPARSFA-like", value: "dparsfa_like" },
+  { label: "Custom", value: "custom" },
+];
+
+const CONFIRMATIONS: Array<{
+  key: ConfirmationKey;
+  label: string;
+  detail: string;
+}> = [
+  {
+    key: "confirm_rawdata_readonly",
+    label: "Rawdata stays read-only",
+    detail: "Only project workspace derivatives may be written.",
+  },
+  {
+    key: "confirm_reviewed_execution",
+    label: "Reviewed execution request",
+    detail: "The request uses the backend reviewed orchestrator.",
+  },
+  {
+    key: "confirm_external_tools_if_needed",
+    label: "External-tool gates acknowledged",
+    detail: "SPM/MATLAB stages remain blocked without backend approval and env gates.",
+  },
+  {
+    key: "confirm_research_use_only",
+    label: "Research use only",
+    detail: "No clinical diagnosis, treatment, or decision-support claim.",
+  },
+  {
+    key: "confirm_no_clinical_use",
+    label: "No clinical use",
+    detail: "Outputs require scientific review before interpretation.",
+  },
+];
+
+const STAGE_ROWS: Array<{
+  stageId: string;
+  label: string;
+  backend: string;
+  fcMinimal: boolean;
+  dparsfaLike: boolean;
+  note: string;
+  state: "computed" | "external" | "optional" | "report" | "gate";
+}> = [
+  {
+    stageId: "input_validation",
+    label: "Input inventory",
+    backend: "registry",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "Requires registered converted BIDS/NIfTI input.",
+    state: "gate",
+  },
+  {
+    stageId: "dummy_scan_removal",
+    label: "Dummy scan removal",
+    backend: "auto",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "Skipped unless requested by reviewed parameters.",
+    state: "optional",
+  },
+  {
+    stageId: "realignment",
+    label: "Realignment",
+    backend: "SPM12",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "External stage remains approval/env gated or resume-only.",
+    state: "external",
+  },
+  {
+    stageId: "t1_coregistration",
+    label: "T1 coregistration",
+    backend: "SPM12",
+    fcMinimal: false,
+    dparsfaLike: true,
+    note: "Optional spatial stage; required before segmentation/normalization.",
+    state: "external",
+  },
+  {
+    stageId: "segmentation",
+    label: "Segmentation",
+    backend: "SPM12",
+    fcMinimal: false,
+    dparsfaLike: true,
+    note: "Optional source for WM/CSF nuisance and normalization.",
+    state: "external",
+  },
+  {
+    stageId: "normalization",
+    label: "Normalization",
+    backend: "SPM12",
+    fcMinimal: false,
+    dparsfaLike: true,
+    note: "Required for MNI atlas FC; not required for matched native atlas FC.",
+    state: "external",
+  },
+  {
+    stageId: "spatial_smoothing",
+    label: "Smoothing",
+    backend: "SPM12",
+    fcMinimal: false,
+    dparsfaLike: true,
+    note: "Optional and does not block native-space Minimal FC.",
+    state: "external",
+  },
+  {
+    stageId: "nuisance_regression",
+    label: "Nuisance regression",
+    backend: "Python",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "Consumes realigned BOLD and motion parameters.",
+    state: "computed",
+  },
+  {
+    stageId: "temporal_filtering",
+    label: "Temporal filtering",
+    backend: "Python",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "Requires TR from sidecar or explicit reviewed value.",
+    state: "computed",
+  },
+  {
+    stageId: "alff_falff",
+    label: "ALFF / fALFF",
+    backend: "Python",
+    fcMinimal: false,
+    dparsfaLike: true,
+    note: "Optional derived maps; computed status is not validation.",
+    state: "optional",
+  },
+  {
+    stageId: "reho",
+    label: "ReHo",
+    backend: "Python",
+    fcMinimal: false,
+    dparsfaLike: true,
+    note: "Optional derived map with CPU golden validation.",
+    state: "optional",
+  },
+  {
+    stageId: "functional_connectivity",
+    label: "Functional connectivity",
+    backend: "Python",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "Formal FC requires a real atlas artifact or reviewed atlas path.",
+    state: "computed",
+  },
+  {
+    stageId: "subject_qc",
+    label: "Subject QC",
+    backend: "registry",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "Summarizes computed artifacts without inventing pass/fail state.",
+    state: "report",
+  },
+  {
+    stageId: "group_summary",
+    label: "Pipeline report",
+    backend: "report",
+    fcMinimal: true,
+    dparsfaLike: true,
+    note: "Exports report and validation records when backend evidence exists.",
+    state: "report",
+  },
+];
+
+const defaultConfirmations: Record<ConfirmationKey, boolean> = {
+  confirm_rawdata_readonly: false,
+  confirm_reviewed_execution: false,
+  confirm_external_tools_if_needed: false,
+  confirm_research_use_only: false,
+  confirm_no_clinical_use: false,
+};
+
+export function PreprocessingReviewedFlow({
+  baseUrl,
+  hasPreprocessingRun,
+  inventory,
+  onOpenDataConversion,
+  preprocessingRunId,
+  projectId,
+}: Props) {
+  const [profile, setProfile] = useState<Profile>("fc_minimal");
+  const [atlasPath, setAtlasPath] = useState("");
+  const [labelsPath, setLabelsPath] = useState("");
+  const [fallbackTr, setFallbackTr] = useState("");
+  const [previewLimit, setPreviewLimit] = useState("");
+  const [includeGlobalSignal, setIncludeGlobalSignal] = useState(false);
+  const [confirmations, setConfirmations] =
+    useState<Record<ConfirmationKey, boolean>>(defaultConfirmations);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<PreprocessingPipelineExecuteResponse | null>(null);
+  const [error, setError] = useState("");
+
+  const visibleStages = useMemo(
+    () =>
+      STAGE_ROWS.filter((stage) => {
+        if (profile === "dparsfa_like") return stage.dparsfaLike;
+        if (profile === "custom") return stage.fcMinimal || stage.state === "optional";
+        return stage.fcMinimal;
+      }),
+    [profile],
+  );
+
+  const allConfirmationsChecked = CONFIRMATIONS.every((item) => confirmations[item.key]);
+  const canSubmit = Boolean(
+    projectId && preprocessingRunId && allConfirmationsChecked && !submitting,
+  );
+  const fcResult = result?.stage_results.find(
+    (stage) => stage.stage_id === "functional_connectivity",
+  );
+
+  const executeReviewedFlow = async () => {
+    if (!projectId || !preprocessingRunId || !canSubmit) return;
+    setSubmitting(true);
+    setError("");
+    setResult(null);
+    try {
+      const response = await executeReviewedPreprocessingPipeline(
+        baseUrl,
+        projectId,
+        preprocessingRunId,
+        buildReviewedRequest({
+          atlasPath,
+          confirmations,
+          fallbackTr,
+          includeGlobalSignal,
+          labelsPath,
+          previewLimit,
+          profile,
+        }),
+      );
+      setResult(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className={styles.reviewedFlow} aria-label="Reviewed preprocessing flow">
+      <ConversionHandoffCard inventory={inventory} onOpenDataConversion={onOpenDataConversion} />
+
+      <Card className={styles.pipelineBuilderCard} tone="muted">
+        <div className={styles.sectionHeader}>
+          <div>
+            <h3>Pipeline builder</h3>
+            <p>Profile, backend policy, atlas, nuisance, and filtering settings for review.</p>
+          </div>
+          <Badge tone="info">Reviewed</Badge>
+        </div>
+        <SegmentedControl
+          aria-label="Preprocessing pipeline profile"
+          options={PROFILE_OPTIONS}
+          value={profile}
+          onChange={(value) => setProfile(value as Profile)}
+        />
+        <div className={styles.builderGrid}>
+          <label className={styles.fieldShell}>
+            <span>Atlas path</span>
+            <input
+              value={atlasPath}
+              onChange={(event) => setAtlasPath(event.target.value)}
+              placeholder="registered atlas artifact or reviewed local path"
+            />
+          </label>
+          <label className={styles.fieldShell}>
+            <span>Labels path</span>
+            <input
+              value={labelsPath}
+              onChange={(event) => setLabelsPath(event.target.value)}
+              placeholder="TSV or JSON labels"
+            />
+          </label>
+          <label className={styles.fieldShell}>
+            <span>Fallback TR</span>
+            <input
+              inputMode="decimal"
+              value={fallbackTr}
+              onChange={(event) => setFallbackTr(event.target.value)}
+              placeholder="blank unless explicitly reviewed"
+            />
+          </label>
+          <label className={styles.fieldShell}>
+            <span>Preview limit</span>
+            <input
+              inputMode="numeric"
+              value={previewLimit}
+              onChange={(event) => setPreviewLimit(event.target.value)}
+              placeholder="blank for full discovered scope"
+            />
+          </label>
+        </div>
+        <label className={styles.inlineCheck}>
+          <input
+            type="checkbox"
+            checked={includeGlobalSignal}
+            onChange={(event) => setIncludeGlobalSignal(event.target.checked)}
+          />
+          <span>Include global signal regressor</span>
+        </label>
+        <Table caption="Reviewed preprocessing stages">
+          <thead>
+            <tr>
+              <th>Stage</th>
+              <th>Backend</th>
+              <th>State</th>
+              <th>Review note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleStages.map((stage) => (
+              <tr key={stage.stageId}>
+                <td>{stage.label}</td>
+                <td>{stage.backend}</td>
+                <td>
+                  <Badge tone={stageStateTone(stage.state)} size="sm">
+                    {stageStateLabel(stage.state)}
+                  </Badge>
+                </td>
+                <td>{stage.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Card>
+
+      <Card className={styles.executionGateCard}>
+        <div className={styles.sectionHeader}>
+          <div>
+            <h3>Reviewed execution gate</h3>
+            <p>All confirmations are explicit before the backend orchestrator can be called.</p>
+          </div>
+          <Badge tone={canSubmit ? "success" : "warning"}>{canSubmit ? "Ready" : "Blocked"}</Badge>
+        </div>
+        <div className={styles.gateSummary} aria-label="Reviewed gate readiness">
+          <div>
+            <span>Project</span>
+            <strong>{projectId ? "Selected" : "Missing"}</strong>
+          </div>
+          <div>
+            <span>Preprocessing run</span>
+            <strong>
+              {preprocessingRunId ?? (hasPreprocessingRun ? "ID unavailable" : "Required")}
+            </strong>
+          </div>
+          <div>
+            <span>Profile</span>
+            <strong>{profileLabel(profile)}</strong>
+          </div>
+        </div>
+        <div className={styles.confirmationList} aria-label="Reviewed execution confirmations">
+          {CONFIRMATIONS.map((item) => (
+            <label className={styles.confirmationItem} key={item.key}>
+              <input
+                type="checkbox"
+                checked={confirmations[item.key]}
+                onChange={() =>
+                  setConfirmations((current) => ({
+                    ...current,
+                    [item.key]: !current[item.key],
+                  }))
+                }
+              />
+              <span>
+                <strong>{item.label}</strong>
+                <small>{item.detail}</small>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className={styles.reviewedActions}>
+          <Button variant="primary" onClick={executeReviewedFlow} disabled={!canSubmit}>
+            {submitting ? "Submitting..." : "Submit reviewed execution"}
+          </Button>
+          <span>
+            {preprocessingRunId
+              ? "Backend status, artifacts, and report generation remain authoritative."
+              : "Create or restore a preprocessing run before execution can be submitted."}
+          </span>
+        </div>
+        {error ? <div className={styles.inlineError}>{error}</div> : null}
+      </Card>
+
+      <PipelineDashboard result={result} />
+      <FcResultsPanel
+        atlasPath={atlasPath}
+        baseUrl={baseUrl}
+        fcResult={fcResult}
+        preprocessingRunId={preprocessingRunId}
+        projectId={projectId}
+        result={result}
+      />
+    </section>
+  );
+}
+
+function ConversionHandoffCard({
+  inventory,
+  onOpenDataConversion,
+}: {
+  inventory: ProjectInventory;
+  onOpenDataConversion: () => void;
+}) {
+  return (
+    <Card className={styles.handoffCard}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <h3>DICOM conversion handoff</h3>
+          <p>Converted BIDS/NIfTI evidence is the preprocessing input boundary.</p>
+        </div>
+        <Badge tone={inventory.hasConvertedData ? "success" : "warning"}>
+          {inventory.hasConvertedData ? "Registered" : "Required"}
+        </Badge>
+      </div>
+      <div className={styles.handoffMetrics} aria-label="DICOM conversion handoff">
+        <div>
+          <span>Subjects</span>
+          <strong>{inventory.convertedSubjects}</strong>
+        </div>
+        <div>
+          <span>NIfTI files</span>
+          <strong>{inventory.niftiFileCount.toLocaleString()}</strong>
+        </div>
+        <div>
+          <span>State</span>
+          <strong>{inventory.dataStateLabel}</strong>
+        </div>
+      </div>
+      <Button variant="secondary" onClick={onOpenDataConversion}>
+        Review conversion input
+      </Button>
+    </Card>
+  );
+}
+
+function PipelineDashboard({ result }: { result: PreprocessingPipelineExecuteResponse | null }) {
+  if (!result) {
+    return (
+      <Card className={styles.dashboardCard}>
+        <EmptyState
+          title="No reviewed execution submitted"
+          description="Dashboard rows appear only after the backend reviewed orchestrator returns persisted stage status."
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <Card className={styles.dashboardCard} aria-label="Pipeline run dashboard">
+      <div className={styles.sectionHeader}>
+        <div>
+          <h3>Pipeline run dashboard</h3>
+          <p>Stage status, warnings, blocking issues, and report paths returned by the backend.</p>
+        </div>
+        <Badge tone={statusTone(result.status)}>{result.status}</Badge>
+      </div>
+      <div className={styles.statusStrip} aria-label="Reviewed execution summary">
+        <SummaryMetric label="Completed" value={result.completed_stages.length} tone="success" />
+        <SummaryMetric label="Blocked" value={result.blocked_stages.length} tone="warning" />
+        <SummaryMetric label="Failed" value={result.failed_stages.length} tone="danger" />
+        <SummaryMetric
+          label="Metadata-only"
+          value={result.metadata_only_stages.length}
+          tone="info"
+        />
+        <SummaryMetric label="Preview-only" value={result.preview_only_stages.length} tone="info" />
+      </div>
+      <Table caption="Reviewed execution stage timeline">
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th>Status</th>
+            <th>Artifacts</th>
+            <th>Issue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {result.stage_results.length ? (
+            result.stage_results.map((stage) => (
+              <tr key={stage.stage_id}>
+                <td>{stage.name || stage.stage_id}</td>
+                <td>
+                  <Badge tone={statusTone(stage.status)} size="sm">
+                    {stage.status}
+                  </Badge>
+                </td>
+                <td>{stage.output_artifact_ids.length}</td>
+                <td>{firstIssue(stage)}</td>
+              </tr>
+            ))
+          ) : (
+            <TableEmpty colSpan={4}>No stage rows were returned by the backend.</TableEmpty>
+          )}
+        </tbody>
+      </Table>
+      <div className={styles.reportRail} aria-label="Report and validation outputs">
+        <div>
+          <span>Report</span>
+          <strong>{result.report_path || "Not generated"}</strong>
+        </div>
+        <div>
+          <span>Validation</span>
+          <strong>{result.validation_status || "Not run"}</strong>
+        </div>
+        <div>
+          <span>Registry</span>
+          <strong>{result.artifact_registry_path || "Unavailable"}</strong>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function FcResultsPanel({
+  atlasPath,
+  baseUrl,
+  fcResult,
+  preprocessingRunId,
+  projectId,
+  result,
+}: {
+  atlasPath: string;
+  baseUrl: string;
+  fcResult?: PreprocessingPipelineStageResult;
+  preprocessingRunId?: string | null;
+  projectId: string | null;
+  result: PreprocessingPipelineExecuteResponse | null;
+}) {
+  const status = fcResult?.status ?? (result ? "not_started" : "waiting");
+  const artifactCount = fcResult?.output_artifact_ids.length ?? 0;
+  const matrixShape = extractMatrixShape(fcResult?.result);
+  const roiCount = extractNumber(fcResult?.result, ["roi_count"]);
+  const qcStatus = extractString(fcResult?.result, ["fc_qc_status", "qc_status", "status"]);
+  const atlasSource = extractString(fcResult?.result, ["atlas_source"]);
+  const atlasName =
+    atlasPath.trim() ||
+    extractString(fcResult?.result, ["atlas_file", "atlas_path", "atlas"]) ||
+    "Awaiting atlas evidence";
+  const previewOnly =
+    status === "preview_only" || result?.preview_only_stages.includes("functional_connectivity");
+
+  return (
+    <Card className={styles.fcCard} aria-label="FC results panel">
+      <div className={styles.sectionHeader}>
+        <div>
+          <h3>FC results</h3>
+          <p>Matrix, Fisher-z, ROI time series, labels, and provenance stay artifact-backed.</p>
+        </div>
+        <Badge tone={statusTone(status)}>{previewOnly ? "preview_only" : status}</Badge>
+      </div>
+      <div className={styles.fcMetrics}>
+        <div>
+          <span>Atlas</span>
+          <strong>{previewOnly ? "Synthetic preview" : atlasName}</strong>
+        </div>
+        <div>
+          <span>ROI count</span>
+          <strong>{roiCount ?? "Awaiting backend evidence"}</strong>
+        </div>
+        <div>
+          <span>Matrix shape</span>
+          <strong>{matrixShape}</strong>
+        </div>
+        <div>
+          <span>QC</span>
+          <strong>{qcStatus || (status === "succeeded" ? "Backend computed" : "Review required")}</strong>
+        </div>
+      </div>
+      <div className={styles.fcArtifactSummary} aria-label="FC artifact summary">
+        <div>
+          <span>Atlas source</span>
+          <strong>{atlasSource || (previewOnly ? "synthetic_x_chunk" : "provided atlas")}</strong>
+        </div>
+        <div>
+          <span>Registered artifacts</span>
+          <strong>{artifactCount}</strong>
+        </div>
+      </div>
+      <Table caption="FC artifact handoff">
+        <thead>
+          <tr>
+            <th>Artifact</th>
+            <th>Availability</th>
+            <th>Links</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fcResult?.output_artifact_ids.length ? (
+            fcResult.output_artifact_ids.map((artifactId) => (
+              <tr key={artifactId}>
+                <td>{artifactId}</td>
+                <td>
+                  <Badge tone="info" size="sm">
+                    backend artifact
+                  </Badge>
+                </td>
+                <td>
+                  {projectId && preprocessingRunId ? (
+                    <>
+                    <a
+                      href={artifactMetadataHref(baseUrl, projectId, preprocessingRunId, artifactId)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Metadata
+                    </a>
+                    {" | "}
+                    <a
+                      href={artifactFileHref(baseUrl, projectId, preprocessingRunId, artifactId)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      File
+                    </a>
+                    </>
+                  ) : (
+                    "Awaiting run"
+                  )}
+                </td>
+              </tr>
+            ))
+          ) : (
+            <TableEmpty colSpan={3}>
+              FC downloads appear only after the backend registers matrix, Fisher-z, ROI timeseries,
+              labels, and provenance artifacts.
+            </TableEmpty>
+          )}
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
+
+function SummaryMetric({
+  label,
+  tone,
+  value,
+}: {
+  label: string;
+  tone: BadgeProps["tone"];
+  value: number;
+}) {
+  return (
+    <div data-tone={tone}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function buildReviewedRequest({
+  atlasPath,
+  confirmations,
+  fallbackTr,
+  includeGlobalSignal,
+  labelsPath,
+  previewLimit,
+  profile,
+}: {
+  atlasPath: string;
+  confirmations: Record<ConfirmationKey, boolean>;
+  fallbackTr: string;
+  includeGlobalSignal: boolean;
+  labelsPath: string;
+  previewLimit: string;
+  profile: Profile;
+}): PreprocessingPipelineExecuteRequest {
+  return {
+    pipeline_profile: profile,
+    start_from: "existing_preprocessing_input",
+    backend_policy: {
+      motion_correction: "spm12",
+      normalization: profile === "dparsfa_like" ? "spm12" : "skip",
+      nuisance_regression: "python",
+      temporal_filtering: "python",
+      functional_connectivity: "python",
+      alff_falff: "python",
+      reho: "python",
+    },
+    stages:
+      profile === "custom"
+        ? {
+            input_validation: "enabled",
+            realignment: "enabled",
+            nuisance_regression: "enabled",
+            temporal_filtering: "enabled",
+            functional_connectivity: "enabled",
+            subject_qc: "enabled",
+            group_summary: "enabled",
+            alff_falff: "auto",
+            reho: "auto",
+          }
+        : {},
+    atlas: {
+      atlas_path: atlasPath.trim(),
+      labels_path: labelsPath.trim(),
+      atlas_space: "native_or_matched",
+      allow_resample: false,
+    },
+    nuisance: {
+      model: "friston24",
+      include_wm_csf: profile === "dparsfa_like",
+      include_global_signal: includeGlobalSignal,
+      include_linear_trend: true,
+      include_intercept: true,
+    },
+    filtering: {
+      low_hz: 0.01,
+      high_hz: 0.08,
+      fallback_tr: parseOptionalNumber(fallbackTr),
+      tr: null,
+    },
+    execution_limits: {
+      preview_limit: parseOptionalInteger(previewLimit),
+      max_subjects: null,
+    },
+    confirmations,
+    resume: true,
+    rerun_policy: "skip_succeeded",
+    generate_report: true,
+    run_validation: true,
+  };
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseOptionalInteger(value: string): number | null {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function firstIssue(stage: PreprocessingPipelineStageResult): string {
+  return (
+    stage.blocking_issues[0] || stage.errors[0] || stage.warnings[0] || stage.skipped_reason || "-"
+  );
+}
+
+function profileLabel(profile: Profile): string {
+  const match = PROFILE_OPTIONS.find((item) => item.value === profile);
+  return match?.label ?? profile;
+}
+
+function stageStateLabel(state: (typeof STAGE_ROWS)[number]["state"]): string {
+  const labels = {
+    computed: "computed path",
+    external: "gated",
+    optional: "optional",
+    report: "report",
+    gate: "gate",
+  };
+  return labels[state];
+}
+
+function stageStateTone(state: (typeof STAGE_ROWS)[number]["state"]): BadgeProps["tone"] {
+  if (state === "computed") return "success";
+  if (state === "external") return "warning";
+  if (state === "optional") return "info";
+  return "neutral";
+}
+
+function statusTone(status?: string | null): BadgeProps["tone"] {
+  const normalized = String(status || "").toLowerCase();
+  if (["succeeded", "success", "ready", "computed"].includes(normalized)) return "success";
+  if (["failed", "error"].includes(normalized)) return "danger";
+  if (["blocked", "partial", "metadata_only"].includes(normalized)) return "warning";
+  if (["preview_only", "skipped", "waiting", "not_started"].includes(normalized)) return "info";
+  return "neutral";
+}
+
+function extractString(value: unknown, keys: string[]): string {
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const item = record[key];
+    if (typeof item === "string" && item.trim()) return item;
+  }
+  for (const item of Object.values(record)) {
+    const nested = extractString(item, keys);
+    if (nested) return nested;
+  }
+  return "";
+}
+
+function extractNumber(value: unknown, keys: string[]): number | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    const item = record[key];
+    const parsed = Number(item);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  for (const item of Object.values(record)) {
+    const nested = extractNumber(item, keys);
+    if (nested !== null) return nested;
+  }
+  return null;
+}
+
+function extractMatrixShape(value: unknown): string {
+  if (!value || typeof value !== "object") return "Awaiting backend evidence";
+  const record = value as Record<string, unknown>;
+  for (const key of ["matrix_shape", "shape", "fc_matrix_shape"]) {
+    const item = record[key];
+    if (Array.isArray(item) && item.length >= 2) {
+      return `${item[0]} x ${item[1]}`;
+    }
+    if (typeof item === "string" && item.trim()) {
+      return item;
+    }
+  }
+  for (const item of Object.values(record)) {
+    const nested = extractMatrixShape(item);
+    if (nested !== "Awaiting backend evidence") return nested;
+  }
+  return "Awaiting backend evidence";
+}
+
+function artifactMetadataHref(
+  baseUrl: string,
+  projectId: string,
+  preprocessingRunId: string,
+  artifactId: string,
+): string {
+  const root = baseUrl.replace(/\/$/, "");
+  return `${root}/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/artifacts/${encodeURIComponent(artifactId)}`;
+}
+
+function artifactFileHref(
+  baseUrl: string,
+  projectId: string,
+  preprocessingRunId: string,
+  artifactId: string,
+): string {
+  return `${artifactMetadataHref(baseUrl, projectId, preprocessingRunId, artifactId)}/file`;
+}

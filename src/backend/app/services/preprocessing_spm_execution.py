@@ -5,7 +5,7 @@ captures stdout/stderr, writes manifest/provenance.
 Env-gated. No rawdata modification. No converted input modification.
 """
 from __future__ import annotations
-import os, json, hashlib, shutil
+import os, hashlib, shutil
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,7 @@ from src.backend.app.schemas.preprocessing_spm_execution import (
     SpmSandboxExecutionRequest, SpmSandboxExecutionResponse,
     validate_sandbox_env, sandbox_safety_flags,
 )
+from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.services.mock_store import mock_store
 
 
@@ -62,8 +63,23 @@ def run_sandbox_spm_execution(
         return SpmSandboxExecutionResponse(ok=False, status="blocked", project_id=project_id,
             blocking_issues=["No BOLD files found."], safety_flags=sandbox_safety_flags())
 
+    selected_bold_files = bold_files
+    selection_policy = "all"
+    preview_only = False
+    partial = False
+    warnings: list[str] = []
+    if request.preview_limit is not None:
+        selected_bold_files = bold_files[: request.preview_limit]
+        selection_policy = "explicit_preview_limit"
+        preview_only = True
+        partial = len(selected_bold_files) < len(bold_files)
+        warnings.append(
+            f"preview_limit={request.preview_limit} selected "
+            f"{len(selected_bold_files)} of {len(bold_files)} BOLD files; output is preview_only."
+        )
+
     copied: list[Path] = []
-    for bf in bold_files[:10]:
+    for bf in selected_bold_files:
         subj = "sub-unknown"
         for part in bf.parts:
             if part.startswith("sub-"): subj = part; break
@@ -91,7 +107,7 @@ def run_sandbox_spm_execution(
                 "args": ["-nodisplay", "-nosplash", "-nodesktop", "-r", f"run('{batch_path}');exit;"],
                 "shell": False, "sandbox_only": True}
     tmpl_path = exec_dir / "command_template.json"
-    tmpl_path.write_text(json.dumps(cmd_tmpl, indent=2))
+    atomic_write_json(tmpl_path, cmd_tmpl, schema_version=1)
 
     # Execute via subprocess (fake runner for tests, real when env flags set)
     stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
@@ -106,22 +122,63 @@ def run_sandbox_spm_execution(
         stdout_log.write_text("", encoding="utf-8"); stderr_log.write_text(str(exc), encoding="utf-8")
         rc = 1
 
+    status = "failed" if rc != 0 else ("preview_only" if preview_only else "succeeded")
+    dataset_selection = {
+        "selection_policy": selection_policy,
+        "preview_limit": request.preview_limit,
+        "subjects_discovered": len(bold_files),
+        "subjects_selected": len(copied),
+        "preview_only": preview_only,
+        "partial": partial,
+    }
     # Write manifest/provenance
-    (exec_dir / "manifest.json").write_text(json.dumps({"exec_id": exec_id, "status": "succeeded" if rc == 0 else "failed"}, indent=2))
-    (exec_dir / "provenance.json").write_text(json.dumps({"exec_id": exec_id, "sandbox_only": True}, indent=2))
-    (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "succeeded": len(copied) if rc == 0 else 0, "failed": len(copied) if rc != 0 else 0}, indent=2))
+    atomic_write_json(
+        exec_dir / "manifest.json",
+        {
+            "exec_id": exec_id,
+            "status": status,
+            "dataset_selection": dataset_selection,
+            "warnings": warnings,
+        },
+        schema_version=1,
+    )
+    atomic_write_json(
+        exec_dir / "provenance.json",
+        {
+            "exec_id": exec_id,
+            "sandbox_only": True,
+            "dataset_selection": dataset_selection,
+        },
+        schema_version=1,
+    )
+    atomic_write_json(
+        exec_dir / "subject_status.json",
+        {
+            "total": len(copied),
+            "discovered": len(bold_files),
+            "selected": len(copied),
+            "succeeded": len(copied) if rc == 0 else 0,
+            "failed": len(copied) if rc != 0 else 0,
+            "preview_only": preview_only,
+            "partial": partial,
+            "selection_policy": selection_policy,
+        },
+        schema_version=1,
+    )
     (exec_dir / "README.md").write_text(f"# SPM Sandbox Execution {exec_id}\nSandbox only. Rawdata unchanged. Research use only.\n")
 
-    status = "succeeded" if rc == 0 else "failed"
     return SpmSandboxExecutionResponse(
         ok=rc == 0, status=status, project_id=project_id, preprocessing_run_id=run_id,
         dry_run_id=request.dry_run_id, execution_id=exec_id, execution_dir=str(exec_dir),
         sandbox_input_dir=str(sandbox_in), sandbox_output_dir=str(sandbox_out),
         subjects_total=len(copied), subjects_succeeded=len(copied) if rc == 0 else 0,
         subjects_failed=0 if rc == 0 else len(copied),
+        subjects_discovered=len(bold_files), subjects_selected=len(copied),
+        preview_only=preview_only, partial=partial, selection_policy=selection_policy,
         command_template_path=str(tmpl_path), batch_script_path=str(batch_path),
         stdout_log_path=str(stdout_log), stderr_log_path=str(stderr_log),
         manifest_path=str(exec_dir / "manifest.json"), provenance_path=str(exec_dir / "provenance.json"),
         subject_status_path=str(exec_dir / "subject_status.json"),
         next_actions=["Review execution results.", "Proceed to normalization if ready."],
+        warnings=warnings,
         safety_flags=sandbox_safety_flags())

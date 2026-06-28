@@ -1,6 +1,6 @@
 # Project State
 
-Current as of 2026-06-20.
+Current as of 2026-06-28.
 
 ## Version and Branch
 
@@ -40,8 +40,13 @@ their tag state.
   project workspace, with rawdata count unchanged and dcm2niix provenance
   recorded.
 - Feature-flagged frontend execute UI for DICOM conversion; hidden by default.
-- Phase 5 preprocessing workflow for converted inputs, including dry-run plans,
-  sandbox workspaces, stage output registration, validation, and report export.
+- Reviewed rs-fMRI preprocessing workflow for converted inputs, including a
+  unified stage catalog, artifact registry and lineage, Minimal FC backend
+  chain, optional DPARSFA-like stage semantics, reviewed orchestrator endpoint,
+  stage output registration, validation, report export, and a frontend
+  reviewed flow that can create a preprocessing run from registered converted
+  input, submit the reviewed gate, show stage status, and expose FC artifact
+  metadata handoff links.
 - Frontend API wrappers under `src/frontend/src/lib/api/` with a shared client.
 
 ## Current Execution Boundaries
@@ -54,9 +59,14 @@ their tag state.
   package evidence, checksum/rollback checks, and safe output roots.
 - SPM/MATLAB sandbox preprocessing requires explicit opt-in flags and local
   tool availability.
+- Reviewed Minimal FC can continue from already registered realignment outputs;
+  this is a resume/registration path. It is not a one-click local SPM
+  realignment execution claim while MATLAB/SPM gates remain unsatisfied.
 - DPABI remains disabled by default.
-- Full-brain FC, group statistics, classification, clinical diagnosis, report
-  editing, and auto-update are not current capabilities.
+- Full DICOM-to-reviewed-FC GUI E2E on real multi-subject data, true
+  MATLAB/SPM preprocessing execution in this local environment, group
+  statistics, classification, clinical diagnosis, report editing, and
+  auto-update are not current capabilities.
 
 ## Validation Baseline
 
@@ -72,8 +82,9 @@ their tag state.
   and missing `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
 - The latest committed source-level frontend refactor fix
   (`904c3ec`, 2026-06-13) recorded `109 passed, 4 skipped`.
-- Current cleanup validation is recorded in the final Completion Report rather
-  than appended here as a development diary.
+- Current task-level validation is recorded in the final Completion Report and
+  the local phase execution record rather than appended here as a development
+  diary.
 - Current Phase 6B DICOM conversion focused validation includes strict
   `tests/integration/test_dicom_conversion_public_e2e_smoke.py` execution with
   `MEDIMAGE_E2E_SMOKE_RAWDATA_DIR` pointing to DemoData. The smoke now requires
@@ -95,9 +106,11 @@ their tag state.
 ## Known Limitations and Risks
 
 - Per-stage real capability is recorded in `docs/CAPABILITY_MATRIX.md`.
-  ALFF/fALFF/ReHo/FC are **Numerically Implemented** (real kernels wired into
-  the sandbox execution services); SPM/MATLAB stages remain
-  **Needs Verification** and stay off by default.
+  ALFF/fALFF/ReHo/FC are **Numerically Implemented** on the Python backend
+  where their required inputs exist; atlas-grounded FC is reload-tested in
+  backend regression tests but the full DICOM-to-reviewed-FC GUI workflow is
+  not yet E2E validated. SPM/MATLAB stages remain **Needs Verification** and
+  stay off by default.
 - Scientific-computation sandbox services previously reported `succeeded` for
   both "sandbox prepared" and "numeric result produced". Per-metric status
   now distinguishes these; older manifests are read with backward-compatible
@@ -112,23 +125,31 @@ their tag state.
   active project interpreter and `--basetemp=.pytest_tmp`.
 - The desktop SQLite state store is ignored runtime state and can accumulate
   stale local paths.
-- Full DICOM-to-preprocessing-to-report E2E remains unproven while SPM/MATLAB
-  preprocessing stages are unavailable or metadata-only.
+- Full DICOM-to-preprocessing-to-report GUI E2E remains unproven while
+  SPM/MATLAB preprocessing stages are unavailable, blocked by environment
+  gates, or resume-only through already registered artifacts. Preview/subset
+  runs and synthetic-atlas FC remain labeled `preview_only` or `partial`.
 
 ## Next Work
 
 1. Keep public DICOM conversion execution default-blocked unless a maintainer
    explicitly approves a release enablement path.
-2. Continue splitting large legacy route and frontend modules only through
+2. Validate the reviewed preprocessing UI against a real project with a
+   prepared preprocessing run, real atlas artifact, and recorded backend
+   report/validation outputs.
+3. Continue splitting large legacy route and frontend modules only through
    focused, tested changes.
-3. Validate desktop packaging and GUI smoke in an interactive Windows session.
-4. Keep documentation lifecycle clean: completed task handoffs and temporary
+4. Validate desktop packaging and GUI smoke in an interactive Windows session.
+5. Keep documentation lifecycle clean: completed task handoffs and temporary
    reports should not become long-term state.
 
 ## Reference Documents
 
 - Stable agent rules: `AGENTS.md`
 - Per-stage real capability: `docs/CAPABILITY_MATRIX.md`
+- Reviewed preprocessing user guide: `docs/user/full_preprocessing_pipeline.md`
+- Reviewed preprocessing developer contract:
+  `docs/dev/preprocessing_pipeline_contract.md`
 - Current architecture: `docs/architecture.md`
 - Desktop packaging: `docs/DESKTOP_APP_PACKAGING.md`
 - Release notes: `docs/releases/`

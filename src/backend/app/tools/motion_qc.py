@@ -5,6 +5,8 @@ from pathlib import Path
 from statistics import mean, median
 from typing import Any
 
+from src.backend.app.runtime.atomic_file import atomic_write_json
+
 
 def _read_motion_params(path: Path) -> list[list[float]]:
     rows: list[list[float]] = []
@@ -53,6 +55,7 @@ def compute_motion_qc_for_subject(
 
     qc_json = out_dir / "motion_qc.json"
     qc_md = out_dir / "motion_qc.md"
+    fd_tsv = out_dir / "fd_timeseries.tsv"
 
     warnings: list[str] = []
     errors: list[str] = []
@@ -70,7 +73,7 @@ def compute_motion_qc_for_subject(
             "warnings": warnings,
             "errors": [f"Motion parameter file not found: {motion_path}"],
         }
-        qc_json.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(qc_json, result, schema_version=1)
         return result
 
     try:
@@ -115,10 +118,14 @@ def compute_motion_qc_for_subject(
             "translation_max_abs_mm": float(translation_max_abs_mm),
             "rotation_max_abs_rad": float(rotation_max_abs_rad),
             "motion_qc_status": motion_qc_status,
-            "outputs": [str(qc_json), str(qc_md)],
+            "fd_timeseries_tsv": str(fd_tsv),
+            "outputs": [str(qc_json), str(qc_md), str(fd_tsv)],
             "warnings": warnings,
             "errors": errors,
         }
+        fd_lines = ["frame\tframewise_displacement"]
+        fd_lines.extend(f"{idx}\t{value}" for idx, value in enumerate(fd))
+        fd_tsv.write_text("\n".join(fd_lines) + "\n", encoding="utf-8")
 
     except Exception as exc:
         result = {
@@ -132,10 +139,7 @@ def compute_motion_qc_for_subject(
             "errors": [str(exc)],
         }
 
-    qc_json.write_text(
-        json.dumps(result, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(qc_json, result, schema_version=1)
 
     lines = []
     lines.append(f"# Motion QC: {subject_id}")
@@ -215,10 +219,7 @@ def write_motion_qc_dataset_report(
     summary_path = report_out / "motion_qc_summary.json"
     report_path = report_out / "motion_qc_report.md"
 
-    summary_path.write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    atomic_write_json(summary_path, summary, schema_version=1)
 
     lines = []
     lines.append("# rs-fMRI Motion QC Dataset Report")

@@ -1,0 +1,73 @@
+# Reviewed rs-fMRI Preprocessing Flow
+
+Current as of 2026-06-28.
+
+This guide describes the reviewed preprocessing flow for research use. It does
+not describe a clinical workflow and does not make diagnostic claims.
+
+## Preconditions
+
+- A project is selected.
+- Raw DICOM data, if present, remains read-only.
+- DICOM conversion has produced registered BIDS/NIfTI input, or a converted
+  BIDS/NIfTI project is already registered.
+- A preprocessing run exists before reviewed execution is submitted.
+- External SPM/MATLAB stages remain blocked unless backend approval,
+  environment gates, and reviewed artifacts are available.
+
+## Frontend Flow
+
+1. Open **Data & Conversion** and review conversion or BIDS validation state.
+2. Open **Preprocessing** after converted input is registered.
+3. If no preprocessing run is active, click **Create preprocessing run**. The
+   UI sends the converted-input confirmations and the backend creates a run
+   from the registered BIDS/NIfTI inventory.
+4. Review the pipeline profile:
+   - Minimal FC for the first reviewed FC path.
+   - DPARSFA-like for optional spatial and derived metric stages.
+   - Custom for a reviewed subset.
+5. Enter atlas and label paths only when they are reviewed and match the
+   functional space. Leave fallback TR blank unless it has been explicitly
+   reviewed.
+6. Confirm every reviewed execution gate item:
+   - rawdata stays read-only;
+   - request is reviewed;
+   - external-tool gates are acknowledged;
+   - research use only;
+   - no clinical use.
+7. Submit reviewed execution. The backend orchestrator remains authoritative
+   for blocked, failed, partial, metadata-only, preview-only, and succeeded
+   states.
+8. Review the pipeline dashboard, report path, validation status, and FC
+   artifact handoff.
+
+## Status Labels
+
+- `blocked`: required confirmation, input artifact, approval, environment gate,
+  or registered output is missing.
+- `metadata_only`: metadata was produced without the declared numerical
+  artifact.
+- `preview_only`: preview output exists, such as synthetic-atlas FC, and must not
+  be treated as formal atlas-grounded FC.
+- `partial`: only part of the requested scope completed.
+- `succeeded`: backend evidence indicates the stage completed with required
+  artifacts.
+
+## FC Result Review
+
+Formal FC review requires backend-registered matrix, Fisher-z, ROI time series,
+labels, QC, and provenance artifacts. Synthetic atlas output can support smoke
+or preview work, but the UI labels it `preview_only` and does not present it as
+formal research FC.
+
+## Troubleshooting
+
+| Symptom | Likely Cause | Action |
+| --- | --- | --- |
+| Execute button disabled | Missing preprocessing run id or confirmations | Create/restore a preprocessing run and check every reviewed gate item |
+| Create preprocessing run fails | No converted BIDS/NIfTI input is registered or converted-input confirmations are missing | Register converted input first, then use **Create preprocessing run** from Preprocessing |
+| Nuisance blocked after realignment | Motion parameters or FD motion QC artifacts are missing from registered realignment outputs | Register reviewed realignment outputs and motion QC before nuisance regression |
+| External stage blocked | SPM/MATLAB env or approval gate not satisfied | Review environment settings and backend approval evidence |
+| Filtering blocked | Missing TR and no explicit fallback TR | Provide BIDS sidecar metadata or reviewed fallback TR |
+| FC blocked | Missing filtered BOLD or atlas artifact | Register filtered BOLD and provide a validated atlas or reviewed atlas path |
+| FC preview only | Synthetic atlas or preview scope was used | Treat output as preview; do not report it as formal atlas-grounded FC |

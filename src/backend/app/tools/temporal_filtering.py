@@ -4,6 +4,8 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from src.backend.app.runtime.atomic_file import atomic_write_json
+
 def _read_json(path: Path) -> dict[str, Any] | None:
     if not path.exists(): return None
     try: return json.loads(path.read_text(encoding="utf-8"))
@@ -12,18 +14,72 @@ def _read_json(path: Path) -> dict[str, Any] | None:
 def _find_residual_functional(subject_id: str, derivatives_dir: str) -> Path | None:
     func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
     if not func_dir.exists(): return None
-    preferred = func_dir / f"resid_swra{subject_id}_bold.nii"
-    if preferred.exists(): return preferred
-    candidates = sorted(func_dir.glob("resid_swr*.nii"))
+    preferred = [
+        func_dir / f"resid_swra{subject_id}_bold.nii",
+        func_dir / f"resid_swra{subject_id}_bold.nii.gz",
+        func_dir / f"resid_r{subject_id}_bold.nii",
+        func_dir / f"resid_r{subject_id}_bold.nii.gz",
+        func_dir / f"resid_ra{subject_id}_bold.nii",
+        func_dir / f"resid_ra{subject_id}_bold.nii.gz",
+    ]
+    for path in preferred:
+        if path.exists(): return path
+    candidates = sorted(path for path in func_dir.glob("resid_*.nii*") if path.is_file())
     return candidates[0] if candidates else None
 
 def _safe_residual_input(path: Path, subject_id: str, derivatives_dir: str) -> bool:
     func_dir = (Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func").resolve()
     try: path.resolve().relative_to(func_dir)
     except ValueError: return False
-    return path.name.startswith("resid_swr") and path.name.endswith(".nii")
+    suffixes = "".join(path.suffixes).lower()
+    is_nifti = path.suffix.lower() == ".nii" or suffixes.endswith(".nii.gz")
+    return path.name.startswith("resid_") and is_nifti
 
-def _resolve_tr(subject_id: str, derivatives_dir: str, tr: float | None = None, fallback_tr: float | None = None) -> tuple[float | None, list[str], list[str], str | None]:
+def _candidate_bids_sidecars(input_path: Path, subject_id: str, derivatives_dir: str) -> list[Path]:
+    suffixes = "".join(input_path.suffixes).lower()
+    if suffixes.endswith(".nii.gz"):
+        stem = input_path.name[:-7]
+    elif input_path.suffix.lower() == ".nii":
+        stem = input_path.name[:-4]
+    else:
+        stem = input_path.stem
+
+    candidates: list[Path] = [input_path.with_name(f"{stem}.json")]
+    stripped = stem
+    for prefix in ("filt_", "resid_", "swra", "swr", "ra", "r", "a"):
+        if stripped.startswith(prefix):
+            stripped = stripped[len(prefix):]
+            candidates.append(input_path.with_name(f"{stripped}.json"))
+    func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
+    if func_dir.exists():
+        candidates.extend(sorted(func_dir.glob("*bold.json")))
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in seen:
+            seen.add(resolved)
+            unique.append(candidate)
+    return unique
+
+def _resolve_tr_from_bids_sidecar(input_path: Path, subject_id: str, derivatives_dir: str) -> tuple[float | None, list[str], list[str], str | None]:
+    warnings: list[str] = []; errors: list[str] = []
+    for sidecar in _candidate_bids_sidecars(input_path, subject_id, derivatives_dir):
+        payload = _read_json(sidecar)
+        if not payload or payload.get("RepetitionTime") is None:
+            continue
+        try:
+            parsed = float(payload["RepetitionTime"])
+            if parsed <= 0:
+                errors.append(f"RepetitionTime in BIDS sidecar is not positive: {sidecar}")
+                return None, warnings, errors, str(sidecar)
+            return parsed, warnings, errors, str(sidecar)
+        except Exception:
+            errors.append(f"RepetitionTime in BIDS sidecar is not numeric: {sidecar}")
+            return None, warnings, errors, str(sidecar)
+    return None, warnings, errors, None
+
+def _resolve_tr(subject_id: str, derivatives_dir: str, input_path: Path, tr: float | None = None, fallback_tr: float | None = None) -> tuple[float | None, list[str], list[str], str | None]:
     warnings: list[str] = []; errors: list[str] = []
     if tr is not None:
         try:
@@ -31,6 +87,12 @@ def _resolve_tr(subject_id: str, derivatives_dir: str, tr: float | None = None, 
             if parsed <= 0: errors.append("TR must be positive."); return None, warnings, errors, "parameter"
             return parsed, warnings, errors, "parameter"
         except Exception: errors.append("TR parameter must be numeric."); return None, warnings, errors, "parameter"
+    sidecar_tr, sidecar_warnings, sidecar_errors, sidecar_source = _resolve_tr_from_bids_sidecar(input_path, subject_id, derivatives_dir)
+    warnings.extend(sidecar_warnings); errors.extend(sidecar_errors)
+    if sidecar_tr is not None:
+        return sidecar_tr, warnings, errors, sidecar_source
+    if sidecar_errors:
+        return None, warnings, errors, sidecar_source
     qc_path = Path(derivatives_dir) / "rsfmri_qc" / subject_id / "slice_timing_qc.json"
     payload = _read_json(qc_path)
     if payload and payload.get("tr") is not None:
@@ -57,8 +119,8 @@ def _failure(subject_id: str, result_json: Path, qc_json: Path, qc_md: Path, err
     warnings = warnings or []
     qc = {"ok": False, "node_id": "temporal_filtering_qc_subject", "backend": "python", "subject_id": subject_id, "filtering_qc_status": "FAIL", "outputs": [str(qc_json), str(qc_md)], "warnings": warnings, "errors": errors}
     result = {"ok": False, "node_id": "python_temporal_filter_subject", "backend": "python", "subject_id": subject_id, "outputs": [str(result_json), str(qc_json), str(qc_md)], "warnings": warnings, "errors": errors}
-    result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qc_json.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(result_json, result, schema_version=1)
+    atomic_write_json(qc_json, qc, schema_version=1)
     _write_qc_markdown(qc_md, qc)
     return result
 
@@ -79,7 +141,7 @@ def run_python_temporal_filter_subject(
     if not input_path: return _failure(subject_id, result_json, qc_json, qc_md, [f"No residual functional input found for subject {subject_id}."])
     if not _safe_residual_input(input_path, subject_id, derivatives_dir): return _failure(subject_id, result_json, qc_json, qc_md, [f"Unsafe temporal filtering input: {input_path}"])
 
-    resolved_tr, tr_warnings, tr_errors, tr_source = _resolve_tr(subject_id=subject_id, derivatives_dir=derivatives_dir, tr=tr, fallback_tr=fallback_tr)
+    resolved_tr, tr_warnings, tr_errors, tr_source = _resolve_tr(subject_id=subject_id, derivatives_dir=derivatives_dir, input_path=input_path, tr=tr, fallback_tr=fallback_tr)
     warnings.extend(tr_warnings); errors.extend(tr_errors)
     if resolved_tr is None: return _failure(subject_id, result_json, qc_json, qc_md, errors, warnings)
 
@@ -120,8 +182,8 @@ def run_python_temporal_filter_subject(
     except Exception as exc:
         return _failure(subject_id, result_json, qc_json, qc_md, [str(exc)], warnings)
 
-    result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qc_json.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(result_json, result, schema_version=1)
+    atomic_write_json(qc_json, qc, schema_version=1)
     _write_qc_markdown(qc_md, qc)
     return result
 
@@ -141,7 +203,7 @@ def write_temporal_filtering_dataset_report(derivatives_dir: str, report_dir: st
     rf = [float(s["retained_frequency_fraction"]) for s in subjects if s.get("retained_frequency_fraction") is not None]
     summary = {"ok": n > 0 and fail_count == 0, "node_id": "temporal_filtering_qc_dataset_report", "backend": "python", "subjects_total": n, "subjects_pass": pass_count, "subjects_warning": warning_count, "subjects_fail": fail_count, "mean_variance_ratio": float(mean(vr)) if vr else None, "mean_retained_frequency_fraction": float(mean(rf)) if rf else None, "subjects": subjects, "warnings": warnings, "errors": errors}
     sp = report_out / "temporal_filtering_qc_summary.json"; rp = report_out / "temporal_filtering_qc_report.md"
-    sp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(sp, summary, schema_version=1)
     lines = ["# rs-fMRI Temporal Filtering QC Dataset Report", "", "## Summary", "", f"- Subjects total: {n}", f"- PASS: {pass_count}", f"- WARNING: {warning_count}", f"- FAIL: {fail_count}", f"- Mean variance ratio: {summary['mean_variance_ratio']}", f"- Mean retained frequency fraction: {summary['mean_retained_frequency_fraction']}", "", "## Subjects", "", "| Subject | Status | TR | Band Hz | Retained Bins | Variance Ratio |", "|---|---|---:|---|---:|---:|"]
     for s in subjects: lines.append(f"| {s.get('subject_id')} | {s.get('filtering_qc_status')} | {s.get('tr')} | {s.get('low_hz')}-{s.get('high_hz')} | {s.get('retained_frequency_bin_count')} | {s.get('variance_ratio')} |")
     lines += ["", "## Safety Note", "", "This report summarizes derivative temporal filtering QC outputs only. It does not modify rawdata."]

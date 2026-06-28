@@ -10,7 +10,10 @@ import { RsfmriSmoothingQcPanel } from "../../components/RsfmriSmoothingQcPanel"
 import { RsfmriStRealignMotionChainPanel } from "../../components/RsfmriStRealignMotionChainPanel";
 import { TechnicalModuleSection } from "../../components/domain/TechnicalModuleSection";
 import { Badge, Button, Card, EmptyState } from "../../components/ui";
+import { createPreprocessingRun } from "../../lib/api/preprocessing";
 import type { ProjectDataState, ProjectInventory } from "../../lib/projectWorkflow";
+import type { PreprocessingRunCreateResponse } from "../../types";
+import { PreprocessingReviewedFlow } from "./PreprocessingReviewedFlow";
 import styles from "./PreprocessingWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
 
@@ -20,6 +23,7 @@ export interface PreprocessingWorkspaceProps {
   dataState?: ProjectDataState;
   inventory: ProjectInventory | null;
   hasPreprocessingRun: boolean;
+  preprocessingRunId?: string | null;
   onOpenDataConversion: () => void;
   onOpenToolsDrawer: () => void;
 }
@@ -30,6 +34,7 @@ export function PreprocessingWorkspace({
   dataState,
   inventory,
   hasPreprocessingRun,
+  preprocessingRunId,
   onOpenDataConversion,
   onOpenToolsDrawer,
 }: PreprocessingWorkspaceProps) {
@@ -37,12 +42,48 @@ export function PreprocessingWorkspace({
   const [showDetailedValidation, setShowDetailedValidation] = useState(false);
   const [selectedStageName, setSelectedStageName] = useState(preprocessingStages[0].name);
   const [configMode, setConfigMode] = useState<ConfigMode>("basic");
+  const [localRunId, setLocalRunId] = useState<string | null>(null);
+  const [createRunResult, setCreateRunResult] = useState<PreprocessingRunCreateResponse | null>(
+    null,
+  );
+  const [createRunError, setCreateRunError] = useState("");
+  const [creatingRun, setCreatingRun] = useState(false);
   const resolvedInventory = inventory ?? emptyProjectInventory(dataState);
   const isRawDicom = dataState === "raw_dicom";
   const hasRegisteredConvertedInput =
     resolvedInventory.hasConvertedData &&
     !resolvedInventory.metadataOnlyNiftiInventory &&
     (resolvedInventory.convertedSubjects > 0 || resolvedInventory.niftiFileCount > 0);
+  const effectivePreprocessingRunId = localRunId || preprocessingRunId || null;
+  const effectiveHasPreprocessingRun = hasPreprocessingRun || Boolean(effectivePreprocessingRunId);
+
+  const handleCreatePreprocessingRun = async () => {
+    if (!projectId || !hasRegisteredConvertedInput || creatingRun) return;
+    setCreatingRun(true);
+    setCreateRunError("");
+    try {
+      const response = await createPreprocessingRun(baseUrl, projectId, {
+        confirm_use_converted_input: true,
+        confirm_no_rawdata_modification: true,
+        confirm_python_only_execution: true,
+        confirm_no_spm_matlab: true,
+      });
+      setCreateRunResult(response);
+      if (response.ok && response.preprocessing_run_id) {
+        setLocalRunId(response.preprocessing_run_id);
+      } else {
+        setCreateRunError(
+          response.blocking_issues[0] ||
+            response.errors[0] ||
+            "Backend did not create a preprocessing run.",
+        );
+      }
+    } catch (error) {
+      setCreateRunError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCreatingRun(false);
+    }
+  };
 
   if (isRawDicom) {
     return (
@@ -142,6 +183,7 @@ export function PreprocessingWorkspace({
         <PreprocessingTechnicalSections
           baseUrl={baseUrl}
           isMissingRegistration={true}
+          preprocessingRunId={null}
           projectId={projectId}
           showDetailedValidation={showDetailedValidation}
           showTechnicalModules={showTechnicalModules}
@@ -156,39 +198,69 @@ export function PreprocessingWorkspace({
     <div className={layoutStyles.stack}>
       <WorkspaceHeader
         title="Preprocessing"
-        subtitle="Configure and review the preprocessing path after BIDS/NIfTI registration. No full preprocessing action is exposed here."
+        subtitle="Configure, gate, and monitor reviewed preprocessing after BIDS/NIfTI registration."
         status={
           isMissingRegistration
             ? "Input required"
-            : hasPreprocessingRun
+            : effectiveHasPreprocessingRun
               ? "Run available"
               : "Ready to configure"
         }
       />
-      {!hasPreprocessingRun && (
+      {!effectiveHasPreprocessingRun && (
         <EmptyState
           className={styles.setupCallout}
-          title="Ready to configure preprocessing"
-          description="Review the staged setup and open the project context inspector for environment and safety details. This does not run preprocessing or mark outputs computed."
+          title="Ready to create preprocessing run"
+          description="A reviewed preprocessing run records the converted input registry and opens the execution dashboard. It does not run MATLAB, SPM, DPABI, or mark scientific outputs computed."
           action={
-            <Button variant="secondary" onClick={onOpenToolsDrawer}>
-              Open setup context
-            </Button>
+            <div className={styles.createRunActions}>
+              <Button
+                variant="primary"
+                onClick={handleCreatePreprocessingRun}
+                disabled={!projectId || !hasRegisteredConvertedInput || creatingRun}
+              >
+                {creatingRun ? "Creating..." : "Create preprocessing run"}
+              </Button>
+              <Button variant="secondary" onClick={onOpenToolsDrawer}>
+                Open setup context
+              </Button>
+            </div>
           }
         />
       )}
+      {createRunError ? <div className={styles.inlineError}>{createRunError}</div> : null}
+      {createRunResult?.ok && effectivePreprocessingRunId ? (
+        <Card className={styles.runBridgeCard}>
+          <div className={styles.sectionHeader}>
+            <div>
+              <h3>Reviewed run created</h3>
+              <p>Run {effectivePreprocessingRunId} is ready for reviewed execution setup.</p>
+            </div>
+            <Badge tone="success">Run available</Badge>
+          </div>
+        </Card>
+      ) : null}
       <PreprocessingStageOverview
         configMode={configMode}
-        hasPreprocessingRun={hasPreprocessingRun}
+        hasPreprocessingRun={effectiveHasPreprocessingRun}
         inventory={resolvedInventory}
         isMissingRegistration={isMissingRegistration}
         onConfigModeChange={setConfigMode}
         onSelectStage={setSelectedStageName}
         selectedStageName={selectedStageName}
       />
+      <PreprocessingReviewedFlow
+        baseUrl={baseUrl}
+        hasPreprocessingRun={effectiveHasPreprocessingRun}
+        inventory={resolvedInventory}
+        preprocessingRunId={effectivePreprocessingRunId}
+        projectId={projectId}
+        onOpenDataConversion={onOpenDataConversion}
+      />
       <PreprocessingTechnicalSections
         baseUrl={baseUrl}
         isMissingRegistration={false}
+        preprocessingRunId={effectivePreprocessingRunId}
         projectId={projectId}
         showDetailedValidation={showDetailedValidation}
         showTechnicalModules={showTechnicalModules}
@@ -382,6 +454,7 @@ function PreprocessingTechnicalSections({
   isMissingRegistration,
   onToggleDetailedValidation,
   onToggleTechnicalModules,
+  preprocessingRunId,
   projectId,
   showDetailedValidation,
   showTechnicalModules,
@@ -390,6 +463,7 @@ function PreprocessingTechnicalSections({
   isMissingRegistration: boolean;
   onToggleDetailedValidation: () => void;
   onToggleTechnicalModules: () => void;
+  preprocessingRunId?: string | null;
   projectId: string | null;
   showDetailedValidation: boolean;
   showTechnicalModules: boolean;
@@ -413,7 +487,10 @@ function PreprocessingTechnicalSections({
         statusTone={isMissingRegistration ? "warning" : "info"}
         title="Detailed validation"
       >
-        <AdvancedPreprocessingPipelinePanel projectId={projectId} preprocessingRunId={null} />
+        <AdvancedPreprocessingPipelinePanel
+          projectId={projectId}
+          preprocessingRunId={preprocessingRunId ?? null}
+        />
       </TechnicalModuleSection>
 
       <TechnicalModuleSection

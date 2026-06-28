@@ -4,6 +4,8 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from src.backend.app.runtime.atomic_file import atomic_write_json
+
 
 def _read_confounds(path: Path) -> tuple[list[str], list[list[float]]]:
     with path.open("r", encoding="utf-8", newline="") as f:
@@ -14,9 +16,24 @@ def _read_confounds(path: Path) -> tuple[list[str], list[list[float]]]:
 
 def _safe_input_path(path: Path, subject_id: str, derivatives_dir: str) -> bool:
     func_dir = (Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func").resolve()
-    try: path.resolve().relative_to(func_dir)
-    except ValueError: return False
-    return path.name.startswith("swr") and path.name.endswith(".nii")
+    resolved = path.resolve()
+    suffixes = "".join(path.suffixes).lower()
+    is_nifti = path.suffix.lower() == ".nii" or suffixes.endswith(".nii.gz")
+    if not is_nifti or not path.name.startswith(("swr", "swra", "r", "ra", "realigned_")):
+        return False
+    if any(part.lower() == "rawdata" for part in resolved.parts):
+        return False
+    try:
+        resolved.relative_to(func_dir)
+        return True
+    except ValueError:
+        pass
+    project_root = Path(derivatives_dir).resolve().parent
+    try:
+        resolved.relative_to(project_root / "preprocessing_runs")
+        return True
+    except ValueError:
+        return False
 
 
 def run_python_nuisance_regression_subject(
@@ -50,7 +67,7 @@ def run_python_nuisance_regression_subject(
         Y = data.reshape((-1, t)).T.astype(np.float64)
         beta = np.linalg.pinv(X) @ Y; fitted = X @ beta; residual = Y - fitted
         residual_4d = residual.T.reshape((x, y, z, t)).astype("float32")
-        output_path = input_path.with_name(f"resid_{input_path.name}")
+        output_path = func_dir / f"resid_{input_path.name}"
         out_img = nib.Nifti1Image(residual_4d, affine=img.affine, header=img.header)
         nib.save(out_img, str(output_path))
 
@@ -69,8 +86,8 @@ def run_python_nuisance_regression_subject(
     except Exception as exc:
         return _write_failure(subject_id, result_json, qc_json, qc_md, [str(exc)])
 
-    result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qc_json.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(result_json, result, schema_version=1)
+    atomic_write_json(qc_json, qc, schema_version=1)
     _write_qc_markdown(qc_md, qc)
     return result
 
@@ -78,8 +95,8 @@ def run_python_nuisance_regression_subject(
 def _write_failure(subject_id: str, result_json: Path, qc_json: Path, qc_md: Path, errors: list[str]) -> dict[str, Any]:
     qc = {"ok": False, "node_id": "nuisance_regression_qc_subject", "backend": "python", "subject_id": subject_id, "regression_qc_status": "FAIL", "outputs": [str(qc_json), str(qc_md)], "warnings": [], "errors": errors}
     result = {"ok": False, "node_id": "python_nuisance_regression_subject", "backend": "python", "subject_id": subject_id, "outputs": [str(result_json), str(qc_json), str(qc_md)], "warnings": [], "errors": errors}
-    result_json.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qc_json.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(result_json, result, schema_version=1)
+    atomic_write_json(qc_json, qc, schema_version=1)
     _write_qc_markdown(qc_md, qc)
     return result
 
@@ -108,7 +125,7 @@ def write_nuisance_regression_dataset_report(derivatives_dir: str, report_dir: s
     variance_ratios = [float(s["variance_ratio"]) for s in subjects if s.get("variance_ratio") is not None]
     summary = {"ok": subjects_total > 0 and fail_count == 0, "node_id": "nuisance_regression_qc_dataset_report", "backend": "python", "subjects_total": subjects_total, "subjects_pass": pass_count, "subjects_warning": warning_count, "subjects_fail": fail_count, "mean_variance_ratio": float(mean(variance_ratios)) if variance_ratios else None, "subjects": subjects, "warnings": warnings, "errors": errors}
     summary_path = report_out / "nuisance_regression_qc_summary.json"; report_path = report_out / "nuisance_regression_qc_report.md"
-    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_json(summary_path, summary, schema_version=1)
     lines = ["# rs-fMRI Nuisance Regression QC Dataset Report", "", "## Summary", "", f"- Subjects total: {subjects_total}", f"- PASS: {pass_count}", f"- WARNING: {warning_count}", f"- FAIL: {fail_count}", f"- Mean variance ratio: {summary['mean_variance_ratio']}", "", "## Subjects", "", "| Subject | Status | Confounds | Rank | Variance Ratio |", "|---|---|---:|---:|---:|"]
     for item in subjects:
         lines.append(f"| {item.get('subject_id')} | {item.get('regression_qc_status')} | {item.get('confound_columns')} | {item.get('confound_rank')} | {item.get('variance_ratio')} |")

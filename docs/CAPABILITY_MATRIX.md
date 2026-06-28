@@ -1,6 +1,6 @@
 # Capability Matrix
 
-Current as of 2026-06-20. This matrix records the real capability level of
+Current as of 2026-06-28. This matrix records the real capability level of
 each preprocessing stage in the MedImage Agent pipeline runtime. It is a
 record of **current code behavior**, not a roadmap.
 
@@ -61,7 +61,7 @@ Describes whether and how the stage can be exercised:
 | **ALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
 | **fALFF** | Numerically Implemented | Reference Validated | Sandbox-Only; CI-Covered (golden regression) |
 | **ReHo** | Numerically Implemented | Golden Validated (CPU); Unvalidated (GPU) | Sandbox-Only; CI-Covered (golden regression, CPU path) |
-| **FC** | Numerically Implemented | Reference Validated (Pearson kernel only) | Sandbox-Only; CI-Covered (golden regression); Synthetic-atlas preview only — atlas-grounded FC workflow not yet validated |
+| **FC** | Numerically Implemented | Reference Validated (Pearson kernel); atlas-grounded workflow not E2E validated | Reviewed orchestrator path; CI-Covered backend regression; real atlas path requires validated atlas artifact or reviewed atlas path |
 
 ### DICOM Conversion note
 
@@ -72,21 +72,35 @@ requires dcm2niix + pydicom + DemoData; the E2E smoke test
 default-skipped in CI. It is not "Release Ready" until the default-blocked
 constraint is lifted by maintainer approval.
 
+### Reviewed preprocessing pipeline note
+
+The reviewed preprocessing orchestrator and frontend reviewed flow are
+implemented as of 2026-06-28. They provide a gated request path, stage status
+timeline, preprocessing-run creation from registered converted input, artifact
+handoff links, report/validation links, and FC result summary. Registered
+realignment outputs now require or produce motion QC artifacts (`motion_qc.json`,
+`fd_timeseries.tsv`, and a dataset summary) before nuisance regression can be
+treated as available. This is not a claim that unavailable external SPM/MATLAB
+stages have run successfully in the local environment. External stages remain
+default-blocked unless backend approval, environment flags, and already
+registered artifacts support the requested stage.
+
 ### FC capability breakdown
 
 The FC entry above covers the **Pearson correlation kernel** only
 (`tools/functional_connectivity_compute.py::compute_fc_backend`), which is
-Reference Validated via golden regression. The sandbox execution service
-always uses a **synthetic x-chunk atlas** (`_generate_atlas` with
-`roi_count=8`), not a real brain atlas (AAL, Schaefer, Brainnetome, etc.).
-Therefore:
+Reference Validated via golden regression. The backend FC runner can now use a
+real atlas path after atlas shape/affine validation. Synthetic x-chunk atlas
+output remains preview-only and must not be displayed as formal atlas-grounded
+FC. Therefore:
 
 | Sub-capability | Status |
 |----------------|--------|
 | ROI Pearson correlation kernel | Reference Validated |
-| Synthetic x-chunk atlas FC preview | Numerically Implemented |
-| External atlas loading | Not Yet Implemented |
-| Atlas-grounded research FC workflow | Not Yet Validated |
+| Synthetic x-chunk atlas FC preview | Numerically Implemented; preview_only |
+| External atlas loading | Numerically Implemented with shape/affine checks |
+| Atlas-grounded subject FC matrix | Numerically Implemented and reload-tested in backend regression tests |
+| Full DICOM-to-reviewed-FC GUI workflow | Not Yet E2E Validated |
 
 ### ReHo CPU vs GPU validation breakdown
 

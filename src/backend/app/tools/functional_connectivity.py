@@ -1,210 +1,565 @@
 from __future__ import annotations
-import csv, json
+
+import csv
+import json
 from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from src.backend.app.runtime.atomic_file import atomic_write_json
+from src.backend.app.tools.atlas_io import load_atlas_for_bold, sha256_file
+from src.backend.app.tools.functional_connectivity_compute import compute_fc_backend
+
+
 def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists(): return None
-    try: return json.loads(path.read_text(encoding="utf-8"))
-    except Exception: return None
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _nifti_ext(path: Path) -> str:
+    suffixes = "".join(path.suffixes).lower()
+    if suffixes.endswith(".nii.gz"):
+        return ".nii.gz"
+    return path.suffix.lower()
+
 
 def _find_filtered(subject_id: str, derivatives_dir: str) -> Path | None:
-    d = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
-    if not d.exists(): return None
-    p = d / f"filt_resid_swra{subject_id}_bold.nii"
-    if p.exists(): return p
-    c = sorted(d.glob("filt_resid_swr*.nii")); return c[0] if c else None
+    func_dir = Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func"
+    if not func_dir.exists():
+        return None
+    preferred = [
+        func_dir / f"filt_resid_swra{subject_id}_bold.nii",
+        func_dir / f"filt_resid_swra{subject_id}_bold.nii.gz",
+    ]
+    for path in preferred:
+        if path.exists():
+            return path
+    candidates = sorted(
+        path
+        for path in func_dir.glob("filt_resid*")
+        if path.is_file() and _nifti_ext(path) in {".nii", ".nii.gz"}
+    )
+    return candidates[0] if candidates else None
 
-def _safe_filtered(path: Path, subject_id: str, derivatives_dir: str) -> bool:
-    fd = (Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func").resolve()
-    try: path.resolve().relative_to(fd)
-    except ValueError: return False
-    return path.name.startswith("filt_resid_swr") and path.name.endswith(".nii")
+
+def _safe_derivative_input(path: Path, subject_id: str, derivatives_dir: str) -> bool:
+    func_dir = (Path(derivatives_dir) / "rsfmri_preproc" / subject_id / "func").resolve()
+    try:
+        path.resolve().relative_to(func_dir)
+    except ValueError:
+        return False
+    return path.name.startswith("filt_") and _nifti_ext(path) in {".nii", ".nii.gz"}
+
 
 def _safe_atlas(path: Path, derivatives_dir: str) -> bool:
-    r = path.resolve()
-    for root in [Path(derivatives_dir).resolve(), Path("outputs/work").resolve()]:
-        try: r.relative_to(root); return True
-        except ValueError: continue
+    resolved = path.resolve()
+    roots = [Path(derivatives_dir).resolve(), Path("outputs/work").resolve()]
+    for root in roots:
+        try:
+            resolved.relative_to(root)
+            return True
+        except ValueError:
+            continue
     return False
 
-def _write_tsv(path: Path, header: list[str], rows: list[list[float]]) -> None:
-    with path.open("w", encoding="utf-8", newline="") as f:
-        w = csv.writer(f, delimiter="\t"); w.writerow(header); w.writerows(rows)
 
-def _generate_atlas(shape: tuple[int,int,int], roi_count: int):
+def _write_tsv(path: Path, header: list[Any], rows: list[list[Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        writer.writerow(header)
+        writer.writerows(rows)
+
+
+def _generate_atlas(shape: tuple[int, int, int], roi_count: int):
     import numpy as np
+
     nx, ny, nz = shape
     atlas = np.zeros(shape, dtype=np.int16)
     edges = np.linspace(0, nx, roi_count + 1).astype(int)
-    defs = []
+    definitions = []
     for idx in range(roi_count):
-        s, e = int(edges[idx]), int(edges[idx+1])
-        if e <= s: continue
-        atlas[s:e, :, :] = idx + 1
-        defs.append({"label": idx+1, "name": f"ROI_{idx+1}", "strategy": "synthetic_x_chunk", "x_start": s, "x_end": e})
-    return atlas, defs
+        start, end = int(edges[idx]), int(edges[idx + 1])
+        if end <= start:
+            continue
+        atlas[start:end, :, :] = idx + 1
+        definitions.append(
+            {
+                "label": idx + 1,
+                "name": f"ROI_{idx + 1}",
+                "strategy": "synthetic_x_chunk",
+                "x_start": start,
+                "x_end": end,
+            }
+        )
+    return atlas, definitions
 
-def _safe_corrcoef(ts):
-    import numpy as np
-    arr = np.asarray(ts, dtype=np.float64); n = arr.shape[0]; corr = np.eye(n)
-    for i in range(n):
-        for j in range(i+1, n):
-            a, b = arr[i], arr[j]
-            sa, sb = float(np.std(a)), float(np.std(b))
-            if sa == 0 or sb == 0: v = 0.0
-            else:
-                v = float(np.corrcoef(a,b)[0,1])
-                if not np.isfinite(v): v = 0.0
-            corr[i,j] = corr[j,i] = v
-    return corr
 
-def _fisher_z(corr):
+def _extract_roi_timeseries(data: Any, atlas: Any, labels: list[int]) -> tuple[Any, dict[str, int], int, list[str]]:
     import numpy as np
-    c = np.clip(corr, -0.999999, 0.999999); z = np.arctanh(c); np.fill_diagonal(z, 0.0); return z
 
-def _seed_to_voxel(data, seed_ts):
-    import numpy as np
-    nx,ny,nz,nt = data.shape; flat = data.reshape((-1,nt)).astype(np.float64)
-    seed = np.asarray(seed_ts, dtype=np.float64); ss = float(np.std(seed))
-    corr = np.zeros(flat.shape[0], dtype=np.float32)
-    if ss == 0: return corr.reshape((nx,ny,nz)), corr.reshape((nx,ny,nz))
-    sc = seed - np.mean(seed)
-    for i in range(flat.shape[0]):
-        v = flat[i]; sv = float(np.std(v))
-        if sv == 0: continue
-        d = float((nt-1)*ss*sv)
-        if d == 0: continue
-        val = float(np.sum(sc*(v-np.mean(v)))/d)
-        corr[i] = val if np.isfinite(val) else 0.0
-    cm = corr.reshape((nx,ny,nz)); zm = np.arctanh(np.clip(cm, -0.999999, 0.999999)).astype(np.float32)
-    return cm.astype(np.float32), zm
+    nt = int(data.shape[3])
+    roi_timeseries = []
+    voxel_counts: dict[str, int] = {}
+    empty_count = 0
+    warnings: list[str] = []
+    for label in labels:
+        mask = atlas == label
+        voxel_count = int(np.count_nonzero(mask))
+        voxel_counts[str(label)] = voxel_count
+        if voxel_count == 0:
+            empty_count += 1
+            warnings.append(f"ROI {label} empty.")
+            roi_timeseries.append(np.zeros((nt,), dtype=np.float64))
+            continue
+        ts = np.mean(data[mask, :], axis=0).astype(np.float64)
+        roi_timeseries.append(np.where(np.isfinite(ts), ts, 0.0))
+    stacked = np.vstack(roi_timeseries) if roi_timeseries else np.zeros((0, nt), dtype=np.float64)
+    return stacked, voxel_counts, empty_count, warnings
+
 
 def _write_qc_md(path: Path, qc: dict[str, Any]) -> None:
-    lines = [f"# FC QC: {qc.get('subject_id')}", "", f"- OK: {qc.get('ok')}", f"- Status: {qc.get('fc_qc_status')}", f"- ROI count: {qc.get('roi_count')}", f"- Timepoints: {qc.get('timepoints')}", f"- Empty ROIs: {qc.get('empty_roi_count')}", f"- Timeseries finite: {qc.get('timeseries_finite_fraction')}", f"- Correlation finite: {qc.get('correlation_finite_fraction')}", f"- Symmetry diff: {qc.get('symmetry_max_abs_diff')}", f"- Seed map: {qc.get('seed_map_generated')}", "", "## Safety Note", "", "FC reads derivative files only and does not modify rawdata."]
+    lines = [
+        f"# FC QC: {qc.get('subject_id')}",
+        "",
+        f"- OK: {qc.get('ok')}",
+        f"- Status: {qc.get('fc_qc_status')}",
+        f"- Stage status: {qc.get('stage_status')}",
+        f"- Atlas grounded: {qc.get('atlas_grounded')}",
+        f"- ROI count: {qc.get('roi_count')}",
+        f"- Timepoints: {qc.get('timepoints')}",
+        f"- Empty ROIs: {qc.get('empty_roi_count')}",
+        f"- Timeseries finite: {qc.get('timeseries_finite_fraction')}",
+        f"- Correlation finite: {qc.get('correlation_finite_fraction')}",
+        f"- Symmetry diff: {qc.get('symmetry_max_abs_diff')}",
+        f"- Seed map: {qc.get('seed_map_generated')}",
+        "",
+        "## Safety Note",
+        "",
+        "FC reads derivative files only and does not modify rawdata.",
+    ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-def _fail(sid: str, rj: Path, qj: Path, qm: Path, errors: list[str], warnings: list[str] | None = None) -> dict[str, Any]:
-    w = warnings or []
-    qc = {"ok": False, "node_id": "functional_connectivity_qc_subject", "backend": "python", "subject_id": sid, "fc_qc_status": "FAIL", "outputs": [str(qj),str(qm)], "warnings": w, "errors": errors}
-    r = {"ok": False, "node_id": "python_functional_connectivity_subject", "backend": "python", "subject_id": sid, "outputs": [str(rj),str(qj),str(qm)], "warnings": w, "errors": errors}
-    rj.write_text(json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8")
-    qj.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qm, qc); return r
 
-def run_python_functional_connectivity_subject(subject_id: str, derivatives_dir: str, roi_count: int = 4, atlas_path: str | None = None, generate_seed_map: bool = False) -> dict[str, Any]:
-    try: import nibabel as nib; import numpy as np
-    except ImportError as exc: raise RuntimeError("Missing nibabel/numpy.") from exc
+def _fail(
+    subject_id: str,
+    result_json: Path,
+    qc_json: Path,
+    qc_md: Path,
+    errors: list[str],
+    warnings: list[str] | None = None,
+) -> dict[str, Any]:
+    warnings = warnings or []
+    qc = {
+        "ok": False,
+        "node_id": "functional_connectivity_qc_subject",
+        "backend": "python",
+        "subject_id": subject_id,
+        "fc_qc_status": "FAIL",
+        "stage_status": "failed",
+        "atlas_grounded": False,
+        "preview_only": False,
+        "outputs": [str(qc_json), str(qc_md)],
+        "warnings": warnings,
+        "errors": errors,
+    }
+    result = {
+        "ok": False,
+        "node_id": "python_functional_connectivity_subject",
+        "backend": "python",
+        "subject_id": subject_id,
+        "stage_status": "failed",
+        "outputs": [str(result_json), str(qc_json), str(qc_md)],
+        "warnings": warnings,
+        "errors": errors,
+    }
+    atomic_write_json(result_json, result, schema_version=1)
+    atomic_write_json(qc_json, qc, schema_version=1)
+    _write_qc_md(qc_md, qc)
+    return result
 
-    fcd = Path(derivatives_dir) / "rsfmri_fc" / subject_id
-    qcd = Path(derivatives_dir) / "rsfmri_qc" / subject_id
-    fcd.mkdir(parents=True, exist_ok=True); qcd.mkdir(parents=True, exist_ok=True)
-    rj = fcd / "fc_result.json"; qj = qcd / "functional_connectivity_qc.json"; qm = qcd / "functional_connectivity_qc.md"
-    w: list[str] = []; e: list[str] = []
 
-    ip = _find_filtered(subject_id, derivatives_dir)
-    if not ip: return _fail(subject_id, rj, qj, qm, ["No filtered functional input found."])
-    if not _safe_filtered(ip, subject_id, derivatives_dir): return _fail(subject_id, rj, qj, qm, [f"Unsafe input: {ip}"])
+def run_python_functional_connectivity_subject(
+    subject_id: str,
+    derivatives_dir: str,
+    roi_count: int = 4,
+    atlas_path: str | None = None,
+    labels_path: str | None = None,
+    generate_seed_map: bool = False,
+    input_nii: str | None = None,
+    prefer_gpu: bool = False,
+    require_gpu: bool = False,
+) -> dict[str, Any]:
+    try:
+        import nibabel as nib
+        import numpy as np
+    except ImportError as exc:
+        raise RuntimeError("Missing dependency: nibabel and numpy are required.") from exc
+
+    fc_dir = Path(derivatives_dir) / "rsfmri_fc" / subject_id
+    qc_dir = Path(derivatives_dir) / "rsfmri_qc" / subject_id
+    fc_dir.mkdir(parents=True, exist_ok=True)
+    qc_dir.mkdir(parents=True, exist_ok=True)
+    result_json = fc_dir / "fc_result.json"
+    qc_json = qc_dir / "functional_connectivity_qc.json"
+    qc_md = qc_dir / "functional_connectivity_qc.md"
+    provenance_json = fc_dir / "functional_connectivity_provenance.json"
+    warnings: list[str] = []
+    errors: list[str] = []
+
+    input_path = Path(input_nii) if input_nii else _find_filtered(subject_id, derivatives_dir)
+    if not input_path:
+        return _fail(subject_id, result_json, qc_json, qc_md, ["No filtered functional input found."])
+    if not input_path.exists():
+        return _fail(subject_id, result_json, qc_json, qc_md, [f"Filtered functional input not found: {input_path}"])
+    if not _safe_derivative_input(input_path, subject_id, derivatives_dir):
+        return _fail(subject_id, result_json, qc_json, qc_md, [f"Unsafe filtered input: {input_path}"])
 
     try:
-        img = nib.load(str(ip)); data = img.get_fdata(dtype="float32")
-        if data.ndim != 4: raise ValueError(f"Must be 4D. Got {data.shape}")
-        nx, ny, nz, nt = data.shape; roi_defs = []
+        img = nib.load(str(input_path))
+        data = img.get_fdata(dtype="float32")
+        if data.ndim != 4:
+            raise ValueError(f"Input NIfTI must be 4D. Got shape {data.shape}.")
+        nx, ny, nz, nt = data.shape
+        if nt < 3:
+            raise ValueError(f"Functional connectivity requires at least 3 timepoints. Got {nt}.")
 
         if atlas_path:
-            af = Path(atlas_path)
-            if not af.exists(): raise ValueError(f"Atlas not found: {af}")
-            if not _safe_atlas(af, derivatives_dir): raise ValueError(f"Unsafe atlas: {af}")
-            ad = nib.load(str(af)).get_fdata().astype("int16")
-            if list(ad.shape[:3]) != [nx,ny,nz]: raise ValueError(f"Atlas shape mismatch")
-            labels = sorted(int(x) for x in np.unique(ad) if int(x) > 0)
-            roi_defs = [{"label": l, "name": f"ROI_{l}", "strategy": "provided"} for l in labels]
+            atlas_file = Path(atlas_path)
+            if not _safe_atlas(atlas_file, derivatives_dir):
+                raise ValueError(f"Unsafe atlas: {atlas_file}")
+            if labels_path and not _safe_atlas(Path(labels_path), derivatives_dir):
+                raise ValueError(f"Unsafe atlas labels: {labels_path}")
+            atlas_info = load_atlas_for_bold(
+                atlas_path=atlas_file,
+                bold_img=img,
+                labels_path=labels_path,
+            )
+            atlas_data = atlas_info["atlas_data"]
+            roi_definitions = atlas_info["roi_definitions"]
+            atlas_file_for_output = atlas_info["atlas_file"]
+            atlas_checksum = atlas_info["checksum"]
+            warnings.extend(atlas_info.get("warnings", []))
+            atlas_grounded = True
+            preview_only = False
+            stage_status = "succeeded"
+            atlas_source = "provided_atlas"
         else:
-            ad, roi_defs = _generate_atlas((nx,ny,nz), int(roi_count))
-            af = fcd / "synthetic_roi_atlas.nii"
-            h3 = img.header.copy()
-            try: h3.set_data_shape(ad.shape)
-            except Exception: pass
-            nib.save(nib.Nifti1Image(ad.astype("int16"), affine=img.affine, header=h3), str(af))
+            atlas_data, roi_definitions = _generate_atlas((nx, ny, nz), int(roi_count))
+            atlas_file = fc_dir / "synthetic_roi_atlas.nii"
+            header = img.header.copy()
+            try:
+                header.set_data_shape(atlas_data.shape)
+            except Exception:
+                pass
+            nib.save(nib.Nifti1Image(atlas_data.astype("int16"), affine=img.affine, header=header), str(atlas_file))
+            atlas_file_for_output = str(atlas_file)
+            atlas_checksum = sha256_file(atlas_file)
+            atlas_grounded = False
+            preview_only = True
+            stage_status = "preview_only"
+            atlas_source = "synthetic_x_chunk"
+            warnings.append("Synthetic atlas generated; FC result is preview_only, not atlas-grounded.")
 
-        (fcd / "roi_definitions.json").write_text(json.dumps({"subject_id": subject_id, "atlas_file": str(af), "roi_definitions": roi_defs, "synthetic": atlas_path is None}, ensure_ascii=False, indent=2), encoding="utf-8")
-        labels = [int(d["label"]) for d in roi_defs]; names = [str(d.get("name", f"ROI_{l}")) for d,l in zip(roi_defs, labels)]
+        labels = [int(item["label"]) for item in roi_definitions]
+        names = [str(item.get("name") or f"ROI_{label}") for item, label in zip(roi_definitions, labels)]
+        roi_timeseries, roi_voxel_counts, empty_roi_count, roi_warnings = _extract_roi_timeseries(
+            data,
+            atlas_data,
+            labels,
+        )
+        warnings.extend(roi_warnings)
 
-        rts = []; rvc = {}; ec = 0
-        for l in labels:
-            m = ad == l; vc = int(np.count_nonzero(m)); rvc[str(l)] = vc
-            if vc == 0: ec += 1; w.append(f"ROI {l} empty."); rts.append(np.zeros((nt,), dtype=np.float64))
-            else: ts = np.mean(data[m, :], axis=0).astype(np.float64); rts.append(np.where(np.isfinite(ts), ts, 0.0))
-        rta = np.vstack(rts) if rts else np.zeros((0, nt), dtype=np.float64)
+        compute = compute_fc_backend(
+            data,
+            atlas_data,
+            generate_seed_map=generate_seed_map,
+            prefer_gpu=prefer_gpu,
+            require_gpu=require_gpu,
+        )
+        if not compute.get("ok"):
+            raise ValueError("; ".join(str(item) for item in compute.get("errors", [])) or "FC computation failed.")
+        corr = np.asarray(compute["correlation_matrix"], dtype=np.float64)
+        fisher_z = np.asarray(compute["fisher_z_matrix"], dtype=np.float64)
 
-        ttsv = fcd / "roi_timeseries.tsv"
-        _write_tsv(ttsv, names, [[float(rta[ri,t]) for ri in range(len(labels))] for t in range(nt)])
+        roi_timeseries_tsv = fc_dir / "roi_timeseries.tsv"
+        _write_tsv(
+            roi_timeseries_tsv,
+            names,
+            [[float(roi_timeseries[roi_index, time_index]) for roi_index in range(len(labels))] for time_index in range(nt)],
+        )
 
-        corr = _safe_corrcoef(rta); fz = _fisher_z(corr)
-        ctsv = fcd / "correlation_matrix.tsv"; ftsv = fcd / "fisher_z_matrix.tsv"
-        cjson = fcd / "correlation_matrix.json"; fjson = fcd / "fisher_z_matrix.json"
-        _write_tsv(ctsv, ["roi"]+names, [[names[i]] + [float(x) for x in corr[i]] for i in range(len(names))])
-        _write_tsv(ftsv, ["roi"]+names, [[names[i]] + [float(x) for x in fz[i]] for i in range(len(names))])
-        cjson.write_text(json.dumps({"subject_id": subject_id, "roi_names": names, "matrix": corr.tolist()}, ensure_ascii=False, indent=2), encoding="utf-8")
-        fjson.write_text(json.dumps({"subject_id": subject_id, "roi_names": names, "matrix": fz.tolist()}, ensure_ascii=False, indent=2), encoding="utf-8")
+        labels_json = fc_dir / "labels.json"
+        labels_tsv = fc_dir / "labels.tsv"
+        labels_payload = {
+            "subject_id": subject_id,
+            "atlas_file": atlas_file_for_output,
+            "labels_path": labels_path or "",
+            "roi_count": len(labels),
+            "labels": roi_definitions,
+            "synthetic": not atlas_grounded,
+            "atlas_grounded": atlas_grounded,
+        }
+        atomic_write_json(labels_json, labels_payload, schema_version=1)
+        atomic_write_json(fc_dir / "roi_definitions.json", labels_payload, schema_version=1)
+        _write_tsv(labels_tsv, ["label", "name", "strategy"], [[item["label"], item.get("name", ""), item.get("strategy", "")] for item in roi_definitions])
 
-        scf = None; szf = None; sgen = False
-        if generate_seed_map and len(labels) > 0:
-            ni = [i for i,l in enumerate(labels) if rvc.get(str(l),0) > 0]
-            if ni:
-                si = ni[0]; cm, zm = _seed_to_voxel(data, rta[si])
-                scf = fcd / "seed_correlation_map.nii"; szf = fcd / "seed_fisher_z_map.nii"
-                mh = img.header.copy()
-                try: mh.set_data_shape(cm.shape)
-                except Exception: pass
-                nib.save(nib.Nifti1Image(cm, affine=img.affine, header=mh), str(scf))
-                nib.save(nib.Nifti1Image(zm, affine=img.affine, header=mh), str(szf)); sgen = True
-            else: w.append("Seed map requested but no non-empty ROI.")
+        corr_tsv = fc_dir / "correlation_matrix.tsv"
+        corr_json = fc_dir / "correlation_matrix.json"
+        corr_npy = fc_dir / "correlation_matrix.npy"
+        fisher_tsv = fc_dir / "fisher_z_matrix.tsv"
+        fisher_json = fc_dir / "fisher_z_matrix.json"
+        fisher_npy = fc_dir / "fisher_z_matrix.npy"
+        _write_tsv(corr_tsv, ["roi"] + names, [[names[idx]] + [float(value) for value in corr[idx]] for idx in range(len(names))])
+        _write_tsv(fisher_tsv, ["roi"] + names, [[names[idx]] + [float(value) for value in fisher_z[idx]] for idx in range(len(names))])
+        atomic_write_json(corr_json, {"subject_id": subject_id, "roi_names": names, "matrix": corr.tolist()}, schema_version=1)
+        atomic_write_json(fisher_json, {"subject_id": subject_id, "roi_names": names, "matrix": fisher_z.tolist()}, schema_version=1)
+        np.save(corr_npy, corr.astype("float32"))
+        np.save(fisher_npy, fisher_z.astype("float32"))
 
-        tff = float(np.count_nonzero(np.isfinite(rta))/rta.size) if rta.size else 0.0
-        cff = float(np.count_nonzero(np.isfinite(corr))/corr.size) if corr.size else 0.0
-        fff = float(np.count_nonzero(np.isfinite(fz))/fz.size) if fz.size else 0.0
-        dm = float(np.mean(np.diag(corr))) if corr.size else None
-        smd = float(np.max(np.abs(corr-corr.T))) if corr.size else None
+        seed_corr_map = None
+        seed_fisher_map = None
+        seed_generated = False
+        if generate_seed_map and compute.get("seed_correlation_map") is not None:
+            seed_corr_map = fc_dir / "seed_correlation_map.nii"
+            seed_fisher_map = fc_dir / "seed_fisher_z_map.nii"
+            map_header = img.header.copy()
+            try:
+                map_header.set_data_shape(compute["seed_correlation_map"].shape)
+            except Exception:
+                pass
+            nib.save(nib.Nifti1Image(compute["seed_correlation_map"], affine=img.affine, header=map_header), str(seed_corr_map))
+            nib.save(nib.Nifti1Image(compute["seed_fisher_z_map"], affine=img.affine, header=map_header), str(seed_fisher_map))
+            seed_generated = True
+        elif generate_seed_map:
+            warnings.append("Seed map requested but no valid seed map was produced.")
 
-        status = "PASS"
-        if len(labels) == 0: status = "FAIL"; e.append("No ROIs.")
-        elif ec > 0: status = "WARNING"; w.append(f"{ec} empty ROI(s).")
-        elif tff < 1.0 or cff < 1.0 or fff < 1.0: status = "WARNING"; w.append("Non-finite values detected.")
-        elif dm is not None and abs(dm-1.0) > 1e-5: status = "WARNING"; w.append(f"Diagonal mean {dm} != 1.0")
-        elif smd is not None and smd > 1e-6: status = "WARNING"; w.append(f"Symmetry diff {smd}")
+        timeseries_finite_fraction = float(np.count_nonzero(np.isfinite(roi_timeseries)) / roi_timeseries.size) if roi_timeseries.size else 0.0
+        corr_finite_fraction = float(np.count_nonzero(np.isfinite(corr)) / corr.size) if corr.size else 0.0
+        fisher_finite_fraction = float(np.count_nonzero(np.isfinite(fisher_z)) / fisher_z.size) if fisher_z.size else 0.0
+        diagonal_mean = float(np.mean(np.diag(corr))) if corr.size else None
+        symmetry_max_abs_diff = float(np.max(np.abs(corr - corr.T))) if corr.size else None
+        fisher_diagonal_max_abs = float(np.max(np.abs(np.diag(fisher_z)))) if fisher_z.size else None
 
-        qc = {"ok": status != "FAIL", "node_id": "functional_connectivity_qc_subject", "backend": "python", "subject_id": subject_id, "input_nii": str(ip), "atlas_file": str(af), "input_shape": list(data.shape), "atlas_shape": list(ad.shape), "timepoints": int(nt), "roi_count": len(labels), "roi_names": names, "roi_voxel_counts": rvc, "empty_roi_count": ec, "timeseries_finite_fraction": tff, "correlation_matrix_shape": list(corr.shape), "correlation_finite_fraction": cff, "fisher_z_finite_fraction": fff, "diagonal_mean": dm, "symmetry_max_abs_diff": smd, "seed_map_generated": sgen, "fc_qc_status": status, "outputs": [str(qj),str(qm)], "warnings": w, "errors": e}
+        fc_qc_status = "PASS"
+        if len(labels) == 0:
+            fc_qc_status = "FAIL"
+            errors.append("No ROIs.")
+        elif empty_roi_count > 0:
+            fc_qc_status = "WARNING"
+            warnings.append(f"{empty_roi_count} empty ROI(s).")
+        elif timeseries_finite_fraction < 1.0 or corr_finite_fraction < 1.0 or fisher_finite_fraction < 1.0:
+            fc_qc_status = "WARNING"
+            warnings.append("Non-finite values detected.")
+        elif diagonal_mean is not None and abs(diagonal_mean - 1.0) > 1e-5:
+            fc_qc_status = "WARNING"
+            warnings.append(f"Diagonal mean {diagonal_mean} != 1.0")
+        elif symmetry_max_abs_diff is not None and symmetry_max_abs_diff > 1e-6:
+            fc_qc_status = "WARNING"
+            warnings.append(f"Symmetry diff {symmetry_max_abs_diff}")
+        elif fisher_diagonal_max_abs is not None and fisher_diagonal_max_abs > 1e-6:
+            fc_qc_status = "WARNING"
+            warnings.append(f"Fisher-z diagonal max abs {fisher_diagonal_max_abs}")
 
-        outputs = [str(af), str(fcd/"roi_definitions.json"), str(ttsv), str(ctsv), str(cjson), str(ftsv), str(fjson), str(rj), str(qj), str(qm)]
-        if scf: outputs.append(str(scf))
-        if szf: outputs.append(str(szf))
+        qc = {
+            "ok": fc_qc_status != "FAIL",
+            "node_id": "functional_connectivity_qc_subject",
+            "backend": "python",
+            "compute_backend": compute.get("backend", "cpu-numpy"),
+            "subject_id": subject_id,
+            "input_nii": str(input_path),
+            "atlas_file": atlas_file_for_output,
+            "atlas_source": atlas_source,
+            "atlas_grounded": atlas_grounded,
+            "preview_only": preview_only,
+            "stage_status": stage_status if fc_qc_status != "FAIL" else "failed",
+            "input_shape": list(data.shape),
+            "atlas_shape": list(atlas_data.shape),
+            "timepoints": int(nt),
+            "roi_count": len(labels),
+            "roi_names": names,
+            "roi_voxel_counts": roi_voxel_counts,
+            "empty_roi_count": empty_roi_count,
+            "timeseries_finite_fraction": timeseries_finite_fraction,
+            "correlation_matrix_shape": list(corr.shape),
+            "correlation_finite_fraction": corr_finite_fraction,
+            "fisher_z_finite_fraction": fisher_finite_fraction,
+            "diagonal_mean": diagonal_mean,
+            "symmetry_max_abs_diff": symmetry_max_abs_diff,
+            "fisher_z_diagonal_max_abs": fisher_diagonal_max_abs,
+            "seed_map_generated": seed_generated,
+            "fc_qc_status": fc_qc_status,
+            "outputs": [str(qc_json), str(qc_md)],
+            "warnings": warnings,
+            "errors": errors,
+        }
 
-        result = {"ok": status != "FAIL", "node_id": "python_functional_connectivity_subject", "backend": "python", "subject_id": subject_id, "input_nii": str(ip), "atlas_file": str(af), "roi_definitions": roi_defs, "roi_timeseries_tsv": str(ttsv), "correlation_matrix_tsv": str(ctsv), "correlation_matrix_json": str(cjson), "fisher_z_matrix_tsv": str(ftsv), "fisher_z_matrix_json": str(fjson), "seed_correlation_map": str(scf) if scf else None, "seed_fisher_z_map": str(szf) if szf else None, "qc": qc, "outputs": outputs, "warnings": w, "errors": e}
+        outputs = [
+            atlas_file_for_output,
+            str(labels_json),
+            str(labels_tsv),
+            str(fc_dir / "roi_definitions.json"),
+            str(roi_timeseries_tsv),
+            str(corr_tsv),
+            str(corr_json),
+            str(corr_npy),
+            str(fisher_tsv),
+            str(fisher_json),
+            str(fisher_npy),
+            str(provenance_json),
+            str(result_json),
+            str(qc_json),
+            str(qc_md),
+        ]
+        if seed_corr_map:
+            outputs.append(str(seed_corr_map))
+        if seed_fisher_map:
+            outputs.append(str(seed_fisher_map))
+
+        provenance = {
+            "algorithm_id": "roi_pearson_functional_connectivity",
+            "algorithm_version": "1",
+            "subject_id": subject_id,
+            "input_nii": str(input_path),
+            "input_checksum": sha256_file(input_path),
+            "input_shape": list(data.shape),
+            "atlas_file": atlas_file_for_output,
+            "atlas_checksum": atlas_checksum,
+            "atlas_source": atlas_source,
+            "atlas_grounded": atlas_grounded,
+            "labels_path": labels_path or "",
+            "roi_count": len(labels),
+            "correlation_method": "pearson",
+            "fisher_z": True,
+            "backend": "python",
+            "compute_backend": compute.get("backend", "cpu-numpy"),
+            "precision": "float32-output",
+            "preview_only": preview_only,
+            "outputs": outputs,
+            "warnings": warnings,
+        }
+        atomic_write_json(provenance_json, provenance, schema_version=1)
+
+        result = {
+            "ok": fc_qc_status != "FAIL",
+            "node_id": "python_functional_connectivity_subject",
+            "backend": "python",
+            "compute_backend": compute.get("backend", "cpu-numpy"),
+            "subject_id": subject_id,
+            "stage_status": qc["stage_status"],
+            "fc_status": "atlas_grounded_computed" if atlas_grounded else "preview_only",
+            "preview_only": preview_only,
+            "atlas_grounded": atlas_grounded,
+            "input_nii": str(input_path),
+            "atlas_file": atlas_file_for_output,
+            "labels_json": str(labels_json),
+            "labels_tsv": str(labels_tsv),
+            "roi_definitions": roi_definitions,
+            "roi_timeseries_tsv": str(roi_timeseries_tsv),
+            "correlation_matrix_tsv": str(corr_tsv),
+            "correlation_matrix_json": str(corr_json),
+            "correlation_matrix_npy": str(corr_npy),
+            "fisher_z_matrix_tsv": str(fisher_tsv),
+            "fisher_z_matrix_json": str(fisher_json),
+            "fisher_z_matrix_npy": str(fisher_npy),
+            "seed_correlation_map": str(seed_corr_map) if seed_corr_map else None,
+            "seed_fisher_z_map": str(seed_fisher_map) if seed_fisher_map else None,
+            "provenance_json": str(provenance_json),
+            "qc": qc,
+            "outputs": outputs,
+            "warnings": warnings,
+            "errors": errors,
+        }
     except Exception as exc:
-        return _fail(subject_id, rj, qj, qm, [str(exc)], w)
+        return _fail(subject_id, result_json, qc_json, qc_md, [str(exc)], warnings)
 
-    rj.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    qj.write_text(json.dumps(qc, ensure_ascii=False, indent=2), encoding="utf-8")
-    _write_qc_md(qm, qc); return result
+    atomic_write_json(result_json, result, schema_version=1)
+    atomic_write_json(qc_json, qc, schema_version=1)
+    _write_qc_md(qc_md, qc)
+    return result
+
 
 def write_functional_connectivity_dataset_report(derivatives_dir: str, report_dir: str) -> dict[str, Any]:
-    d = Path(derivatives_dir); ro = Path(report_dir) / "rsfmri"; ro.mkdir(parents=True, exist_ok=True)
-    qps = sorted((d / "rsfmri_qc").glob("*/functional_connectivity_qc.json"))
-    subjects = []; w: list[str] = []; e: list[str] = []
-    for p in qps:
-        pl = _read_json(p)
-        if not pl: w.append(f"Invalid: {p}"); continue
-        subjects.append(pl)
-    n = len(subjects); pc = sum(1 for s in subjects if s.get("fc_qc_status") == "PASS"); wc = sum(1 for s in subjects if s.get("fc_qc_status") == "WARNING"); fc_c = sum(1 for s in subjects if s.get("fc_qc_status") == "FAIL")
-    rc = [float(s["roi_count"]) for s in subjects if s.get("roi_count") is not None]
-    ec = [float(s["empty_roi_count"]) for s in subjects if s.get("empty_roi_count") is not None]
-    summary = {"ok": n > 0 and fc_c == 0, "node_id": "functional_connectivity_qc_dataset_report", "backend": "python", "subjects_total": n, "subjects_pass": pc, "subjects_warning": wc, "subjects_fail": fc_c, "mean_roi_count": float(mean(rc)) if rc else None, "mean_empty_roi_count": float(mean(ec)) if ec else None, "subjects": subjects, "warnings": w, "errors": e}
-    sp = ro / "functional_connectivity_qc_summary.json"; rp = ro / "functional_connectivity_qc_report.md"
-    sp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    lines = ["# rs-fMRI FC QC Dataset Report", "", "## Summary", "", f"- Subjects: {n}", f"- PASS: {pc}", f"- WARNING: {wc}", f"- FAIL: {fc_c}", f"- Mean ROI count: {summary['mean_roi_count']}", f"- Mean empty ROIs: {summary['mean_empty_roi_count']}", "", "## Subjects", "", "| Subject | Status | ROI Count | Empty ROIs | Timepoints | Symmetry Diff |", "|---|---|---:|---:|---:|---:|"]
-    for s in subjects: lines.append(f"| {s.get('subject_id')} | {s.get('fc_qc_status')} | {s.get('roi_count')} | {s.get('empty_roi_count')} | {s.get('timepoints')} | {s.get('symmetry_max_abs_diff')} |")
+    derivatives = Path(derivatives_dir)
+    report_out = Path(report_dir) / "rsfmri"
+    report_out.mkdir(parents=True, exist_ok=True)
+    qc_paths = sorted((derivatives / "rsfmri_qc").glob("*/functional_connectivity_qc.json"))
+    subjects = []
+    warnings: list[str] = []
+    errors: list[str] = []
+    for path in qc_paths:
+        payload = _read_json(path)
+        if not payload:
+            warnings.append(f"Invalid: {path}")
+            continue
+        subjects.append(payload)
+    subject_count = len(subjects)
+    pass_count = sum(1 for item in subjects if item.get("fc_qc_status") == "PASS")
+    warning_count = sum(1 for item in subjects if item.get("fc_qc_status") == "WARNING")
+    fail_count = sum(1 for item in subjects if item.get("fc_qc_status") == "FAIL")
+    preview_count = sum(1 for item in subjects if item.get("preview_only"))
+    roi_counts = [float(item["roi_count"]) for item in subjects if item.get("roi_count") is not None]
+    empty_counts = [float(item["empty_roi_count"]) for item in subjects if item.get("empty_roi_count") is not None]
+    summary = {
+        "ok": subject_count > 0 and fail_count == 0,
+        "node_id": "functional_connectivity_qc_dataset_report",
+        "backend": "python",
+        "subjects_total": subject_count,
+        "subjects_pass": pass_count,
+        "subjects_warning": warning_count,
+        "subjects_fail": fail_count,
+        "subjects_preview_only": preview_count,
+        "mean_roi_count": float(mean(roi_counts)) if roi_counts else None,
+        "mean_empty_roi_count": float(mean(empty_counts)) if empty_counts else None,
+        "subjects": subjects,
+        "warnings": warnings,
+        "errors": errors,
+    }
+    summary_path = report_out / "functional_connectivity_qc_summary.json"
+    report_path = report_out / "functional_connectivity_qc_report.md"
+    atomic_write_json(summary_path, summary, schema_version=1)
+    lines = [
+        "# rs-fMRI FC QC Dataset Report",
+        "",
+        "## Summary",
+        "",
+        f"- Subjects: {subject_count}",
+        f"- PASS: {pass_count}",
+        f"- WARNING: {warning_count}",
+        f"- FAIL: {fail_count}",
+        f"- Preview-only: {preview_count}",
+        f"- Mean ROI count: {summary['mean_roi_count']}",
+        f"- Mean empty ROIs: {summary['mean_empty_roi_count']}",
+        "",
+        "## Subjects",
+        "",
+        "| Subject | Status | Stage | Atlas Grounded | ROI Count | Empty ROIs | Timepoints | Symmetry Diff |",
+        "|---|---|---|---:|---:|---:|---:|---:|",
+    ]
+    for item in subjects:
+        lines.append(
+            f"| {item.get('subject_id')} | {item.get('fc_qc_status')} | {item.get('stage_status')} | "
+            f"{item.get('atlas_grounded')} | {item.get('roi_count')} | {item.get('empty_roi_count')} | "
+            f"{item.get('timepoints')} | {item.get('symmetry_max_abs_diff')} |"
+        )
     lines += ["", "## Safety Note", "", "Derivative FC QC only. Does not modify rawdata."]
-    rp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return {"ok": True, "node_id": "functional_connectivity_qc_dataset_report", "backend": "python", "outputs": [str(sp),str(rp)], "metrics": {"subjects_total": n, "subjects_pass": pc, "subjects_warning": wc, "subjects_fail": fc_c}, "warnings": w, "errors": e}
+    report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {
+        "ok": True,
+        "node_id": "functional_connectivity_qc_dataset_report",
+        "backend": "python",
+        "outputs": [str(summary_path), str(report_path)],
+        "metrics": {
+            "subjects_total": subject_count,
+            "subjects_pass": pass_count,
+            "subjects_warning": warning_count,
+            "subjects_fail": fail_count,
+            "subjects_preview_only": preview_count,
+        },
+        "warnings": warnings,
+        "errors": errors,
+    }

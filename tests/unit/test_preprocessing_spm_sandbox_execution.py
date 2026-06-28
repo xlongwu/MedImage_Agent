@@ -75,6 +75,56 @@ def test_sandbox_copies_bold_files(tmp_path, monkeypatch):
     assert len(list(Path(result.sandbox_input_dir).rglob("*.nii*"))) == 2
 
 
+def test_sandbox_default_processes_all_bold_files(tmp_path, monkeypatch):
+    _setup_store(tmp_path, monkeypatch); cb = _make_bold_input(tmp_path, subjects=12)
+    dry_dir = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / "dr-test"
+    dry_dir.mkdir(parents=True)
+    (dry_dir / "dry_run_manifest.json").write_text('{"status":"dry_run_preview"}')
+    import subprocess as _sp
+    monkeypatch.setattr(_sp, "run", lambda *a, **kw: type("R",(),{"returncode":0,"stdout":"ok","stderr":""})())
+    from src.backend.app.schemas.preprocessing_spm_execution import SpmSandboxExecutionRequest
+    from src.backend.app.services.preprocessing_spm_execution import run_sandbox_spm_execution
+    req = SpmSandboxExecutionRequest(dry_run_id="dr-test", preprocessing_input_dir=str(cb), confirm_sandbox_copy=True)
+    result = run_sandbox_spm_execution("brain-tumor-study", "pp-test", req, env=_ALL_FLAGS, project_dir=str(tmp_path))
+    manifest = json.loads(Path(result.manifest_path).read_text(encoding="utf-8"))
+    assert result.status == "succeeded"
+    assert result.subjects_discovered == 12
+    assert result.subjects_selected == 12
+    assert len(list(Path(result.sandbox_input_dir).rglob("*.nii*"))) == 12
+    assert manifest["dataset_selection"]["selection_policy"] == "all"
+    assert manifest["dataset_selection"]["preview_only"] is False
+
+
+def test_sandbox_preview_limit_marks_preview_only(tmp_path, monkeypatch):
+    _setup_store(tmp_path, monkeypatch); cb = _make_bold_input(tmp_path, subjects=12)
+    dry_dir = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / "dr-test"
+    dry_dir.mkdir(parents=True)
+    (dry_dir / "dry_run_manifest.json").write_text('{"status":"dry_run_preview"}')
+    import subprocess as _sp
+    monkeypatch.setattr(_sp, "run", lambda *a, **kw: type("R",(),{"returncode":0,"stdout":"ok","stderr":""})())
+    from src.backend.app.schemas.preprocessing_spm_execution import SpmSandboxExecutionRequest
+    from src.backend.app.services.preprocessing_spm_execution import run_sandbox_spm_execution
+    req = SpmSandboxExecutionRequest(
+        dry_run_id="dr-test",
+        preprocessing_input_dir=str(cb),
+        confirm_sandbox_copy=True,
+        preview_limit=3,
+    )
+    result = run_sandbox_spm_execution("brain-tumor-study", "pp-test", req, env=_ALL_FLAGS, project_dir=str(tmp_path))
+    manifest = json.loads(Path(result.manifest_path).read_text(encoding="utf-8"))
+    subject_status = json.loads(Path(result.subject_status_path).read_text(encoding="utf-8"))
+    assert result.status == "preview_only"
+    assert result.preview_only is True
+    assert result.partial is True
+    assert result.subjects_discovered == 12
+    assert result.subjects_selected == 3
+    assert len(list(Path(result.sandbox_input_dir).rglob("*.nii*"))) == 3
+    assert manifest["dataset_selection"]["selection_policy"] == "explicit_preview_limit"
+    assert manifest["dataset_selection"]["preview_only"] is True
+    assert subject_status["preview_only"] is True
+    assert subject_status["partial"] is True
+
+
 def test_sandbox_writes_manifest_provenance(tmp_path, monkeypatch):
     _setup_store(tmp_path, monkeypatch); cb = _make_bold_input(tmp_path, subjects=1)
     dry_dir = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / "dr-test"

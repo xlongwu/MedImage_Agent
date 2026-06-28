@@ -3,6 +3,7 @@ import csv, json
 from pathlib import Path
 import nibabel as nib; import numpy as np
 from src.backend.app.tools.nuisance_regression import run_python_nuisance_regression_subject
+from src.backend.app.tools.nuisance_regression_runner import run_nuisance_regression_subject
 
 def test_python_nuisance_regression_outputs_residual_nifti(tmp_path: Path):
     derivatives = tmp_path / "derivatives"; subject_id = "sub-001"
@@ -22,3 +23,35 @@ def test_python_nuisance_regression_outputs_residual_nifti(tmp_path: Path):
     payload = json.loads(qc_path.read_text(encoding="utf-8"))
     assert payload["subject_id"] == subject_id
     assert payload["regression_qc_status"] in {"PASS", "WARNING"}
+
+
+def test_nuisance_runner_accepts_realigned_bold_and_motion_params(tmp_path: Path):
+    derivatives = tmp_path / "derivatives"; subject_id = "sub-001"
+    func_dir = derivatives / "rsfmri_preproc" / subject_id / "func"; func_dir.mkdir(parents=True)
+    input_nii = func_dir / "rsub-001_bold.nii"
+    rng = np.random.default_rng(8)
+    data = rng.normal(size=(3,3,3,8)).astype(np.float32)
+    nib.save(nib.Nifti1Image(data, affine=np.eye(4)), str(input_nii))
+    motion = func_dir / "rp_sub-001_bold.txt"
+    motion.write_text("\n".join(["0 0 0 0 0 0"] * 8), encoding="utf-8")
+
+    result = run_nuisance_regression_subject(subject_id=subject_id, derivatives_dir=str(derivatives))
+
+    assert result["ok"] is True, result["errors"]
+    assert result["input_nii"].endswith("rsub-001_bold.nii")
+    assert (func_dir / "resid_rsub-001_bold.nii").exists()
+    assert "linear_trend" in result["confounds"]["qc"]["column_names"]
+
+
+def test_nuisance_runner_blocks_without_motion_params(tmp_path: Path):
+    derivatives = tmp_path / "derivatives"; subject_id = "sub-001"
+    func_dir = derivatives / "rsfmri_preproc" / subject_id / "func"; func_dir.mkdir(parents=True)
+    nib.save(
+        nib.Nifti1Image(np.zeros((3,3,3,5), dtype=np.float32), affine=np.eye(4)),
+        str(func_dir / "rsub-001_bold.nii"),
+    )
+
+    result = run_nuisance_regression_subject(subject_id=subject_id, derivatives_dir=str(derivatives))
+
+    assert result["ok"] is False
+    assert "motion parameter" in " ".join(result["errors"]).lower()

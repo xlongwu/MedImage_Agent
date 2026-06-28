@@ -1363,6 +1363,18 @@ export type PreprocessingStagePreview = {
   enabled: boolean;
   optional: boolean;
   description: string;
+  category?: string;
+  default_enabled?: boolean;
+  required_for_fc?: boolean;
+  input_artifact_types?: string[];
+  output_artifact_types?: string[];
+  supported_backends?: string[];
+  default_backend?: string;
+  requires_approval?: boolean;
+  requires_env_flags?: string[];
+  can_run_in_ci?: boolean;
+  scientific_status?: string;
+  validation_status?: string;
 };
 
 export type PreprocessingPlanPreviewResponse = {
@@ -1387,10 +1399,15 @@ export type PreprocessingRunCreateResponse = {
   preprocessing_run_id: string;
   run_dir: string;
   preprocessing_input_dir: string;
+  artifact_registry_path: string;
+  input_inventory: Record<string, unknown>;
   stage_count: number;
   python_stage_count: number;
+  external_blocked_count: number;
+  planned_stage_count: number;
   disabled_external_stage_count: number;
   warnings: string[];
+  errors: string[];
   blocking_issues: string[];
   next_actions: string[];
   safety_flags: Record<string, boolean>;
@@ -1403,6 +1420,18 @@ export type PreprocessingStageStatus = {
   requires_external_tool: boolean;
   enabled: boolean;
   optional: boolean;
+  category?: string;
+  default_enabled?: boolean;
+  required_for_fc?: boolean;
+  input_artifact_types?: string[];
+  output_artifact_types?: string[];
+  supported_backends?: string[];
+  default_backend?: string;
+  requires_approval?: boolean;
+  requires_env_flags?: string[];
+  can_run_in_ci?: boolean;
+  scientific_status?: string;
+  validation_status?: string;
 };
 export type PreprocessingRunExecuteResponse = {
   ok: boolean;
@@ -1411,11 +1440,106 @@ export type PreprocessingRunExecuteResponse = {
   preprocessing_run_id: string;
   completed_stages: string[];
   disabled_external_stages: string[];
+  metadata_only_stages?: string[];
+  preview_only_stages?: string[];
   stage_statuses: PreprocessingStageStatus[];
   input_inventory_path: string;
   qc_preflight_summary_path: string;
   manifest_path: string;
   warnings: string[];
+  next_actions: string[];
+  safety_flags: Record<string, boolean>;
+};
+export type PreprocessingPipelineExecuteRequest = {
+  pipeline_profile?: "fc_minimal" | "dparsfa_like" | "custom";
+  start_from?: string;
+  backend_policy?: {
+    motion_correction?: string;
+    normalization?: string;
+    nuisance_regression?: string;
+    temporal_filtering?: string;
+    functional_connectivity?: string;
+    alff_falff?: string;
+    reho?: string;
+  };
+  stages?: Record<string, "enabled" | "disabled" | "auto">;
+  atlas?: {
+    atlas_path?: string;
+    labels_path?: string;
+    atlas_space?: string;
+    allow_resample?: boolean;
+  };
+  nuisance?: {
+    model?: string;
+    include_wm_csf?: boolean;
+    include_global_signal?: boolean;
+    include_linear_trend?: boolean;
+    include_intercept?: boolean;
+  };
+  filtering?: {
+    low_hz?: number;
+    high_hz?: number;
+    fallback_tr?: number | null;
+    tr?: number | null;
+  };
+  execution_limits?: {
+    preview_limit?: number | null;
+    max_subjects?: number | null;
+  };
+  confirmations?: {
+    confirm_rawdata_readonly?: boolean;
+    confirm_reviewed_execution?: boolean;
+    confirm_external_tools_if_needed?: boolean;
+    confirm_research_use_only?: boolean;
+    confirm_no_clinical_use?: boolean;
+  };
+  approval?: Record<string, unknown> | null;
+  resume?: boolean;
+  rerun_policy?: "skip_succeeded" | "require_explicit" | "rerun_new_execution";
+  derivatives_dir?: string;
+  generate_report?: boolean;
+  run_validation?: boolean;
+};
+export type PreprocessingPipelineStageResult = {
+  stage_id: string;
+  name: string;
+  status: string;
+  enabled: boolean;
+  optional: boolean;
+  backend: string;
+  node_id: string;
+  started_at: string;
+  ended_at: string;
+  skipped_reason: string;
+  blocking_issues: string[];
+  warnings: string[];
+  errors: string[];
+  output_artifact_ids: string[];
+  result: Record<string, unknown>;
+};
+export type PreprocessingPipelineExecuteResponse = {
+  ok: boolean;
+  status: string;
+  project_id: string;
+  preprocessing_run_id: string;
+  execution_id: string;
+  pipeline_profile: string;
+  manifest_path: string;
+  artifact_registry_path: string;
+  report_path: string;
+  validation_status: string;
+  completed_stages: string[];
+  skipped_stages: string[];
+  blocked_stages: string[];
+  failed_stages: string[];
+  metadata_only_stages: string[];
+  preview_only_stages: string[];
+  stage_results: PreprocessingPipelineStageResult[];
+  stage_statuses: PreprocessingStageStatus[];
+  approval_gate: Record<string, unknown>;
+  warnings: string[];
+  errors: string[];
+  blocking_issues: string[];
   next_actions: string[];
   safety_flags: Record<string, boolean>;
 };

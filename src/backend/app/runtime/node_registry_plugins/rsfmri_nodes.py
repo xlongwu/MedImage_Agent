@@ -103,6 +103,8 @@ def run_nuisance_regression_subject_node(
         include_intercept=bool(node.params.get("include_intercept", True)),
         include_linear_trend=bool(node.params.get("include_linear_trend", True)),
         include_global_signal=bool(node.params.get("include_global_signal", False)),
+        input_nii=node.params.get("input_nii"),
+        motion_parameter_file=node.params.get("motion_parameter_file"),
     )
     result["node_id"] = node.id
     return result
@@ -139,7 +141,9 @@ def run_functional_connectivity_subject_node(context, node, subject_record=None,
         backend=node.params.get("backend", "python"),
         roi_count=int(node.params.get("roi_count", 4)),
         atlas_path=node.params.get("atlas_path"),
+        labels_path=node.params.get("labels_path"),
         generate_seed_map=bool(node.params.get("generate_seed_map", False)),
+        input_nii=node.params.get("input_nii"),
     )
     result["node_id"] = node.id
     return result

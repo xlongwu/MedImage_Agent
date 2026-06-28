@@ -7,18 +7,29 @@ Old routes remain registered in ``dashboard_routes.py`` with ``deprecated=True``
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import FileResponse
 
-from src.backend.app.api.dependencies import ProjectStore
+from src.backend.app.api._errors import raise_api_error
+from src.backend.app.api.dependencies import ProjectStore, get_project_store
+from src.backend.app.core.exceptions import NotFoundError, PipelineError, SafetyError
+from src.backend.app.schemas.preprocessing_handoff import (
+    PreprocessingInputRegistrationRequest,
+    PreprocessingInputRegistrationResponse,
+)
+from src.backend.app.schemas.preprocessing_pipeline import (
+    PreprocessingPipelineExecuteRequest,
+    PreprocessingPipelineExecuteResponse,
+)
+from src.backend.app.schemas.preprocessing_run import (
+    PreprocessingRunCreateRequest,
+    PreprocessingRunCreateResponse,
+)
 
 router = APIRouter()
-
-
-def get_project_store() -> ProjectStore:
-    from src.backend.app.services.mock_store import mock_store
-    return mock_store  # type: ignore[return-value]
 
 
 # Preprocessing handoff
@@ -26,31 +37,30 @@ def get_project_store() -> ProjectStore:
 
 @router.post(
     "/api/projects/{project_id}/preprocessing/input/register-converted",
-    response_model=dict[str, Any],
+    response_model=PreprocessingInputRegistrationResponse,
 )
 def register_converted_preprocessing_input(
     project_id: str,
-    body: dict[str, Any],
+    body: PreprocessingInputRegistrationRequest,
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
-    if not store.get_project(project_id):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.preprocessing_handoff import (
+            register_converted_bids_as_preprocessing_input,
+        )
 
-    from src.backend.app.services.preprocessing_adapter import (
-        build_preprocessing_input_registration,
-    )
-    from src.backend.app.services.mock_store import mock_store
-
-    project = mock_store.get_project(project_id)
-    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
-    project_dir = str(metadata.get("project_dir") or "")
-    return build_preprocessing_input_registration(
-        project_id=project_id,
-        body=body,
-        project_dir=project_dir,
-        store=store,
-    )
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return register_converted_bids_as_preprocessing_input(
+            project_id=project_id,
+            request=body,
+            project_dir=str(metadata.get("project_dir") or ""),
+            store=store,
+        ).model_dump()
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
 
 
 @router.post(
@@ -85,31 +95,28 @@ def preview_preprocessing_plan(
 
 @router.post(
     "/api/projects/{project_id}/preprocessing/runs",
-    response_model=dict[str, Any],
+    response_model=PreprocessingRunCreateResponse,
 )
 def create_preprocessing_run(
     project_id: str,
-    body: dict[str, Any],
+    body: PreprocessingRunCreateRequest,
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
-    if not store.get_project(project_id):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.preprocessing_run import create_preprocessing_run as _create
 
-    from src.backend.app.services.preprocessing_adapter import (
-        build_preprocessing_run_create,
-    )
-    from src.backend.app.services.mock_store import mock_store
-
-    project = mock_store.get_project(project_id)
-    metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
-    project_dir = str(metadata.get("project_dir") or "")
-    return build_preprocessing_run_create(
-        project_id=project_id,
-        body=body,
-        project_dir=project_dir,
-        store=store,
-    )
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return _create(
+            project_id,
+            body,
+            project_dir=str(metadata.get("project_dir") or ""),
+            store=store,
+        ).model_dump()
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
 
 
 @router.post(
@@ -139,6 +146,36 @@ def execute_python_preflight_endpoint(
         project_dir=project_dir,
         store=store,
     )
+
+
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/execute-reviewed",
+    response_model=PreprocessingPipelineExecuteResponse,
+)
+def execute_reviewed_preprocessing_pipeline(
+    project_id: str,
+    preprocessing_run_id: str,
+    body: PreprocessingPipelineExecuteRequest,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.preprocessing_orchestrator import (
+            execute_reviewed_preprocessing_pipeline as _execute,
+        )
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return _execute(
+            project_id=project_id,
+            preprocessing_run_id=preprocessing_run_id,
+            request=body,
+            project_dir=str(metadata.get("project_dir") or ""),
+            store=store,
+        ).model_dump()
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
 
 
 @router.get(
@@ -288,6 +325,7 @@ def slice_timing_realign_sandbox(
         confirm_slice_timing_realign_only=bool(body.get("confirm_slice_timing_realign_only", False)),
         confirm_no_full_preprocessing=bool(body.get("confirm_no_full_preprocessing", False)),
         confirm_research_use_only=bool(body.get("confirm_research_use_only", False)),
+        preview_limit=int(body["preview_limit"]) if body.get("preview_limit") is not None else None,
         matlab_executable=str(body.get("matlab_executable", "matlab")),
         spm_path=str(body.get("spm_path", "")),
         timeout_seconds=int(body.get("timeout_seconds", 600)),
@@ -988,6 +1026,107 @@ def register_fc_outputs(
 
 
 # Reports
+
+
+@router.get(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/artifacts/{artifact_id}",
+    response_model=dict[str, Any],
+)
+def get_preprocessing_run_artifact(
+    project_id: str,
+    preprocessing_run_id: str,
+    artifact_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        if not artifact_id.startswith("ppart-"):
+            raise NotFoundError("Artifact not found.")
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.preprocessing_artifact_registry import (
+            REGISTRY_FILENAME,
+            load_artifact_registry,
+        )
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        project_dir = str(metadata.get("project_dir") or "")
+        run_dir = (
+            Path(project_dir) / "preprocessing_runs" / preprocessing_run_id
+            if project_dir
+            else Path(f"outputs/preprocessing_runs/{preprocessing_run_id}")
+        )
+        registry_path = run_dir / REGISTRY_FILENAME
+        if not registry_path.exists():
+            raise NotFoundError("Preprocessing artifact registry not found.")
+        registry = load_artifact_registry(registry_path)
+        artifact = next(
+            (
+                item for item in registry.get("artifacts", [])
+                if isinstance(item, dict) and item.get("artifact_id") == artifact_id
+            ),
+            None,
+        )
+        if not artifact:
+            raise NotFoundError("Artifact not found.")
+        return {
+            "ok": True,
+            "project_id": project_id,
+            "preprocessing_run_id": preprocessing_run_id,
+            "artifact": artifact,
+            "artifact_registry_path": str(registry_path),
+        }
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
+@router.get(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/artifacts/{artifact_id}/file",
+)
+def download_preprocessing_run_artifact(
+    project_id: str,
+    preprocessing_run_id: str,
+    artifact_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> FileResponse:
+    try:
+        payload = get_preprocessing_run_artifact(
+            project_id=project_id,
+            preprocessing_run_id=preprocessing_run_id,
+            artifact_id=artifact_id,
+            store=store,
+        )
+        artifact = payload["artifact"]
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        project_dir = str(metadata.get("project_dir") or "")
+        run_dir = (
+            Path(project_dir) / "preprocessing_runs" / preprocessing_run_id
+            if project_dir
+            else Path(f"outputs/preprocessing_runs/{preprocessing_run_id}")
+        )
+        artifact_path = Path(str(artifact.get("path") or ""))
+        if not artifact_path.is_absolute():
+            artifact_path = Path(project_dir) / artifact_path if project_dir else run_dir / artifact_path
+        resolved = artifact_path.resolve()
+        allowed_roots = [run_dir.resolve()]
+        if project_dir:
+            allowed_roots.append(Path(project_dir).resolve())
+        if any(part.lower() == "rawdata" for part in resolved.parts):
+            raise SafetyError("Rawdata artifacts cannot be downloaded from preprocessing handoff links.")
+        if not any(resolved == root or root in resolved.parents for root in allowed_roots):
+            raise SafetyError("Artifact path is outside the project preprocessing boundary.")
+        if not resolved.is_file():
+            raise NotFoundError("Artifact file not found.")
+        return FileResponse(
+            path=resolved,
+            filename=resolved.name,
+            media_type="application/octet-stream",
+        )
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
 
 
 @router.get(

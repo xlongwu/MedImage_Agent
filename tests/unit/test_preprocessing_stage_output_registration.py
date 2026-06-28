@@ -19,7 +19,10 @@ def _make_exec_dir(tmp_path, exec_id="spm-ex-abc123", with_outputs=True):
     if with_outputs:
         sub = so / "sub-001"; sub.mkdir()
         (sub / "rasub-001_task-rest_bold.nii").write_text("output")
-        (sub / "rp_sub-001.txt").write_text("motion params")
+        (sub / "rp_sub-001.txt").write_text(
+            "0 0 0 0 0 0\n0.1 0 0 0 0 0\n",
+            encoding="utf-8",
+        )
         (sub / "meansub-001_task-rest_bold.nii").write_text("mean")
     return ed
 
@@ -74,6 +77,25 @@ def test_records_motion_files(tmp_path, monkeypatch):
     assert len(result.motion_files) == 1
 
 
+def test_registers_motion_qc_artifacts_after_realignment(tmp_path, monkeypatch):
+    _setup_store(tmp_path, monkeypatch); _make_exec_dir(tmp_path)
+    from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
+    from src.backend.app.services.preprocessing_artifact_registry import REGISTRY_FILENAME, load_artifact_registry
+    from src.backend.app.services.preprocessing_stage_outputs import register_sandbox_spm_outputs
+
+    result = register_sandbox_spm_outputs(
+        "brain-tumor-study",
+        "pp-test",
+        StageOutputRegistrationRequest(execution_id="spm-ex-abc123", confirm_sandbox_outputs=True),
+        project_dir=str(tmp_path),
+    )
+
+    assert result.ok
+    registry = load_artifact_registry(tmp_path / "preprocessing_runs" / "pp-test" / REGISTRY_FILENAME)
+    artifact_types = {item["artifact_type"] for item in registry["artifacts"]}
+    assert {"motion_parameters", "fd_timeseries", "qc_json", "motion_qc_summary"} <= artifact_types
+
+
 def test_records_mean_image(tmp_path, monkeypatch):
     _setup_store(tmp_path, monkeypatch); _make_exec_dir(tmp_path)
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
@@ -111,3 +133,34 @@ def test_endpoint_returns_200(tmp_path):
     resp = client.post("/api/projects/brain-tumor-study/preprocessing/runs/pp-test/stage-outputs/register-sandbox-spm",
         json={"execution_id": "spm-ex-abc123", "confirm_sandbox_outputs": True})
     assert resp.status_code == 200
+
+
+def test_register_fc_outputs_discovers_canonical_matrix_artifacts(tmp_path, monkeypatch):
+    _setup_store(tmp_path, monkeypatch)
+    exec_id = "fc-ex-abc123"
+    exec_dir = tmp_path / "preprocessing_runs" / "pp-test" / "spm_exec" / exec_id
+    sandbox_out = exec_dir / "sandbox_output" / "sub-001"
+    sandbox_out.mkdir(parents=True)
+    (exec_dir / "manifest.json").write_text('{"status":"succeeded"}')
+    (sandbox_out / "correlation_matrix.npy").write_text("matrix")
+    (sandbox_out / "correlation_matrix.tsv").write_text("matrix")
+    (sandbox_out / "fisher_z_matrix.npy").write_text("matrix")
+    (sandbox_out / "roi_timeseries.tsv").write_text("roi")
+    (sandbox_out / "labels.json").write_text("{}")
+    (sandbox_out / "functional_connectivity_provenance.json").write_text("{}")
+    from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
+    from src.backend.app.services.preprocessing_artifact_registry import REGISTRY_FILENAME, load_artifact_registry
+    from src.backend.app.services.preprocessing_stage_outputs import register_fc_outputs
+
+    result = register_fc_outputs(
+        "brain-tumor-study",
+        "pp-test",
+        StageOutputRegistrationRequest(execution_id=exec_id),
+        project_dir=str(tmp_path),
+    )
+
+    assert result.ok
+    assert result.status == "registered"
+    registry = load_artifact_registry(tmp_path / "preprocessing_runs" / "pp-test" / REGISTRY_FILENAME)
+    artifact_types = {item["artifact_type"] for item in registry["artifacts"]}
+    assert {"roi_timeseries", "fc_matrix", "fisher_z_matrix", "roi_labels", "provenance_json"} <= artifact_types

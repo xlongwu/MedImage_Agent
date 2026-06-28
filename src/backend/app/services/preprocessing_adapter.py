@@ -27,6 +27,9 @@ def build_preprocessing_input_registration(
     req = PreprocessingInputRegistrationRequest(
         conversion_run_id=str(body.get("conversion_run_id", "")),
         converted_bids_dir=body.get("converted_bids_dir"),
+        manifest_path=body.get("manifest_path"),
+        provenance_path=body.get("provenance_path"),
+        checksum_verified=bool(body.get("checksum_verified", False)),
         mode=str(body.get("mode", "reference")),
         confirm_rawdata_readonly=bool(body.get("confirm_rawdata_readonly", False)),
         confirm_use_converted_outputs=bool(body.get("confirm_use_converted_outputs", False)),
@@ -35,6 +38,7 @@ def build_preprocessing_input_registration(
         project_id=project_id,
         request=req,
         project_dir=project_dir,
+        store=store,
     ).model_dump()
 
 
@@ -46,9 +50,7 @@ def build_preprocessing_plan_preview(
     from src.backend.app.schemas.preprocessing_handoff import (
         build_default_dparsfa_style_plan,
     )
-    from src.backend.app.services.mock_store import mock_store
-
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
     input_registered = bool(metadata.get("preprocessing_input_dir"))
 
@@ -71,13 +73,21 @@ def build_preprocessing_run_create(
     req = PreprocessingRunCreateRequest(
         plan_id=str(body.get("plan_id", "")),
         preprocessing_input_dir=str(body.get("preprocessing_input_dir", "")),
+        input_registry_path=str(body.get("input_registry_path", "")),
+        source_kind=str(body.get("source_kind", "")),
+        conversion_run_id=str(body.get("conversion_run_id", "")),
         run_name=str(body.get("run_name", "")),
         confirm_use_converted_input=bool(body.get("confirm_use_converted_input", False)),
         confirm_no_rawdata_modification=bool(body.get("confirm_no_rawdata_modification", False)),
         confirm_python_only_execution=bool(body.get("confirm_python_only_execution", False)),
         confirm_no_spm_matlab=bool(body.get("confirm_no_spm_matlab", False)),
     )
-    return create_preprocessing_run(project_id, req, project_dir=project_dir).model_dump()
+    return create_preprocessing_run(
+        project_id,
+        req,
+        project_dir=project_dir,
+        store=store,
+    ).model_dump()
 
 
 def execute_python_preflight(
@@ -89,7 +99,10 @@ def execute_python_preflight(
     from src.backend.app.services.preprocessing_run import execute_python_preflight
 
     return execute_python_preflight(
-        project_id, preprocessing_run_id, project_dir=project_dir
+        project_id,
+        preprocessing_run_id,
+        project_dir=project_dir,
+        store=store,
     ).model_dump()
 
 
@@ -102,5 +115,8 @@ def get_preprocessing_run_status(
     from src.backend.app.services.preprocessing_run import get_preprocessing_run_status
 
     return get_preprocessing_run_status(
-        project_id, preprocessing_run_id, project_dir=project_dir
+        project_id,
+        preprocessing_run_id,
+        project_dir=project_dir,
+        store=store,
     ).model_dump()

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class PipelineValidationResponse(BaseModel):
     ok: bool = False; status: str = "not_started"; project_id: str = ""
     preprocessing_run_id: str = ""
+    artifact_registry_path: str = ""
     stage_summary: list[dict] = Field(default_factory=list)
     completed_stages: list[str] = Field(default_factory=list)
     dry_run_only_stages: list[str] = Field(default_factory=list)

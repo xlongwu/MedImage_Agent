@@ -86,6 +86,19 @@ export async function executePreprocessingPythonPreflight(
   );
 }
 
+export async function executeReviewedPreprocessingPipeline(
+  baseUrl: string,
+  projectId: string,
+  preprocessingRunId: string,
+  body: import("../../types").PreprocessingPipelineExecuteRequest,
+) {
+  return requestJson<import("../../types").PreprocessingPipelineExecuteResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/execute-reviewed`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
 export async function executeSpmSandboxSliceTimingRealign(
   baseUrl: string,
   projectId: string,

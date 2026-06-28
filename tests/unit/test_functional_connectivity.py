@@ -20,3 +20,74 @@ def test_python_fc_outputs_matrices(tmp_path: Path):
     pl = json.loads(qp.read_text(encoding="utf-8"))
     assert pl["subject_id"] == sid; assert pl["fc_qc_status"] in {"PASS","WARNING"}
     assert pl["roi_count"] == 4; assert pl["correlation_matrix_shape"] == [4,4]
+    assert pl["stage_status"] == "preview_only"
+    assert pl["preview_only"] is True
+    assert (fcd / "correlation_matrix.npy").exists()
+    assert (fcd / "fisher_z_matrix.npy").exists()
+    assert (fcd / "functional_connectivity_provenance.json").exists()
+
+
+def test_python_fc_with_real_atlas_outputs_reloadable_grounded_artifacts(tmp_path: Path):
+    d = tmp_path / "derivatives"; sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    ip = fd / "filt_resid_rsub-001_bold.nii.gz"
+    nt = 16
+    t = np.linspace(0, 2*np.pi, nt, dtype=np.float32)
+    data = np.zeros((4,4,3,nt), dtype=np.float32)
+    data[:2,:,:,:] = np.sin(t)
+    data[2:,:,:,:] = np.cos(t)
+    affine = np.eye(4)
+    nib.save(nib.Nifti1Image(data, affine=affine), str(ip))
+    atlas = np.zeros((4,4,3), dtype=np.int16)
+    atlas[:2,:,:] = 1
+    atlas[2:,:,:] = 2
+    atlas_path = d / "atlases" / "subject_atlas.nii.gz"
+    atlas_path.parent.mkdir(parents=True)
+    nib.save(nib.Nifti1Image(atlas, affine=affine), str(atlas_path))
+    labels_path = atlas_path.with_suffix("").with_suffix(".tsv")
+    labels_path.write_text("label\tname\n1\tSin\n2\tCos\n", encoding="utf-8")
+
+    result = run_python_functional_connectivity_subject(
+        subject_id=sid,
+        derivatives_dir=str(d),
+        atlas_path=str(atlas_path),
+        labels_path=str(labels_path),
+    )
+
+    assert result["ok"] is True, result["errors"]
+    assert result["stage_status"] == "succeeded"
+    assert result["atlas_grounded"] is True
+    assert result["preview_only"] is False
+    corr = np.load(fcd := Path(result["correlation_matrix_npy"]))
+    fz = np.load(result["fisher_z_matrix_npy"])
+    assert corr.shape == (2, 2)
+    assert fz.shape == (2, 2)
+    assert np.allclose(corr, corr.T, atol=1e-6)
+    assert np.allclose(np.diag(corr), 1.0, atol=1e-6)
+    assert np.allclose(np.diag(fz), 0.0, atol=1e-6)
+    labels = json.loads(Path(result["labels_json"]).read_text(encoding="utf-8"))
+    assert labels["labels"][0]["name"] == "Sin"
+    provenance = json.loads(Path(result["provenance_json"]).read_text(encoding="utf-8"))
+    assert provenance["atlas_grounded"] is True
+    assert provenance["atlas_checksum"]
+    assert fcd.exists()
+
+
+def test_python_fc_rejects_atlas_shape_mismatch(tmp_path: Path):
+    d = tmp_path / "derivatives"; sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    ip = fd / "filt_resid_rsub-001_bold.nii"
+    nib.save(nib.Nifti1Image(np.zeros((4,4,3,8), dtype=np.float32), np.eye(4)), str(ip))
+    atlas_path = d / "atlases" / "bad_atlas.nii"
+    atlas_path.parent.mkdir(parents=True)
+    nib.save(nib.Nifti1Image(np.ones((3,4,3), dtype=np.int16), np.eye(4)), str(atlas_path))
+
+    result = run_python_functional_connectivity_subject(
+        subject_id=sid,
+        derivatives_dir=str(d),
+        atlas_path=str(atlas_path),
+    )
+
+    assert result["ok"] is False
+    assert result["stage_status"] == "failed"
+    assert "shape" in " ".join(result["errors"]).lower()

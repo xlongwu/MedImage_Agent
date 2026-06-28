@@ -3,6 +3,13 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.createRunActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
 .inputRequiredGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 0.36fr);
@@ -95,6 +102,234 @@
   display: grid;
   gap: 14px;
   min-width: 0;
+}
+
+.reviewedFlow {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.handoffCard,
+.pipelineBuilderCard,
+.executionGateCard,
+.dashboardCard,
+.fcCard,
+.runBridgeCard {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.pipelineBuilderCard,
+.dashboardCard,
+.fcCard {
+  grid-column: span 2;
+}
+
+.builderGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.fieldShell {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fieldShell span {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.fieldShell input {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.fieldShell input:focus-visible {
+  border-color: rgba(35, 97, 146, 0.52);
+  box-shadow: 0 0 0 3px rgba(35, 97, 146, 0.14);
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.inlineCheck,
+.confirmationItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.inlineCheck input,
+.confirmationItem input {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+.confirmationList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.confirmationItem {
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.confirmationItem span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.confirmationItem strong {
+  color: var(--color-text-primary);
+  font-size: 12px;
+}
+
+.confirmationItem small {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.handoffMetrics,
+.gateSummary,
+.statusStrip,
+.fcMetrics,
+.fcArtifactSummary,
+.reportRail {
+  display: grid;
+  gap: 10px;
+}
+
+.handoffMetrics,
+.gateSummary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.statusStrip {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.fcMetrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fcArtifactSummary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.reportRail {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.handoffMetrics div,
+.gateSummary div,
+.statusStrip div,
+.fcMetrics div,
+.fcArtifactSummary div,
+.reportRail div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.statusStrip div[data-tone="success"] {
+  border-color: rgba(36, 138, 61, 0.24);
+  background: rgba(36, 138, 61, 0.08);
+}
+
+.statusStrip div[data-tone="warning"] {
+  border-color: rgba(181, 124, 36, 0.28);
+  background: rgba(255, 248, 232, 0.88);
+}
+
+.statusStrip div[data-tone="danger"] {
+  border-color: rgba(185, 42, 42, 0.22);
+  background: rgba(255, 238, 238, 0.88);
+}
+
+.statusStrip div[data-tone="info"] {
+  border-color: rgba(35, 97, 146, 0.24);
+  background: rgba(35, 97, 146, 0.07);
+}
+
+.handoffMetrics span,
+.gateSummary span,
+.statusStrip span,
+.fcMetrics span,
+.fcArtifactSummary span,
+.reportRail span {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.handoffMetrics strong,
+.gateSummary strong,
+.statusStrip strong,
+.fcMetrics strong,
+.fcArtifactSummary strong,
+.reportRail strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 14px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reviewedActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reviewedActions span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.inlineError {
+  padding: 10px;
+  border: 1px solid rgba(185, 42, 42, 0.25);
+  border-radius: var(--radius);
+  background: rgba(255, 238, 238, 0.9);
+  color: #982323;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .sectionHeader {
@@ -393,9 +628,27 @@
 
 @media (max-width: 1120px) {
   .overviewGrid,
+  .reviewedFlow,
   .stageList,
   .inputRequiredGrid,
   .setupCallout {
+    grid-template-columns: 1fr;
+  }
+
+  .pipelineBuilderCard,
+  .dashboardCard,
+  .fcCard {
+    grid-column: auto;
+  }
+
+  .builderGrid,
+  .confirmationList,
+  .handoffMetrics,
+  .gateSummary,
+  .statusStrip,
+  .fcMetrics,
+  .fcArtifactSummary,
+  .reportRail {
     grid-template-columns: 1fr;
   }
 }

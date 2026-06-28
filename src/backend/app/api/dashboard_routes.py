@@ -1829,6 +1829,7 @@ def post_spm_sandbox_execution(
         confirm_slice_timing_realign_only=body.get("confirm_slice_timing_realign_only", False),
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
+        preview_limit=int(body["preview_limit"]) if body.get("preview_limit") is not None else None,
         matlab_executable=body.get("matlab_executable", "matlab"),
         spm_path=body.get("spm_path", ""), timeout_seconds=body.get("timeout_seconds", 600),
     )

@@ -39,3 +39,6 @@ def test_motion_qc_computes_fd(tmp_path: Path):
 
     payload = json.loads(qc_path.read_text(encoding="utf-8"))
     assert payload["subject_id"] == "sub-001"
+    fd_path = derivatives / "rsfmri_qc" / "sub-001" / "fd_timeseries.tsv"
+    assert fd_path.exists()
+    assert "framewise_displacement" in fd_path.read_text(encoding="utf-8")

@@ -1,8 +1,17 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectInventory } from "../../../lib/projectWorkflow";
+import {
+  createPreprocessingRun,
+  executeReviewedPreprocessingPipeline,
+} from "../../../lib/api/preprocessing";
 import { PreprocessingWorkspace } from "../PreprocessingWorkspace";
+
+vi.mock("../../../lib/api/preprocessing", () => ({
+  createPreprocessingRun: vi.fn(),
+  executeReviewedPreprocessingPipeline: vi.fn(),
+}));
 
 vi.mock("../../../components/AdvancedPreprocessingPipelinePanel", () => ({
   default: () => <div data-testid="preprocessing-validation-panel">Preprocessing panel</div>,
@@ -40,6 +49,9 @@ vi.mock("../../../components/RsfmriSmoothingQcPanel", () => ({
   RsfmriSmoothingQcPanel: () => <div data-testid="smoothing-qc-panel">Smoothing QC panel</div>,
 }));
 
+const executeReviewedMock = vi.mocked(executeReviewedPreprocessingPipeline);
+const createRunMock = vi.mocked(createPreprocessingRun);
+
 function inventory(overrides: Partial<ProjectInventory> = {}): ProjectInventory {
   return {
     projectName: "Demo Project",
@@ -60,6 +72,11 @@ function inventory(overrides: Partial<ProjectInventory> = {}): ProjectInventory 
 }
 
 describe("PreprocessingWorkspace", () => {
+  beforeEach(() => {
+    executeReviewedMock.mockReset();
+    createRunMock.mockReset();
+  });
+
   it("keeps raw DICOM preprocessing blocked with a data conversion CTA", () => {
     const onOpenDataConversion = vi.fn();
 
@@ -105,7 +122,8 @@ describe("PreprocessingWorkspace", () => {
       />,
     );
 
-    expect(screen.getByText("Ready to configure preprocessing")).toBeInTheDocument();
+    expect(screen.getByText("Ready to create preprocessing run")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create preprocessing run" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open setup context" }));
     expect(onOpenToolsDrawer).toHaveBeenCalledTimes(1);
 
@@ -135,6 +153,57 @@ describe("PreprocessingWorkspace", () => {
       ),
     ).toHaveTextContent("On demand");
     expect(screen.queryByTestId("slice-timing-panel")).not.toBeInTheDocument();
+  });
+
+  it("creates a preprocessing run from registered converted input and opens reviewed flow", async () => {
+    createRunMock.mockResolvedValue({
+      ok: true,
+      status: "created",
+      project_id: "project-1",
+      preprocessing_run_id: "pp-created",
+      run_dir: "/tmp/project/preprocessing_runs/pp-created",
+      preprocessing_input_dir: "/tmp/project/converted_bids",
+      artifact_registry_path: "/tmp/project/preprocessing_runs/pp-created/preprocessing_artifact_registry.json",
+      input_inventory: {},
+      stage_count: 12,
+      python_stage_count: 6,
+      external_blocked_count: 4,
+      planned_stage_count: 6,
+      disabled_external_stage_count: 4,
+      warnings: [],
+      errors: [],
+      blocking_issues: [],
+      next_actions: [],
+      safety_flags: {},
+    });
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={false}
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Create preprocessing run" }));
+
+    await waitFor(() => expect(createRunMock).toHaveBeenCalledTimes(1));
+    expect(createRunMock).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+      expect.objectContaining({
+        confirm_use_converted_input: true,
+        confirm_no_rawdata_modification: true,
+        confirm_python_only_execution: true,
+        confirm_no_spm_matlab: true,
+      }),
+    );
+    expect(await screen.findByText(/Run pp-created is ready/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Reviewed preprocessing flow")).toHaveTextContent("pp-created");
   });
 
   it("switches selected preprocessing stage and advanced parameters", () => {
@@ -247,6 +316,7 @@ describe("PreprocessingWorkspace", () => {
         dataState="converted_bids"
         inventory={inventory()}
         hasPreprocessingRun={true}
+        preprocessingRunId="pp-demo"
         onOpenDataConversion={vi.fn()}
         onOpenToolsDrawer={vi.fn()}
       />,
@@ -256,6 +326,127 @@ describe("PreprocessingWorkspace", () => {
     expect(within(stages).getByText("Data preparation")).toBeInTheDocument();
     expect(within(stages).getAllByText("Review").length).toBeGreaterThan(0);
     expect(screen.queryByText("Create preprocessing run")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Reviewed preprocessing flow")).toHaveTextContent("pp-demo");
+    expect(screen.getByRole("button", { name: "Submit reviewed execution" })).toBeDisabled();
+    expect(screen.queryByText("Run Full Preprocessing")).not.toBeInTheDocument();
+  });
+
+  it("submits reviewed execution only after explicit confirmations", async () => {
+    executeReviewedMock.mockResolvedValue({
+      ok: false,
+      status: "blocked",
+      project_id: "project-1",
+      preprocessing_run_id: "pp-demo",
+      execution_id: "pprev-demo",
+      pipeline_profile: "fc_minimal",
+      manifest_path: "reviewed_execution/manifest.json",
+      artifact_registry_path: "preprocessing_artifact_registry.json",
+      report_path: "",
+      validation_status: "blocked",
+      completed_stages: ["input_validation"],
+      skipped_stages: [],
+      blocked_stages: ["realignment", "functional_connectivity"],
+      failed_stages: [],
+      metadata_only_stages: [],
+      preview_only_stages: ["functional_connectivity"],
+      stage_results: [
+        {
+          stage_id: "input_validation",
+          name: "Input inventory",
+          status: "succeeded",
+          enabled: true,
+          optional: false,
+          backend: "registry",
+          node_id: "",
+          started_at: "2026-06-28T00:00:00Z",
+          ended_at: "2026-06-28T00:00:01Z",
+          skipped_reason: "",
+          blocking_issues: [],
+          warnings: [],
+          errors: [],
+          output_artifact_ids: [],
+          result: {},
+        },
+        {
+          stage_id: "functional_connectivity",
+          name: "Functional connectivity",
+          status: "preview_only",
+          enabled: true,
+          optional: false,
+          backend: "python",
+          node_id: "functional_connectivity_subject",
+          started_at: "2026-06-28T00:00:02Z",
+          ended_at: "2026-06-28T00:00:03Z",
+          skipped_reason: "",
+          blocking_issues: ["Missing required input artifact: atlas"],
+          warnings: [],
+          errors: [],
+          output_artifact_ids: ["fc-matrix-preview"],
+          result: { matrix_shape: [8, 8] },
+        },
+      ],
+      stage_statuses: [],
+      approval_gate: {},
+      warnings: [],
+      errors: [],
+      blocking_issues: ["realignment"],
+      next_actions: ["Resolve blocked required stages before continuing."],
+      safety_flags: {},
+    });
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={true}
+        preprocessingRunId="pp-demo"
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    const submit = screen.getByRole("button", { name: "Submit reviewed execution" });
+    expect(submit).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/Rawdata stays read-only/));
+    fireEvent.click(screen.getByLabelText(/Reviewed execution request/));
+    fireEvent.click(screen.getByLabelText(/External-tool gates acknowledged/));
+    fireEvent.click(screen.getByLabelText(/Research use only/));
+    fireEvent.click(screen.getByLabelText(/No clinical use/));
+
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(executeReviewedMock).toHaveBeenCalledTimes(1));
+    expect(executeReviewedMock).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+      "pp-demo",
+      expect.objectContaining({
+        pipeline_profile: "fc_minimal",
+        confirmations: expect.objectContaining({
+          confirm_rawdata_readonly: true,
+          confirm_reviewed_execution: true,
+          confirm_external_tools_if_needed: true,
+          confirm_research_use_only: true,
+          confirm_no_clinical_use: true,
+        }),
+      }),
+    );
+    expect(screen.getByLabelText("Pipeline run dashboard")).toHaveTextContent("blocked");
+    expect(screen.getByLabelText("FC results panel")).toHaveTextContent("preview_only");
+    expect(screen.getByLabelText("FC results panel")).toHaveTextContent("Synthetic preview");
+    expect(screen.getByLabelText("FC results panel")).toHaveTextContent("8 x 8");
+    expect(screen.getByRole("link", { name: "Metadata" })).toHaveAttribute(
+      "href",
+      "http://localhost/api/projects/project-1/preprocessing/runs/pp-demo/artifacts/fc-matrix-preview",
+    );
+    expect(screen.getByRole("link", { name: "File" })).toHaveAttribute(
+      "href",
+      "http://localhost/api/projects/project-1/preprocessing/runs/pp-demo/artifacts/fc-matrix-preview/file",
+    );
   });
 
   it("opens migrated SPM technical modules on demand for converted projects", () => {
