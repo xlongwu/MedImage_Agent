@@ -607,7 +607,9 @@ function FcResultsPanel({
         </div>
         <div>
           <span>QC</span>
-          <strong>{qcStatus || (status === "succeeded" ? "Backend computed" : "Review required")}</strong>
+          <strong>
+            {qcStatus || (status === "succeeded" ? "Backend computed" : "Review required")}
+          </strong>
         </div>
       </div>
       <div className={styles.fcArtifactSummary} aria-label="FC artifact summary">
@@ -641,21 +643,26 @@ function FcResultsPanel({
                 <td>
                   {projectId && preprocessingRunId ? (
                     <>
-                    <a
-                      href={artifactMetadataHref(baseUrl, projectId, preprocessingRunId, artifactId)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Metadata
-                    </a>
-                    {" | "}
-                    <a
-                      href={artifactFileHref(baseUrl, projectId, preprocessingRunId, artifactId)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      File
-                    </a>
+                      <a
+                        href={artifactMetadataHref(
+                          baseUrl,
+                          projectId,
+                          preprocessingRunId,
+                          artifactId,
+                        )}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Metadata
+                      </a>
+                      {" | "}
+                      <a
+                        href={artifactFileHref(baseUrl, projectId, preprocessingRunId, artifactId)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        File
+                      </a>
                     </>
                   ) : (
                     "Awaiting run"

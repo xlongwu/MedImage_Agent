@@ -118,11 +118,17 @@ def test_plan_preview_returns_dparsfa_stages():
     assert plan.stage_count == 15; assert plan.execution_disabled is True
     assert plan.preprocessing_input_registered is True
     python_stages = [s for s in plan.stages if s.backend == "python"]
-    matlab_stages = [s for s in plan.stages if s.backend == "matlab"]
-    assert len(python_stages) == 4
-    assert len(matlab_stages) == 11
-    assert all(s.enabled for s in python_stages)
-    assert all(not s.enabled for s in matlab_stages)
+    external_stages = [s for s in plan.stages if s.requires_external_tool]
+    assert len(python_stages) == 9
+    assert len(external_stages) == 6
+    assert all(not s.enabled for s in external_stages)
+    for stage_id in ("nuisance_regression", "temporal_filtering", "alff_falff", "reho", "functional_connectivity"):
+        stage = next(s for s in plan.stages if s.stage_id == stage_id)
+        assert stage.backend == "python"
+        assert not stage.requires_external_tool
+    fc = next(s for s in plan.stages if s.stage_id == "functional_connectivity")
+    assert fc.required_for_fc is True
+    assert fc.optional is False
 
 
 def test_plan_preview_warns_when_input_not_registered():

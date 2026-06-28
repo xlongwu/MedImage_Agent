@@ -163,7 +163,8 @@ describe("PreprocessingWorkspace", () => {
       preprocessing_run_id: "pp-created",
       run_dir: "/tmp/project/preprocessing_runs/pp-created",
       preprocessing_input_dir: "/tmp/project/converted_bids",
-      artifact_registry_path: "/tmp/project/preprocessing_runs/pp-created/preprocessing_artifact_registry.json",
+      artifact_registry_path:
+        "/tmp/project/preprocessing_runs/pp-created/preprocessing_artifact_registry.json",
       input_inventory: {},
       stage_count: 12,
       python_stage_count: 6,

@@ -203,7 +203,7 @@ def test_rawdata_not_modified(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 
 def test_dummy_scan_not_completed(tmp_path, monkeypatch):
-    """Dummy scan removal must be planned_not_executed, not completed."""
+    """Dummy scan removal must remain planned, not completed."""
     _setup_store(tmp_path, monkeypatch)
     cb = _make_converted_bids(tmp_path, subjects=1)
     from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
@@ -213,8 +213,36 @@ def test_dummy_scan_not_completed(tmp_path, monkeypatch):
     result = execute_python_preflight("brain-tumor-study", cr.preprocessing_run_id, project_dir=str(tmp_path))
     dummy = [s for s in result.stage_statuses if s.stage_id == "dummy_scan_removal"]
     assert len(dummy) == 1
-    assert dummy[0].status == "planned_not_executed", f"Expected planned_not_executed, got {dummy[0].status}"
+    assert dummy[0].status == "planned", f"Expected planned, got {dummy[0].status}"
     assert "dummy_scan_removal" not in result.completed_stages
+
+
+def test_metadata_only_planned_stage_not_marked_succeeded(tmp_path, monkeypatch):
+    """Metadata-only placeholder execution must not be promoted to succeeded."""
+    _setup_store(tmp_path, monkeypatch)
+    cb = _make_converted_bids(tmp_path, subjects=1)
+    from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
+    from src.backend.app.services.preprocessing_run import (
+        create_preprocessing_run,
+        execute_planned_stages,
+        execute_python_preflight,
+    )
+    req = PreprocessingRunCreateRequest(preprocessing_input_dir=str(cb))
+    cr = create_preprocessing_run("brain-tumor-study", req, project_dir=str(tmp_path))
+    execute_python_preflight("brain-tumor-study", cr.preprocessing_run_id, project_dir=str(tmp_path))
+
+    result = execute_planned_stages(
+        "brain-tumor-study",
+        cr.preprocessing_run_id,
+        project_dir=str(tmp_path),
+        stages_to_run=["nuisance_regression"],
+    )
+
+    nuisance = next(s for s in result.stage_statuses if s.stage_id == "nuisance_regression")
+    assert nuisance.status == "metadata_only"
+    assert "nuisance_regression" in result.metadata_only_stages
+    assert "nuisance_regression" not in result.completed_stages
+    assert result.status == "metadata_only"
 
 
 def test_no_image_transform_outputs(tmp_path, monkeypatch):
