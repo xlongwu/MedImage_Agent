@@ -46,16 +46,20 @@ start.bat
 
 ### 运行测试
 
-```powershell
-D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
+使用当前项目 Python 环境。在 Windows 上可先激活 `.venv`，或显式传入项目解释器。
+
+```bash
+python -m pytest --collect-only -q --basetemp=.pytest_tmp
+python -m pytest --tb=short --basetemp=.pytest_tmp
 ```
 
 前端验证：
 
-```powershell
-cmd /c npm --prefix src/frontend run typecheck
-cmd /c npm --prefix src/frontend run test
-cmd /c npm --prefix src/frontend run build
+```bash
+npm --prefix src/frontend run format:check
+npm --prefix src/frontend run typecheck
+npm --prefix src/frontend run test
+npm --prefix src/frontend run build
 ```
 
 ## 桌面应用
@@ -63,13 +67,16 @@ cmd /c npm --prefix src/frontend run build
 Windows 桌面应用使用 Electron 壳和 PyInstaller 后端 sidecar。前端仍然只通过
 HTTP API 与后端通信，不直接访问本地文件系统。
 
-开发构建入口：
+主要 Windows 打包入口会构建前端、PyInstaller 后端 sidecar、launcher 和 Electron
+桌面包：
 
 ```powershell
-npm --prefix src/frontend run build
-powershell -File desktop/packaging/build_backend.ps1 -PythonExe "D:\Anaconda3\envs\mamba\python.exe"
-powershell -File desktop/packaging/build_desktop.ps1 -DirOnly -ElectronRuntimeZip "desktop\electron\.electron-cache\manual-runtime\electron-v31.7.7-win32-x64.zip"
+powershell -ExecutionPolicy Bypass -File desktop\packaging\build_all_windows.ps1 -DirOnly -PythonExe .\.venv\Scripts\python.exe
 ```
+
+未打包安装器形态的 Windows 可执行文件会生成在
+`desktop/electron/dist/win-unpacked/MedImage Agent.exe`。构建成功只证明制品已组装，
+不能替代交互式 GUI 工作流 smoke 验证。
 
 详见[桌面应用打包](docs/DESKTOP_APP_PACKAGING.md)。
 
@@ -95,20 +102,25 @@ artifact。运行时状态写入使用原子文件写入。Pipeline Runtime 是�
 ## 当前稳定工作流
 
 ```text
-选择 BIDS/rawdata
+选择 BIDS/rawdata 或 converted BIDS
 -> 创建项目
 -> 生成 project_config.yaml 和 dataset_index.json
 -> 注入项目上下文并审查计划
 -> 保存 reviewed plan
 -> 通过审批门执行 reviewed plan
--> 查看 run summary、events、logs 和 artifacts
+-> 可选执行 DICOM 转换 dry-run、审查、readiness 和审批后的转换
+-> 将转换输出注册为预处理输入
+-> 创建预处理 run 并执行 Python preflight
+-> 提交 reviewed preprocessing / Minimal FC 执行
+-> 查看 stage status、validation、report、logs、artifacts 和 metadata 链接
 ```
 
 DICOM/FunRaw/T1Raw 数据支持只读检测和转换 dry-run 预览。公共 DICOM 转换执行
 路径是 fail-closed 的环境变量、审批和 readiness 门控路径，不会自动执行。
 
-Phase 5 预处理工作流运行在 converted/sandboxed 输入上，仍然需要显式确认和
-环境变量门控。
+Reviewed preprocessing 工作流运行在 converted/sandboxed 输入上，仍然需要显式确认和
+环境变量门控。当前 stage catalog 会区分 metadata-only、planned、blocked、computed
+和 preview 状态，避免 UI 将占位或预览结果呈现为已完成的数值输出。
 
 ## 项目结构
 
@@ -162,7 +174,8 @@ tests/
 - DPABI 执行默认禁用。
 - MATLAB/SPM 执行需要本地工具和显式环境变量。
 - DICOM 转换执行默认阻断，需要 release approval evidence 和多重确认。
-- 部分数值预处理阶段在缺少可选科学计算依赖时会使用 metadata-first fallback。
+- ALFF/fALFF、ReHo 和 functional connectivity 在满足输入条件时已有 Python 后端路径；
+  metadata-only 和 preview 输出仍会明确标注为对应状态。
 - 当前发布线不包含 group statistics、classification、diagnosis model、report
   editor 或 auto-update 工作流。
 - 桌面打包和 GUI smoke 需要兼容的本地 Windows 桌面环境。

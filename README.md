@@ -47,16 +47,21 @@ start.bat
 
 ### Run Tests
 
-```powershell
-D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
+Use the active project Python environment. On Windows, activate `.venv` or pass
+the project interpreter explicitly.
+
+```bash
+python -m pytest --collect-only -q --basetemp=.pytest_tmp
+python -m pytest --tb=short --basetemp=.pytest_tmp
 ```
 
 Frontend validation:
 
-```powershell
-cmd /c npm --prefix src/frontend run typecheck
-cmd /c npm --prefix src/frontend run test
-cmd /c npm --prefix src/frontend run build
+```bash
+npm --prefix src/frontend run format:check
+npm --prefix src/frontend run typecheck
+npm --prefix src/frontend run test
+npm --prefix src/frontend run build
 ```
 
 ## Desktop App
@@ -65,13 +70,17 @@ The Windows desktop app uses an Electron shell and a PyInstaller backend
 sidecar. The frontend still talks to the backend through HTTP APIs; it does not
 access the local filesystem directly.
 
-Development build entry points:
+The main Windows packaging entry point builds the frontend, PyInstaller backend
+sidecar, launcher, and Electron desktop package:
 
 ```powershell
-npm --prefix src/frontend run build
-powershell -File desktop/packaging/build_backend.ps1 -PythonExe "D:\Anaconda3\envs\mamba\python.exe"
-powershell -File desktop/packaging/build_desktop.ps1 -DirOnly -ElectronRuntimeZip "desktop\electron\.electron-cache\manual-runtime\electron-v31.7.7-win32-x64.zip"
+powershell -ExecutionPolicy Bypass -File desktop\packaging\build_all_windows.ps1 -DirOnly -PythonExe .\.venv\Scripts\python.exe
 ```
+
+The unpacked Windows executable is produced under
+`desktop/electron/dist/win-unpacked/MedImage Agent.exe`. A successful package
+build proves the artifact was assembled; it is not a substitute for an
+interactive GUI workflow smoke test.
 
 See [Desktop App Packaging](docs/DESKTOP_APP_PACKAGING.md).
 
@@ -97,21 +106,27 @@ node registry, frontend API, storage, and desktop boundaries.
 ## Current Stable Workflow
 
 ```text
-Select BIDS/rawdata
+Select BIDS/rawdata or converted BIDS
 -> Create project
 -> Generate project_config.yaml and dataset_index.json
 -> Review plan with project context
 -> Save reviewed plan
 -> Execute reviewed plan through approval gates
--> Inspect run summary, events, logs, and artifacts
+-> Optionally run DICOM conversion dry-run, review, readiness, and approved execution
+-> Register converted outputs as preprocessing input
+-> Create a preprocessing run and execute Python preflight
+-> Submit reviewed preprocessing / Minimal FC execution
+-> Inspect stage status, validation, report, logs, artifacts, and metadata links
 ```
 
 DICOM/FunRaw/T1Raw datasets support read-only detection and conversion dry-run
 preview. Public DICOM conversion execution exists only as a fail-closed,
 env-gated, approval/readiness-gated path; it is not automatic.
 
-Phase 5 preprocessing workflows operate on converted/sandboxed inputs and
-remain explicit, confirmable, and environment gated.
+Reviewed preprocessing workflows operate on converted/sandboxed inputs and
+remain explicit, confirmable, and environment gated. The current stage catalog
+tracks metadata-only, planned, blocked, computed, and preview states separately
+so the UI does not present placeholders as completed numerical outputs.
 
 ## Project Structure
 
@@ -166,8 +181,9 @@ tests/
 - MATLAB/SPM execution requires local tools plus explicit env flags.
 - DICOM conversion execution is default-blocked and requires release approval
   evidence and multiple confirmations.
-- Some numerical preprocessing stages may use metadata-first fallbacks when
-  optional scientific dependencies are unavailable.
+- ALFF/fALFF, ReHo, and functional connectivity have Python backend paths where
+  their required inputs exist; metadata-only and preview outputs remain labeled
+  as such.
 - No group statistics, classification, diagnosis model, report editor, or
   auto-update workflow is included in the current release line.
 - Desktop packaging and GUI smoke require a compatible local Windows desktop
