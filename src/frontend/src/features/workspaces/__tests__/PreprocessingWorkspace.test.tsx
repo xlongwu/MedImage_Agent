@@ -2,15 +2,26 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectInventory } from "../../../lib/projectWorkflow";
+import type { NativeFullPreprocResponse } from "../../../types";
 import {
   createPreprocessingRun,
+  executeNativeFullPreprocessing,
   executeReviewedPreprocessingPipeline,
+  getLatestNativeFullPreprocessingRun,
+  getNativeFullPreprocessingReport,
+  getNativeFullPreprocessingValidation,
+  runNativeFullPreprocessingDryRun,
 } from "../../../lib/api/preprocessing";
 import { PreprocessingWorkspace } from "../PreprocessingWorkspace";
 
 vi.mock("../../../lib/api/preprocessing", () => ({
   createPreprocessingRun: vi.fn(),
+  executeNativeFullPreprocessing: vi.fn(),
   executeReviewedPreprocessingPipeline: vi.fn(),
+  getLatestNativeFullPreprocessingRun: vi.fn(),
+  getNativeFullPreprocessingReport: vi.fn(),
+  getNativeFullPreprocessingValidation: vi.fn(),
+  runNativeFullPreprocessingDryRun: vi.fn(),
 }));
 
 vi.mock("../../../components/AdvancedPreprocessingPipelinePanel", () => ({
@@ -51,6 +62,11 @@ vi.mock("../../../components/RsfmriSmoothingQcPanel", () => ({
 
 const executeReviewedMock = vi.mocked(executeReviewedPreprocessingPipeline);
 const createRunMock = vi.mocked(createPreprocessingRun);
+const nativeDryRunMock = vi.mocked(runNativeFullPreprocessingDryRun);
+const nativeExecuteMock = vi.mocked(executeNativeFullPreprocessing);
+const latestNativeRunMock = vi.mocked(getLatestNativeFullPreprocessingRun);
+const nativeValidationMock = vi.mocked(getNativeFullPreprocessingValidation);
+const nativeReportMock = vi.mocked(getNativeFullPreprocessingReport);
 
 function inventory(overrides: Partial<ProjectInventory> = {}): ProjectInventory {
   return {
@@ -71,10 +87,64 @@ function inventory(overrides: Partial<ProjectInventory> = {}): ProjectInventory 
   };
 }
 
+function nativeResponse(
+  overrides: Partial<NativeFullPreprocResponse> = {},
+): NativeFullPreprocResponse {
+  return {
+    ok: false,
+    status: "blocked",
+    dry_run: true,
+    project_id: "project-1",
+    run_id: "pp-demo",
+    run_dir: "/tmp/project/preprocessing_native_runs/pp-demo",
+    backend: "native_python",
+    stage_graph: [],
+    stage_results: [
+      {
+        stage_id: "functional_connectivity",
+        display_name: "Functional connectivity",
+        node_id: "native_preproc_functional_connectivity",
+        status: "blocked",
+        capability_level: "computed",
+        validation_status: "synthetic_tested_reference_pending",
+        backend: "native_python",
+        input_artifacts: [],
+        output_artifacts: [],
+        warnings: [],
+        errors: [],
+        blocking_issues: ["Missing required input artifact: atlas"],
+        validation_errors: [],
+        result: {},
+      },
+    ],
+    completed_stages: [],
+    blocked_stages: ["functional_connectivity"],
+    failed_stages: [],
+    skipped_stages: [],
+    metadata_only_stages: [],
+    warning_stages: [],
+    artifact_count: 0,
+    manifest_path: "/tmp/project/preprocessing_native_runs/pp-demo/native_full_run_manifest.json",
+    validation_report_path: "",
+    final_report_path: "",
+    warnings: [],
+    errors: [],
+    blocking_issues: ["Missing required input artifact: atlas"],
+    next_actions: ["Provide a reviewed atlas."],
+    safety_flags: { no_external_tools_executed: true },
+    ...overrides,
+  };
+}
+
 describe("PreprocessingWorkspace", () => {
   beforeEach(() => {
     executeReviewedMock.mockReset();
     createRunMock.mockReset();
+    nativeDryRunMock.mockReset();
+    nativeExecuteMock.mockReset();
+    latestNativeRunMock.mockReset();
+    nativeValidationMock.mockReset();
+    nativeReportMock.mockReset();
   });
 
   it("keeps raw DICOM preprocessing blocked with a data conversion CTA", () => {
@@ -448,6 +518,366 @@ describe("PreprocessingWorkspace", () => {
       "href",
       "http://localhost/api/projects/project-1/preprocessing/runs/pp-demo/artifacts/fc-matrix-preview/file",
     );
+  });
+
+  it("runs native full dry-run and renders blocked stage evidence", async () => {
+    nativeDryRunMock.mockResolvedValue(nativeResponse());
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={true}
+        preprocessingRunId="pp-demo"
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Run native dry-run" }));
+
+    await waitFor(() => expect(nativeDryRunMock).toHaveBeenCalledTimes(1));
+    expect(nativeDryRunMock).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+      expect.objectContaining({
+        run_id: "pp-demo",
+        stage_overrides: expect.objectContaining({
+          functional_connectivity: true,
+          alff: false,
+          reho: false,
+        }),
+      }),
+    );
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "blocked",
+    );
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "Functional connectivity",
+    );
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "Missing required input artifact: atlas",
+    );
+  });
+
+  it("restores the latest native full preprocessing run after reviewed-plan execution", async () => {
+    latestNativeRunMock.mockResolvedValue(
+      nativeResponse({
+        ok: false,
+        status: "partial",
+        dry_run: false,
+        run_id: "run-reviewed-native",
+        artifact_count: 12,
+        completed_stages: ["slice_timing", "functional_connectivity"],
+        blocked_stages: [],
+        stage_results: [
+          {
+            stage_id: "functional_connectivity",
+            display_name: "Functional connectivity",
+            node_id: "native_preproc_functional_connectivity",
+            status: "succeeded",
+            capability_level: "computed",
+            validation_status: "synthetic_tested_reference_pending",
+            backend: "native_python",
+            input_artifacts: [],
+            output_artifacts: [
+              {
+                artifact_type: "fc_matrix",
+                path: "fc.tsv",
+                shape: [116, 116],
+              },
+            ],
+            warnings: [],
+            errors: [],
+            blocking_issues: [],
+            validation_errors: [],
+            result: { qc_status: "pass", qc_metrics: { roi_count: 116 } },
+          },
+        ],
+      }),
+    );
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={false}
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(latestNativeRunMock).toHaveBeenCalledWith("http://localhost", "project-1"),
+    );
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "run-reviewed-native",
+    );
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "partial",
+    );
+    expect(screen.getByLabelText("Native full run summary")).toHaveTextContent("12");
+    expect(screen.queryByText("No reviewed execution submitted")).not.toBeInTheDocument();
+    const nativeWorkflow = screen.getByLabelText("Native full preprocessing workflow");
+    expect(within(nativeWorkflow).getByText("Functional connectivity")).toBeInTheDocument();
+    expect(within(nativeWorkflow).getByText("succeeded")).toBeInTheDocument();
+    const fcPanel = screen.getByLabelText("FC results panel");
+    expect(fcPanel).toHaveTextContent("succeeded");
+    expect(fcPanel).toHaveTextContent("116");
+    expect(fcPanel).toHaveTextContent("116 x 116");
+    expect(fcPanel).toHaveTextContent("fc_matrix");
+    expect(fcPanel).toHaveTextContent("fc.tsv");
+  });
+
+  it("shows latest native FC blocking evidence instead of an empty waiting state", async () => {
+    latestNativeRunMock.mockResolvedValue(
+      nativeResponse({
+        status: "partial",
+        dry_run: false,
+        run_id: "run-reviewed-native",
+        stage_results: [
+          {
+            stage_id: "functional_connectivity",
+            display_name: "Functional connectivity",
+            node_id: "native_preproc_functional_connectivity",
+            status: "blocked",
+            capability_level: "computed",
+            validation_status: "synthetic_tested_reference_pending",
+            backend: "native_python",
+            input_artifacts: [],
+            output_artifacts: [],
+            warnings: [],
+            errors: [],
+            blocking_issues: ["Missing ROI time series for FC."],
+            validation_errors: [],
+            result: {},
+          },
+        ],
+      }),
+    );
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={false}
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(latestNativeRunMock).toHaveBeenCalledWith("http://localhost", "project-1"),
+    );
+    const fcPanel = screen.getByLabelText("FC results panel");
+    expect(fcPanel).toHaveTextContent("blocked");
+    expect(fcPanel).toHaveTextContent("Missing ROI time series for FC.");
+  });
+
+  it("allows native execute from a restored latest native run without a preprocessing run id", async () => {
+    latestNativeRunMock.mockResolvedValue(
+      nativeResponse({
+        ok: false,
+        status: "partial",
+        dry_run: false,
+        run_id: "run-reviewed-native",
+        artifact_count: 26,
+        blocked_stages: ["functional_connectivity"],
+      }),
+    );
+    nativeExecuteMock.mockResolvedValue(
+      nativeResponse({
+        ok: true,
+        status: "succeeded",
+        dry_run: false,
+        run_id: "run-reviewed-native",
+        artifact_count: 30,
+        completed_stages: ["functional_connectivity"],
+        blocked_stages: [],
+      }),
+    );
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={false}
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(latestNativeRunMock).toHaveBeenCalledWith("http://localhost", "project-1"),
+    );
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "run-reviewed-native",
+    );
+    const execute = screen.getByRole("button", { name: "Execute native full preprocessing" });
+    expect(execute).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/Reviewed native execution/));
+    fireEvent.click(screen.getByLabelText(/Native rawdata read-only/));
+    fireEvent.click(screen.getByLabelText(/No external tools/));
+    fireEvent.click(screen.getByLabelText(/Native research use only/));
+    fireEvent.click(screen.getByLabelText(/Native no clinical use/));
+
+    expect(execute).toBeEnabled();
+    fireEvent.click(execute);
+
+    await waitFor(() => expect(nativeExecuteMock).toHaveBeenCalledTimes(1));
+    expect(nativeExecuteMock).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+      expect.objectContaining({
+        run_id: "run-reviewed-native",
+        confirmations: expect.objectContaining({
+          confirm_reviewed_native_execution: true,
+          confirm_rawdata_readonly: true,
+          confirm_no_external_tools: true,
+          confirm_research_use_only: true,
+          confirm_no_clinical_use: true,
+        }),
+      }),
+    );
+  });
+
+  it("executes native full only after native safety confirmations", async () => {
+    nativeExecuteMock.mockResolvedValue(
+      nativeResponse({
+        ok: true,
+        status: "partial",
+        dry_run: false,
+        completed_stages: ["input_validation"],
+        blocked_stages: ["functional_connectivity"],
+        artifact_count: 3,
+      }),
+    );
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={true}
+        preprocessingRunId="pp-demo"
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    const execute = screen.getByRole("button", { name: "Execute native full preprocessing" });
+    expect(execute).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/Reviewed native execution/));
+    fireEvent.click(screen.getByLabelText(/Native rawdata read-only/));
+    fireEvent.click(screen.getByLabelText(/No external tools/));
+    fireEvent.click(screen.getByLabelText(/Native research use only/));
+    fireEvent.click(screen.getByLabelText(/Native no clinical use/));
+
+    expect(execute).toBeEnabled();
+    fireEvent.click(execute);
+
+    await waitFor(() => expect(nativeExecuteMock).toHaveBeenCalledTimes(1));
+    expect(nativeExecuteMock).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+      expect.objectContaining({
+        run_id: "pp-demo",
+        confirmations: expect.objectContaining({
+          confirm_reviewed_native_execution: true,
+          confirm_rawdata_readonly: true,
+          confirm_no_external_tools: true,
+          confirm_research_use_only: true,
+          confirm_no_clinical_use: true,
+        }),
+      }),
+    );
+    expect(screen.getByLabelText("Native full run summary")).toHaveTextContent("3");
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "partial",
+    );
+  });
+
+  it("refreshes native validation and report outputs after a native run exists", async () => {
+    nativeDryRunMock.mockResolvedValue(
+      nativeResponse({
+        ok: true,
+        status: "succeeded",
+        dry_run: false,
+        artifact_count: 8,
+        validation_report_path: "/tmp/project/native/validation.json",
+        final_report_path: "/tmp/project/native/report.json",
+      }),
+    );
+    nativeValidationMock.mockResolvedValue({
+      ok: true,
+      status: "succeeded",
+      validation_report_path: "/tmp/project/native/validation-refreshed.json",
+    });
+    nativeReportMock.mockResolvedValue({
+      ok: true,
+      status: "succeeded",
+      final_report_path: "/tmp/project/native/report-refreshed.json",
+    });
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={true}
+        preprocessingRunId="pp-demo"
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Run native dry-run" }));
+    await waitFor(() => expect(nativeDryRunMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh native validation" }));
+    await waitFor(() => expect(nativeValidationMock).toHaveBeenCalledWith("http://localhost", "project-1", "pp-demo"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh native report" }));
+    await waitFor(() => expect(nativeReportMock).toHaveBeenCalledWith("http://localhost", "project-1", "pp-demo"));
+    expect(screen.getByLabelText("Native validation and report outputs")).toHaveTextContent(
+      "/tmp/project/native/validation-refreshed.json",
+    );
+    expect(screen.getByLabelText("Native validation and report outputs")).toHaveTextContent(
+      "/tmp/project/native/report-refreshed.json",
+    );
+  });
+
+  it("shows native full workflow errors from API failures", async () => {
+    nativeDryRunMock.mockRejectedValue(new Error("native route unavailable"));
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={true}
+        preprocessingRunId="pp-demo"
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Run native dry-run" }));
+
+    expect(await screen.findByText("native route unavailable")).toBeInTheDocument();
   });
 
   it("opens migrated SPM technical modules on demand for converted projects", () => {

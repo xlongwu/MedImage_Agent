@@ -8,7 +8,7 @@ Does NOT call dcm2niix.  Does NOT modify rawdata.  Does NOT enable
 public conversion.  Does NOT add execute endpoints or frontend buttons.
 
 Reference:
-  docs/DICOM_CONVERSION_RELEASE_HARDENING.md  (Phase 4L-0)
+  docs/预处理与科学计算/DICOM转换/发布加固.md  (Phase 4L-0)
   src/backend/app/schemas/dicom_conversion_release_approval.py
 """
 

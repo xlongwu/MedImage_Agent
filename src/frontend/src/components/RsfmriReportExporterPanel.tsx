@@ -42,12 +42,13 @@ export function RsfmriReportExporterPanel({ baseUrl }: Props) {
     setStatus("RUNNING");
     setError("");
     try {
-      setResult(
-        await runRsfmriReportExport(baseUrl, {
-          project_config_path: "examples/project_config_dataset.yaml",
-          pipeline_path: "examples/pipeline_rsfmri_report_exporter.yaml",
-        }),
-      );
+      const runResult = await runRsfmriReportExport(baseUrl, {
+        project_config_path: "examples/project_config_dataset.yaml",
+        pipeline_path: "examples/pipeline_rsfmri_report_exporter.yaml",
+      });
+      setResult(runResult);
+      setStatus("LOADING");
+      setLatest(await getLatestRsfmriReportExport(baseUrl));
       setStatus("REQUEST_COMPLETE");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -120,7 +121,7 @@ export function RsfmriReportExporterPanel({ baseUrl }: Props) {
         <Metric label="Export ID" value={latest?.export_id} />
         <Metric label="Subjects" value={es?.exported_subjects_total} />
         <Metric label="Files" value={es?.exported_files_total} />
-        <Metric label="ZIP Size" value={es?.zip_size_bytes} />
+        <Metric label="ZIP Size" value={es?.zip_size_bytes ?? latest?.zip_size_bytes} />
         <Metric label="Manifest Files" value={Array.isArray(m?.files) ? m.files.length : "-"} />
       </div>
 

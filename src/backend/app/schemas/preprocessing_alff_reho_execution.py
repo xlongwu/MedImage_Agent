@@ -9,6 +9,7 @@ class AlffRehoSandboxExecutionRequest(BaseModel):
     confirm_previous_stage_readonly: bool = False; confirm_alff_reho_only: bool = False
     confirm_no_fc_execution: bool = False; confirm_no_full_preprocessing: bool = False
     confirm_research_use_only: bool = False
+    preview_limit: int | None = Field(default=None, ge=1)
     timeout_seconds: int = 600
 
 

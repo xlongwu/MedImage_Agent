@@ -57,6 +57,34 @@ class PlannerResponse:
 
 # ── Rule-based goal → node sequence ──────────────────────────────────────────
 
+# Native full preprocessing is only selected when a real project context already
+# exposes registered NIfTI/BIDS evidence. Generic motion-planning behavior stays
+# backward compatible.
+_NATIVE_FULL_GOAL_TERMS = (
+    "rs-fmri",
+    "preprocessing",
+    "preprocess",
+    "slice timing",
+    "realignment",
+    "realign",
+    "motion qc",
+    "nuisance regression",
+    "detrending",
+    "temporal filtering",
+    "roi time series",
+    "functional connectivity",
+    "预处理",
+    "全流程",
+)
+
+_NATIVE_FULL_CONFIRMATIONS: dict[str, bool] = {
+    "confirm_reviewed_native_execution": True,
+    "confirm_rawdata_readonly": True,
+    "confirm_no_external_tools": True,
+    "confirm_research_use_only": True,
+    "confirm_no_clinical_use": True,
+}
+
 # Each entry: set of trigger keywords → (pipeline_id, list of node ids)
 _RULES: list[tuple[set[str], str, list[str]]] = [
     (
@@ -127,6 +155,8 @@ _RULES: list[tuple[set[str], str, list[str]]] = [
 
 def _infer_backend(node_id: str) -> str:
     """Infer a backend string for a node; falls back to 'python'."""
+    if node_id.startswith("native_preproc_"):
+        return "native_python"
     if node_id.startswith("spm_"):
         return "matlab-spm"
     if node_id.startswith("dpabi_"):
@@ -183,6 +213,105 @@ def _build_plan(
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+
+def _project_context_from_constraints(
+    constraints: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not isinstance(constraints, dict):
+        return {}
+    context = constraints.get("project_context")
+    return dict(context) if isinstance(context, dict) else {}
+
+
+def _diagnostics_from_context(context: dict[str, Any]) -> dict[str, Any]:
+    diagnostics = context.get("diagnostics")
+    return dict(diagnostics) if isinstance(diagnostics, dict) else {}
+
+
+def _has_registered_nifti_evidence(context: dict[str, Any]) -> bool:
+    diagnostics = _diagnostics_from_context(context)
+    status = str(diagnostics.get("status") or "").upper()
+    if status in {"CONVERTED_BIDS", "MIXED", "NIFTI", "BIDS"}:
+        return True
+    if diagnostics.get("converted_bids_available") is True:
+        return True
+    count = diagnostics.get("nifti_file_count") or diagnostics.get("nifti_files")
+    try:
+        return int(count) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _matches_native_full_goal(goal_lower: str) -> bool:
+    score = sum(1 for term in _NATIVE_FULL_GOAL_TERMS if term.lower() in goal_lower)
+    has_preproc_intent = (
+        "preprocessing" in goal_lower
+        or "preprocess" in goal_lower
+        or "预处理" in goal_lower
+        or "全流程" in goal_lower
+    )
+    has_downstream_intent = any(
+        term in goal_lower
+        for term in (
+            "functional connectivity",
+            "roi time series",
+            "temporal filtering",
+            "nuisance regression",
+            "detrending",
+        )
+    )
+    return score >= 2 and (has_preproc_intent or has_downstream_intent)
+
+
+def _build_native_full_preprocessing_plan(
+    *,
+    goal: str,
+    provider: str,
+    project_context: dict[str, Any],
+) -> dict[str, Any]:
+    diagnostics = _diagnostics_from_context(project_context)
+    conversion_run_id = str(
+        diagnostics.get("preprocessing_conversion_run_id")
+        or diagnostics.get("conversion_run_id")
+        or ""
+    )
+    native_params: dict[str, Any] = {
+        "project_id": str(project_context.get("project_id") or ""),
+        "project_dir": str(diagnostics.get("project_dir") or ""),
+        "conversion_run_id": conversion_run_id,
+        "confirmations": dict(_NATIVE_FULL_CONFIRMATIONS),
+        "stage_overrides": {},
+    }
+    return {
+        "pipeline_id": "native_full_preprocessing",
+        "project_context": {
+            "project_id": None,
+            "project_config_path": None,
+            "rawdata_dir": None,
+            "dataset_index_path": None,
+            "source": "planner_minimal_mock",
+            "diagnostics": {},
+        },
+        "goal": goal,
+        "nodes": [
+            {
+                "id": "native_preproc_full_execute",
+                "backend": "native_python",
+                "depends_on": [],
+                "params": native_params,
+            }
+        ],
+        "metadata": {
+            "planner": "deterministic_keyword_mock",
+            "provider": provider,
+            "capability_level": "computed",
+            "external_api_used": False,
+            "execution_enabled": False,
+            "execution_requires_approval_gate": True,
+            "native_preprocessing": True,
+        },
+    }
+
 
 def generate_plan_from_goal(
     goal: str,
@@ -264,6 +393,34 @@ def generate_plan_from_goal(
 
     # ── Rule matching ──
     goal_lower = stripped.lower()
+    project_context = _project_context_from_constraints(constraints)
+    if (
+        _has_registered_nifti_evidence(project_context)
+        and _matches_native_full_goal(goal_lower)
+    ):
+        plan = _build_native_full_preprocessing_plan(
+            goal=stripped,
+            provider=provider,
+            project_context=project_context,
+        )
+        validation = validate_plan(plan)
+        messages.append(
+            "Matched goal to native full preprocessing using registered NIfTI/BIDS evidence."
+        )
+        if validation.warnings:
+            for w in validation.warnings:
+                warnings.append(f"[{w.code}] {w.message}")
+        return PlannerResponse(
+            ok=validation.ok and len(errors) == 0,
+            provider=provider,
+            goal=goal,
+            plan=plan,
+            validation=validation.to_dict(),
+            messages=messages,
+            warnings=warnings,
+            errors=errors,
+        )
+
     best_match: tuple[int, str, list[str]] | None = None
 
     for keywords, pipeline_id, node_ids in _RULES:

@@ -14,7 +14,7 @@ Current as of 2026-06-28.
   - `v0.4.0-rc1` tagged 2026-06-10
   - `v0.5.0-rc1` tagged 2026-06-11
 
-Historical release notes live under `docs/releases/` and should remain tied to
+Historical release notes live under `docs/发布记录/` and should remain tied to
 their tag state.
 
 ## Implemented Capabilities
@@ -105,12 +105,14 @@ their tag state.
 
 ## Known Limitations and Risks
 
-- Per-stage real capability is recorded in `docs/CAPABILITY_MATRIX.md`.
+- Per-stage real capability is recorded in `docs/项目概览/能力矩阵.md`.
   ALFF/fALFF/ReHo/FC are **Numerically Implemented** on the Python backend
-  where their required inputs exist; atlas-grounded FC is reload-tested in
-  backend regression tests but the full DICOM-to-reviewed-FC GUI workflow is
-  not yet E2E validated. SPM/MATLAB stages remain **Needs Verification** and
-  stay off by default.
+  where their required inputs exist; atlas-grounded FC requires a registered
+  safe atlas artifact or a controlled repository-template copy into
+  derivatives, and numeric metric maps plus atlas artifacts are reload-checked
+  by pipeline validation. The full DICOM-to-reviewed-FC GUI workflow is not
+  yet E2E validated. SPM/MATLAB stages remain **Needs Verification** and stay
+  off by default.
 - Scientific-computation sandbox services previously reported `succeeded` for
   both "sandbox prepared" and "numeric result produced". Per-metric status
   now distinguishes these; older manifests are read with backward-compatible
@@ -146,12 +148,12 @@ their tag state.
 ## Reference Documents
 
 - Stable agent rules: `AGENTS.md`
-- Per-stage real capability: `docs/CAPABILITY_MATRIX.md`
-- Reviewed preprocessing user guide: `docs/user/full_preprocessing_pipeline.md`
+- Per-stage real capability: `docs/项目概览/能力矩阵.md`
+- Reviewed preprocessing user guide: `docs/用户指南/完整预处理流程.md`
 - Reviewed preprocessing developer contract:
-  `docs/dev/preprocessing_pipeline_contract.md`
-- Current architecture: `docs/architecture.md`
-- Desktop packaging: `docs/DESKTOP_APP_PACKAGING.md`
-- Release notes: `docs/releases/`
-- Safety boundaries: `docs/SAFETY_BOUNDARIES.md`
-- Run lifecycle: `docs/REAL_PROJECT_RUN_LIFECYCLE.md`
+  `docs/预处理与科学计算/原生预处理/预处理流水线契约.md`
+- Current architecture: `docs/架构与决策/系统架构.md`
+- Desktop packaging: `docs/桌面与前端/桌面应用打包.md`
+- Release notes: `docs/发布记录/`
+- Safety boundaries: `docs/安全与审批/安全边界.md`
+- Run lifecycle: `docs/安全与审批/真实项目运行生命周期.md`

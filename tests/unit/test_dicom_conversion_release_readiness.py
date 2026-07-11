@@ -13,6 +13,11 @@ from pathlib import Path
 import pytest
 
 
+class _NoProjectStore:
+    def get_project(self, project_id: str):  # noqa: ANN001
+        return None
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Group 1 — Schema: disk space check
 # ═══════════════════════════════════════════════════════════════════════
@@ -324,15 +329,62 @@ def test_service_imports_no_subprocess():
     assert "from subprocess" not in source
 
 
-def test_run_conversion_execute_still_blocked():
-    """Gate 14: run_conversion_execute() remains blocked for normal users."""
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
+def test_service_does_not_scan_frontend_source_for_readiness():
+    """Release readiness must use runtime flags/config, not packaged source scans."""
+    import inspect
+    import src.backend.app.services.dicom_conversion_release_readiness as mod
+
+    source = inspect.getsource(mod._is_frontend_execute_button_present)
+    assert "open(" not in source
+    assert "read().splitlines" not in source
+    assert "src/frontend" not in source
+    assert "DicomConversionReviewPanel" not in source
+
+
+def test_frontend_execute_runtime_flag_controls_readiness(monkeypatch):
+    """Frontend execute readiness follows explicit runtime signal."""
+    from src.backend.app.services.dicom_conversion_release_readiness import (
+        _is_frontend_execute_button_present,
     )
+
+    monkeypatch.delenv("MEDIMAGE_FRONTEND_DICOM_EXECUTE_UI_ENABLED", raising=False)
+    monkeypatch.delenv("MEDIMAGE_DICOM_EXECUTE_UI_ENABLED", raising=False)
+    monkeypatch.delenv("VITE_ENABLE_DICOM_EXECUTE_UI", raising=False)
+    assert _is_frontend_execute_button_present() is False
+
+    monkeypatch.setenv("MEDIMAGE_FRONTEND_DICOM_EXECUTE_UI_ENABLED", "1")
+    assert _is_frontend_execute_button_present() is True
+
+
+def test_run_conversion_execute_still_blocked(monkeypatch):
+    """Gate 14: run_conversion_execute() remains blocked for normal users."""
+    import src.backend.app.services.dicom_conversion_execution as execution_module
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
-    result = run_conversion_execute("test", DicomConversionExecutionRequest())
+
+    for key in (
+        "MEDIMAGE_ENABLE_DICOM_CONVERSION",
+        "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(execution_module, "mock_store", _NoProjectStore())
+    monkeypatch.setattr(
+        execution_module,
+        "_detect_dcm2niix_runtime",
+        lambda env=None: {
+            "found": False,
+            "executable_path": "",
+            "error": "dcm2niix unavailable in unit test",
+            "warnings": [],
+        },
+    )
+
+    result = execution_module.run_conversion_execute(
+        "test",
+        DicomConversionExecutionRequest(),
+    )
     assert result.conversion_disabled is True
 
 
@@ -347,17 +399,22 @@ def test_no_public_conversion_execute_endpoint():
     In Phase 4L-2 the endpoint is implemented behind env flags.
     Without env flags, it returns 200 with status=disabled/blocked.
     """
-    from fastapi import FastAPI
     from fastapi.testclient import TestClient
+    from src.backend.app.api.dependencies import get_project_store
     from src.backend.app.main import app
-    client = TestClient(app)
-    resp = client.post("/api/projects/test/conversion/execute", json={})
-    assert resp.status_code == 200, f"Expected 200 blocked, got {resp.status_code}"
-    data = resp.json()
-    assert data["ok"] is False
-    assert data["status"] in ("disabled", "blocked")
-    resp2 = client.post("/api/projects/test/conversion/run", json={})
-    assert resp2.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp2.status_code}"
+
+    app.dependency_overrides[get_project_store] = lambda: _NoProjectStore()
+    try:
+        client = TestClient(app)
+        resp = client.post("/api/projects/test/conversion/execute", json={})
+        assert resp.status_code == 200, f"Expected 200 blocked, got {resp.status_code}"
+        data = resp.json()
+        assert data["ok"] is False
+        assert data["status"] in ("disabled", "blocked")
+        resp2 = client.post("/api/projects/test/conversion/run", json={})
+        assert resp2.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp2.status_code}"
+    finally:
+        app.dependency_overrides.pop(get_project_store, None)
 
 
 def test_no_frontend_execute_button():

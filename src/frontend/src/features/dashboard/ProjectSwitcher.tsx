@@ -1,5 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Button, Dialog } from "../../components/ui";
 import type { ProjectSummary } from "../../lib/types/project";
 import styles from "./ProjectSwitcher.module.css";
@@ -29,7 +28,6 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
 }: ProjectSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
-  const [popoverStyle, setPopoverStyle] = useState<CSSProperties | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -40,32 +38,6 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
     : error
       ? "Project list unavailable"
       : `${projects.length} projects`;
-
-  const updatePopoverGeometry = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger || typeof window === "undefined") return;
-    const rect = trigger.getBoundingClientRect();
-    const viewportWidth = window.innerWidth || 1024;
-    const viewportHeight = window.innerHeight || 768;
-    const width = Math.min(Math.max(rect.width, 320), Math.max(280, viewportWidth - 32));
-    const left = Math.min(Math.max(16, rect.left), Math.max(16, viewportWidth - width - 16));
-    const maxHeight = Math.max(220, viewportHeight - rect.bottom - 24);
-
-    setPopoverStyle({
-      left,
-      maxHeight: Math.min(420, maxHeight),
-      top: rect.bottom + 8,
-      width,
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      setPopoverStyle(null);
-      return;
-    }
-    updatePopoverGeometry();
-  }, [open, updatePopoverGeometry]);
 
   useEffect(() => {
     if (!open) return;
@@ -84,15 +56,11 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
     };
     document.addEventListener("mousedown", handleClick);
     document.addEventListener("keydown", handleKey);
-    window.addEventListener("resize", updatePopoverGeometry);
-    window.addEventListener("scroll", updatePopoverGeometry, true);
     return () => {
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
-      window.removeEventListener("resize", updatePopoverGeometry);
-      window.removeEventListener("scroll", updatePopoverGeometry, true);
     };
-  }, [open, updatePopoverGeometry]);
+  }, [open]);
 
   const handleTriggerClick = useCallback(() => {
     setOpen((current) => {
@@ -179,13 +147,7 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
       </button>
 
       {open ? (
-        <div
-          className={styles.popover}
-          id={popoverId}
-          role="listbox"
-          aria-label="Project switcher"
-          style={popoverStyle ?? undefined}
-        >
+        <div className={styles.popover} id={popoverId} role="listbox" aria-label="Project switcher">
           <header className={styles.header}>
             <div className={styles.headerCopy}>
               <span>Recent projects</span>

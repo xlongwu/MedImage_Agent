@@ -70,7 +70,7 @@ describe("ProjectSwitcher", () => {
     expect(trigger).toHaveFocus();
   });
 
-  it("keeps one anchored popover and closes it when the trigger is clicked again", async () => {
+  it("keeps one inline popover and closes it when the trigger is clicked again", async () => {
     const user = userEvent.setup();
 
     render(
@@ -93,7 +93,8 @@ describe("ProjectSwitcher", () => {
 
     const popover = screen.getByRole("listbox", { name: "Project switcher" });
     expect(screen.getAllByRole("listbox", { name: "Project switcher" })).toHaveLength(1);
-    expect(popover).toHaveStyle({ left: "16px", top: "8px", width: "320px" });
+    expect(popover).not.toHaveAttribute("style");
+    expect(trigger.nextElementSibling).toBe(popover);
 
     await user.click(trigger);
 

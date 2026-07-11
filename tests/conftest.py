@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
+
+
+# Keep module-level SQLiteDesktopStore instances created during pytest away
+# from the persistent desktop database used by the local application.
+os.environ.setdefault(
+    "MEDIMAGE_DESKTOP_STORE_PATH",
+    str(Path(".pytest_tmp") / f"desktop_state_{os.getpid()}_{uuid4().hex}.sqlite"),
+)
 
 
 @pytest.fixture()

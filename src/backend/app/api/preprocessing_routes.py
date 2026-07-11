@@ -20,6 +20,10 @@ from src.backend.app.schemas.preprocessing_handoff import (
     PreprocessingInputRegistrationRequest,
     PreprocessingInputRegistrationResponse,
 )
+from src.backend.app.schemas.native_preproc_api import (
+    NativeFullPreprocRequest,
+    NativeFullPreprocResponse,
+)
 from src.backend.app.schemas.preprocessing_pipeline import (
     PreprocessingPipelineExecuteRequest,
     PreprocessingPipelineExecuteResponse,
@@ -1173,3 +1177,156 @@ def get_pipeline_validation(
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     return _validate(project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", ""))).model_dump()
+
+
+# Native full preprocessing API
+
+
+@router.post(
+    "/api/projects/{project_id}/preprocessing/native/full/dry-run",
+    response_model=NativeFullPreprocResponse,
+)
+def native_full_preprocessing_dry_run(
+    project_id: str,
+    body: NativeFullPreprocRequest,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import run_native_full_dry_run
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return run_native_full_dry_run(
+            project_id,
+            body,
+            project_dir=str(metadata.get("project_dir") or ""),
+            project_metadata=metadata,
+        ).model_dump(mode="json")
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
+@router.post(
+    "/api/projects/{project_id}/preprocessing/native/full/execute",
+    response_model=NativeFullPreprocResponse,
+)
+def native_full_preprocessing_execute(
+    project_id: str,
+    body: NativeFullPreprocRequest,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import run_native_full_execute
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return run_native_full_execute(
+            project_id,
+            body,
+            project_dir=str(metadata.get("project_dir") or ""),
+            project_metadata=metadata,
+        ).model_dump(mode="json")
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
+@router.get(
+    "/api/projects/{project_id}/preprocessing/native/runs/latest",
+    response_model=NativeFullPreprocResponse,
+)
+def get_latest_native_full_preprocessing_run(
+    project_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import get_latest_native_full_run
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return get_latest_native_full_run(
+            project_id,
+            project_dir=str(metadata.get("project_dir") or ""),
+        ).model_dump(mode="json")
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
+@router.get(
+    "/api/projects/{project_id}/preprocessing/native/runs/{run_id}",
+    response_model=NativeFullPreprocResponse,
+)
+def get_native_full_preprocessing_run(
+    project_id: str,
+    run_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import get_native_full_run
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return get_native_full_run(
+            project_id,
+            run_id,
+            project_dir=str(metadata.get("project_dir") or ""),
+        ).model_dump(mode="json")
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
+@router.get(
+    "/api/projects/{project_id}/preprocessing/native/runs/{run_id}/validation",
+    response_model=dict[str, Any],
+)
+def get_native_full_preprocessing_validation(
+    project_id: str,
+    run_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import get_native_full_validation
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return get_native_full_validation(
+            project_id,
+            run_id,
+            project_dir=str(metadata.get("project_dir") or ""),
+        )
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
+@router.get(
+    "/api/projects/{project_id}/preprocessing/native/runs/{run_id}/report",
+    response_model=dict[str, Any],
+)
+def get_native_full_preprocessing_report(
+    project_id: str,
+    run_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import get_native_full_report
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return get_native_full_report(
+            project_id,
+            run_id,
+            project_dir=str(metadata.get("project_dir") or ""),
+        )
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)

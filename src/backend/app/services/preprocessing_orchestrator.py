@@ -27,6 +27,9 @@ from src.backend.app.schemas.preprocessing_pipeline import (
 )
 from src.backend.app.schemas.preprocessing_run import PreprocessingStageStatus
 from src.backend.app.schemas.preprocessing_stage_catalog import (
+    SPM_COREG_NORM_ENV_FLAGS,
+    SPM_SMOOTHING_ENV_FLAGS,
+    SPM_STAGE_ENV_FLAGS,
     PreprocessingStageSpec,
     get_preprocessing_stage_spec,
     initial_stage_execution_status,
@@ -51,13 +54,34 @@ _FC_MINIMAL_STAGES = {
     "group_summary",
 }
 
-_NODE_BY_STAGE = {
+_NATIVE_NODE_BY_STAGE = {
+    "slice_timing": "native_preproc_slice_timing",
+    "realignment": "native_preproc_realignment",
+    "t1_coregistration": "native_preproc_coregistration",
+    "segmentation": "native_preproc_segmentation",
+    "normalization": "native_preproc_normalization",
+    "spatial_smoothing": "native_preproc_smoothing",
+}
+
+_EXTERNAL_SPM_NODE_BY_STAGE = {
     "slice_timing": "spm_slice_timing_subject",
     "realignment": "spm_realign_subject",
     "t1_coregistration": "spm_coregister_subject",
     "segmentation": "spm_segment_subject",
     "normalization": "spm_normalize_subject",
     "spatial_smoothing": "spm_smooth_subject",
+}
+_EXTERNAL_ENV_FLAGS_BY_STAGE = {
+    "slice_timing": SPM_STAGE_ENV_FLAGS,
+    "realignment": SPM_STAGE_ENV_FLAGS,
+    "t1_coregistration": SPM_COREG_NORM_ENV_FLAGS,
+    "segmentation": SPM_COREG_NORM_ENV_FLAGS,
+    "normalization": SPM_COREG_NORM_ENV_FLAGS,
+    "spatial_smoothing": SPM_SMOOTHING_ENV_FLAGS,
+}
+
+_NODE_BY_STAGE = {
+    **_NATIVE_NODE_BY_STAGE,
     "nuisance_regression": "nuisance_regression_subject",
     "temporal_filtering": "temporal_filtering_subject",
     "alff_falff": "alff_falff_subject",
@@ -83,6 +107,7 @@ _COMPLETION_ARTIFACTS = {
 }
 
 _METADATA_ARTIFACT_TYPES = {"stage_manifest", "qc_json", "provenance_json"}
+_EXTERNAL_BACKENDS = {"spm12", "matlab-spm", "matlab_spm", "dpabi", "matlab-dpabi", "matlab_dpabi", "matlab"}
 
 
 def _now_iso() -> str:
@@ -93,6 +118,16 @@ def _now_iso() -> str:
 
 def _truthy_env(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _backend_requires_external_tool(backend: str) -> bool:
+    return str(backend or "").strip().lower() in _EXTERNAL_BACKENDS
+
+
+def _node_id_for_stage(stage_id: str, backend: str = "") -> str:
+    if _backend_requires_external_tool(backend):
+        return _EXTERNAL_SPM_NODE_BY_STAGE.get(stage_id, _NODE_BY_STAGE.get(stage_id, ""))
+    return _NODE_BY_STAGE.get(stage_id, "")
 
 
 def _safety_flags(*, external_executed: bool = False) -> dict[str, bool]:
@@ -272,9 +307,9 @@ def _external_approval_gate(
     request: PreprocessingPipelineExecuteRequest,
 ) -> dict[str, Any]:
     external_nodes = [
-        _NODE_BY_STAGE.get(spec.stage_id, spec.stage_id)
+        _node_id_for_stage(spec.stage_id, _stage_backend(spec.stage_id, request, spec))
         for spec in enabled_specs
-        if spec.requires_external_tool
+        if _backend_requires_external_tool(_stage_backend(spec.stage_id, request, spec))
     ]
     if not external_nodes:
         return {
@@ -354,10 +389,18 @@ def _missing_stage_inputs(
 
 def _stage_backend(stage_id: str, request: PreprocessingPipelineExecuteRequest, spec: PreprocessingStageSpec) -> str:
     policy = request.backend_policy
+    if stage_id == "slice_timing":
+        return policy.slice_timing
     if stage_id == "realignment":
         return policy.motion_correction
+    if stage_id == "t1_coregistration":
+        return policy.t1_coregistration
+    if stage_id == "segmentation":
+        return policy.segmentation
     if stage_id == "normalization":
         return policy.normalization
+    if stage_id == "spatial_smoothing":
+        return policy.spatial_smoothing
     if stage_id == "nuisance_regression":
         return policy.nuisance_regression
     if stage_id == "temporal_filtering":
@@ -483,6 +526,8 @@ def _artifact_type_for_output(stage_id: str, path: Path) -> str:
         return "motion_qc_summary"
     if "fd_timeseries" in name:
         return "fd_timeseries"
+    if stage_id == "functional_connectivity" and suffixes.endswith((".nii", ".nii.gz")) and "atlas" in name:
+        return "atlas"
     if "fisher" in name:
         return "fisher_z_matrix"
     if "correlation" in name or "fc_matrix" in name:
@@ -620,6 +665,259 @@ def _write_stage_manifest(
     return str(path)
 
 
+def _latest_artifact_path(
+    registry: dict[str, Any],
+    project_root: Path | None,
+    *artifact_types: str,
+) -> str:
+    for artifact_type in artifact_types:
+        paths = _artifact_paths(registry, project_root, artifact_type)
+        if paths:
+            return str(paths[-1])
+    return ""
+
+
+def _reviewed_stage_overrides(enabled_ids: set[str]) -> dict[str, bool]:
+    fc_enabled = "functional_connectivity" in enabled_ids
+    return {
+        "dummy_scan_removal": "dummy_scan_removal" in enabled_ids,
+        "slice_timing": "slice_timing" in enabled_ids,
+        "realignment": "realignment" in enabled_ids,
+        "motion_qc": "realignment" in enabled_ids,
+        "coregistration": "t1_coregistration" in enabled_ids,
+        "segmentation": "segmentation" in enabled_ids,
+        "normalization": "normalization" in enabled_ids,
+        "smoothing": "spatial_smoothing" in enabled_ids,
+        "nuisance_regression": "nuisance_regression" in enabled_ids,
+        "detrending": "temporal_filtering" in enabled_ids,
+        "temporal_filtering": "temporal_filtering" in enabled_ids,
+        "alff": "alff_falff" in enabled_ids,
+        "falff": "alff_falff" in enabled_ids,
+        "reho": "reho" in enabled_ids,
+        "atlas_resampling": fc_enabled,
+        "roi_timeseries": fc_enabled,
+        "functional_connectivity": fc_enabled,
+        "subject_qc": "subject_qc" in enabled_ids,
+        "group_summary": "group_summary" in enabled_ids,
+    }
+
+
+def _native_full_request_from_reviewed(
+    *,
+    request: PreprocessingPipelineExecuteRequest,
+    preprocessing_run_id: str,
+    execution_dir: Path,
+    registry: dict[str, Any],
+    project_root: Path | None,
+    enabled_ids: set[str],
+    subjects: list[str],
+) -> Any:
+    from src.backend.app.schemas.native_preproc_api import (  # noqa: E402
+        NativeFullPreprocConfirmations,
+        NativeFullPreprocRequest,
+    )
+
+    input_bold = _latest_artifact_path(
+        registry,
+        project_root,
+        "converted_bold",
+        "dummy_removed_bold",
+        "slice_timing_corrected_bold",
+        "realigned_bold",
+    )
+    return NativeFullPreprocRequest(
+        run_id=f"{preprocessing_run_id}-native-full",
+        subject_id=subjects[0] if subjects else "",
+        output_dir=str(execution_dir / "native_full"),
+        input_bold=input_bold,
+        sidecar_json=_latest_artifact_path(registry, project_root, "sidecar_json"),
+        t1w=_latest_artifact_path(registry, project_root, "converted_t1w", "t1w"),
+        template=_latest_artifact_path(registry, project_root, "template"),
+        atlas=request.atlas.atlas_path or _latest_artifact_path(registry, project_root, "atlas"),
+        atlas_labels=request.atlas.labels_path,
+        enable_slice_timing="slice_timing" in enabled_ids,
+        tr=request.filtering.tr or request.filtering.fallback_tr,
+        low_hz=request.filtering.low_hz,
+        high_hz=request.filtering.high_hz,
+        include_wm=request.nuisance.include_wm_csf,
+        include_csf=request.nuisance.include_wm_csf,
+        include_global_signal=request.nuisance.include_global_signal,
+        stage_overrides=_reviewed_stage_overrides(enabled_ids),
+        confirmations=NativeFullPreprocConfirmations(
+            confirm_reviewed_native_execution=request.confirmations.confirm_reviewed_execution,
+            confirm_rawdata_readonly=request.confirmations.confirm_rawdata_readonly,
+            confirm_no_external_tools=True,
+            confirm_research_use_only=request.confirmations.confirm_research_use_only,
+            confirm_no_clinical_use=request.confirmations.confirm_no_clinical_use,
+        ),
+    )
+
+
+_NATIVE_TO_REVIEWED_STAGE = {
+    "coregistration": "t1_coregistration",
+    "smoothing": "spatial_smoothing",
+    "alff": "alff_falff",
+    "falff": "alff_falff",
+}
+
+
+def _reviewed_result_from_native_stage(native_stage: Any) -> PreprocessingPipelineStageResult:
+    stage_id = _NATIVE_TO_REVIEWED_STAGE.get(native_stage.stage_id, native_stage.stage_id)
+    artifacts = list(native_stage.output_artifacts or [])
+    return PreprocessingPipelineStageResult(
+        stage_id=stage_id,
+        name=native_stage.display_name,
+        status=native_stage.status,
+        enabled=native_stage.status != "skipped",
+        optional=False,
+        backend=native_stage.backend,
+        node_id=native_stage.node_id,
+        blocking_issues=list(native_stage.blocking_issues),
+        warnings=list(native_stage.warnings),
+        errors=list(native_stage.errors),
+        output_artifact_ids=[
+            str(item.get("artifact_id"))
+            for item in artifacts
+            if isinstance(item, dict) and item.get("artifact_id")
+        ],
+        result={
+            "native_stage_id": native_stage.stage_id,
+            "capability_level": native_stage.capability_level,
+            "validation_status": native_stage.validation_status,
+            "input_artifacts": list(native_stage.input_artifacts or []),
+            "output_artifacts": artifacts,
+            "native_result": dict(native_stage.result or {}),
+        },
+    )
+
+
+def _map_native_stage_ids(stage_ids: list[str]) -> list[str]:
+    return sorted({_NATIVE_TO_REVIEWED_STAGE.get(stage_id, stage_id) for stage_id in stage_ids})
+
+
+def _execute_reviewed_native_full(
+    *,
+    project_id: str,
+    preprocessing_run_id: str,
+    request: PreprocessingPipelineExecuteRequest,
+    run_manifest: dict[str, Any],
+    manifest_path: Path,
+    registry: dict[str, Any],
+    registry_path: Path,
+    project_root: Path | None,
+    enabled_ids: set[str],
+    stage_statuses: list[PreprocessingStageStatus],
+    execution_id: str,
+    execution_dir: Path,
+    subjects: list[str],
+    effective_project_dir: str,
+    execution_scope: dict[str, Any],
+) -> PreprocessingPipelineExecuteResponse:
+    from src.backend.app.native_preproc.orchestrator.runner import execute_native_full_preproc  # noqa: E402
+
+    native_request = _native_full_request_from_reviewed(
+        request=request,
+        preprocessing_run_id=preprocessing_run_id,
+        execution_dir=execution_dir,
+        registry=registry,
+        project_root=project_root,
+        enabled_ids=enabled_ids,
+        subjects=subjects,
+    )
+    native_response = execute_native_full_preproc(
+        project_id,
+        native_request,
+        project_dir=effective_project_dir,
+    )
+    stage_results = [_reviewed_result_from_native_stage(item) for item in native_response.stage_results]
+    status_by_id = {item.stage_id: item.status for item in stage_results}
+    for stage in stage_statuses:
+        if stage.stage_id in status_by_id:
+            stage.status = normalize_stage_execution_status(status_by_id[stage.stage_id])
+            stage.backend = "native_python"
+            stage.output_manifest = next(
+                (
+                    item.result
+                    for item in stage_results
+                    if item.stage_id == stage.stage_id
+                ),
+                {},
+            )
+            stage.registered_at = _now_iso()
+    safety_flags = {
+        **_safety_flags(),
+        **native_response.safety_flags,
+        "reviewed_native_full_delegated": True,
+    }
+    approval_gate = {
+        "ok": True,
+        "execution_allowed": True,
+        "approval_required": False,
+        "approved": False,
+        "native_full_delegated": True,
+    }
+    execution_manifest = {
+        "project_id": project_id,
+        "preprocessing_run_id": preprocessing_run_id,
+        "execution_id": execution_id,
+        "pipeline_profile": request.pipeline_profile,
+        "status": native_response.status,
+        "created_at": _now_iso(),
+        "request": request.model_dump(mode="json"),
+        "native_full_request": native_request.model_dump(mode="json"),
+        "native_full_manifest_path": native_response.manifest_path,
+        "approval_gate": approval_gate,
+        "stage_results": [item.model_dump(mode="json") for item in stage_results],
+        "artifact_registry_path": str(registry_path),
+        "native_full_run_dir": native_response.run_dir,
+        "report_path": native_response.final_report_path,
+        "validation_status": native_response.status,
+        "execution_scope": {key: value for key, value in execution_scope.items() if key != "subjects"},
+        "safety_flags": safety_flags,
+    }
+    reviewed_manifest_path = execution_dir / "preprocessing_reviewed_execution_manifest.json"
+    atomic_write_json(reviewed_manifest_path, execution_manifest, schema_version=1)
+
+    run_manifest["status"] = f"reviewed_execution_{native_response.status}"
+    run_manifest["updated_at"] = _now_iso()
+    run_manifest["reviewed_execution_manifest_path"] = str(reviewed_manifest_path)
+    run_manifest["native_full_manifest_path"] = native_response.manifest_path
+    run_manifest["stage_statuses"] = [stage.model_dump() for stage in stage_statuses]
+    artifacts = run_manifest.setdefault("artifacts", {})
+    artifacts["reviewed_execution_manifest"] = str(reviewed_manifest_path)
+    artifacts["native_full_manifest"] = native_response.manifest_path
+    if native_response.final_report_path:
+        artifacts["latest_pipeline_report"] = native_response.final_report_path
+    atomic_write_json(manifest_path, run_manifest, schema_version=1)
+
+    return PreprocessingPipelineExecuteResponse(
+        ok=native_response.ok,
+        status=native_response.status,
+        project_id=project_id,
+        preprocessing_run_id=preprocessing_run_id,
+        execution_id=execution_id,
+        pipeline_profile=request.pipeline_profile,
+        manifest_path=str(reviewed_manifest_path),
+        artifact_registry_path=str(registry_path),
+        report_path=native_response.final_report_path,
+        validation_status=native_response.status,
+        completed_stages=_map_native_stage_ids(native_response.completed_stages),
+        skipped_stages=_map_native_stage_ids(native_response.skipped_stages),
+        blocked_stages=_map_native_stage_ids(native_response.blocked_stages),
+        failed_stages=_map_native_stage_ids(native_response.failed_stages),
+        metadata_only_stages=_map_native_stage_ids(native_response.metadata_only_stages),
+        preview_only_stages=[],
+        stage_results=stage_results,
+        stage_statuses=stage_statuses,
+        approval_gate=approval_gate,
+        warnings=list(native_response.warnings),
+        errors=list(native_response.errors),
+        blocking_issues=list(native_response.blocking_issues),
+        next_actions=list(native_response.next_actions),
+        safety_flags=safety_flags,
+    )
+
+
 def execute_reviewed_preprocessing_pipeline(
     project_id: str,
     preprocessing_run_id: str,
@@ -721,6 +1019,29 @@ def execute_reviewed_preprocessing_pipeline(
             f"max_subjects={execution_scope['limit_value']} restricts this reviewed execution; outputs are partial."
         )
 
+    explicit_external_backend = any(
+        _backend_requires_external_tool(_stage_backend(spec.stage_id, request, spec))
+        for spec in enabled_specs
+    )
+    if not global_blocking and not explicit_external_backend:
+        return _execute_reviewed_native_full(
+            project_id=project_id,
+            preprocessing_run_id=preprocessing_run_id,
+            request=request,
+            run_manifest=run_manifest,
+            manifest_path=manifest_path,
+            registry=registry,
+            registry_path=registry_path,
+            project_root=project_root,
+            enabled_ids=enabled_ids,
+            stage_statuses=stage_statuses,
+            execution_id=execution_id,
+            execution_dir=execution_dir,
+            subjects=subjects,
+            effective_project_dir=effective_pd,
+            execution_scope=execution_scope,
+        )
+
     for spec in iter_preprocessing_stage_specs():
         mode = _stage_mode(request, spec)
         backend = _stage_backend(spec.stage_id, request, spec)
@@ -738,7 +1059,7 @@ def execute_reviewed_preprocessing_pipeline(
             enabled=stage.enabled,
             optional=spec.optional,
             backend=backend,
-            node_id=_NODE_BY_STAGE.get(spec.stage_id, ""),
+            node_id=_node_id_for_stage(spec.stage_id, backend),
             started_at=started_at,
         )
         result.result["execution_scope"] = execution_scope_payload
@@ -778,8 +1099,9 @@ def execute_reviewed_preprocessing_pipeline(
                 result.status = "blocked"
                 result.blocking_issues.extend(f"Missing required input artifact: {item}" for item in missing_inputs)
                 blocked.append(spec.stage_id)
-            elif spec.requires_external_tool:
-                missing_env = [flag for flag in spec.requires_env_flags if not _truthy_env(os.environ.get(flag))]
+            elif _backend_requires_external_tool(backend):
+                required_env_flags = _EXTERNAL_ENV_FLAGS_BY_STAGE.get(spec.stage_id, spec.requires_env_flags)
+                missing_env = [flag for flag in required_env_flags if not _truthy_env(os.environ.get(flag))]
                 if not request.confirmations.confirm_external_tools_if_needed:
                     result.blocking_issues.append("confirm_external_tools_if_needed is required for external-tool stages.")
                 if not approval_gate.get("execution_allowed", False):

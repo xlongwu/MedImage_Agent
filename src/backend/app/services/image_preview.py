@@ -257,7 +257,10 @@ def build_image_validation_report(
                     )
                 )
 
-    for (subject_id, session_id, sequence), matches in sorted(by_subject_session_sequence.items()):
+    for (subject_id, session_id, sequence), matches in sorted(
+        by_subject_session_sequence.items(),
+        key=lambda item: (item[0][0] or "", item[0][1] or "", item[0][2] or ""),
+    ):
         if len(matches) > 1:
             session_text = f" session {session_id}" if session_id else ""
             issues.append(
@@ -484,6 +487,8 @@ def _preview_search_roots(extra_roots: Iterable[str | Path] | None = None) -> li
         roots: list[Path] = []
         seen: set[str] = set()
         for raw_root in extra_list:
+            if not str(raw_root).strip():
+                continue
             root = Path(raw_root)
             key = str(root.resolve()) if root.exists() else str(root)
             if key in seen:

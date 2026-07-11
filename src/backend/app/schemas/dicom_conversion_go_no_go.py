@@ -8,7 +8,7 @@ Schema-only module.  No subprocess.  No file writes.  No external tool imports.
 No real conversion execution is enabled.
 
 Reference:
-  docs/DICOM_USER_DATA_CONVERSION_GO_NO_GO_REVIEW.md
+  docs/预处理与科学计算/DICOM转换/用户数据转换放行审查.md
 """
 
 from __future__ import annotations

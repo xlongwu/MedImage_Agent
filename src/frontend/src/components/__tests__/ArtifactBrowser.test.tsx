@@ -10,7 +10,12 @@ const apiMocks = vi.hoisted(() => ({
   refreshArtifacts: vi.fn(),
 }));
 
+const preprocessingMocks = vi.hoisted(() => ({
+  getLatestNativeFullPreprocessingRun: vi.fn(),
+}));
+
 vi.mock("../../lib/api/legacy", () => apiMocks);
+vi.mock("../../lib/api/preprocessing", () => preprocessingMocks);
 
 const artifactIndex = {
   index: {
@@ -47,12 +52,14 @@ beforeEach(() => {
   apiMocks.getArtifacts.mockReset();
   apiMocks.refreshArtifacts.mockReset();
   apiMocks.previewArtifact.mockReset();
+  preprocessingMocks.getLatestNativeFullPreprocessingRun.mockReset();
 });
 
-function renderBrowser(onSelectedArtifactChange = vi.fn()) {
+function renderBrowser(onSelectedArtifactChange = vi.fn(), projectId?: string | null) {
   render(
     <ArtifactBrowser
       baseUrl="http://localhost"
+      projectId={projectId}
       onSelectedArtifactChange={onSelectedArtifactChange}
     />,
   );
@@ -146,5 +153,78 @@ describe("ArtifactBrowser", () => {
 
     expect(apiMocks.refreshArtifacts).toHaveBeenCalledWith("http://localhost");
     expect(await screen.findByText("research_package.zip")).toBeInTheDocument();
+  });
+
+  it("loads latest project native preprocessing artifacts before the legacy index", async () => {
+    const user = userEvent.setup();
+    preprocessingMocks.getLatestNativeFullPreprocessingRun.mockResolvedValue({
+      artifact_count: 1,
+      backend: "native_python",
+      blocked_stages: [],
+      blocking_issues: [],
+      completed_stages: ["functional_connectivity"],
+      dry_run: false,
+      errors: [],
+      failed_stages: [],
+      final_report_path: "",
+      manifest_path: "",
+      metadata_only_stages: [],
+      next_actions: [],
+      ok: true,
+      project_id: "project-1",
+      run_dir: "",
+      run_id: "run-native-1",
+      safety_flags: {},
+      skipped_stages: [],
+      stage_graph: [],
+      stage_results: [
+        {
+          backend: "native_python",
+          blocking_issues: [],
+          capability_level: "computed",
+          display_name: "Functional connectivity",
+          errors: [],
+          input_artifacts: [],
+          node_id: "functional_connectivity",
+          output_artifacts: [
+            {
+              artifact_id: "fc-sub-001",
+              artifact_type: "fc_matrix",
+              metadata: {
+                created_at: "2026-07-04T10:00:00Z",
+                size_bytes: 1234,
+              },
+              path: "work/native_preproc/run-native-1/sub-001/functional_connectivity/sub-001_fc_matrix.tsv",
+            },
+          ],
+          result: {},
+          stage_id: "functional_connectivity",
+          status: "succeeded",
+          validation_errors: [],
+          validation_status: "ok",
+          warnings: [],
+        },
+      ],
+      status: "succeeded",
+      validation_report_path: "",
+      warning_stages: [],
+      warnings: [],
+    });
+
+    renderBrowser(vi.fn(), "project-1");
+
+    await user.click(screen.getByRole("button", { name: "Load Artifacts" }));
+
+    expect(preprocessingMocks.getLatestNativeFullPreprocessingRun).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+    );
+    expect(apiMocks.getArtifacts).not.toHaveBeenCalled();
+    expect(await screen.findByText("sub-001_fc_matrix.tsv")).toBeInTheDocument();
+    const table = screen.getByRole("table", { name: "Artifact index" });
+    expect(table).toHaveTextContent("run-native-1");
+    expect(table).toHaveTextContent("sub-001");
+    expect(table).toHaveTextContent("fc_matrix");
+    expect(table).toHaveTextContent("functional_connectivity");
   });
 });

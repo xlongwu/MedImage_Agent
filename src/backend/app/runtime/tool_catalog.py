@@ -545,6 +545,97 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
 }
 
 
+TOOL_METADATA.update(
+    {
+        "native_preproc_full_dry_run": {
+            "name": "Native Full Preprocessing Dry Run",
+            "backend": "native_python",
+            "parallel_level": "project",
+            "description": (
+                "Plan the Python-native full rs-fMRI preprocessing workflow without "
+                "creating numerical artifacts or invoking MATLAB, SPM, or DPABI."
+            ),
+            "requires_approval": False,
+            "manual_required": False,
+            "risk_level": "low",
+            "inputs": ["BOLD NIfTI", "BIDS sidecar JSON", "optional T1w/template/atlas"],
+            "outputs": ["planned native stage graph"],
+            "tags": ["native-preproc", "dry-run", "rsfmri", "no-external-tools"],
+        },
+        "native_preproc_full_execute": {
+            "name": "Native Full Preprocessing Execute",
+            "backend": "native_python",
+            "parallel_level": "project",
+            "description": (
+                "Execute the reviewed Python-native full preprocessing orchestrator. "
+                "The runner writes manifest, provenance, validation, report, and "
+                "registered numerical artifacts while keeping rawdata read-only and "
+                "external MATLAB/SPM/DPABI disabled."
+            ),
+            "requires_approval": True,
+            "manual_required": False,
+            "risk_level": "medium",
+            "inputs": [
+                "BOLD NIfTI",
+                "BIDS sidecar JSON or explicit TR",
+                "optional T1w/template/atlas",
+                "native safety confirmations",
+            ],
+            "outputs": [
+                "native_full_run_manifest.json",
+                "native_preproc_validation_report.json",
+                "native_preproc_final_report.json",
+                "stage artifacts",
+            ],
+            "tags": [
+                "native-preproc",
+                "execute",
+                "rsfmri",
+                "requires-approval",
+                "audit",
+                "no-external-tools",
+                "rawdata-readonly",
+            ],
+        },
+    }
+)
+
+
+def _install_native_preproc_stage_metadata() -> None:
+    from src.backend.app.native_preproc.orchestrator.stage_graph import (  # noqa: E402
+        iter_native_full_stage_specs,
+    )
+
+    for spec in iter_native_full_stage_specs():
+        TOOL_METADATA.setdefault(
+            spec.node_id,
+            {
+                "name": f"Native Preprocessing Stage Boundary: {spec.display_name}",
+                "backend": "native_python",
+                "parallel_level": "project",
+                "description": (
+                    f"Reviewed-plan boundary for native stage '{spec.stage_id}'. "
+                    "Direct execution is blocked; use native_preproc_full_execute "
+                    "so artifacts, provenance, validation, and reports stay coordinated."
+                ),
+                "requires_approval": False,
+                "manual_required": False,
+                "risk_level": "low",
+                "inputs": list(spec.required_inputs),
+                "outputs": list(spec.produced_outputs),
+                "tags": [
+                    "native-preproc",
+                    "stage-boundary",
+                    "rsfmri",
+                    "coordinated-execution-only",
+                ],
+            },
+        )
+
+
+_install_native_preproc_stage_metadata()
+
+
 # ── Fallback logic ────────────────────────────────────────────────────────────
 
 def _fallback(node_id: str) -> dict[str, Any]:

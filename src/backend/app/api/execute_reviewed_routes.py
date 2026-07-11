@@ -45,7 +45,12 @@ from src.backend.app.schemas.execution_consistency import (
     ExecutionConsistencyInput,
     verify_execution_consistency,
 )
+from src.backend.app.schemas.native_preproc_api import (
+    NativeFullPreprocConfirmations,
+    NativeFullPreprocRequest,
+)
 from src.backend.app.services.mock_store import mock_store
+from src.backend.app.services.native_preproc_full import run_native_full_dry_run
 
 router = APIRouter()
 
@@ -176,13 +181,14 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
     gpu_temporal_filtering_sandbox_nodes = policy.get("allowed_gpu_temporal_filtering_sandbox_nodes", [])
     gpu_functional_connectivity_sandbox_nodes = policy.get("allowed_gpu_functional_connectivity_sandbox_nodes", [])
     gpu_nuisance_regression_sandbox_nodes = policy.get("allowed_gpu_nuisance_regression_sandbox_nodes", [])
+    native_preproc_nodes = policy.get("allowed_native_preproc_nodes", [])
     unsafe = gpu_nodes  # contract_nodes are Python-only metadata, now allowed; gpu_synthetic_smoke sandbox-gated
     if unsafe:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
 
     # Must have at least one allowed node
     python_nodes = policy.get("allowed_python_nodes", [])
-    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes + spm_slice_timing_sandbox_nodes + spm_coregister_sandbox_nodes + spm_segment_sandbox_nodes + spm_normalize_sandbox_nodes + spm_smooth_sandbox_nodes + dpabi_metadata_nodes + dpabi_sandbox_smoke_nodes + dpabi_single_function_sandbox_nodes + dpabi_subject_smooth_sandbox_nodes + dpabi_subject_wrapper_report_nodes + dpabi_validation_matrix_nodes + contract_nodes + gpu_synthetic_smoke_nodes + gpu_alff_sandbox_nodes + gpu_reho_sandbox_nodes + gpu_temporal_filtering_sandbox_nodes + gpu_functional_connectivity_sandbox_nodes + gpu_nuisance_regression_sandbox_nodes
+    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes + spm_slice_timing_sandbox_nodes + spm_coregister_sandbox_nodes + spm_segment_sandbox_nodes + spm_normalize_sandbox_nodes + spm_smooth_sandbox_nodes + dpabi_metadata_nodes + dpabi_sandbox_smoke_nodes + dpabi_single_function_sandbox_nodes + dpabi_subject_smooth_sandbox_nodes + dpabi_subject_wrapper_report_nodes + dpabi_validation_matrix_nodes + contract_nodes + gpu_synthetic_smoke_nodes + gpu_alff_sandbox_nodes + gpu_reho_sandbox_nodes + gpu_temporal_filtering_sandbox_nodes + gpu_functional_connectivity_sandbox_nodes + gpu_nuisance_regression_sandbox_nodes + native_preproc_nodes
     if not total_allowed:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
     return None
@@ -378,6 +384,217 @@ def _reviewed_plan_error_status(exc: ReviewedPlanStoreError) -> str:
     return code if code.startswith("REVIEWED_PLAN_") else "REVIEWED_PLAN_INVALID"
 
 
+def _native_preproc_nodes(plan: dict[str, Any]) -> list[dict[str, Any]]:
+    nodes = plan.get("nodes", []) or []
+    return [
+        node
+        for node in nodes
+        if isinstance(node, dict) and node.get("id") == "native_preproc_full_execute"
+    ]
+
+
+def _native_preproc_request_from_node(
+    node: dict[str, Any],
+    *,
+    fallback_run_id: str = "",
+) -> NativeFullPreprocRequest:
+    params = dict(node.get("params") or {})
+    confirmations = (
+        params.get("confirmations")
+        if isinstance(params.get("confirmations"), dict)
+        else {}
+    )
+    return NativeFullPreprocRequest(
+        run_id=str(params.get("run_id") or fallback_run_id),
+        subject_id=str(params.get("subject_id") or ""),
+        session_id=str(params.get("session_id") or ""),
+        output_dir=str(params.get("output_dir") or ""),
+        input_bold=str(params.get("input_bold") or ""),
+        sidecar_json=str(params.get("sidecar_json") or ""),
+        t1w=str(params.get("t1w") or ""),
+        template=str(params.get("template") or ""),
+        atlas=str(params.get("atlas") or ""),
+        atlas_labels=str(params.get("atlas_labels") or ""),
+        conversion_run_id=str(params.get("conversion_run_id") or ""),
+        dparsf_config=dict(params.get("dparsf_config") or {}),
+        stage_overrides=dict(params.get("stage_overrides") or {}),
+        remove_first=int(params.get("remove_first") or 0),
+        enable_slice_timing=bool(params.get("enable_slice_timing", True)),
+        tr=float(params["tr"]) if params.get("tr") is not None else None,
+        confirmations=NativeFullPreprocConfirmations(
+            confirm_reviewed_native_execution=bool(
+                confirmations.get("confirm_reviewed_native_execution")
+                or params.get("confirm_reviewed_native_execution", False)
+            ),
+            confirm_rawdata_readonly=bool(
+                confirmations.get("confirm_rawdata_readonly")
+                or params.get("confirm_rawdata_readonly", False)
+            ),
+            confirm_no_external_tools=bool(
+                confirmations.get("confirm_no_external_tools")
+                or params.get("confirm_no_external_tools", False)
+            ),
+            confirm_research_use_only=bool(
+                confirmations.get("confirm_research_use_only")
+                or params.get("confirm_research_use_only", False)
+            ),
+            confirm_no_clinical_use=bool(
+                confirmations.get("confirm_no_clinical_use")
+                or params.get("confirm_no_clinical_use", False)
+            ),
+        ),
+    )
+
+
+def _native_project_metadata(
+    *,
+    project_id: str,
+    context: ProjectContext | None,
+) -> dict[str, object]:
+    metadata: dict[str, object] = {}
+    if project_id:
+        project = mock_store.get_project(project_id)
+        if project is not None and isinstance(project.metadata, dict):
+            metadata.update(project.metadata)
+    if context is not None:
+        if context.project_dir is not None:
+            metadata.setdefault("project_dir", str(context.project_dir))
+        for key, value in context.diagnostics.items():
+            metadata.setdefault(key, value)
+    return metadata
+
+
+def _native_project_id(
+    plan: dict[str, Any],
+    request: ExecuteReviewedRequest,
+    context: ProjectContext | None,
+    params: dict[str, Any],
+) -> str:
+    project_context = plan.get("project_context")
+    return str(
+        params.get("project_id")
+        or request.project_id
+        or (context.project_id if context else "")
+        or (
+            project_context.get("project_id")
+            if isinstance(project_context, dict)
+            else ""
+        )
+        or ""
+    )
+
+
+def _native_project_dir(
+    context: ProjectContext | None,
+    params: dict[str, Any],
+    metadata: dict[str, object],
+) -> str:
+    return str(
+        params.get("project_dir")
+        or metadata.get("project_dir")
+        or (context.project_dir if context and context.project_dir else "")
+        or ""
+    )
+
+
+def _native_readiness_errors(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for issue in payload.get("blocking_issues") or []:
+        errors.append(str(issue))
+    for stage in payload.get("stage_results") or []:
+        if not isinstance(stage, dict) or stage.get("status") != "blocked":
+            continue
+        stage_id = str(stage.get("stage_id") or "native_stage")
+        for issue in stage.get("blocking_issues") or []:
+            errors.append(f"{stage_id}: {issue}")
+    return errors
+
+
+def _check_native_preproc_readiness(
+    plan: dict[str, Any],
+    request: ExecuteReviewedRequest,
+    context: ProjectContext | None,
+) -> dict[str, Any] | None:
+    native_nodes = _native_preproc_nodes(plan)
+    if not native_nodes:
+        return None
+
+    results: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for index, node in enumerate(native_nodes, start=1):
+        params = dict(node.get("params") or {})
+        project_id = _native_project_id(plan, request, context, params)
+        metadata = _native_project_metadata(project_id=project_id, context=context)
+        project_dir = _native_project_dir(context, params, metadata)
+        native_request = _native_preproc_request_from_node(
+            node,
+            fallback_run_id=f"preflight-native-{index}",
+        )
+        response = run_native_full_dry_run(
+            project_id,
+            native_request,
+            project_dir=project_dir,
+            project_metadata=metadata,
+            persist_artifacts=False,
+        )
+        payload = response.model_dump(mode="json")
+        payload["node_id"] = node.get("id")
+        results.append(payload)
+        if not response.ok:
+            errors.extend(_native_readiness_errors(payload))
+
+    if not errors:
+        return {
+            "ok": True,
+            "status": "NATIVE_PREPROC_READINESS_OK",
+            "results": results,
+        }
+    return {
+        "ok": False,
+        "status": "NATIVE_PREPROC_READINESS_BLOCKED",
+        "results": results,
+        "errors": errors,
+    }
+
+
+def _native_preproc_readiness_blocked_result(
+    *,
+    plan: dict[str, Any],
+    validation: dict[str, Any],
+    gate: dict[str, Any],
+    adapter: Any,
+    request: ExecuteReviewedRequest,
+    readiness: dict[str, Any],
+) -> dict[str, Any]:
+    result = {
+        "ok": False,
+        "status": "NATIVE_PREPROC_READINESS_BLOCKED",
+        "dry_run": request.dry_run,
+        "would_execute": False,
+        "execution_allowed": False,
+        "validation": validation,
+        "approval_gate": gate,
+        "adapter": _adapter_summary(adapter),
+        "pipeline_yaml": _pipeline_yaml_default(),
+        "plan_summary": _plan_summary(plan, validation),
+        "project_config_path": request.project_config_path,
+        "execution": _execution_meta(),
+        "native_preproc_readiness": readiness,
+        "errors": readiness.get("errors", []),
+    }
+    result["audit"] = _write_audit(
+        "execution_blocked",
+        plan,
+        validation,
+        request.approval,
+        gate,
+        result,
+        request.actor,
+        request,
+    )
+    return result
+
+
 # ── Consistency preflight (Phase 3) ──────────────────────────────────────────
 
 def _run_consistency_preflight(
@@ -457,6 +674,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                     (safe allowlist only).
     """
     plan = request.plan
+    context: ProjectContext | None = None
 
     # ═══════════════════════════════════════════════════════════════════════════
     # dry_run=false → execution preflight (M5-T015) + gated execution (M5-T016)
@@ -586,6 +804,17 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 gate, result, request.actor, request,
             )
             return result
+
+        native_readiness = _check_native_preproc_readiness(plan, request, context)
+        if native_readiness is not None and not native_readiness.get("ok"):
+            return _native_preproc_readiness_blocked_result(
+                plan=plan,
+                validation=validation,
+                gate=gate,
+                adapter=adapter,
+                request=request,
+                readiness=native_readiness,
+            )
 
         run_link_id: str | None = None
         linked_run_id: str | None = None
@@ -889,6 +1118,49 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 )
             except Exception as exc:
                 response_warnings.append(f"RUN_LINK_FINALIZE_FAILED: {exc}")
+        executor_failed = False
+        executor_errors: list[str] = []
+        if isinstance(executor_result, dict):
+            raw_status = str(executor_result.get("status") or "").upper()
+            executor_failed = raw_status in {"FAILED", "FAILURE", "ERROR"} or executor_result.get("ok") is False
+            raw_errors = executor_result.get("errors")
+            if isinstance(raw_errors, list):
+                executor_errors = [str(item) for item in raw_errors]
+            elif raw_errors:
+                executor_errors = [str(raw_errors)]
+            if executor_failed and not executor_errors:
+                executor_errors = [f"Executor returned failure status: {raw_status or 'UNKNOWN'}"]
+        if executor_failed:
+            result = {
+                "ok": False,
+                "status": "EXECUTION_FAILED",
+                "dry_run": False,
+                "would_execute": True,
+                "execution_allowed": True,
+                "validation": validation,
+                "approval_gate": gate,
+                "adapter": _adapter_summary(adapter),
+                "pipeline_yaml": py_info,
+                "plan_summary": _plan_summary(plan, validation),
+                "project_config_path": request.project_config_path,
+                "execution": _execution_meta(
+                    submitted=True,
+                    run_id=linked_run_id or executor_run_id,
+                    executor_called=True,
+                ),
+                "executor_result": executor_result,
+                "audit": audit_info,
+                "errors": executor_errors,
+                "warnings": response_warnings,
+            }
+            return _with_link_fields(
+                result,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
+                run_link_id=run_link_id,
+                run_id=linked_run_id or executor_run_id,
+                pipeline_path=str(written_path) if written_path else None,
+                summary_path=str(summary_path) if summary_path else None,
+            )
         result = {
             "ok": True,
             "status": "EXECUTION_SUBMITTED",
@@ -996,6 +1268,17 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
 
     if _is_policy_blocked(adapter.policy):
         return _blocked_result("EXECUTION_POLICY_BLOCKED", plan, validation, gate, adapter, request)
+
+    native_readiness = _check_native_preproc_readiness(plan, request, context)
+    if native_readiness is not None and not native_readiness.get("ok"):
+        return _native_preproc_readiness_blocked_result(
+            plan=plan,
+            validation=validation,
+            gate=gate,
+            adapter=adapter,
+            request=request,
+            readiness=native_readiness,
+        )
 
     # ── 4. Pipeline writer check ──
     py_info, writer_status, written_path = _try_write_pipeline_yaml(adapter, request)

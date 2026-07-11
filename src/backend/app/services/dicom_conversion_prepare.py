@@ -163,6 +163,12 @@ def run_dicom_conversion_prepare(
     from src.backend.app.services.dicom_conversion_plan_persistence import (
         persist_conversion_plan,
     )
+    from src.backend.app.schemas.dicom_conversion_release_approval import (
+        DicomConversionReleaseApprovalRecord,
+    )
+    from src.backend.app.services.dicom_conversion_release_approval import (
+        persist_release_approval,
+    )
 
     warnings: list[str] = []
     errors: list[str] = []
@@ -384,13 +390,81 @@ def run_dicom_conversion_prepare(
             overwrite_policy=request.overwrite_policy,
             preflight_ok=preflight_ok,
         )
-        if persist_result.conversion_run_id:
+        if persist_result.ok and persist_result.conversion_run_id:
             conversion_run_id = persist_result.conversion_run_id
-            run_dir = Path(project_dir) / "conversion_runs" / conversion_run_id
+            if persist_result.reservation:
+                run_dir = Path(persist_result.reservation.run_dir)
+                approval_record_path = Path(persist_result.reservation.approval_record_path)
+                audit_preview_path = Path(persist_result.reservation.audit_preview_path)
+                preflight_snapshot_path = Path(persist_result.reservation.preflight_snapshot_path)
+                mapping_snapshot_path = Path(persist_result.reservation.mapping_snapshot_path)
+                command_templates_path = Path(persist_result.reservation.command_templates_path)
+            else:
+                run_dir = Path(project_dir) / "conversion_runs" / conversion_run_id
+                approval_record_path = run_dir / "approval_record.json"
+                audit_preview_path = run_dir / "audit_preview.json"
+                preflight_snapshot_path = run_dir / "preflight_snapshot.json"
+                mapping_snapshot_path = run_dir / "mapping_snapshot.json"
+                command_templates_path = run_dir / "command_templates.json"
+            checksum_before_path = run_dir / "rawdata_checksum_before.json"
+            rollback_plan_path = run_dir / "rollback_plan_dry_run.json"
+            checksum_before_exists = checksum_before_path.exists()
+            rollback_plan_exists = rollback_plan_path.exists()
+        elif persist_result.conversion_run_id:
+            warnings.append(
+                f"Plan persistence returned {persist_result.status}; using prepared run "
+                f"{conversion_run_id} instead of {persist_result.conversion_run_id}."
+            )
     except Exception as exc:
         warnings.append(f"Plan persistence skipped: {exc}")
 
     # ── 17. Determine readiness ────────────────────────────────────────
+    release_approval_id = f"release-{approval_id}"
+    release_approval_record_path: str | None = None
+    release_approval_decision_path: str | None = None
+    release_approval_approved = False
+    if confirmations_ok and gate.status == "approved":
+        try:
+            release_record = DicomConversionReleaseApprovalRecord(
+                approval_id=release_approval_id,
+                project_id=project_id,
+                conversion_run_id=conversion_run_id,
+                status="approved",
+                approved_by=request.approved_by,
+                human_approval_statement=(
+                    "Operator approved research DICOM-to-NIfTI conversion via "
+                    "the unified prepare workflow."
+                ),
+                rawdata_readonly_acknowledged=confirmations.rawdata_readonly,
+                no_clinical_use_acknowledged=confirmations.no_clinical_use,
+                rollback_acknowledged=confirmations.rollback_policy,
+                approval_audit_acknowledged=confirmations.approval_audit,
+                public_endpoint_acknowledged=confirmations.public_endpoint,
+                frontend_execute_acknowledged=confirmations.frontend_execute,
+                spm_dpabi_matlab_disabled_acknowledged=(
+                    confirmations.spm_dpabi_matlab_disabled
+                ),
+            )
+            release_decision = persist_release_approval(
+                release_record,
+                project_dir=project_dir,
+                conversion_run_id=conversion_run_id,
+            )
+            release_approval_record_path = release_decision.approval_record_path
+            release_approval_decision_path = release_decision.decision_path
+            release_approval_approved = (
+                release_decision.approved and not release_decision.blocked
+            )
+            warnings.extend(release_decision.warnings)
+            errors.extend(release_decision.errors)
+            if release_decision.blocking_issues:
+                warnings.append(
+                    "Release approval decision is not executable: "
+                    + "; ".join(release_decision.blocking_issues)
+                )
+        except Exception as exc:
+            warnings.append(f"Release approval persistence skipped: {exc}")
+
     technical_ready = (
         preflight_ok
         and dcm2niix_available
@@ -401,7 +475,12 @@ def run_dicom_conversion_prepare(
         and checksum_before_exists
         and rollback_plan_exists
     )
-    approval_ready = technical_ready and confirmations_ok and gate.status == "approved"
+    approval_ready = (
+        technical_ready
+        and confirmations_ok
+        and gate.status == "approved"
+        and release_approval_approved
+    )
     execution_ready = approval_ready
 
     if not env_gates_ok or not dcm2niix_available:
@@ -467,6 +546,9 @@ def run_dicom_conversion_prepare(
         errors=errors,
         run_dir=str(run_dir),
         approval_record_path=str(approval_record_path),
+        release_approval_id=release_approval_id,
+        release_approval_record_path=release_approval_record_path,
+        release_approval_decision_path=release_approval_decision_path,
         audit_preview_path=str(audit_preview_path),
         preflight_snapshot_path=str(preflight_snapshot_path),
         mapping_snapshot_path=str(mapping_snapshot_path),

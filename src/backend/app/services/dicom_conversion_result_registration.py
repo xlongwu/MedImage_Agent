@@ -136,24 +136,120 @@ def register_conversion_result(
         if provenance_path:
             project.metadata["last_conversion_provenance_path"] = provenance_path
 
+        activity = {
+            "id": f"dicom-conversion-{conversion_run_id}",
+            "kind": "dicom_conversion",
+            "title": "DICOM to NIfTI conversion",
+            "status": execution_status,
+            "conversion_run_id": conversion_run_id,
+            "output_root": output_root,
+            "nifti_count": discovered_nifti,
+            "subject_count": subject_count,
+            "created_at": now,
+        }
+        existing_activity = project.metadata.get("recent_activity", [])
+        if not isinstance(existing_activity, list):
+            existing_activity = []
+        project.metadata["recent_activity"] = [
+            activity,
+            *[
+                item for item in existing_activity
+                if not (
+                    isinstance(item, dict)
+                    and item.get("id") == activity["id"]
+                )
+            ],
+        ][:20]
+
+        result_artifacts: list[dict[str, str]] = []
+        if manifest_path:
+            result_artifacts.append({
+                "kind": "manifest",
+                "label": "DICOM conversion manifest",
+                "path": manifest_path,
+            })
+        if provenance_path:
+            result_artifacts.append({
+                "kind": "provenance",
+                "label": "DICOM conversion provenance",
+                "path": provenance_path,
+            })
+        if result_artifacts:
+            existing_artifacts = project.metadata.get("results_artifacts", [])
+            if not isinstance(existing_artifacts, list):
+                existing_artifacts = []
+            existing_keys = {
+                str(item.get("path"))
+                for item in existing_artifacts
+                if isinstance(item, dict) and item.get("path")
+            }
+            project.metadata["results_artifacts"] = [
+                *existing_artifacts,
+                *[
+                    item for item in result_artifacts
+                    if item["path"] not in existing_keys
+                ],
+            ]
+
         # Mark converted BIDS as available for preprocessing input
         project.metadata["converted_bids_available"] = execution_status in {"succeeded", "partial"}
         project.metadata["converted_bids_dir"] = output_root
         project.metadata["converted_bids_registered_at"] = now
+        if project.metadata["converted_bids_available"] and discovered_nifti > 0:
+            project.metadata["preprocessing_input_dir"] = output_root
+            project.metadata["preprocessing_input_source"] = "converted_bids"
+            project.metadata["preprocessing_conversion_run_id"] = conversion_run_id
+            project.metadata["preprocessing_input_registered_at"] = now
+            project.metadata["preprocessing_input_nifti_count"] = discovered_nifti
+            project.metadata["preprocessing_input_subject_count"] = subject_count
 
         # Refresh data readiness timestamp so Dashboard can re-fetch
         project.metadata["data_readiness_stale"] = True
         project.metadata["data_readiness_refreshed_at"] = now
 
+        if execution_status in {"succeeded", "partial"} and output_path.exists() and discovered_nifti > 0:
+            try:
+                from src.backend.app.services.preprocessing_artifact_registry import (
+                    write_converted_input_registry,
+                )
+
+                registry = write_converted_input_registry(
+                    project_id=project_id,
+                    conversion_run_id=conversion_run_id,
+                    converted_bids_dir=output_root,
+                    project_dir=str(project.metadata.get("project_dir") or ""),
+                    rawdata_dir=str(project.metadata.get("rawdata_dir") or ""),
+                    manifest_path=manifest_path,
+                    provenance_path=provenance_path,
+                    source_kind="converted_bids",
+                )
+                if registry.ok:
+                    project.metadata["preprocessing_input_registry_path"] = registry.registry_path
+                    project.metadata["preprocessing_input_artifact_count"] = registry.artifact_count
+                    project.metadata["preprocessing_input_inventory"] = registry.inventory
+                    project.metadata["native_full_preproc_handoff"] = {
+                        "conversion_run_id": conversion_run_id,
+                        "artifact_registry_path": registry.registry_path,
+                        "input_resolution": "preprocessing_input_registry_path",
+                        "status": "ready",
+                    }
+                else:
+                    warnings.extend(registry.blocking_issues)
+            except Exception as exc:
+                warnings.append(f"Preprocessing artifact registry skipped: {exc}")
+
     # ── Persist project ────────────────────────────────────────────────
     # The ProjectStore protocol does not expose update_project; we persist
     # via the mock_store's add_project(overwrite=True) when available.
     try:
-        from src.backend.app.services.mock_store import mock_store
         metadata = project.metadata if isinstance(project.metadata, dict) else {}
         rawdata_dir = str(metadata.get("rawdata_dir") or "")
         health_status = str(metadata.get("health_status") or "unknown")
-        mock_store.add_project(
+        target_store = store if hasattr(store, "add_project") else None
+        if target_store is None:
+            from src.backend.app.services.mock_store import mock_store
+            target_store = mock_store
+        target_store.add_project(
             project,
             health_status=health_status,
             rawdata_dir=rawdata_dir,
@@ -163,7 +259,11 @@ def register_conversion_result(
         warnings.append(f"Project metadata update failed: {exc}")
 
     # ── Optionally register as preprocessing input ─────────────────────
-    preprocessing_registered = False
+    preprocessing_registered = (
+        execution_status in {"succeeded", "partial"}
+        and output_path.exists()
+        and discovered_nifti > 0
+    )
     if execution_status in {"succeeded", "partial"} and output_path.exists():
         try:
             from src.backend.app.services.preprocessing_handoff import (
@@ -172,6 +272,9 @@ def register_conversion_result(
             handoff_request = PreprocessingInputRegistrationRequest(
                 conversion_run_id=conversion_run_id,
                 converted_bids_dir=output_root,
+                manifest_path=manifest_path,
+                provenance_path=provenance_path,
+                checksum_verified=checksum_verified,
             )
             metadata = project.metadata if isinstance(project.metadata, dict) else {}
             project_dir = str(metadata.get("project_dir") or "")
@@ -180,7 +283,7 @@ def register_conversion_result(
                 request=handoff_request,
                 project_dir=project_dir,
             )
-            preprocessing_registered = handoff.ok
+            preprocessing_registered = preprocessing_registered or handoff.ok
             if not handoff.ok:
                 warnings.extend(handoff.blocking_issues or [])
         except Exception as exc:
@@ -203,6 +306,16 @@ def register_conversion_result(
         "subjects": discovered_subjects,
         "manifest_path": manifest_path,
         "provenance_path": provenance_path,
+        "preprocessing_input_registry_path": (
+            project.metadata.get("preprocessing_input_registry_path")
+            if isinstance(project.metadata, dict)
+            else ""
+        ),
+        "native_full_preproc_handoff": (
+            project.metadata.get("native_full_preproc_handoff", {})
+            if isinstance(project.metadata, dict)
+            else {}
+        ),
         "checksum_verified": checksum_verified,
         "preprocessing_registered": preprocessing_registered,
         "project_metadata_updated": True,

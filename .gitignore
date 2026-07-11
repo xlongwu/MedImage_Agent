@@ -46,6 +46,7 @@ outputs/exports/
 outputs/reports/
 outputs/demo_runs/
 outputs/memory/
+/workspace/
 
 # Node / Frontend
 node_modules/
@@ -75,7 +76,7 @@ desktop/packaging/dist/
 .workbuddy/
 .claude/settings.local.json
 .claude/worktrees/
-docs/tasks/TASK_*.md
+docs/临时任务/任务_*.md
 
 # Local logs
 debug.log

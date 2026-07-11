@@ -13,6 +13,8 @@ extraResources:
     to: frontend
   - from: ../packaging/dist/backend_payload
     to: backend
+  - from: ../resources/tools
+    to: tools
   - from: ../../examples
     to: workspace_seed/examples
   - from: ../../matlab

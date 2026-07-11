@@ -9,8 +9,8 @@ Schema-only module.  No subprocess.  No file writes.  No external tool
 imports.  No real dcm2niix execution is enabled.
 
 Reference:
-  docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md
-  docs/REAL_PREPROCESSING_EXECUTION_CONTRACT.md
+  docs/预处理与科学计算/DICOM转换/DICOM到NIfTI执行包装契约.md
+  docs/预处理与科学计算/原生预处理/真实预处理执行契约.md
 """
 
 from __future__ import annotations

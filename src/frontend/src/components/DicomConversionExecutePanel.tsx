@@ -4,6 +4,7 @@ import { registerProjectDicomConversionResult } from "../lib/api/dicom";
 import { useDicomConversionWorkflow } from "../hooks/useDicomConversionWorkflow";
 import type {
   DicomConversionExecutionUiState,
+  DicomConversionPrepareResponse,
   DicomConversionPublicExecutionResponse,
   DicomConversionPublicExecutionSafetyFlags,
   DicomConversionReleaseReadinessReport,
@@ -15,6 +16,7 @@ type Props = {
   projectId: string;
   conversionRunId: string;
   readiness: DicomConversionReleaseReadinessReport | null;
+  onPrepared?: (response: DicomConversionPrepareResponse) => void;
 };
 
 const CONFIRMATIONS: { key: string; label: string }[] = [
@@ -44,6 +46,13 @@ const PREPARE_CONFIRMATIONS: {
   { key: "external_converter", label: "I acknowledge dcm2niix is an external converter." },
   { key: "rollback_policy", label: "I acknowledge the rollback policy." },
   { key: "risk_acknowledgement", label: "I acknowledge the conversion risks." },
+  { key: "approval_audit", label: "I acknowledge the approval and audit package." },
+  { key: "public_endpoint", label: "I acknowledge the gated local conversion endpoint." },
+  { key: "frontend_execute", label: "I acknowledge frontend execution requires approval." },
+  {
+    key: "spm_dpabi_matlab_disabled",
+    label: "I understand SPM/DPABI/MATLAB preprocessing is not part of this action.",
+  },
   { key: "confirm_execution", label: "I confirm execution of the conversion." },
 ];
 
@@ -68,6 +77,7 @@ export default function DicomConversionExecutePanel({
   projectId,
   conversionRunId,
   readiness,
+  onPrepared,
 }: Props) {
   const featureEnabled = import.meta.env.VITE_ENABLE_DICOM_EXECUTE_UI === "1";
 
@@ -87,16 +97,25 @@ export default function DicomConversionExecutePanel({
   const readinessReady = readiness?.status === "ready_for_human_release_review";
   const gatesFull = readiness != null && readiness.gates_met >= readiness.gates_total;
 
-  // Show the confirm button only when readiness passes OR the prepare
-  // workflow reports technical readiness.
-  const canShowConfirm =
-    featureEnabled && ((readinessReady && gatesFull) || workflow.technicalReady);
+  // Show the confirm button only after the prepare workflow has produced the
+  // release approval decision consumed by the execute endpoint.
+  const canShowConfirm = featureEnabled && workflow.executionReady;
 
   function toggleConfirm(key: string) {
     setConfirmChecks((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   const allConfirmed = CONFIRMATIONS.every((c) => confirmChecks[c.key] === true);
+
+  async function handlePrepare() {
+    const resp = await workflow.prepare();
+    if (resp) {
+      onPrepared?.(resp);
+      if (resp.execution_ready) {
+        setUiState("confirming");
+      }
+    }
+  }
 
   async function handleExecute() {
     if (!allConfirmed || submitting) return;
@@ -109,9 +128,11 @@ export default function DicomConversionExecutePanel({
       // 实现dcm2nii任务方案.md §16.5 — prefer the conversion_run_id
       // reserved by the prepare workflow; fall back to the prop value.
       const runId = workflow.conversionRunId || conversionRunId;
+      const releaseApprovalId =
+        workflow.prepareResponse?.release_approval_id || `frontend-${Date.now()}`;
       const body: Record<string, unknown> = {
         conversion_run_id: runId,
-        release_approval_id: `frontend-${Date.now()}`,
+        release_approval_id: releaseApprovalId,
         confirm_user_data_conversion: confirmChecks.confirm_dicom_only ?? false,
         confirm_rawdata_readonly: confirmChecks.confirm_rawdata_readonly ?? false,
         confirm_research_use_only: confirmChecks.confirm_research_use_only ?? false,
@@ -151,8 +172,8 @@ export default function DicomConversionExecutePanel({
             conversion_run_id: runId,
             output_root: resp.output_root,
             execution_status: resp.status,
-            manifest_path: resp.manifest_path,
-            provenance_path: resp.provenance_path,
+            manifest_path: resp.output_manifest_path ?? resp.manifest_path,
+            provenance_path: resp.execution_provenance_path ?? resp.provenance_path,
             checksum_verified: resp.checksum_verified,
           });
         } catch {
@@ -185,9 +206,13 @@ export default function DicomConversionExecutePanel({
     const missing: string[] = [];
     if (!featureEnabled)
       missing.push("Frontend feature flag VITE_ENABLE_DICOM_EXECUTE_UI is not set.");
-    if (!readinessReady) missing.push("Release readiness is not ready_for_human_release_review.");
-    if (!gatesFull)
+    const preparedExecutionReady = workflow.executionReady;
+    if (!readinessReady && !preparedExecutionReady) {
+      missing.push("Release readiness is not ready_for_human_release_review.");
+    }
+    if (!gatesFull && !preparedExecutionReady) {
       missing.push(`Safety gates: ${readiness?.gates_met ?? 0}/${readiness?.gates_total ?? 32}.`);
+    }
 
     return (
       <section className={styles.style001}>
@@ -281,7 +306,7 @@ export default function DicomConversionExecutePanel({
               </div>
             )}
             <button
-              onClick={workflow.prepare}
+              onClick={handlePrepare}
               disabled={workflow.submitting}
               style={{
                 marginTop: 8,

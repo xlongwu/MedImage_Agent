@@ -1,7 +1,7 @@
 # MedImage Agent
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.6.0--rc1-1976d2)](docs/releases/v0.6.0-rc1.md)
+[![Version](https://img.shields.io/badge/version-v0.6.0--rc1-1976d2)](docs/发布记录/v0.6.0-rc1.md)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.136%2B-green)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18%2B-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6)](https://www.typescriptlang.org/)
@@ -16,7 +16,7 @@ This is a research engineering platform, not a clinical diagnosis or clinical
 decision product.
 
 Current release line: **v0.6.0-rc1**. See
-[release notes](docs/releases/v0.6.0-rc1.md).
+[release notes](docs/发布记录/v0.6.0-rc1.md).
 
 ## Quick Start
 
@@ -82,7 +82,7 @@ The unpacked Windows executable is produced under
 build proves the artifact was assembled; it is not a substitute for an
 interactive GUI workflow smoke test.
 
-See [Desktop App Packaging](docs/DESKTOP_APP_PACKAGING.md).
+See [Desktop App Packaging](docs/桌面与前端/桌面应用打包.md).
 
 ## Architecture
 
@@ -100,7 +100,7 @@ State is local and project-scoped: SQLite stores project metadata and JSON
 files store run state and artifacts. Runtime state writes use atomic file
 writes. The Pipeline Runtime is the only pipeline execution path.
 
-See [Architecture](docs/architecture.md) for current router, service, schema,
+See [Architecture](docs/架构与决策/系统架构.md) for current router, service, schema,
 node registry, frontend API, storage, and desktop boundaries.
 
 ## Current Stable Workflow
@@ -155,6 +155,8 @@ desktop/
 
 docs/
   releases/                    historical release notes
+  tasks/                       temporary Codex task handoffs
+  archive/                     historical plans and agent outputs
   architecture.md              current architecture
   DESKTOP_APP_PACKAGING.md     packaging guide
 
@@ -192,13 +194,13 @@ tests/
 ## Documentation
 
 - [Current Project State](PROJECT_STATE.md)
-- [Architecture](docs/architecture.md)
-- [Release Notes v0.6.0-rc1](docs/releases/v0.6.0-rc1.md)
-- [Release Notes v0.4.0-rc1](docs/releases/v0.4.0-rc1.md)
-- [Release Notes v0.3.0-rc1](docs/releases/v0.3.0-rc1.md)
-- [Desktop App Packaging](docs/DESKTOP_APP_PACKAGING.md)
-- [Real Project Run Lifecycle](docs/REAL_PROJECT_RUN_LIFECYCLE.md)
-- [Safety Boundaries](docs/SAFETY_BOUNDARIES.md)
+- [Architecture](docs/架构与决策/系统架构.md)
+- [Release Notes v0.6.0-rc1](docs/发布记录/v0.6.0-rc1.md)
+- [Release Notes v0.4.0-rc1](docs/发布记录/v0.4.0-rc1.md)
+- [Release Notes v0.3.0-rc1](docs/发布记录/v0.3.0-rc1.md)
+- [Desktop App Packaging](docs/桌面与前端/桌面应用打包.md)
+- [Real Project Run Lifecycle](docs/安全与审批/真实项目运行生命周期.md)
+- [Safety Boundaries](docs/安全与审批/安全边界.md)
 
 ## License
 

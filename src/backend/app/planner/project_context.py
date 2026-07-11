@@ -21,6 +21,7 @@ class ProjectContextError(ValueError):
 class ProjectContext:
     project_id: str | None
     project_config_path: Path
+    project_dir: Path | None
     rawdata_dir: Path | None
     dataset_index_path: Path | None
     source: str
@@ -30,6 +31,7 @@ class ProjectContext:
         return {
             "project_id": self.project_id,
             "project_config_path": str(self.project_config_path),
+            "project_dir": str(self.project_dir) if self.project_dir else None,
             "rawdata_dir": str(self.rawdata_dir) if self.rawdata_dir else None,
             "dataset_index_path": (
                 str(self.dataset_index_path) if self.dataset_index_path else None
@@ -59,6 +61,82 @@ def _is_example_config(path: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _iter_nifti_files(root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+    return [
+        path
+        for path in root.rglob("*")
+        if path.is_file() and (path.name.endswith(".nii") or path.name.endswith(".nii.gz"))
+    ]
+
+
+def _bids_subjects_from_nifti_files(nifti_files: list[Path]) -> list[str]:
+    subjects: set[str] = set()
+    for path in nifti_files:
+        for part in path.parent.parts:
+            if part.startswith("sub-"):
+                subjects.add(part)
+                break
+    return sorted(subjects)
+
+
+def _augment_diagnostics_with_registered_outputs(
+    diagnostics: dict[str, Any],
+    metadata: dict[str, Any],
+    project_dir: Path | None,
+) -> dict[str, Any]:
+    enriched = dict(diagnostics)
+    if project_dir is not None:
+        enriched.setdefault("project_dir", str(project_dir))
+
+    converted_root = _path(
+        metadata.get("preprocessing_input_dir")
+        or metadata.get("converted_bids_dir")
+        or metadata.get("last_conversion_output_root")
+    )
+    if converted_root is None and project_dir is not None:
+        converted_root = project_dir / "converted_bids"
+
+    if converted_root is not None and converted_root.is_dir():
+        nifti_files = _iter_nifti_files(converted_root)
+        if nifti_files:
+            subjects = _bids_subjects_from_nifti_files(nifti_files)
+            bold_count = sum(1 for path in nifti_files if "_bold" in path.name)
+            t1w_count = sum(1 for path in nifti_files if "_T1w" in path.name)
+            enriched.update(
+                {
+                    "status": "CONVERTED_BIDS",
+                    "converted_bids_available": True,
+                    "converted_bids_dir": str(converted_root),
+                    "preprocessing_input_dir": str(converted_root),
+                    "nifti_file_count": len(nifti_files),
+                    "nifti_files": len(nifti_files),
+                    "bold_nifti_count": bold_count,
+                    "t1w_nifti_count": t1w_count,
+                    "subjects_total": len(subjects) or enriched.get("subjects_total", 0),
+                    "subject_candidates": subjects or enriched.get("subject_candidates", []),
+                }
+            )
+
+    for key in (
+        "preprocessing_conversion_run_id",
+        "preprocessing_input_registry_path",
+        "preprocessing_input_source",
+    ):
+        value = metadata.get(key)
+        if value:
+            enriched[key] = value
+
+    handoff = metadata.get("native_full_preproc_handoff")
+    if isinstance(handoff, dict):
+        enriched["native_full_preproc_handoff"] = dict(handoff)
+        if handoff.get("conversion_run_id") and not enriched.get("preprocessing_conversion_run_id"):
+            enriched["preprocessing_conversion_run_id"] = handoff["conversion_run_id"]
+
+    return enriched
 
 
 def load_project_context(
@@ -120,6 +198,12 @@ def load_project_context(
             "PROJECT_CONFIG_MISMATCH: project config does not match persisted metadata"
         )
 
+    project_dir = _path(
+        stored_metadata.get("project_dir")
+        or project_section.get("root_dir")
+        or config_metadata.get("project_dir")
+    )
+
     config_rawdata = _path(
         data_section.get("rawdata_dir") or config_metadata.get("rawdata_dir")
     )
@@ -159,6 +243,11 @@ def load_project_context(
     diagnostics = _mapping(
         stored_metadata.get("diagnostics") or config_metadata.get("diagnostics")
     )
+    diagnostics = _augment_diagnostics_with_registered_outputs(
+        diagnostics,
+        stored_metadata,
+        project_dir,
+    )
 
     if source == "created":
         if rawdata_dir is None or not rawdata_dir.exists() or not rawdata_dir.is_dir():
@@ -177,6 +266,7 @@ def load_project_context(
     return ProjectContext(
         project_id=resolved_project_id,
         project_config_path=config_path,
+        project_dir=project_dir,
         rawdata_dir=rawdata_dir,
         dataset_index_path=dataset_index_path,
         source=source,
@@ -223,6 +313,18 @@ def apply_project_context_to_plan(
                 params["rawdata_dir"] = str(context.rawdata_dir)
             if context.dataset_index_path is not None:
                 params["output_dir"] = str(context.dataset_index_path.parent)
+        if node_id in {"native_preproc_full_dry_run", "native_preproc_full_execute"}:
+            if context.project_id:
+                params.setdefault("project_id", context.project_id)
+            if context.project_dir is not None:
+                params.setdefault("project_dir", str(context.project_dir))
+            conversion_run_id = str(
+                context.diagnostics.get("preprocessing_conversion_run_id")
+                or context.diagnostics.get("conversion_run_id")
+                or ""
+            )
+            if conversion_run_id:
+                params.setdefault("conversion_run_id", conversion_run_id)
 
         is_subject_level = (
             node_id in subject_nodes or node.get("parallel_level") == "subject"

@@ -8,8 +8,8 @@ Schema-only module.  No runtime executor is imported or modified.
 No file I/O.  No external-tool execution is enabled.
 
 Reference:
-  docs/REAL_PREPROCESSING_EXECUTION_CONTRACT.md
-  docs/PIPELINE_EXECUTOR_PRODUCTIZATION_CONTRACT.md
+  docs/预处理与科学计算/原生预处理/真实预处理执行契约.md
+  docs/规划与运行时/流水线执行器产品化契约.md
 """
 
 from __future__ import annotations

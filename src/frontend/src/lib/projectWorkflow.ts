@@ -1,4 +1,4 @@
-import type { ProjectCreateResponse } from "../types";
+import type { NativeFullPreprocResponse, ProjectCreateResponse } from "../types";
 import type { TaskStatus } from "./types/task";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "./types/project";
 
@@ -74,6 +74,32 @@ export function isWorkflowTabBlocked(
   hasPreprocessingRun: boolean,
 ): boolean {
   return deriveWorkflowLifecycleState(tabId, dataState, hasPreprocessingRun) === "blocked";
+}
+
+type NativePreprocessingRunEvidence = Pick<
+  NativeFullPreprocResponse,
+  "dry_run" | "status" | "stage_results"
+>;
+
+const RESULT_READY_NATIVE_STAGES = new Set([
+  "functional_connectivity",
+  "roi_time_series",
+  "temporal_filtering",
+  "nuisance_regression",
+]);
+
+export function hasNativePreprocessingRunEvidence(
+  nativeRun: NativePreprocessingRunEvidence | null | undefined,
+): boolean {
+  if (!nativeRun || nativeRun.dry_run) return false;
+  if (nativeRun.status === "succeeded") return true;
+  if (nativeRun.status !== "partial") return false;
+
+  return nativeRun.stage_results.some((stage) => {
+    if (!RESULT_READY_NATIVE_STAGES.has(stage.stage_id)) return false;
+    if (stage.status !== "succeeded" && stage.status !== "simplified") return false;
+    return stage.capability_level === "computed" || stage.output_artifacts.length > 0;
+  });
 }
 
 export type DefaultWorkflowRouteReason =
@@ -260,6 +286,10 @@ export function deriveProjectWorkflowState(
   const dicomRecord = asSignalRecord(dicomPreflight);
   const readinessDicomPreflight = nestedSignal(readinessRecord, "dicom_preflight");
   const readinessDicomPreflightCamel = nestedSignal(readinessRecord, "dicomPreflight");
+  const preprocessingInputInventory = asSignalRecord(projectMetadata.preprocessing_input_inventory);
+  const nativeFullPreprocHandoff = asSignalRecord(projectMetadata.native_full_preproc_handoff);
+  const lastConversionStatus = String(projectMetadata.last_conversion_status ?? "").toLowerCase();
+  const handoffStatus = String(nativeFullPreprocHandoff.status ?? "").toLowerCase();
 
   const dicomFileCount = maxNumericSignal(
     dicomRecord.dicom_file_count,
@@ -291,6 +321,9 @@ export function deriveProjectWorkflowState(
     readinessRecord.nifti_file_count,
     readinessRecord.nifti_files,
     readinessRecord.image_source_count,
+    projectMetadata.last_conversion_nifti_count,
+    projectMetadata.preprocessing_input_nifti_count,
+    preprocessingInputInventory.nifti_count,
     projectDiagnostics.nifti_file_count,
     projectDiagnostics.nifti_files,
     projectDiagnostics.image_source_count,
@@ -337,6 +370,9 @@ export function deriveProjectWorkflowState(
     readinessRecord.converted_subjects,
     readinessRecord.nifti_subject_count,
     readinessRecord.image_subject_count,
+    projectMetadata.last_conversion_subject_count,
+    projectMetadata.preprocessing_input_subject_count,
+    preprocessingInputInventory.subjects,
     projectDiagnostics.converted_subject_count,
     projectDiagnostics.converted_subjects,
     projectDiagnostics.nifti_subject_count,
@@ -352,7 +388,20 @@ export function deriveProjectWorkflowState(
 
   const hasRealBidsRoots =
     bidsRootCount > 0 && (!hasRawDicomEvidence || niftiCount > 0 || explicitConvertedSubjects > 0);
-  const hasRealConvertedData = niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence;
+  const hasRegisteredConvertedOutput =
+    (booleanSignal(projectMetadata.converted_bids_available) ||
+      lastConversionStatus === "succeeded" ||
+      handoffStatus === "ready" ||
+      Boolean(projectMetadata.preprocessing_input_registry_path)) &&
+    (niftiCount > 0 ||
+      explicitConvertedSubjects > 0 ||
+      maxNumericSignal(preprocessingInputInventory.bold_count, preprocessingInputInventory.t1w_count) >
+        0);
+  const hasRealConvertedData =
+    niftiCount > 0 ||
+    hasRealBidsRoots ||
+    hasConvertedSubjectEvidence ||
+    hasRegisteredConvertedOutput;
   const convertedDataAbsent = niftiCount === 0 && !hasRealBidsRoots && !hasConvertedSubjectEvidence;
 
   const importCount = readinessRecord.import_count ?? projectDiagnostics.import_count ?? 0;
@@ -412,6 +461,18 @@ export function buildProjectInventory(
   overview: StudyOverview,
   diagnostics: Record<string, unknown>,
 ): ProjectInventory {
+  const projectMetadata = asSignalRecord(project.metadata);
+  const preprocessingInputInventory = asSignalRecord(projectMetadata.preprocessing_input_inventory);
+  const metadataNiftiFileCount = maxNumericSignal(
+    projectMetadata.last_conversion_nifti_count,
+    projectMetadata.preprocessing_input_nifti_count,
+    preprocessingInputInventory.nifti_count,
+  );
+  const metadataConvertedSubjects = maxNumericSignal(
+    projectMetadata.last_conversion_subject_count,
+    projectMetadata.preprocessing_input_subject_count,
+    preprocessingInputInventory.subjects,
+  );
   const dicomFileCount = firstDiagnosticNumber(
     diagnostics,
     ["dicom_file_count", "dicom_files"],
@@ -427,9 +488,14 @@ export function buildProjectInventory(
     "nifti_files",
     "image_source_count",
   ]);
-  const convertedSubjectInventory = firstDiagnosticNumber(
-    diagnostics,
-    ["converted_subject_count", "nifti_subject_count", "image_subject_count"],
+  const resolvedNiftiFileCount = Math.max(niftiFileCount, metadataNiftiFileCount);
+  const convertedSubjectInventory = maxNumericSignal(
+    firstDiagnosticNumber(diagnostics, [
+      "converted_subject_count",
+      "nifti_subject_count",
+      "image_subject_count",
+    ]),
+    metadataConvertedSubjects,
     project.subjects_count,
   );
   const rawDicomCandidates = firstDiagnosticNumber(
@@ -441,13 +507,17 @@ export function buildProjectInventory(
   );
   const hasRawDicom = dicomFileCount > 0 || dicomSeriesCount > 0 || rawDicomCandidates > 0;
   const convertedSubjects = hasRawDicom
-    ? firstDiagnosticNumber(diagnostics, [
-        "converted_subject_count",
-        "nifti_subject_count",
-        "image_subject_count",
-      ])
+    ? maxNumericSignal(
+        firstDiagnosticNumber(diagnostics, [
+          "converted_subject_count",
+          "nifti_subject_count",
+          "image_subject_count",
+        ]),
+        metadataConvertedSubjects,
+      )
     : convertedSubjectInventory;
-  const metadataOnlyNiftiInventory = niftiFileCount === 0 && isMetadataOnlySignal(diagnostics);
+  const metadataOnlyNiftiInventory =
+    resolvedNiftiFileCount === 0 && isMetadataOnlySignal(diagnostics);
   const workflowSignals: SignalRecord = {
     ...overview,
     ...diagnostics,
@@ -456,8 +526,8 @@ export function buildProjectInventory(
     dicom_series_count: dicomSeriesCount,
     dicom_series: dicomSeriesCount,
     raw_dicom_candidate_subjects: rawDicomCandidates,
-    nifti_file_count: niftiFileCount,
-    nifti_files: niftiFileCount,
+    nifti_file_count: resolvedNiftiFileCount,
+    nifti_files: resolvedNiftiFileCount,
     converted_subject_count: convertedSubjects,
     image_subject_count: convertedSubjects,
   };
@@ -490,7 +560,7 @@ export function buildProjectInventory(
     dicomSeriesCount,
     dicomFileCount,
     convertedSubjects,
-    niftiFileCount,
+    niftiFileCount: resolvedNiftiFileCount,
     hasRawDicom,
     hasConvertedData,
     metadataOnlyNiftiInventory,

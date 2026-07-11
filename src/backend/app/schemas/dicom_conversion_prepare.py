@@ -50,6 +50,10 @@ class DicomConversionPrepareConfirmations(BaseModel):
     external_converter: bool = False
     rollback_policy: bool = False
     risk_acknowledgement: bool = False
+    approval_audit: bool = False
+    public_endpoint: bool = False
+    frontend_execute: bool = False
+    spm_dpabi_matlab_disabled: bool = False
     confirm_execution: bool = False
 
 
@@ -130,6 +134,9 @@ class DicomConversionPrepareResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     run_dir: str | None = None
     approval_record_path: str | None = None
+    release_approval_id: str = ""
+    release_approval_record_path: str | None = None
+    release_approval_decision_path: str | None = None
     audit_preview_path: str | None = None
     preflight_snapshot_path: str | None = None
     mapping_snapshot_path: str | None = None
@@ -150,6 +157,10 @@ _CONFIRMATION_LABELS: dict[str, str] = {
     "external_converter": "External converter acknowledgement",
     "rollback_policy": "Rollback policy acknowledgement",
     "risk_acknowledgement": "Risk acknowledgement",
+    "approval_audit": "Approval/audit acknowledgement",
+    "public_endpoint": "Public endpoint acknowledgement",
+    "frontend_execute": "Frontend execute acknowledgement",
+    "spm_dpabi_matlab_disabled": "SPM/DPABI/MATLAB disabled acknowledgement",
     "confirm_execution": "Execution confirmation",
 }
 
@@ -161,6 +172,10 @@ _REQUIRED_CONFIRMATIONS: frozenset[str] = frozenset({
     "external_converter",
     "rollback_policy",
     "risk_acknowledgement",
+    "approval_audit",
+    "public_endpoint",
+    "frontend_execute",
+    "spm_dpabi_matlab_disabled",
     "confirm_execution",
 })
 

@@ -13,7 +13,7 @@ and documentation lifecycle. If this file conflicts with `AGENTS.md`,
 - Keep edits limited to the files required by the current task.
 - Do not work concurrently with another agent on the same task unless the human
   explicitly coordinates ownership.
-- Use `docs/tasks/` only as temporary handoff space. Completed handoffs should
+- Use `docs/临时任务/` only as temporary handoff space. Completed handoffs should
   be removed after durable information is migrated to the correct long-term
   document.
 

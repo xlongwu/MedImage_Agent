@@ -28,7 +28,7 @@ def test_desktop_packaging_files_exist():
         "desktop/packaging/build_all_windows.ps1",
         "src/backend/app/desktop_backend_entry.py",
         "src/backend/app/desktop_launcher_entry.py",
-        "docs/DESKTOP_APP_PACKAGING.md",
+        "docs/桌面与前端/桌面应用打包.md",
     ]
 
     for relative in required:
@@ -44,6 +44,11 @@ def test_electron_main_contract():
     assert "MEDIMAGE_DESKTOP_SMOKE" in main
     assert "MEDIMAGE_DESKTOP_SMOKE_RESULT" in main
     assert "MEDIMAGE_DESKTOP_USER_DATA" in main
+    assert "MEDIMAGE_DESKTOP_WORKSPACE" in main
+    assert "findRepositoryRoot" in main
+    assert "resolveDefaultDataRoot" in main
+    assert 'path.join(repositoryRoot, "workspace")' in main
+    assert 'path.join(getUserWorkspace(), ".runtime", "backend-sidecar")' in main
     assert "MEDIMAGE_DESKTOP_API_BASE_URL" in main
     assert "loadFile(frontendIndex)" in main
     assert "medimage-backend.bin" in main
@@ -57,7 +62,17 @@ def test_electron_main_contract():
     assert "nodeIntegration: false" in main
     assert "sandbox: true" in main
     assert "setWindowOpenHandler" in main
-    assert "MEDIMAGE_ENABLE_REVIEWED_EXECUTION" not in main
+    assert "resolveDcm2niixPath" in main
+    assert "MEDIMAGE_DCM2NIIX_PATH" in main
+    assert "MEDIMAGE_ENABLE_DICOM_CONVERSION" in main
+    assert "MEDIMAGE_ENABLE_REVIEWED_EXECUTION" in main
+    assert "MEDIMAGE_ALLOW_USER_DATA_CONVERSION" in main
+    assert "MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT" in main
+    assert "MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE" in main
+    assert "VITE_ENABLE_DICOM_EXECUTE_UI" not in main
+    assert "MEDIMAGE_FRONTEND_DICOM_EXECUTE_UI_ENABLED" not in main
+    assert "MEDIMAGE_MATLAB_ENABLED" not in main
+    assert "MEDIMAGE_SPM_SMOKE_ENABLED" not in main
     assert "pywinauto" not in main.lower()
     assert "inference" not in main.lower()
     assert "safetensors" not in main.lower()
@@ -78,6 +93,7 @@ def test_electron_builder_contract():
 
     assert "../../src/frontend/dist" in builder
     assert "../packaging/dist/backend_payload" in builder
+    assert "../resources/tools" in builder
     assert "workspace_seed/examples" in builder
     assert "target: nsis" in builder
     assert "target: portable" in builder
@@ -104,6 +120,8 @@ def test_pyinstaller_spec_excludes_blocked_gui_and_model_modules():
     assert "medimage-backend" in spec
     assert "upx=False" in spec
     assert 'runtime_tmpdir="."' in spec
+    assert 'collect_submodules("scipy")' in spec
+    assert 'collect_dynamic_libs("scipy")' in spec
     assert '"pywinauto"' in spec
     assert '"torch"' in spec
     assert '"safetensors"' in spec
@@ -124,6 +142,8 @@ def test_desktop_launcher_contract():
     assert "find_available_port" in launcher
     assert "StaticFiles" in launcher
     assert "MEDIMAGE_DESKTOP_WORKSPACE" in launcher
+    assert "_default_packaged_workspace" in launcher
+    assert '_find_repository_root' in launcher
     assert "MEDIMAGE_GUI_AGENT_PROVIDER" in launcher
     assert '"mock"' in launcher
     assert "server.should_exit = True" in launcher
@@ -135,10 +155,13 @@ def test_desktop_launcher_contract():
 def test_frontend_runtime_config_contract():
     client = read("src/frontend/src/lib/api/client.ts")
     vite = read("src/frontend/vite.config.ts")
+    build_frontend = read("desktop/packaging/build_frontend.ps1")
 
     assert "__MEDIMAGE_DESKTOP_CONFIG__" in client
     assert "MEDIMAGE_API_BASE_URL" in client
     assert 'base: "./"' in vite
+    assert "VITE_ENABLE_DICOM_EXECUTE_UI" in build_frontend
+    assert "Remove-Item Env:VITE_ENABLE_DICOM_EXECUTE_UI" in build_frontend
 
 
 def test_desktop_dist_wrapper_uses_workspace_caches():
@@ -186,7 +209,7 @@ def test_desktop_dist_wrapper_uses_workspace_caches():
 
 
 def test_desktop_docs_record_safety_boundaries():
-    docs = read("docs/DESKTOP_APP_PACKAGING.md")
+    docs = read("docs/桌面与前端/桌面应用打包.md")
 
     required = [
         "does not enable real GUI automation",

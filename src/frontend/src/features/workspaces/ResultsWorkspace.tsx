@@ -73,6 +73,7 @@ export function ResultsWorkspace({
             <div id="artifact-browser-panel">
               <ArtifactBrowser
                 baseUrl={baseUrl}
+                projectId={projectId}
                 onSelectedArtifactChange={onSelectedArtifactChange}
               />
             </div>

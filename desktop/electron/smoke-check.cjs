@@ -35,7 +35,7 @@ check("backend build script exists", exists("desktop/packaging/build_backend.ps1
 check("launcher build script exists", exists("desktop/packaging/build_launcher.ps1"));
 check("desktop build script exists", exists("desktop/packaging/build_desktop.ps1"));
 check("all-in-one Windows build script exists", exists("desktop/packaging/build_all_windows.ps1"));
-check("documentation exists", exists("docs/DESKTOP_APP_PACKAGING.md"));
+check("documentation exists", exists("docs/桌面与前端/桌面应用打包.md"));
 check("desktop dist wrapper exists", fs.existsSync(path.join(electronRoot, "build-dist.cjs")));
 
 check("main resolves PyInstaller sidecar", main.includes("medimage-backend.exe") && main.includes("resolveBackendCommand"));
@@ -50,7 +50,20 @@ check("main supports hidden smoke run", main.includes("MEDIMAGE_DESKTOP_SMOKE") 
 check("main denies new windows", main.includes("setWindowOpenHandler") && main.includes('action: "deny"'));
 check("main restricts dev URLs to localhost", main.includes("isAllowedDevUrl") && main.includes("127.0.0.1"));
 check("main keeps GUI provider mock", main.includes('MEDIMAGE_GUI_AGENT_PROVIDER: "mock"'));
-check("main does not enable reviewed execution", !main.includes("MEDIMAGE_ENABLE_REVIEWED_EXECUTION"));
+check(
+  "main enables only reviewed DICOM conversion gates",
+  main.includes("resolveDcm2niixPath") &&
+    main.includes("MEDIMAGE_DCM2NIIX_PATH") &&
+    main.includes("MEDIMAGE_ENABLE_DICOM_CONVERSION") &&
+    main.includes("MEDIMAGE_ENABLE_REVIEWED_EXECUTION") &&
+    main.includes("MEDIMAGE_ALLOW_USER_DATA_CONVERSION") &&
+    main.includes("MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT") &&
+    main.includes("MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE") &&
+    !main.includes("VITE_ENABLE_DICOM_EXECUTE_UI") &&
+    !main.includes("MEDIMAGE_FRONTEND_DICOM_EXECUTE_UI_ENABLED") &&
+    !main.includes("MEDIMAGE_MATLAB_ENABLED") &&
+    !main.includes("MEDIMAGE_SPM_SMOKE_ENABLED")
+);
 check("main does not reference PyWinAuto", !/pywinauto/i.test(main));
 check("main does not reference model inference", !/inference|weights|torch|safetensors/i.test(main));
 check("BrowserWindow uses contextIsolation", main.includes("contextIsolation: true"));
@@ -63,6 +76,7 @@ check("preload exposes minimal IPC bridge", preload.includes("getBackendBaseUrl"
 
 check("builder includes frontend static dist", builder.includes("../../src/frontend/dist"));
 check("builder includes backend sidecar payload resource", builder.includes("../packaging/dist/backend_payload"));
+check("builder includes dcm2niix tool resources", builder.includes("../resources/tools"));
 check("builder targets Windows installer", builder.includes("target: nsis"));
 check("builder targets portable exe", builder.includes("target: portable"));
 check("builder skips Windows signing helper download", builder.includes("signAndEditExecutable: false"));

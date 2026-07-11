@@ -20,6 +20,7 @@ from src.backend.app.services import (
     bold_reference_readiness,
     motion_metrics_draft as metrics_mod,
     motion_qc_readiness,
+    qc_evidence_roots,
 )
 import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
@@ -30,7 +31,7 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
     monkeypatch.setattr(metrics_mod, "_REPORT_ROOT", tmp_path / "reports" / "motion_metrics")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, metrics_mod,
+    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, qc_evidence_roots, metrics_mod,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
@@ -153,6 +154,51 @@ def test_confounds_tsv_fd_parsed(tmp_path, monkeypatch):
     assert fd_entry[0]["fd_mean"] is not None
     assert fd_entry[0]["fd_over_0_2_count"] == 2
     assert fd_entry[0]["fd_over_0_5_count"] == 1
+
+
+def test_native_fd_source_ignores_auxiliary_empty_tsvs(tmp_path, monkeypatch):
+    _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+
+    rawdata = tmp_path / "bids_native_motion"
+    func = rawdata / "sub-001" / "func"
+    func.mkdir(parents=True)
+    (func / "sub-001_task-rest_bold.nii.gz").write_text("dummy", encoding="utf-8")
+    created = _create_project(client, tmp_path, rawdata)
+
+    motion_dir = (
+        tmp_path
+        / "metrics_proj"
+        / "preprocessing_native_runs"
+        / "pp-test"
+        / "artifacts"
+        / "motion_qc"
+    )
+    motion_dir.mkdir(parents=True)
+    fd_path = motion_dir / "slice_timing_bold_desc-motion_parameters_desc-framewise_displacement.tsv"
+    fd_path.write_text(
+        "framewise_displacement\n"
+        "0.00000000\n"
+        "0.10000000\n"
+        "0.30000000\n",
+        encoding="utf-8",
+    )
+    (motion_dir / "slice_timing_bold_desc-motion_parameters_desc-friston24_regressors.tsv").write_text(
+        "trans_x\ttrans_y\n",
+        encoding="utf-8",
+    )
+    (motion_dir / "slice_timing_bold_desc-motion_parameters.tsv").write_text(
+        "trans_x\ttrans_y\ttrans_z\trot_x\trot_y\trot_z\n",
+        encoding="utf-8",
+    )
+
+    resp = client.post(f"/api/projects/{created['project_id']}/motion-qc/metrics-draft")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "ready"
+    assert body["parsed_count"] == 1
+    assert body["fd_available_count"] == 1
+    assert "No valid data rows found" not in json.dumps(body, ensure_ascii=False)
 
 
 def test_rawdata_unchanged(tmp_path, monkeypatch):

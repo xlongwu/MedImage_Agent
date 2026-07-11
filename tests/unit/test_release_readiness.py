@@ -77,14 +77,14 @@ def test_api_endpoint_report_validation_fixed(checks):
 M1_DOC_PATHS = [
     "file:AGENTS.md",
     "file:CLAUDE.md",
-    "file:docs/PROJECT_GOAL.md",
-    "file:docs/architecture.md",
-    "file:docs/ROADMAP.md",
-    "file:docs/TASK_BACKLOG.md",
-    "file:docs/SAFETY_BOUNDARIES.md",
-    "file:docs/DEVELOPMENT_WORKFLOW.md",
-    "file:docs/DECISIONS/0001-agent-runtime-boundary.md",
-    "file:docs/DECISIONS/0002-rawdata-readonly.md",
+    "file:docs/项目概览/项目目标.md",
+    "file:docs/架构与决策/系统架构.md",
+    "file:docs/项目概览/路线图.md",
+    "file:docs/项目概览/任务清单.md",
+    "file:docs/安全与审批/安全边界.md",
+    "file:docs/开发与测试/开发工作流.md",
+    "file:docs/架构与决策/决策记录/0001_智能体运行时边界.md",
+    "file:docs/架构与决策/决策记录/0002_原始数据只读.md",
 ]
 
 

@@ -1,7 +1,7 @@
 """Parameter schema validator for the future SPM realign wrapper.
 
 Validates params against the contract defined in
-docs/SPM_REALIGN_WRAPPER_SAFETY_CONTRACT.md.  No MATLAB/SPM execution.
+docs/预处理与科学计算/SPM/重对齐包装安全契约.md.  No MATLAB/SPM execution.
 """
 
 from __future__ import annotations

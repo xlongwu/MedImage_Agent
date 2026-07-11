@@ -119,6 +119,37 @@ def _read_text_if_exists(path: str | Path) -> str | None:
     except Exception:
         return None
 
+def _with_node_state_details(result: dict[str, Any]) -> dict[str, Any]:
+    details: list[dict[str, Any]] = []
+    node_errors: list[str] = []
+    node_warnings: list[str] = []
+    for state_path in result.get("node_states", []) or []:
+        if not isinstance(state_path, str):
+            continue
+        state = _read_json_if_exists(state_path)
+        if not state:
+            continue
+        errors = state.get("errors") if isinstance(state.get("errors"), list) else []
+        warnings = state.get("warnings") if isinstance(state.get("warnings"), list) else []
+        details.append(
+            {
+                "node": state.get("node"),
+                "status": state.get("status"),
+                "outputs": state.get("outputs") if isinstance(state.get("outputs"), list) else [],
+                "warnings": warnings,
+                "errors": errors,
+            }
+        )
+        node_errors.extend(str(item) for item in errors)
+        node_warnings.extend(str(item) for item in warnings)
+    if details:
+        result = {**result, "node_state_details": details}
+    if node_errors:
+        result = {**result, "node_errors": node_errors}
+    if node_warnings:
+        result = {**result, "node_warnings": node_warnings}
+    return result
+
 def _load_project_config(path: str) -> dict[str, Any]:
     """Load and validate a project config YAML file.
 
@@ -361,6 +392,7 @@ def api_rsfmri_report_export(payload: RsfmriReportExportRequest) -> dict[str, An
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
+    result = _with_node_state_details(result)
     if result.get("status") in {"SUCCESS", "PARTIAL"}:
         return {"ok": True, **result}
     raise HTTPException(status_code=400, detail=result)
@@ -371,9 +403,22 @@ def api_rsfmri_report_validation(payload: RsfmriReportValidationRequest) -> dict
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
+    result = _with_node_state_details(result)
     if result.get("status") in {"SUCCESS", "PARTIAL"}:
         return {"ok": True, **result}
     raise HTTPException(status_code=400, detail=result)
+
+
+# Backward-compatible aliases for desktop clients packaged before route cleanup.
+@router.post("/api/rsfmri/report-export/run")
+def api_rsfmri_report_export_legacy(payload: RsfmriReportExportRequest) -> dict[str, Any]:
+    return api_rsfmri_report_export(payload)
+
+
+@router.post("/api/rsfmri/report-validator/run")
+def api_rsfmri_report_validation_legacy(payload: RsfmriReportValidationRequest) -> dict[str, Any]:
+    return api_rsfmri_report_validation(payload)
+
 
 @router.post("/api/release-readiness")
 def api_release_readiness(payload: ReleaseReadinessRequest) -> dict[str, Any]:
@@ -411,6 +456,26 @@ def api_rsfmri_get_latest_report_validation() -> dict[str, Any]:
     if result is None:
         raise HTTPException(status_code=404, detail="No report validations found")
     return {"ok": True, **result}
+
+
+@router.get("/api/rsfmri/report-export/list")
+def api_rsfmri_list_report_exports_legacy() -> dict[str, Any]:
+    return api_rsfmri_list_report_exports()
+
+
+@router.get("/api/rsfmri/report-export/latest")
+def api_rsfmri_get_latest_report_export_legacy() -> dict[str, Any]:
+    return api_rsfmri_get_latest_report_export()
+
+
+@router.get("/api/rsfmri/report-validator/list")
+def api_rsfmri_list_report_validations_legacy() -> dict[str, Any]:
+    return api_rsfmri_list_report_validations()
+
+
+@router.get("/api/rsfmri/report-validator/latest")
+def api_rsfmri_get_latest_report_validation_legacy() -> dict[str, Any]:
+    return api_rsfmri_get_latest_report_validation()
 
 
 # ── Reproducibility bundle ────────────────────────────────────────────────

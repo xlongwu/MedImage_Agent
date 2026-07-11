@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProjectDetail } from "../../lib/types/project";
 import PlanReviewConsole from "../PlanReviewConsole";
 import {
+  checkApprovalGate,
   fetchToolCatalog,
   generatePlanFromGoal,
   listProjectReviewedPlans,
@@ -63,6 +64,7 @@ describe("PlanReviewConsole", () => {
     });
     vi.mocked(generatePlanFromGoal).mockReset();
     vi.mocked(saveReviewedPlan).mockReset();
+    vi.mocked(checkApprovalGate).mockReset();
   });
 
   it("does not persist generated plans missing reviewed-plan fields", async () => {
@@ -176,6 +178,106 @@ describe("PlanReviewConsole", () => {
           project_context: expect.any(Object),
           goal: "motion correction",
           metadata: expect.any(Object),
+        }),
+      }),
+    );
+  });
+
+  it("sends native preprocessing safety acknowledgements to approval gate", async () => {
+    const user = userEvent.setup();
+    vi.mocked(generatePlanFromGoal).mockResolvedValue({
+      ok: true,
+      provider: "mock",
+      goal: "native full preprocessing",
+      plan: {
+        pipeline_id: "native_full_preprocessing",
+        project_context: { project_id: "project-1" },
+        goal: "native full preprocessing",
+        nodes: [
+          {
+            id: "native_preproc_full_execute",
+            backend: "native_python",
+            params: {},
+            depends_on: [],
+          },
+        ],
+        metadata: {
+          provider: "mock",
+          external_api_used: false,
+          execution_enabled: false,
+          native_preprocessing: true,
+        },
+      },
+      validation: {
+        ok: true,
+        errors: [],
+        approval_required_nodes: ["native_preproc_full_execute"],
+        risk_summary: { requires_approval: true },
+      },
+      messages: [],
+      warnings: [],
+      errors: [],
+    });
+    vi.mocked(saveReviewedPlan).mockResolvedValue({
+      ok: true,
+      reviewed_plan: {
+        reviewed_plan_id: "plan-native-1",
+        project_id: "project-1",
+        project_config_path: "work/projects/demo/project_config.yaml",
+        dataset_index_path: null,
+        rawdata_dir: "work/projects/demo/rawdata",
+        plan_hash: "hash",
+        plan_path: null,
+        status: "reviewed",
+        created_at: "2026-06-25T00:00:00Z",
+        updated_at: "2026-06-25T00:00:00Z",
+        approval_status: "not_requested",
+        execution_status: "not_started",
+        last_audit_id: null,
+        last_execution_id: null,
+        warnings: [],
+        payload: {},
+      },
+    });
+    vi.mocked(checkApprovalGate).mockResolvedValue({
+      ok: true,
+      execution_allowed: true,
+      approval_required: true,
+      approved: true,
+      missing_approval_nodes: [],
+      rejected_nodes: [],
+      errors: [],
+      warnings: [],
+    });
+
+    renderConsole();
+
+    await user.type(screen.getByRole("textbox"), "native full preprocessing");
+    await user.click(screen.getByRole("button", { name: "Generate Plan" }));
+
+    await screen.findByText("Native Preprocessing Safety Acknowledgement");
+    await user.click(screen.getByRole("button", { name: "Approve all required nodes" }));
+    await user.click(
+      screen.getByLabelText(/I acknowledge native full preprocessing will run/i),
+    );
+    await user.click(screen.getByLabelText(/external tools will not be executed/i));
+    await user.click(screen.getByLabelText(/rawdata must remain read-only/i));
+    await user.click(screen.getByLabelText(/native preprocessing risks/i));
+    await user.click(screen.getByLabelText(/subject\/session scope has been reviewed/i));
+    await user.click(screen.getByRole("button", { name: "Check Approval Gate" }));
+
+    await waitFor(() => expect(checkApprovalGate).toHaveBeenCalledTimes(1));
+    expect(checkApprovalGate).toHaveBeenCalledWith(
+      "http://localhost",
+      expect.objectContaining({
+        approval: expect.objectContaining({
+          approved: true,
+          approved_nodes: ["native_preproc_full_execute"],
+          native_preprocessing_acknowledgement: true,
+          no_external_tools_confirmed: true,
+          rawdata_read_only_confirmed: true,
+          risk_acknowledgement: true,
+          subject_scope_confirmed: true,
         }),
       }),
     );

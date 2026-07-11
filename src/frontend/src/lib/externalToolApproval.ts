@@ -9,6 +9,11 @@ export type ExternalToolApprovalRequirement = {
   reasons: string[];
 };
 
+export type NativePreprocApprovalRequirement = {
+  required: boolean;
+  nodeIds: string[];
+};
+
 const HIGH_RISK_BACKENDS = new Set(["matlab-spm", "dpabi", "matlab-dpabi", "matlab"]);
 const HIGH_RISK_PREFIXES = new Set(["spm_", "dpabi_"]);
 
@@ -62,6 +67,28 @@ export function detectExternalToolNodes(
   };
 }
 
+export function detectNativePreprocNodes(
+  plan: Record<string, unknown> | null | undefined,
+): NativePreprocApprovalRequirement {
+  if (!plan) {
+    return { required: false, nodeIds: [] };
+  }
+
+  const nodes = (plan.nodes ?? []) as Array<Record<string, unknown>>;
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    return { required: false, nodeIds: [] };
+  }
+
+  const nodeIds = nodes
+    .map((node) => String(node.id ?? ""))
+    .filter((id) => id === "native_preproc_full_execute");
+
+  return {
+    required: nodeIds.length > 0,
+    nodeIds,
+  };
+}
+
 // ── Approval completeness check ─────────────────────────────────────────────
 
 export type ExternalToolApprovalState = {
@@ -71,6 +98,14 @@ export type ExternalToolApprovalState = {
   riskAcknowledgement: boolean;
   subjectScopeConfirmed: boolean;
   overwritePolicy: "fail_if_exists" | "require_explicit_overwrite_approval";
+};
+
+export type NativePreprocApprovalState = {
+  nativePreprocessingAcknowledgement: boolean;
+  noExternalToolsConfirmed: boolean;
+  rawdataReadOnlyConfirmed: boolean;
+  riskAcknowledgement: boolean;
+  subjectScopeConfirmed: boolean;
 };
 
 const ALLOWED_OVERWRITE = new Set(["fail_if_exists", "require_explicit_overwrite_approval"]);
@@ -92,5 +127,20 @@ export function isExternalToolApprovalComplete(
     state.riskAcknowledgement === true &&
     state.subjectScopeConfirmed === true &&
     ALLOWED_OVERWRITE.has(state.overwritePolicy)
+  );
+}
+
+export function isNativePreprocApprovalComplete(
+  requirement: NativePreprocApprovalRequirement,
+  state: NativePreprocApprovalState,
+): boolean {
+  if (!requirement.required) return true;
+
+  return (
+    state.nativePreprocessingAcknowledgement === true &&
+    state.noExternalToolsConfirmed === true &&
+    state.rawdataReadOnlyConfirmed === true &&
+    state.riskAcknowledgement === true &&
+    state.subjectScopeConfirmed === true
   );
 }

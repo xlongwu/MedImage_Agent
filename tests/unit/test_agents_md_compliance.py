@@ -115,8 +115,8 @@ def test_all_referenced_documents_exist():
     required = [
         "AGENTS.md",
         "PROJECT_STATE.md",
-        "docs/architecture.md",
-        "docs/CAPABILITY_MATRIX.md",
+        "docs/架构与决策/系统架构.md",
+        "docs/项目概览/能力矩阵.md",
         "README.md",
         "README_CN.md",
         "pyproject.toml",

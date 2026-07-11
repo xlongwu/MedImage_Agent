@@ -5,7 +5,7 @@ audit bundles.  No dcm2niix is called.  No NIfTI files are created.
 No rawdata is modified.  Export contains metadata only — no image data.
 
 Reference:
-  docs/DICOM_CONVERSION_APPROVAL_GATE_DESIGN.md  (Section 21.6)
+  docs/预处理与科学计算/DICOM转换/审批门设计.md  (Section 21.6)
 """
 
 from __future__ import annotations

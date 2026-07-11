@@ -262,6 +262,39 @@ describe("DataConversionWorkspace", () => {
     expect(screen.queryByTestId("qc-summary-panel")).not.toBeInTheDocument();
   });
 
+  it("uses converted summary as the primary view when raw DICOM and registered NIfTI coexist", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DataConversionWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        inventory={inventory({
+          dataState: "mixed",
+          dataStateLabel: "Mixed",
+          rawDicomCandidates: 3,
+          dicomSeriesCount: 6,
+          dicomFileCount: 1104,
+          convertedSubjects: 3,
+          niftiFileCount: 6,
+          hasRawDicom: true,
+          hasConvertedData: true,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Converted imaging inventory" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "DICOM series browser" })).not.toBeInTheDocument();
+    expect(screen.getByText(/DICOM conversion has completed/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Open detailed checks" }));
+
+    expect(screen.getByTestId("conversion-dry-run-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("dicom-review-panel")).toBeInTheDocument();
+  });
+
   it("shows an empty state when no imaging inventory exists", async () => {
     render(
       <DataConversionWorkspace

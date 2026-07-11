@@ -5,11 +5,12 @@ import {
   deriveDefaultWorkflowTab,
   deriveProjectWorkflowState,
   directoryBasename,
+  hasNativePreprocessingRunEvidence,
   isProjectNameConflict,
   mergeCreatedProjectIntoList,
   uniqueProjectName,
 } from "../projectWorkflow";
-import type { ProjectCreateResponse } from "../../types";
+import type { NativeFullPreprocResponse, ProjectCreateResponse } from "../../types";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "../types/project";
 
 function project(overrides: Partial<ProjectDetail> = {}): ProjectDetail {
@@ -107,6 +108,32 @@ describe("deriveProjectWorkflowState", () => {
     expect(state).toBe("mixed");
   });
 
+  it("returns mixed when stale raw diagnostics coexist with registered conversion metadata", () => {
+    const state = deriveProjectWorkflowState(
+      project({
+        subjects_count: 3,
+        metadata: {
+          converted_bids_available: true,
+          last_conversion_status: "succeeded",
+          last_conversion_nifti_count: 6,
+          last_conversion_subject_count: 3,
+          preprocessing_input_registry_path: "preprocessing_inputs/conv-1/registry.json",
+          preprocessing_input_inventory: {
+            nifti_count: 6,
+            subjects: ["sub-001", "sub-002", "sub-003"],
+          },
+          diagnostics: {
+            status: "RAW_DICOM",
+            dicom_file_count: 1104,
+            dicom_series_count: 6,
+          },
+        },
+      }),
+    );
+
+    expect(state).toBe("mixed");
+  });
+
   it("keeps metadata-only NIfTI inventory from counting as converted data", () => {
     const state = deriveProjectWorkflowState(
       project({
@@ -146,6 +173,32 @@ describe("project inventory helpers", () => {
     expect(inventory.dataState).toBe("converted_bids");
     expect(inventory.hasConvertedData).toBe(true);
     expect(inventory.niftiFileCount).toBe(12);
+  });
+
+  it("builds inventory from registered conversion metadata when diagnostics are stale", () => {
+    const inventory = buildProjectInventory(
+      project({
+        subjects_count: 3,
+        metadata: {
+          converted_bids_available: true,
+          last_conversion_status: "succeeded",
+          last_conversion_nifti_count: 6,
+          last_conversion_subject_count: 3,
+          preprocessing_input_registry_path: "preprocessing_inputs/conv-1/registry.json",
+          preprocessing_input_inventory: {
+            nifti_count: 6,
+            subjects: ["sub-001", "sub-002", "sub-003"],
+          },
+        },
+      }),
+      overview({ dicom_files: 1104, dicom_series: 6 }),
+      { status: "RAW_DICOM", dicom_file_count: 1104, dicom_series_count: 6 },
+    );
+
+    expect(inventory.dataState).toBe("mixed");
+    expect(inventory.hasConvertedData).toBe(true);
+    expect(inventory.convertedSubjects).toBe(3);
+    expect(inventory.niftiFileCount).toBe(6);
   });
 
   it("extracts directory basename across separators", () => {
@@ -206,6 +259,75 @@ describe("deriveDefaultWorkflowRoute", () => {
         inventory: { dataState: "converted_bids" },
       }),
     ).toEqual({ reason: "converted_data", tab: "preprocessing" });
+  });
+});
+
+describe("hasNativePreprocessingRunEvidence", () => {
+  it("accepts a completed native full preprocessing run", () => {
+    expect(
+      hasNativePreprocessingRunEvidence({
+        dry_run: false,
+        status: "succeeded",
+        stage_results: [],
+      }),
+    ).toBe(true);
+  });
+
+  it("does not accept dry-runs or planned native runs", () => {
+    expect(
+      hasNativePreprocessingRunEvidence({
+        dry_run: true,
+        status: "succeeded",
+        stage_results: [],
+      }),
+    ).toBe(false);
+    expect(
+      hasNativePreprocessingRunEvidence({
+        dry_run: false,
+        status: "planned",
+        stage_results: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts partial native runs only when downstream result artifacts exist", () => {
+    const partialRun = {
+      dry_run: false,
+      status: "partial",
+      stage_results: [
+        {
+          stage_id: "slice_timing_correction",
+          status: "succeeded",
+          capability_level: "computed",
+          output_artifacts: [{ path: "slice_timing.json" }],
+        },
+        {
+          stage_id: "functional_connectivity",
+          status: "succeeded",
+          capability_level: "computed",
+          output_artifacts: [{ path: "fc.tsv" }],
+        },
+      ],
+    } as unknown as NativeFullPreprocResponse;
+
+    expect(hasNativePreprocessingRunEvidence(partialRun)).toBe(true);
+  });
+
+  it("keeps partial native runs without result-stage artifacts gated", () => {
+    const partialRun = {
+      dry_run: false,
+      status: "partial",
+      stage_results: [
+        {
+          stage_id: "slice_timing_correction",
+          status: "succeeded",
+          capability_level: "computed",
+          output_artifacts: [{ path: "slice_timing.json" }],
+        },
+      ],
+    } as unknown as NativeFullPreprocResponse;
+
+    expect(hasNativePreprocessingRunEvidence(partialRun)).toBe(false);
   });
 });
 

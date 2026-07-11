@@ -42,12 +42,13 @@ export function RsfmriReportValidatorPanel({ baseUrl }: Props) {
     setStatus("RUNNING");
     setError("");
     try {
-      setResult(
-        await runRsfmriReportValidation(baseUrl, {
-          project_config_path: "examples/project_config_dataset.yaml",
-          pipeline_path: "examples/pipeline_rsfmri_report_validator.yaml",
-        }),
-      );
+      const runResult = await runRsfmriReportValidation(baseUrl, {
+        project_config_path: "examples/project_config_dataset.yaml",
+        pipeline_path: "examples/pipeline_rsfmri_report_validator.yaml",
+      });
+      setResult(runResult);
+      setStatus("LOADING");
+      setLatest(await getLatestRsfmriReportValidation(baseUrl));
       setStatus("REQUEST_COMPLETE");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -80,7 +81,8 @@ export function RsfmriReportValidatorPanel({ baseUrl }: Props) {
   }
 
   const evidence = deriveReportValidationEvidence(latest ?? result);
-  const vr = latest?.validation_result as Record<string, unknown> | undefined;
+  const displayedValidation = latest ?? result;
+  const vr = displayedValidation?.validation_result as Record<string, unknown> | undefined;
   const st = vr?.stats as Record<string, unknown> | undefined;
 
   return (
@@ -125,7 +127,7 @@ export function RsfmriReportValidatorPanel({ baseUrl }: Props) {
       </div>
 
       <EvidenceSection title="Validation Result">
-        <JsonBlock value={latest?.validation_result} emptyText="No result" />
+        <JsonBlock value={vr} emptyText="No result" />
       </EvidenceSection>
       <EvidenceSection title="Validation Checks">
         <JsonBlock value={vr?.checks} emptyText="No checks" />

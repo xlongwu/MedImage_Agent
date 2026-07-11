@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_dynamic_libs, collect_submodules
+
 repo_root = Path(SPECPATH).resolve().parents[1]
 entry = repo_root / "src" / "backend" / "app" / "desktop_backend_entry.py"
 
@@ -36,10 +38,13 @@ elif _bundled_tools_dir.is_dir():
         if _resource_file.is_file():
             _datas.append((str(_resource_file), str(Path("resources") / "tools")))
 
+_scipy_hiddenimports = collect_submodules("scipy")
+_scipy_binaries = collect_dynamic_libs("scipy")
+
 a = Analysis(
     [str(entry)],
     pathex=[str(repo_root)],
-    binaries=_ssl_binaries,
+    binaries=[*_ssl_binaries, *_scipy_binaries],
     datas=_datas,
     hiddenimports=[
         "uvicorn.logging",
@@ -55,7 +60,7 @@ a = Analysis(
         "src.backend.app.main",
         "ssl",
         "_ssl",
-    ],
+    ] + _scipy_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

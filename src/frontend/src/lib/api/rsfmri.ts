@@ -43,11 +43,11 @@ export async function generateRsfmriQcPlanningReport(baseUrl: string, projectId:
 }
 
 export async function getLatestRsfmriReportExport(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-export/latest");
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-exports/latest");
 }
 
 export async function getLatestRsfmriReportValidation(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-validator/latest");
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-validations/latest");
 }
 
 export async function getRsfmriAlffFalff(baseUrl: string) {
@@ -107,11 +107,11 @@ export async function getRsfmriTemporalFiltering(baseUrl: string) {
 }
 
 export async function listRsfmriReportExports(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-export/list");
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-exports");
 }
 
 export async function listRsfmriReportValidations(baseUrl: string) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-validator/list");
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-validations");
 }
 
 export async function refreshRsfmriPreprocessingPlan(baseUrl: string) {
@@ -202,7 +202,7 @@ export async function runRsfmriReportExport(
   baseUrl: string,
   payload: { project_config_path: string; pipeline_path: string },
 ) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-export/run", {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-export", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -212,7 +212,7 @@ export async function runRsfmriReportValidation(
   baseUrl: string,
   payload: { project_config_path: string; pipeline_path: string },
 ) {
-  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-validator/run", {
+  return requestJson<Record<string, unknown>>(baseUrl, "/api/rsfmri/report-validation", {
     method: "POST",
     body: JSON.stringify(payload),
   });

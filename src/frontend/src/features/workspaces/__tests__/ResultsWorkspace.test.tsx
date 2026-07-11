@@ -4,7 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { ResultsWorkspace } from "../ResultsWorkspace";
 
 vi.mock("../../../components/ArtifactBrowser", () => ({
-  ArtifactBrowser: () => <div data-testid="artifact-browser">Artifact browser</div>,
+  ArtifactBrowser: ({ projectId }: { projectId?: string | null }) => (
+    <div data-testid="artifact-browser">Artifact browser {projectId}</div>
+  ),
 }));
 
 vi.mock("../../../components/ReportViewer", () => ({
@@ -73,6 +75,7 @@ describe("ResultsWorkspace", () => {
     renderWorkspace();
 
     expect(screen.getByTestId("artifact-browser")).toBeInTheDocument();
+    expect(screen.getByTestId("artifact-browser")).toHaveTextContent("project-1");
     expect(screen.getByTestId("rsfmri-report-exporter")).toBeInTheDocument();
     expect(screen.getByTestId("rsfmri-report-validator")).toBeInTheDocument();
   });

@@ -8,7 +8,7 @@ Schema-only module.  No subprocess.  No file writes.  No dcm2niix.
 No rawdata modification.  No SPM/DPABI/MATLAB.
 
 Reference:
-  docs/DICOM_CONVERSION_RELEASE_HARDENING.md  (Phase 4L-0)
+  docs/预处理与科学计算/DICOM转换/发布加固.md  (Phase 4L-0)
 """
 
 from __future__ import annotations

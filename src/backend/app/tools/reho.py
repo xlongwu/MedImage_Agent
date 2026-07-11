@@ -4,6 +4,8 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from src.backend.app.tools import reho_compute
+
 def _read_json(path: Path) -> dict[str, Any] | None:
     if not path.exists(): return None
     try: return json.loads(path.read_text(encoding="utf-8"))
@@ -28,39 +30,6 @@ def _find_gm(subject_id: str, derivatives_dir: str) -> Path | None:
     p = d / f"c1coreg_{subject_id}_T1w.nii"
     if p.exists(): return p
     c = sorted(d.glob("c1*.nii")); return c[0] if c else None
-
-def _offsets(nb: int) -> list[tuple[int,int,int]]:
-    off = []; rng = [-1,0,1]
-    for dx in rng:
-        for dy in rng:
-            for dz in rng:
-                m = abs(dx)+abs(dy)+abs(dz)
-                if nb == 7 and m <= 1: off.append((dx,dy,dz))
-                elif nb == 19 and m <= 2: off.append((dx,dy,dz))
-                elif nb == 27: off.append((dx,dy,dz))
-    return off
-
-def _rank_cols(vals):
-    import numpy as np
-    T, K = vals.shape; ranks = np.zeros_like(vals, dtype=np.float64)
-    for t in range(T):
-        row = vals[t,:]; order = np.argsort(row, kind="mergesort")
-        sv = row[order]; rr = np.empty_like(row, dtype=np.float64)
-        s = 0
-        while s < len(sv):
-            e = s+1
-            while e < len(sv) and sv[e] == sv[s]: e += 1
-            rr[order[s:e]] = (s+1+e)/2.0; s = e
-        ranks[t,:] = rr
-    return ranks
-
-def _kcc(tbv):
-    import numpy as np
-    T, K = tbv.shape
-    if T < 2 or K < 2: return 0.0
-    r = _rank_cols(tbv); rs = np.sum(r, axis=0); rm = np.mean(rs)
-    num = 12.0 * np.sum((rs - rm)**2); den = (T**2) * (K**3 - K)
-    return float(num/den) if den != 0 else 0.0
 
 def _write_qc_md(path: Path, qc: dict[str, Any]) -> None:
     lines = [f"# ReHo QC: {qc.get('subject_id')}", "", f"- OK: {qc.get('ok')}", f"- Status: {qc.get('reho_qc_status')}", f"- Input: `{qc.get('input_nii')}`", f"- ReHo: `{qc.get('reho_file')}`", f"- Neighborhood: {qc.get('neighborhood')}", f"- Timepoints: {qc.get('timepoints')}", f"- Valid voxels: {qc.get('valid_voxel_count')}", f"- Skipped: {qc.get('skipped_voxel_count')}", f"- Finite fraction: {qc.get('finite_fraction')}", f"- ReHo mean/std: {qc.get('reho_mean')}/{qc.get('reho_std')}", "", "## Safety Note", "", "ReHo reads derivative files only and does not modify rawdata."]
@@ -89,7 +58,7 @@ def run_python_reho_subject(subject_id: str, derivatives_dir: str, neighborhood:
     if not _safe_filtered(ip, subject_id, derivatives_dir): return _fail(subject_id, rj, qj, qm, [f"Unsafe input: {ip}"])
 
     try:
-        nb = int(neighborhood); off = _offsets(nb)
+        nb = int(neighborhood)
         img = nib.load(str(ip)); data = img.get_fdata(dtype="float32")
         if data.ndim != 4: raise ValueError(f"Must be 4D. Got {data.shape}")
         nx, ny, nz, nt = data.shape
@@ -104,24 +73,27 @@ def run_python_reho_subject(subject_id: str, derivatives_dir: str, neighborhood:
                 else: w.append("GM shape mismatch; ignoring mask.")
             else: w.append("GM map not found; computing on internal voxels.")
 
-        reho = np.zeros((nx,ny,nz), dtype=np.float32)
-        vc = 0; sc = 0
-        for x in range(1, nx-1):
-            for y in range(1, ny-1):
-                for z in range(1, nz-1):
-                    if gm_mask is not None and not bool(gm_mask[x,y,z]): sc += 1; continue
-                    series = []; ok = True
-                    for dx,dy,dz in off:
-                        xx,yy,zz = x+dx,y+dy,z+dz
-                        if xx<0 or yy<0 or zz<0 or xx>=nx or yy>=ny or zz>=nz: ok=False; break
-                        series.append(data[xx,yy,zz,:])
-                    if not ok: sc += 1; continue
-                    mat = np.stack(series, axis=1)
-                    if not np.isfinite(mat).all(): sc += 1; continue
-                    reho[x,y,z] = _kcc(mat); vc += 1
+        compute = reho_compute.compute_reho_backend(
+            data,
+            neighborhood=nb,
+            gm_mask=gm_mask,
+            prefer_gpu=False,
+            require_gpu=False,
+        )
+        w.extend(str(item) for item in compute.get("warnings", []))
+        if not compute.get("ok") or compute.get("reho") is None:
+            return _fail(
+                subject_id,
+                rj,
+                qj,
+                qm,
+                [str(item) for item in compute.get("errors", [])] or ["ReHo computation failed."],
+                w,
+            )
 
-        bc = nx*ny*nz - max(nx-2,0)*max(ny-2,0)*max(nz-2,0)
-        sc += int(bc)
+        reho = np.asarray(compute["reho"], dtype=np.float32)
+        vc = int(compute.get("valid_voxel_count", 0) or 0)
+        sc = int(compute.get("skipped_voxel_count", 0) or 0)
         rf = md / "reho.nii"
         h3 = img.header.copy()
         try: h3.set_data_shape(reho.shape)
@@ -138,8 +110,8 @@ def run_python_reho_subject(subject_id: str, derivatives_dir: str, neighborhood:
         elif ff < 0.95: status = "WARNING"; w.append("Finite fraction below 0.95.")
         elif rmin < -1e-6 or rmax > 1.000001: status = "WARNING"; w.append(f"ReHo out of [0,1]: min={rmin}, max={rmax}")
 
-        qc = {"ok": status != "FAIL", "node_id": "reho_qc_subject", "backend": "python", "subject_id": subject_id, "input_nii": str(ip), "reho_file": str(rf), "gm_map_used": gm_used, "input_shape": list(data.shape), "output_shape": list(reho.shape), "timepoints": int(nt), "neighborhood": nb, "neighbor_count": len(off), "boundary_strategy": "skip_boundary", "valid_voxel_count": vc, "skipped_voxel_count": sc, "finite_fraction": ff, "reho_mean": rmean, "reho_std": rstd, "reho_min": rmin, "reho_max": rmax, "reho_qc_status": status, "outputs": [str(qj),str(qm)], "warnings": w, "errors": e}
-        result = {"ok": status != "FAIL", "node_id": "python_reho_subject", "backend": "python", "subject_id": subject_id, "input_nii": str(ip), "reho_file": str(rf), "qc": qc, "outputs": [str(rf),str(rj),str(qj),str(qm)], "warnings": w, "errors": e}
+        qc = {"ok": status != "FAIL", "node_id": "reho_qc_subject", "backend": "python", "compute_backend": compute.get("backend", "cpu-numpy"), "subject_id": subject_id, "input_nii": str(ip), "reho_file": str(rf), "gm_map_used": gm_used, "input_shape": list(data.shape), "output_shape": list(reho.shape), "timepoints": int(nt), "neighborhood": nb, "neighbor_count": len(reho_compute._offsets(nb)), "boundary_strategy": "skip_boundary", "valid_voxel_count": vc, "skipped_voxel_count": sc, "finite_fraction": ff, "reho_mean": rmean, "reho_std": rstd, "reho_min": rmin, "reho_max": rmax, "reho_qc_status": status, "outputs": [str(qj),str(qm)], "warnings": w, "errors": e}
+        result = {"ok": status != "FAIL", "node_id": "python_reho_subject", "backend": "python", "compute_backend": compute.get("backend", "cpu-numpy"), "subject_id": subject_id, "input_nii": str(ip), "reho_file": str(rf), "qc": qc, "outputs": [str(rf),str(rj),str(qj),str(qm)], "warnings": w, "errors": e}
     except Exception as exc:
         return _fail(subject_id, rj, qj, qm, [str(exc)], w)
 

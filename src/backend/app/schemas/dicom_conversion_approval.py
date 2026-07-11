@@ -8,8 +8,8 @@ Schema-only module.  No subprocess.  No file writes.  No external tool
 imports.  No real conversion execution is enabled.
 
 Reference:
-  docs/DICOM_CONVERSION_APPROVAL_GATE_DESIGN.md
-  docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md
+  docs/预处理与科学计算/DICOM转换/审批门设计.md
+  docs/预处理与科学计算/DICOM转换/DICOM到NIfTI执行包装契约.md
 """
 
 from __future__ import annotations

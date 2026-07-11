@@ -18,12 +18,16 @@ from src.backend.app.schemas.desktop import (
 )
 from src.backend.app.services.image_preview import list_image_sources
 from src.backend.app.services.mock_store import mock_store
+from src.backend.app.services.qc_evidence_roots import collect_qc_evidence_roots
 
 
 _MOTION_PARAM_PATTERNS = [
     "rp_*.txt",
     "motion*.txt",
     "*motion*.tsv",
+    "*fd*.tsv",
+    "*framewise_displacement*.tsv",
+    "*confound*.tsv",
     "desc-confounds_timeseries.tsv",
     "confounds*.tsv",
 ]
@@ -62,6 +66,10 @@ def _has_fd_column(tsv_path: Path) -> bool:
         return False
 
 
+def _has_subject_segment(path: Path) -> bool:
+    return any(part.lower().startswith("sub-") for part in path.parts)
+
+
 def build_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
     """Inspect project data for motion-QC readiness without realignment."""
 
@@ -82,16 +90,15 @@ def build_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
             },
         )
 
-    # Collect search roots
-    metadata = project.metadata if isinstance(project.metadata, dict) else {}
-    search_roots: list[str] = []
-    rawdata = str(metadata.get("rawdata_dir") or "")
-    if rawdata:
-        search_roots.append(rawdata)
-    try:
-        search_roots.extend(mock_store.list_import_paths(project_id))
-    except Exception:
-        pass
+    search_roots = [
+        str(root)
+        for root in collect_qc_evidence_roots(project_id, include_native_outputs=False)
+    ]
+    motion_roots = collect_qc_evidence_roots(
+        project_id,
+        include_rawdata=False,
+        include_native_outputs=True,
+    )
 
     # Discover image sources (NIfTI files)
     bold_paths: list[tuple[str, Path, str | None]] = []  # (subject_id, path, session_id)
@@ -136,14 +143,22 @@ def build_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
     if not bold_paths:
         return MotionQcReadinessResponse(
             ok=True, project_id=project_id, status="blocked", checked_at=now,
-            warnings=["No BOLD NIfTI files were found."],
-            next_actions=["Import a BIDS dataset with BOLD functional data."],
+            warnings=["No BOLD NIfTI files were found in registered project evidence roots."],
+            next_actions=["Run DICOM-to-NIfTI conversion or register a BIDS dataset with BOLD functional data."],
             safety_flags={
                 "read_only": True, "rawdata_not_modified": True,
                 "no_realign_executed": True, "no_external_tools_executed": True,
                 "planning_only": True,
             },
         )
+
+    project_motion_files: list[Path] = []
+    for root in motion_roots:
+        project_motion_files.extend(_find_motion_files(root))
+    project_motion_files = sorted(set(project_motion_files))
+    unscoped_project_motion = [
+        path for path in project_motion_files if not _has_subject_segment(path)
+    ]
 
     # Analyse each BOLD candidate
     missing_motion_count = 0
@@ -159,7 +174,20 @@ def build_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
         motion_files = _find_motion_files(bold_dir)
         # Also check parent (subject) directory
         parent_motion = _find_motion_files(bold_path.parent.parent)
-        all_motion = sorted(set(motion_files + parent_motion))
+        subject_motion = [
+            path
+            for path in project_motion_files
+            if subject_id and subject_id.lower() in str(path).lower()
+        ]
+        project_level_motion_used = not subject_motion and bool(unscoped_project_motion)
+        all_motion = sorted(
+            set(
+                motion_files
+                + parent_motion
+                + subject_motion
+                + (unscoped_project_motion if project_level_motion_used else [])
+            )
+        )
         has_motion = len(all_motion) > 0
 
         fd_source: str | None = None
@@ -180,6 +208,10 @@ def build_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
             cand_warnings.append("Missing BOLD sidecar JSON.")
         if not has_motion:
             cand_warnings.append("No motion parameter or confounds files found for this subject.")
+        elif project_level_motion_used:
+            cand_warnings.append(
+                "Project-level native motion evidence found; subject linkage is not explicit."
+            )
 
         candidates.append({
             "subject_id": subject_id,
@@ -211,7 +243,15 @@ def build_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
     if missing_motion_count > 0:
         next_actions.append(f"{missing_motion_count} BOLD file(s) lack motion parameters. Run realignment (SPM/FSL) to generate rp_*.txt files.")
     if fd_available_count > 0:
-        next_actions.append(f"FD column available for {fd_available_count} subject(s). Motion QC computation can proceed.")
+        fd_subject_count = len({
+            str(candidate.get("subject_id") or "")
+            for candidate in candidates
+            if candidate.get("has_fd_column") and candidate.get("subject_id")
+        })
+        next_actions.append(
+            f"FD column available for {fd_available_count} BOLD candidate(s) "
+            f"across {fd_subject_count} subject(s). Motion QC computation can proceed."
+        )
     if status == "ready":
         next_actions.append("Motion QC data is ready. Generate a preprocessing plan in the Plan Review Console.")
 

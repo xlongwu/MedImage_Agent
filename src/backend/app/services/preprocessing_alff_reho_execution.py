@@ -3,6 +3,7 @@ from __future__ import annotations
 import os, json, hashlib, shutil
 from pathlib import Path
 
+from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.schemas.preprocessing_alff_reho_execution import (
     AlffRehoSandboxExecutionRequest, AlffRehoSandboxExecutionResponse,
     validate_alff_reho_env, alff_reho_exec_safety_flags,
@@ -53,6 +54,10 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _write_json(path: Path, data: dict) -> None:
+    atomic_write_json(path, data, schema_version=1)
+
+
 def run_alff_reho_sandbox_execution(
     project_id: str, run_id: str, request: AlffRehoSandboxExecutionRequest,
     *, project_dir: str = "", env: dict[str, str] | None = None
@@ -92,13 +97,17 @@ def run_alff_reho_sandbox_execution(
 
     warnings: list[str] = []; copied = []; designs = []
     files_discovered = len(bold_files)
-    files_selected = min(files_discovered, 10)
-    dataset_complete = files_discovered <= 10
+    files_selected = (
+        min(files_discovered, request.preview_limit)
+        if request.preview_limit is not None
+        else files_discovered
+    )
+    dataset_complete = files_selected == files_discovered
     if not dataset_complete:
         warnings.append(
-            f"Found {files_discovered} BOLD files but only processing first 10 "
-            f"(preview mode). Set a higher limit or split the dataset.")
-    for bf in bold_files[:10]:
+            f"Found {files_discovered} BOLD files but only processing first "
+            f"{files_selected} because preview_limit={request.preview_limit}.")
+    for bf in bold_files[:files_selected]:
         subj = "sub-unknown"
         for part in bf.parts:
             if part.startswith("sub-"): subj = part; break
@@ -182,11 +191,13 @@ def run_alff_reho_sandbox_execution(
                     falff_out = out_path / f"{design['subject']}_desc-falff_map.nii.gz"
                     _nib.save(_nib.Nifti1Image(alff_map, img.affine, img.header), str(alff_out))
                     _nib.save(_nib.Nifti1Image(falff_map, img.affine, img.header), str(falff_out))
-                    (out_path / f"{design['subject']}_desc-alff_provenance.json").write_text(
-                        json.dumps({"tr": tr, "tr_source": tr_source,
-                                    "freq_band": list(freq_band),
-                                    "algorithm": "fft", "backend": alff_res.get("backend"),
-                                    "input_shape": [int(s) for s in data.shape]}, indent=2))
+                    _write_json(
+                        out_path / f"{design['subject']}_desc-alff_provenance.json",
+                        {"tr": tr, "tr_source": tr_source,
+                         "freq_band": list(freq_band),
+                         "algorithm": "fft", "backend": alff_res.get("backend"),
+                         "input_shape": [int(s) for s in data.shape]},
+                    )
                     design['alff_computed'] = True; design['alff_output'] = str(alff_out)
                     design['falff_computed'] = True; design['falff_output'] = str(falff_out)
                     any_alff = True; any_falff = True
@@ -205,11 +216,13 @@ def run_alff_reho_sandbox_execution(
                     reho_map = _np.asarray(reho_res["reho"]).astype(_np.float32)
                     reho_out = out_path / f"{design['subject']}_desc-reho_map.nii.gz"
                     _nib.save(_nib.Nifti1Image(reho_map, img.affine, img.header), str(reho_out))
-                    (out_path / f"{design['subject']}_desc-reho_provenance.json").write_text(
-                        json.dumps({"neighborhood": 27, "method": "kcc",
-                                    "backend": reho_res.get("backend"),
-                                    "valid_voxel_count": int(reho_res.get("valid_voxel_count", 0)),
-                                    "input_shape": [int(s) for s in data.shape]}, indent=2))
+                    _write_json(
+                        out_path / f"{design['subject']}_desc-reho_provenance.json",
+                        {"neighborhood": 27, "method": "kcc",
+                         "backend": reho_res.get("backend"),
+                         "valid_voxel_count": int(reho_res.get("valid_voxel_count", 0)),
+                         "input_shape": [int(s) for s in data.shape]},
+                    )
                     design['reho_computed'] = True; design['reho_output'] = str(reho_out)
                     any_reho = True; reho_succeeded += 1; metadata_only = False
                 else:
@@ -279,12 +292,12 @@ def run_alff_reho_sandbox_execution(
             f"of {files_discovered} discovered BOLD files were processed (preview mode).")
 
     mp_path = exec_dir / "metric_plan.json"
-    mp_path.write_text(json.dumps({"designs": designs, "metadata_only": metadata_only,
-                                   "alff_status": alff_status, "reho_status": reho_status,
-                                   "reho_validation_status": reho_validation_status,
-                                   "reho_backend": reho_backend,
-                                   "subjects_complete": subjects_complete,
-                                   "subjects_partial": subjects_partial}, indent=2))
+    _write_json(mp_path, {"designs": designs, "metadata_only": metadata_only,
+                          "alff_status": alff_status, "reho_status": reho_status,
+                          "reho_validation_status": reho_validation_status,
+                          "reho_backend": reho_backend,
+                          "subjects_complete": subjects_complete,
+                          "subjects_partial": subjects_partial})
 
     stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
     stdout_log.write_text(
@@ -293,7 +306,7 @@ def run_alff_reho_sandbox_execution(
         f"alff_succeeded={alff_succeeded}, reho_succeeded={reho_succeeded}\n")
     stderr_log.write_text("")
 
-    (exec_dir / "manifest.json").write_text(json.dumps({
+    _write_json(exec_dir / "manifest.json", {
         "status": result_status, "metadata_only": metadata_only,
         "subjects": {"total": total_subjects, "complete": subjects_complete,
                      "partial": subjects_partial,
@@ -306,19 +319,21 @@ def run_alff_reho_sandbox_execution(
                   "backend": reho_backend,
                   "external_reference_validated": False,
                   "gpu_validated": False,
-                  "note": "CPU Kendall's W implementation is golden validated and agrees with an independent in-repository NumPy reference. External reference validation remains pending. GPU backend remains unvalidated."}}))
-    (exec_dir / "provenance.json").write_text(json.dumps({
+                  "note": "CPU Kendall's W implementation is golden validated and agrees with an independent in-repository NumPy reference. External reference validation remains pending. GPU backend remains unvalidated."}})
+    _write_json(exec_dir / "provenance.json", {
         "sandbox_only": True, "metadata_only": metadata_only,
         "alff_status": alff_status, "reho_status": reho_status,
         "reho_validation_status": reho_validation_status, "reho_backend": reho_backend,
         "tr_source": agg_tr_source,
         "dataset_selection": {"files_discovered": files_discovered,
                               "files_selected": files_selected,
-                              "selection_policy": "first_10_preview" if not dataset_complete else "all",
+                              "selection_policy": "explicit_preview_limit" if not dataset_complete else "all",
+                              "preview_limit": request.preview_limit,
                               "dataset_complete": dataset_complete},
         "kernels": ["tools/alff_compute.py::compute_alff_backend",
-                    "tools/reho_compute.py::compute_reho_backend"]}))
-    (exec_dir / "subject_status.json").write_text(json.dumps(
+                    "tools/reho_compute.py::compute_reho_backend"]})
+    _write_json(
+        exec_dir / "subject_status.json",
         {"total": total_subjects, "complete": subjects_complete,
          "partial": subjects_partial,
          "failed": total_subjects - subjects_complete - subjects_partial,
@@ -331,7 +346,8 @@ def run_alff_reho_sandbox_execution(
                           "falff_computed": d.get("falff_computed", False),
                           "reho_computed": d.get("reho_computed", False),
                           "tr_source": d.get("tr_source", "unknown")}
-                         for d in designs]}))
+                         for d in designs]},
+    )
     (exec_dir / "README.md").write_text(
         f"# ALFF/ReHo Sandbox\nStatus: {result_status}. "
         f"Complete: {subjects_complete}/{total_subjects}, Partial: {subjects_partial}.\n"

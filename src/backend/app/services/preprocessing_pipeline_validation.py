@@ -21,12 +21,16 @@ from src.backend.app.services.mock_store import mock_store
 
 
 _RELOAD_REQUIRED_TYPES = {
+    "alff_map",
+    "atlas",
     "denoised_bold",
+    "falff_map",
     "filtered_bold",
     "fc_matrix",
     "fisher_z_matrix",
     "roi_timeseries",
     "fd_timeseries",
+    "reho_map",
 }
 
 
@@ -75,7 +79,7 @@ def validate_preprocessing_pipeline(
 
     warnings: list[str] = []; errors: list[str] = []; stage_summary: list[dict] = []
     completed: list[str] = []; dry_run_only: list[str] = []; sandbox_executed: list[str] = []
-    registered: list[str] = []; metadata_only: list[str] = []; blocked: list[str] = []
+    registered: list[str] = []; metadata_only: list[str] = []; preview_only: list[str] = []; blocked: list[str] = []
 
     if not run_dir or not run_dir.exists():
         return PipelineValidationResponse(ok=False, status="not_started", project_id=project_id,
@@ -246,6 +250,8 @@ def validate_preprocessing_pipeline(
             registered.extend(stage_info.get("artifact_ids") or [sid])
         if stage_info["metadata_only"]:
             metadata_only.append(sid)
+        if stage_info["preview_only"]:
+            preview_only.append(sid)
         if stage_info["status"] == "blocked":
             blocked.append(sid)
         if stage_info["status"] == "succeeded":
@@ -274,7 +280,27 @@ def validate_preprocessing_pipeline(
     if not has_reports:
         warnings.append("No pipeline reports generated. Run report export.")
 
-    status = "ready_for_review" if has_execs and not errors else ("warning" if warnings else "blocked" if errors else "not_started")
+    if metadata_only:
+        warnings.append(
+            "Metadata-only stages do not satisfy computed scientific completion: "
+            + ", ".join(sorted(set(metadata_only)))
+        )
+    if preview_only:
+        warnings.append(
+            "Preview-only stages do not satisfy full atlas-grounded E2E completion: "
+            + ", ".join(sorted(set(preview_only)))
+        )
+
+    if errors:
+        status = "blocked"
+    elif metadata_only or preview_only:
+        status = "warning"
+    elif has_execs and not warnings:
+        status = "ready_for_review"
+    elif warnings:
+        status = "warning"
+    else:
+        status = "not_started"
 
     return PipelineValidationResponse(
         ok=True, status=status, project_id=project_id, preprocessing_run_id=run_id,
@@ -282,6 +308,6 @@ def validate_preprocessing_pipeline(
         stage_summary=stage_summary, completed_stages=completed,
         dry_run_only_stages=dry_run_only, sandbox_executed_stages=sandbox_executed,
         registered_outputs=registered, metadata_only_stages=metadata_only,
-        blocked_stages=blocked, warnings=warnings, errors=errors,
+        preview_only_stages=preview_only, blocked_stages=blocked, warnings=warnings, errors=errors,
         next_actions=["Review validation results.", "Generate pipeline report."],
         safety_flags=validation_safety_flags())

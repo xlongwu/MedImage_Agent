@@ -4,6 +4,7 @@ from src.backend.app.runtime.node_registry_plugins.base import NodeRunner, merge
 from src.backend.app.runtime.node_registry_plugins.core_nodes import REGISTRY as CORE_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.dpabi_nodes import REGISTRY as DPABI_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.gpu_nodes import REGISTRY as GPU_REGISTRY
+from src.backend.app.runtime.node_registry_plugins.native_preproc_nodes import REGISTRY as NATIVE_PREPROC_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.spm_nodes import REGISTRY as SPM_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.qc_nodes import REGISTRY as QC_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.rsfmri_nodes import REGISTRY as RSFMRI_REGISTRY
@@ -15,6 +16,7 @@ def create_registry() -> dict[str, NodeRunner]:
         CORE_REGISTRY,
         DPABI_REGISTRY,
         GPU_REGISTRY,
+        NATIVE_PREPROC_REGISTRY,
         SPM_REGISTRY,
         QC_REGISTRY,
         RSFMRI_REGISTRY,

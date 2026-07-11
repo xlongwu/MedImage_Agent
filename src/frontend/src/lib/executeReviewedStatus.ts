@@ -151,6 +151,19 @@ const STATUS_MAP: Record<string, StatusEntry> = {
     canAttemptExecute: false,
   },
 
+  NATIVE_PREPROC_READINESS_BLOCKED: {
+    title: "Native preprocessing inputs are not ready",
+    severity: "warning",
+    explanation:
+      "The backend checked the native preprocessing inputs before execution and found required inputs missing. No pipeline was executed and rawdata was not modified.",
+    nextAction:
+      "Review the response errors, then supply the required template and atlas inputs or disable the dependent normalization, atlas, ROI time-series, and functional-connectivity stages before running the dry-run again.",
+    safetyNote:
+      "This preflight block prevents a long native preprocessing run that is known to be unable to complete.",
+    canRetryDryRun: true,
+    canAttemptExecute: false,
+  },
+
   // ── Error (hard block — requires fix before retry) ──────────────────────
   AUDIT_REQUIRED: {
     title: "Audit persistence is required for execution",

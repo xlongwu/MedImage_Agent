@@ -367,6 +367,88 @@ def _satisfies_gpu_synthetic_smoke_sandbox(node):
     return True
 
 
+_NATIVE_FULL_CONFIRMATIONS = frozenset(
+    {
+        "confirm_reviewed_native_execution",
+        "confirm_rawdata_readonly",
+        "confirm_no_external_tools",
+        "confirm_research_use_only",
+        "confirm_no_clinical_use",
+    }
+)
+
+
+def _safe_native_path(value: Any, *, required: bool = False, output: bool = False) -> bool:
+    if value in {None, ""}:
+        return not required
+    if not isinstance(value, str):
+        return False
+    normalized = value.replace("\\", "/").strip()
+    if not normalized:
+        return not required
+    if ".." in normalized or any(token in normalized for token in (";", "|", "&", "`")):
+        return False
+    lowered = normalized.lower()
+    if "third_party" in lowered or lowered.endswith(".m"):
+        return False
+    if output and "/rawdata/" in f"/{lowered}/":
+        return False
+    return True
+
+
+def _safe_native_identifier(value: Any, *, required: bool = False) -> bool:
+    if value in {None, ""}:
+        return not required
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip()
+    if not normalized:
+        return not required
+    return ".." not in normalized and all(token not in normalized for token in (";", "|", "&", "`", "/", "\\"))
+
+
+def _satisfies_native_full_execute_contract(node: dict[str, Any]) -> bool:
+    params = node.get("params", {}) or {}
+    if not isinstance(params, dict):
+        return False
+    confirmations = params.get("confirmations") or {}
+    if not isinstance(confirmations, dict):
+        confirmations = {}
+    for key in _NATIVE_FULL_CONFIRMATIONS:
+        if confirmations.get(key) is not True and params.get(key) is not True:
+            return False
+    if not _safe_native_path(params.get("input_bold")):
+        return False
+    if not _safe_native_identifier(params.get("conversion_run_id")):
+        return False
+    if not str(params.get("input_bold") or "").strip() and not str(params.get("conversion_run_id") or "").strip():
+        return False
+    if not _safe_native_path(params.get("sidecar_json")):
+        return False
+    if not _safe_native_path(params.get("t1w")):
+        return False
+    if not _safe_native_path(params.get("template")):
+        return False
+    if not _safe_native_path(params.get("atlas")):
+        return False
+    if not _safe_native_path(params.get("output_dir"), output=True):
+        return False
+    return True
+
+
+def _satisfies_native_full_dry_run_contract(node: dict[str, Any]) -> bool:
+    params = node.get("params", {}) or {}
+    if not isinstance(params, dict):
+        return False
+    return (
+        _safe_native_path(params.get("input_bold"))
+        and _safe_native_identifier(params.get("conversion_run_id"))
+        and (str(params.get("input_bold") or "").strip() or str(params.get("conversion_run_id") or "").strip())
+        and _safe_native_path(params.get("sidecar_json"))
+        and _safe_native_path(params.get("output_dir"), output=True)
+    )
+
+
 def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
     """Classify every node in a reviewed plan by execution policy.
 
@@ -396,8 +478,10 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
         "allowed_dpabi_subject_smooth_sandbox_nodes": [],  # M7-DPABI-T006d
         "allowed_dpabi_subject_wrapper_report_nodes": [],  # M7-DPABI-T007d
         "allowed_dpabi_validation_matrix_nodes": [],      # M7-DPABI-T008d
+        "allowed_native_preproc_nodes": [],
         "blocked_spm_nodes": [],
         "blocked_dpabi_execution_nodes": [],
+        "blocked_native_preproc_nodes": [],
         "blocked_gui_nodes": [],
         "blocked_manual_required_nodes": [],
         "blocked_unknown_nodes": [],
@@ -477,6 +561,23 @@ def classify_plan_nodes(plan: dict[str, Any]) -> dict[str, list[str]]:
             result["blocked_dpabi_execution_nodes"].append(nid)
             continue
 
+        # Native full preprocessing: cataloged, audited, and explicitly confirmed.
+        if nid == "native_preproc_full_dry_run":
+            if _satisfies_native_full_dry_run_contract(node):
+                result["allowed_native_preproc_nodes"].append(nid)
+            else:
+                result["blocked_native_preproc_nodes"].append(nid)
+            continue
+        if nid == "native_preproc_full_execute":
+            if _satisfies_native_full_execute_contract(node):
+                result["allowed_native_preproc_nodes"].append(nid)
+            else:
+                result["blocked_native_preproc_nodes"].append(nid)
+            continue
+        if nid.startswith("native_preproc_"):
+            result["blocked_native_preproc_nodes"].append(nid)
+            continue
+
         # GUI
         if nid.startswith("gui_") or cat.backend == "gui-agent":
             result["blocked_gui_nodes"].append(nid)
@@ -536,12 +637,15 @@ def adapt_reviewed_plan(
     # Check for blocked nodes
     blocked = (policy.get("blocked_spm_nodes", []) +
                policy.get("blocked_dpabi_execution_nodes", []) +
+               policy.get("blocked_native_preproc_nodes", []) +
                policy.get("blocked_gui_nodes", []) +
                policy.get("blocked_manual_required_nodes", []) +
                policy.get("blocked_unknown_nodes", []) +
                policy.get("blocked_uncataloged_nodes", []))
     if blocked:
-        warnings.append(f"Plan contains {len(blocked)} blocked node(s): {', '.join(blocked)}")
+        message = f"Plan contains {len(blocked)} blocked node(s): {', '.join(blocked)}"
+        warnings.append(message)
+        errors.append(message)
 
     # Convert
     try:

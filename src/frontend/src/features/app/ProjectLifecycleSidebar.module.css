@@ -35,7 +35,7 @@
 
 .button {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(54px, auto);
   gap: 9px;
   align-items: center;
   width: 100%;
@@ -127,10 +127,14 @@
 
 .stateText {
   justify-self: end;
+  max-width: 74px;
+  overflow: hidden;
   color: var(--color-text-tertiary);
   font-size: 10px;
   font-weight: 900;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .current .stateText,

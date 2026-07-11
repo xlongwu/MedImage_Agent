@@ -6,7 +6,7 @@ Only provider="mock" is allowed; all real/desktop/browser/manual providers
 are blocked.
 
 This is Layer 3 of the 14-layer guard pipeline defined in
-docs/GUI_AGENT_API_GUARD_DESIGN.md.
+docs/桌面与前端/界面智能体接口防护设计.md.
 """
 
 from __future__ import annotations

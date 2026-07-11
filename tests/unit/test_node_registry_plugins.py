@@ -2,9 +2,16 @@ from __future__ import annotations
 
 import pytest
 
+from src.backend.app.native_preproc.orchestrator.stage_graph import iter_native_full_stage_specs
 from src.backend.app.runtime import node_registry
 from src.backend.app.runtime.node_registry_plugins.base import merge_registries
 from src.backend.app.runtime.tool_catalog import build_tool_catalog
+
+
+EXPECTED_NATIVE_NODE_IDS = {
+    "native_preproc_full_dry_run",
+    "native_preproc_full_execute",
+} | {spec.node_id for spec in iter_native_full_stage_specs()}
 
 
 EXPECTED_NODE_IDS = {
@@ -74,12 +81,12 @@ EXPECTED_NODE_IDS = {
     "temporal_filtering_qc_dataset_report",
     "temporal_filtering_subject",
     "tissue_qc_dataset_report",
-}
+} | EXPECTED_NATIVE_NODE_IDS
 
 
 def test_plugin_registry_preserves_exact_node_ids():
     assert set(node_registry.NODE_REGISTRY) == EXPECTED_NODE_IDS
-    assert len(node_registry.NODE_REGISTRY) == 66
+    assert len(node_registry.NODE_REGISTRY) == 92
 
 
 def test_get_node_runner_returns_registered_runner_identity():

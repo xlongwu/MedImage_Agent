@@ -117,15 +117,24 @@ def test_plan_preview_returns_dparsfa_stages():
     assert plan.ok; assert plan.status == "preview_only"
     assert plan.stage_count == 15; assert plan.execution_disabled is True
     assert plan.preprocessing_input_registered is True
-    python_stages = [s for s in plan.stages if s.backend == "python"]
+    native_stages = [s for s in plan.stages if s.backend == "native_python"]
     external_stages = [s for s in plan.stages if s.requires_external_tool]
-    assert len(python_stages) == 9
-    assert len(external_stages) == 6
-    assert all(not s.enabled for s in external_stages)
-    for stage_id in ("nuisance_regression", "temporal_filtering", "alff_falff", "reho", "functional_connectivity"):
+    assert len(native_stages) == 11
+    assert len(external_stages) == 0
+    for stage_id in (
+        "slice_timing",
+        "realignment",
+        "nuisance_regression",
+        "temporal_filtering",
+        "alff_falff",
+        "reho",
+        "functional_connectivity",
+    ):
         stage = next(s for s in plan.stages if s.stage_id == stage_id)
-        assert stage.backend == "python"
+        assert stage.backend == "native_python"
         assert not stage.requires_external_tool
+    realignment = next(s for s in plan.stages if s.stage_id == "realignment")
+    assert "spm12" in realignment.supported_backends
     fc = next(s for s in plan.stages if s.stage_id == "functional_connectivity")
     assert fc.required_for_fc is True
     assert fc.optional is False
@@ -143,6 +152,7 @@ def test_plan_preview_is_preview_only():
     plan = build_default_dparsfa_style_plan()
     assert plan.safety_flags.get("preview_only") is True
     assert plan.safety_flags.get("no_preprocessing_executed") is True
+    assert plan.safety_flags.get("native_backend_default") is True
     assert plan.safety_flags.get("spm_dpabi_matlab_disabled") is True
 
 

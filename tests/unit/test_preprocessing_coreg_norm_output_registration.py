@@ -19,6 +19,19 @@ def _make_exec_dir(tmp_path, exec_id="cn-ex-abc", with_outputs=True):
         (sub / "wsub-001_task-rest_bold.nii").write_text("norm_func")
     return ed
 
+
+def _make_full_spatial_exec_dir(tmp_path, exec_id="cn-ex-full"):
+    ed = _make_exec_dir(tmp_path, exec_id=exec_id, with_outputs=False)
+    sub = ed / "sandbox_output" / "sub-001"
+    sub.mkdir(parents=True)
+    (sub / "coreg_sub-001_T1w.nii").write_text("coreg_t1w")
+    (sub / "c1coreg_sub-001_T1w.nii").write_text("gm")
+    (sub / "c2coreg_sub-001_T1w.nii").write_text("wm")
+    (sub / "c3coreg_sub-001_T1w.nii").write_text("csf")
+    (sub / "y_coreg_sub-001_T1w.nii").write_text("deformation")
+    (sub / "wsub-001_task-rest_bold.nii").write_text("norm_func")
+    return ed
+
 from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
 from src.backend.app.services.preprocessing_stage_outputs import register_coreg_norm_outputs
 
@@ -48,6 +61,27 @@ def test_writes_registry(tmp_path, monkeypatch):
     result = register_coreg_norm_outputs("brain-tumor-study", "pp-test",
         StageOutputRegistrationRequest(execution_id="cn-ex-abc", confirm_sandbox_outputs=True), project_dir=str(tmp_path))
     assert (Path(result.stage_output_dir) / "coreg_norm_stage_output_registry.json").exists()
+
+
+def test_registers_spatial_outputs_under_distinct_optional_stages(tmp_path, monkeypatch):
+    _setup(tmp_path, monkeypatch); _make_full_spatial_exec_dir(tmp_path)
+    result = register_coreg_norm_outputs("brain-tumor-study", "pp-test",
+        StageOutputRegistrationRequest(execution_id="cn-ex-full", confirm_sandbox_outputs=True), project_dir=str(tmp_path))
+    assert result.ok
+
+    from src.backend.app.services.preprocessing_artifact_registry import (
+        REGISTRY_FILENAME,
+        load_artifact_registry,
+    )
+
+    registry = load_artifact_registry(tmp_path / "preprocessing_runs" / "pp-test" / REGISTRY_FILENAME)
+    by_stage = {}
+    for item in registry["artifacts"]:
+        by_stage.setdefault(item["stage_id"], set()).add(item["artifact_type"])
+
+    assert "coregistered_t1w" in by_stage["t1_coregistration"]
+    assert "segmentation_maps" in by_stage["segmentation"]
+    assert "normalized_bold" in by_stage["normalization"]
 
 def test_endpoint_200(tmp_path):
     from fastapi.testclient import TestClient

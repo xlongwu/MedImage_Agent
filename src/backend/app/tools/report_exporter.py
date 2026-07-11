@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 import shutil, zipfile
 from datetime import datetime
 from pathlib import Path
@@ -8,6 +9,11 @@ from src.backend.app.tools.artifact_utils import read_json_artifact, sha256_file
 
 TEXT_EXTENSIONS = {".json",".md",".csv",".tsv",".txt",".log",".yaml",".yml"}
 EXCLUDED_EXTENSIONS = {".nii",".gz",".mat"}
+_SUBJECT_RE = re.compile(r"sub-[A-Za-z0-9]+")
+_NATIVE_SUMMARY_REL = Path("artifacts") / "group_summary" / "native_group_summary.json"
+_NATIVE_VALIDATION_REL = Path("artifacts") / "validation_report" / "native_preproc_validation_report.json"
+_NATIVE_FINAL_REL = Path("artifacts") / "final_report" / "native_preproc_final_report.json"
+_NATIVE_REPORT_ARTIFACT_TYPES = {"roi_timeseries", "fc_matrix", "motion_parameters", "fd_timeseries", "confounds"}
 
 def _now_id() -> str: return datetime.now().strftime("rsfmri_export_%Y%m%d_%H%M%S")
 def _iso_now() -> str: return datetime.now().isoformat(timespec="seconds")
@@ -33,6 +39,216 @@ def _discover_subjects(derivatives: Path) -> list[str]:
             if c.is_dir() and c.name.startswith("sub-"): subjects.add(c.name)
     return sorted(subjects)
 
+def _read_json_payload(path: Path) -> dict[str, Any]:
+    payload = read_json_artifact(path)
+    if isinstance(payload, dict) and "_schema_version" in payload and isinstance(payload.get("data"), dict):
+        return payload["data"]
+    return payload if isinstance(payload, dict) else {}
+
+def _subject_ids_from_native_payloads(*payloads: dict[str, Any]) -> list[str]:
+    subjects: set[str] = set()
+    for payload in payloads:
+        summaries = payload.get("subject_summaries")
+        if isinstance(summaries, list):
+            for item in summaries:
+                if isinstance(item, dict):
+                    sid = str(item.get("subject_id") or "").strip()
+                    if sid and sid.lower() != "unknown":
+                        subjects.add(sid)
+        for match in _SUBJECT_RE.findall(str(payload)):
+            subjects.add(match)
+    return sorted(subjects)
+
+def _candidate_project_roots(*paths: Path) -> list[Path]:
+    roots: list[Path] = []
+    for path in paths:
+        for base in (path, path.parent):
+            if base not in roots:
+                roots.append(base)
+    cwd = Path.cwd()
+    if cwd not in roots:
+        roots.append(cwd)
+    return roots
+
+def _native_run_score(run_dir: Path) -> float:
+    candidates = [run_dir / _NATIVE_FINAL_REL, run_dir / _NATIVE_VALIDATION_REL, run_dir / _NATIVE_SUMMARY_REL]
+    mtimes = [path.stat().st_mtime for path in candidates if path.exists()]
+    return max(mtimes) if mtimes else 0.0
+
+def _discover_latest_native_run(*roots: Path) -> Path | None:
+    seen: set[Path] = set()
+    runs: list[Path] = []
+    for root in roots:
+        root = root.expanduser()
+        for run_root in (root / "preprocessing_native_runs",):
+            if not run_root.exists():
+                continue
+            for run_dir in sorted(item for item in run_root.iterdir() if item.is_dir()):
+                resolved = run_dir.resolve()
+                if resolved not in seen and (run_dir / _NATIVE_SUMMARY_REL).is_file():
+                    seen.add(resolved)
+                    runs.append(run_dir)
+        projects_root = root / "outputs" / "projects"
+        if projects_root.exists():
+            for project_dir in sorted(item for item in projects_root.iterdir() if item.is_dir()):
+                run_root = project_dir / "preprocessing_native_runs"
+                if not run_root.exists():
+                    continue
+                for run_dir in sorted(item for item in run_root.iterdir() if item.is_dir()):
+                    resolved = run_dir.resolve()
+                    if resolved not in seen and (run_dir / _NATIVE_SUMMARY_REL).is_file():
+                        seen.add(resolved)
+                        runs.append(run_dir)
+    if not runs:
+        return None
+    return sorted(runs, key=_native_run_score)[-1]
+
+def _native_stage_status_counts(*payloads: dict[str, Any]) -> dict[str, dict[str, int]]:
+    counts: dict[str, dict[str, int]] = {}
+    for payload in payloads:
+        for item in payload.get("stage_results") or []:
+            if not isinstance(item, dict):
+                continue
+            stage = str(item.get("stage_id") or "unknown")
+            status = str(item.get("status") or "").lower()
+            if status in {"succeeded", "metadata_only"}:
+                bucket = "PASS"
+            elif status in {"warning", "simplified"}:
+                bucket = "WARNING"
+            elif status == "skipped":
+                bucket = "MISSING"
+            else:
+                bucket = "FAIL"
+            counts.setdefault(stage, {"PASS": 0, "WARNING": 0, "FAIL": 0, "MISSING": 0})[bucket] += 1
+    return counts
+
+def _native_warning_error_totals(*payloads: dict[str, Any]) -> tuple[int, int]:
+    warnings = 0
+    errors = 0
+    for payload in payloads:
+        for item in payload.get("stage_results") or []:
+            if not isinstance(item, dict):
+                continue
+            warnings += len(item.get("warnings") or [])
+            errors += len(item.get("errors") or []) + len(item.get("blocking_issues") or [])
+        validation = payload.get("validation_summary")
+        if isinstance(validation, dict):
+            summary = validation.get("summary")
+            if isinstance(summary, dict):
+                errors += int(summary.get("artifact_failed_count") or 0)
+                errors += int(summary.get("truthfulness_failed_count") or 0)
+                errors += int(summary.get("safety_failed_count") or 0)
+    return warnings, errors
+
+def _native_subject_stage_payloads(run_dir: Path, subjects: list[str]) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for subject_id in subjects:
+        candidates = [
+            run_dir / subject_id / "native_full_run_manifest.json",
+            run_dir / subject_id / _NATIVE_FINAL_REL,
+        ]
+        for candidate in candidates:
+            if not candidate.is_file():
+                continue
+            payload = _read_json_payload(candidate)
+            if isinstance(payload.get("stage_results"), list):
+                payloads.append(payload)
+                break
+    return payloads
+
+def _native_artifact_sources(validation_payload: dict[str, Any], subjects: list[str]) -> list[tuple[Path, Path, str]]:
+    sid = subjects[0] if subjects else "unassigned"
+    sources: list[tuple[Path, Path, str]] = []
+    artifacts = validation_payload.get("artifact_validation", {}).get("artifacts", [])
+    if not isinstance(artifacts, list):
+        return sources
+    for item in artifacts:
+        if not isinstance(item, dict):
+            continue
+        artifact_type = str(item.get("artifact_type") or "")
+        if artifact_type not in _NATIVE_REPORT_ARTIFACT_TYPES:
+            continue
+        src = Path(str(item.get("path") or ""))
+        if not src.is_file() or src.suffix.lower() in EXCLUDED_EXTENSIONS:
+            continue
+        if artifact_type in {"roi_timeseries", "fc_matrix"}:
+            dst = Path("fc") / sid / src.name
+            category = "functional_connectivity"
+        else:
+            dst = Path("subjects") / sid / "confounds" / src.name
+            category = "confounds"
+        sources.append((src, dst, category))
+    return sources
+
+def _write_native_group_summary_bridge(pkg: Path, run_dir: Path, subjects: list[str]) -> tuple[dict[str, Any], list[Path], list[tuple[Path, Path, str]], list[str], list[str]]:
+    native_group = _read_json_payload(run_dir / _NATIVE_SUMMARY_REL)
+    native_validation = _read_json_payload(run_dir / _NATIVE_VALIDATION_REL) if (run_dir / _NATIVE_VALIDATION_REL).exists() else {}
+    native_final = _read_json_payload(run_dir / _NATIVE_FINAL_REL) if (run_dir / _NATIVE_FINAL_REL).exists() else {}
+    resolved_subjects = subjects or _subject_ids_from_native_payloads(native_group, native_validation, native_final)
+    stage_payloads = _native_subject_stage_payloads(run_dir, resolved_subjects)
+    if not stage_payloads and isinstance(native_final.get("stage_results"), list):
+        stage_payloads = [native_final]
+    warnings_total, errors_total = _native_warning_error_totals(*stage_payloads)
+    summary = {
+        "ok": errors_total == 0,
+        "summary_type": "native_preproc_group_summary_bridge",
+        "capability_level": "computed",
+        "native_run_dir": str(run_dir),
+        "subjects_total": int(native_group.get("subject_count") or len(resolved_subjects)),
+        "subjects_with_any_qc": int(native_group.get("completed_subject_count") or len(resolved_subjects)),
+        "warnings_total": warnings_total,
+        "errors_total": errors_total,
+        "stage_status_counts": _native_stage_status_counts(*stage_payloads),
+        "warnings": list(native_group.get("limitations") or []),
+        "errors": [],
+    }
+    gd = pkg / "summary" / "group_summary"; gd.mkdir(parents=True, exist_ok=True)
+    td = pkg / "tables"; td.mkdir(parents=True, exist_ok=True)
+    dashboard = {
+        "ok": summary["ok"],
+        "summary_type": summary["summary_type"],
+        "capability_level": "computed",
+        "subjects": [{"subject_id": sid, "summary_status": "native_preproc_computed"} for sid in resolved_subjects],
+        "warnings": summary["warnings"],
+        "errors": [],
+    }
+    table_text = "subject_id,summary_status\n" + "".join(f"{sid},native_preproc_computed\n" for sid in resolved_subjects)
+    report_text = "\n".join([
+        "# rs-fMRI Group Summary",
+        "",
+        "Native preprocessing outputs were used as the upstream group-summary evidence for this report package.",
+        "",
+        "## Subjects",
+        "",
+        f"- Subjects: {len(resolved_subjects)}",
+        "",
+        "## Native Validation",
+        "",
+        f"- Overall status: {native_validation.get('overall_status', 'unknown')}",
+        f"- Artifact failed count: {native_validation.get('summary', {}).get('artifact_failed_count', 'unknown')}",
+        f"- Safety failed count: {native_validation.get('summary', {}).get('safety_failed_count', 'unknown')}",
+        "",
+    ])
+    dataset_path = write_json_artifact(gd / "dataset_summary.json", summary)
+    dashboard_path = write_json_artifact(gd / "dashboard_data.json", dashboard)
+    report_path = gd / "dataset_summary_report.md"; report_path.write_text(report_text, encoding="utf-8")
+    summary_table = gd / "subject_metrics_table.csv"; summary_table.write_text(table_text, encoding="utf-8")
+    table_path = td / "subject_metrics_table.csv"; table_path.write_text(table_text, encoding="utf-8")
+    sources = [(run_dir / _NATIVE_SUMMARY_REL, Path("summary") / "group_summary" / "native_group_summary.json", "native_group_summary")]
+    if (run_dir / _NATIVE_VALIDATION_REL).is_file():
+        sources.append((run_dir / _NATIVE_VALIDATION_REL, Path("summary") / "group_summary" / "native_preproc_validation_report.json", "native_validation_report"))
+    if (run_dir / _NATIVE_FINAL_REL).is_file():
+        sources.append((run_dir / _NATIVE_FINAL_REL, Path("summary") / "group_summary" / "native_preproc_final_report.json", "native_final_report"))
+    sources.extend(_native_artifact_sources(native_validation, resolved_subjects))
+    for subject_id in resolved_subjects:
+        subject_validation_path = run_dir / subject_id / _NATIVE_VALIDATION_REL
+        if not subject_validation_path.is_file():
+            continue
+        subject_validation = _read_json_payload(subject_validation_path)
+        sources.extend(_native_artifact_sources(subject_validation, [subject_id]))
+    bridge_warnings = [f"Using native preprocessing run as report evidence: {run_dir.name}"]
+    return summary, [dataset_path, dashboard_path, report_path, summary_table, table_path], sources, bridge_warnings, resolved_subjects
+
 def _stage_summary(gs: dict[str, Any] | None) -> str:
     if not gs: return "No group summary."
     counts = gs.get("stage_status_counts", {})
@@ -44,7 +260,7 @@ def _stage_summary(gs: dict[str, Any] | None) -> str:
     return "\n".join(lines)
 
 def _write_readme(path: Path, export_id: str, summary: dict[str, Any]) -> None:
-    lines = [f"# rs-fMRI Report Package: {export_id}", "", "Engineering validation outputs for synthetic rs-fMRI pipeline.", "", "## Contents", "", "- `MANIFEST.json`: file manifest with checksums", "- `index.md`: human-readable index", "- `export_summary.json`: exporter summary", "- `summary/`: group and stage-level reports", "- `subjects/`: subject-level QC and confounds", "- `metrics/`: subject metrics result JSON", "- `fc/`: functional connectivity results", "- `contracts/`: DPABI and GPU backend contracts", "- `pipeline_runs/`: pipeline run summaries", "- `tables/`: CSV/TSV tables", "- `checksums/SHA256SUMS.txt`: checksums", "", "## Safety", "", "Generated from synthetic derivative outputs only. Does not include rawdata and does not make clinical conclusions.", "", "## Export Summary", "", f"- Exported subjects: {summary.get('exported_subjects')}", f"- Exported files: {summary.get('exported_files_total')}", f"- Excluded files: {summary.get('excluded_files_total')}", f"- Warnings: {len(summary.get('warnings',[]))}", f"- Errors: {len(summary.get('errors',[]))}"]
+    lines = [f"# rs-fMRI Report Package: {export_id}", "", "Engineering validation outputs for an rs-fMRI research pipeline.", "", "## Contents", "", "- `MANIFEST.json`: file manifest with checksums", "- `index.md`: human-readable index", "- `export_summary.json`: exporter summary", "- `summary/`: group and stage-level reports", "- `subjects/`: subject-level QC and confounds", "- `metrics/`: subject metrics result JSON", "- `fc/`: functional connectivity results", "- `contracts/`: DPABI and GPU backend contracts", "- `pipeline_runs/`: pipeline run summaries", "- `tables/`: CSV/TSV tables", "- `checksums/SHA256SUMS.txt`: checksums", "", "## Safety", "", "Generated from reviewed derivative outputs. The package excludes rawdata and does not make clinical conclusions.", "", "## Export Summary", "", f"- Exported subjects: {summary.get('exported_subjects')}", f"- Exported files: {summary.get('exported_files_total')}", f"- Excluded files: {summary.get('excluded_files_total')}", f"- Warnings: {len(summary.get('warnings',[]))}", f"- Errors: {len(summary.get('errors',[]))}"]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 def _write_index(path: Path, export_id: str, gs: dict[str, Any] | None, es: dict[str, Any]) -> None:
@@ -58,11 +274,76 @@ def _zip_directory(source_dir: Path, zip_path: Path) -> None:
     if zip_path.exists(): zip_path.unlink()
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for p in sorted(source_dir.rglob("*")):
-            if p.is_file(): zf.write(p, arcname=str(p.relative_to(source_dir)))
+            if p.is_file(): zf.write(p, arcname=p.relative_to(source_dir).as_posix())
+
+def _package_relative_path(pkg: Path, path: Path) -> str:
+    return path.relative_to(pkg).as_posix()
 
 def _register(copied: list[dict[str, Any]], pkg: Path, src: Path, dest: Path, category: str) -> None:
-    info = _copy_file(src, dest); info["relative_path"] = str(dest.relative_to(pkg)); info["category"] = category
+    info = _copy_file(src, dest); info["relative_path"] = _package_relative_path(pkg, dest); info["category"] = category
     copied.append(info)
+
+def _register_generated(copied: list[dict[str, Any]], pkg: Path, dest: Path, category: str) -> None:
+    copied.append({"relative_path": _package_relative_path(pkg, dest), "source_path": None, "size_bytes": int(dest.stat().st_size), "sha256": sha256_file(dest), "category": category})
+
+def _write_missing_group_summary(pkg: Path, subjects: list[str]) -> tuple[dict[str, Any], list[Path], str]:
+    warning = "No upstream group summary artifact was found; exported a metadata-only fallback summary."
+    gd = pkg / "summary" / "group_summary"; gd.mkdir(parents=True, exist_ok=True)
+    td = pkg / "tables"; td.mkdir(parents=True, exist_ok=True)
+    summary = {
+        "ok": False,
+        "summary_type": "metadata_only_missing_group_summary",
+        "capability_level": "metadata_only",
+        "subjects_total": len(subjects),
+        "subjects_with_any_qc": 0,
+        "warnings_total": 1,
+        "errors_total": 0,
+        "stage_status_counts": {},
+        "warnings": [warning],
+        "errors": [],
+        "notes": [
+            "This file is a package fallback because the reviewed group summary artifact was absent.",
+            "It preserves export provenance but does not replace group-level QC computation.",
+        ],
+    }
+    dashboard = {
+        "ok": False,
+        "summary_type": summary["summary_type"],
+        "capability_level": "metadata_only",
+        "subjects": [{"subject_id": sid, "summary_status": "missing_group_summary"} for sid in subjects],
+        "warnings": [warning],
+        "errors": [],
+    }
+    table_text = "subject_id,summary_status\n" + "".join(f"{sid},missing_group_summary\n" for sid in subjects)
+    report_text = "\n".join([
+        "# rs-fMRI Group Summary",
+        "",
+        "A reviewed group summary artifact was not available when this report package was exported.",
+        "",
+        "This metadata-only fallback records the missing evidence so package export can complete without inventing group statistics.",
+        "",
+        "## Subjects",
+        "",
+        f"- Discovered subjects: {len(subjects)}",
+        "",
+        "## Warning",
+        "",
+        f"- {warning}",
+        "",
+    ])
+    dataset_path = write_json_artifact(gd / "dataset_summary.json", summary)
+    dashboard_path = write_json_artifact(gd / "dashboard_data.json", dashboard)
+    report_path = gd / "dataset_summary_report.md"; report_path.write_text(report_text, encoding="utf-8")
+    summary_table = gd / "subject_metrics_table.csv"; summary_table.write_text(table_text, encoding="utf-8")
+    table_path = td / "subject_metrics_table.csv"; table_path.write_text(table_text, encoding="utf-8")
+    return summary, [dataset_path, dashboard_path, report_path, summary_table, table_path], warning
+
+def _write_checksums(pkg: Path, copied: list[dict[str, Any]], manifest_path: Path, checksums_path: Path) -> None:
+    checksums_path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [f"{item['sha256']}  {item['relative_path']}" for item in copied]
+    if manifest_path.exists():
+        lines.append(f"{sha256_file(manifest_path)}  {manifest_path.name}")
+    checksums_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
 
 def export_rsfmri_report_package(derivatives_dir: str = "./derivatives", reports_dir: str = "./reports", work_dir: str = "./work", exports_dir: str = "./exports", export_id: str | None = None, include_subject_qc: bool = True, include_metrics: bool = True, include_fc: bool = True, include_contracts: bool = True, include_pipeline_runs: bool = True) -> dict[str, Any]:
     d = Path(derivatives_dir); rpt = Path(reports_dir); w = Path(work_dir); e = Path(exports_dir)
@@ -70,10 +351,25 @@ def export_rsfmri_report_package(derivatives_dir: str = "./derivatives", reports
     pkg.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []; errors: list[str] = []; copied: list[dict[str, Any]] = []; excluded: list[dict[str, Any]] = []
     subs = _discover_subjects(d)
+    native_run = _discover_latest_native_run(*_candidate_project_roots(d, rpt, w, e))
 
     # Group summary
     gb = rpt / "rsfmri" / "group_summary"; gfs = _safe_collect_files(gb, ["*.json","*.md","*.csv"])
-    if not gfs: warnings.append("No group summary found. Run Step 47 first.")
+    fallback_group_summary: dict[str, Any] | None = None
+    if not gfs and native_run is not None:
+        fallback_group_summary, generated, source_specs, bridge_warnings, native_subjects = _write_native_group_summary_bridge(pkg, native_run, subs)
+        subs = native_subjects or subs
+        warnings.extend(bridge_warnings)
+        for path in generated:
+            _register_generated(copied, pkg, path, "group_summary" if "summary" in path.parts else "table")
+        for src, rel, category in source_specs:
+            if src.is_file():
+                _register(copied, pkg, src, pkg / rel, category)
+    elif not gfs:
+        fallback_group_summary, generated, warning = _write_missing_group_summary(pkg, subs)
+        warnings.append(warning)
+        for path in generated:
+            _register_generated(copied, pkg, path, "group_summary_metadata_only" if "summary" in path.parts else "table_metadata_only")
     for s in gfs:
         dst = pkg / "summary" / "group_summary" / s.name; _register(copied, pkg, s, dst, "group_summary")
         if s.name == "subject_metrics_table.csv": _register(copied, pkg, s, pkg / "tables" / "subject_metrics_table.csv", "table")
@@ -118,53 +414,88 @@ def export_rsfmri_report_package(derivatives_dir: str = "./derivatives", reports
         if not rps: warnings.append("No pipeline run summaries found.")
         for s in rps[-50:]: _register(copied, pkg, s, pkg / "pipeline_runs" / f"{s.parent.name}_summary.json", "pipeline_run")
 
-    # Checksums
-    csd = pkg / "checksums"; csd.mkdir(parents=True, exist_ok=True); csp = csd / "SHA256SUMS.txt"
-    cl = [f"{item['sha256']}  {item['relative_path']}" for item in copied]
-    csp.write_text("\n".join(cl) + ("\n" if cl else ""), encoding="utf-8")
-    copied.append({"relative_path": str(csp.relative_to(pkg)), "source_path": None, "size_bytes": int(csp.stat().st_size), "sha256": sha256_file(csp), "category": "checksum"})
-
-    gs = read_json_artifact(pkg / "summary" / "group_summary" / "dataset_summary.json")
-    es = {"ok": len(copied) > 1, "node_id": "rsfmri_report_exporter", "backend": "python", "export_id": eid, "package_dir": str(pkg), "zip_path": str(zp), "created_at": _iso_now(), "exported_subjects": subs, "exported_subjects_total": len(subs), "exported_files_total": len(copied), "excluded_files_total": len(excluded), "warnings": warnings, "errors": errors}
-    if len(copied) <= 1: es["ok"] = False; warnings.append("No source files exported.")
-
     rp = pkg / "README.md"; ip = pkg / "index.md"; ep = pkg / "export_summary.json"; mp = pkg / "MANIFEST.json"
+    csp = pkg / "checksums" / "SHA256SUMS.txt"
+    gs_path = pkg / "summary" / "group_summary" / "dataset_summary.json"
+    gs = read_json_artifact(gs_path) if gs_path.exists() else fallback_group_summary
+    source_files_total = sum(1 for item in copied if item.get("source_path"))
+    if source_files_total == 0:
+        warnings.append("No source files exported.")
+    es = {"ok": source_files_total > 0, "node_id": "rsfmri_report_exporter", "backend": "python", "export_id": eid, "package_dir": str(pkg), "zip_path": str(zp), "created_at": _iso_now(), "exported_subjects": subs, "exported_subjects_total": len(subs), "source_files_total": source_files_total, "exported_files_total": len(copied) + 3, "excluded_files_total": len(excluded), "warnings": warnings, "errors": errors, "zip_size_bytes": None, "outputs": [str(pkg), str(zp), str(mp), str(rp), str(ip), str(ep), str(csp)]}
     _write_readme(rp, eid, es); _write_index(ip, eid, gs, es)
-    for gp, cat in [(rp, "package_readme"), (ip, "package_index")]: copied.append({"relative_path": str(gp.relative_to(pkg)), "source_path": None, "size_bytes": int(gp.stat().st_size), "sha256": sha256_file(gp), "category": cat})
-    es["exported_files_total"] = len(copied) + 2
+    for gp, cat in [(rp, "package_readme"), (ip, "package_index")]: _register_generated(copied, pkg, gp, cat)
+    es["exported_files_total"] = len(copied) + 1
     write_json_artifact(ep, es)
-    copied.append({"relative_path": str(ep.relative_to(pkg)), "source_path": None, "size_bytes": int(ep.stat().st_size), "sha256": sha256_file(ep), "category": "export_summary"})
+    _register_generated(copied, pkg, ep, "export_summary")
 
-    manifest = {"package_id": eid, "export_id": eid, "created_at": es["created_at"], "source_roots": {"derivatives": str(d), "reports": str(rpt), "work": str(w)}, "safety": {"rawdata_included": False, "rawdata_modified": False, "derivatives_modified": False, "reports_modified": False, "work_modified": False, "spm_executed": False, "matlab_executed": False, "dpabi_executed": False, "gpu_executed": False, "files_deleted": False, "clinical_conclusions_generated": False, "statistical_inference_performed": False}, "files": copied, "excluded_files": excluded, "warnings": warnings, "errors": errors}
+    source_roots = {"derivatives": str(d), "reports": str(rpt), "work": str(w)}
+    if native_run is not None:
+        source_roots["native_preproc_run"] = str(native_run)
+    manifest = {"package_id": eid, "export_id": eid, "created_at": es["created_at"], "source_roots": source_roots, "safety": {"rawdata_included": False, "rawdata_modified": False, "derivatives_modified": False, "reports_modified": False, "work_modified": False, "spm_executed": False, "matlab_executed": False, "dpabi_executed": False, "gpu_executed": False, "files_deleted": False, "clinical_conclusions_generated": False, "statistical_inference_performed": False}, "files": copied, "excluded_files": excluded, "warnings": warnings, "errors": errors}
     write_json_artifact(mp, manifest)
-    copied.append({"relative_path": str(mp.relative_to(pkg)), "source_path": None, "size_bytes": int(mp.stat().st_size), "sha256": sha256_file(mp), "category": "manifest"})
-    manifest["files"] = copied; write_json_artifact(mp, manifest)
-    cl2 = [f"{item['sha256']}  {item['relative_path']}" for item in copied if item["relative_path"] != "checksums/SHA256SUMS.txt"]
-    csp.write_text("\n".join(cl2) + ("\n" if cl2 else ""), encoding="utf-8")
+    _write_checksums(pkg, copied, mp, csp)
     _zip_directory(pkg, zp)
 
     es["zip_size_bytes"] = int(zp.stat().st_size) if zp.exists() else None
-    es["outputs"] = [str(pkg), str(zp), str(mp), str(rp), str(ip), str(ep), str(csp)]
-    write_json_artifact(ep, es)
     return es
 
+def _read_json_if_present(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        return read_json_artifact(path)
+    except Exception as exc:
+        return {"_read_error": str(exc)}
+
+def _summarize_export_dir(pkg: Path) -> dict[str, Any]:
+    s = _read_json_if_present(pkg / "export_summary.json") or {}
+    zip_path = pkg.parent / f"{pkg.name}.zip"
+    zip_size = int(zip_path.stat().st_size) if zip_path.exists() else None
+    missing = []
+    if not (pkg / "export_summary.json").exists():
+        missing.append("export_summary.json")
+    if not (pkg / "MANIFEST.json").exists():
+        missing.append("MANIFEST.json")
+    if not zip_path.exists():
+        missing.append(f"{pkg.name}.zip")
+    entry = {"export_id": pkg.name, "package_dir": str(pkg), "zip_path": str(zip_path), "zip_size_bytes": s.get("zip_size_bytes") or zip_size, "created_at": s.get("created_at"), "ok": s.get("ok", False) and not missing, "exported_files_total": s.get("exported_files_total"), "exported_subjects_total": s.get("exported_subjects_total")}
+    if missing:
+        entry["missing_evidence"] = missing
+    if s.get("_read_error"):
+        entry["read_error"] = s["_read_error"]
+        entry["ok"] = False
+    return entry
+
+def _is_readable_export(pkg: Path) -> bool:
+    s = _read_json_if_present(pkg / "export_summary.json")
+    return bool(s) and not s.get("_read_error") and (pkg / "MANIFEST.json").exists() and (pkg.parent / f"{pkg.name}.zip").exists()
+
 def _read_export(pkg: Path) -> dict[str, Any]:
-    s = read_json_artifact(pkg / "export_summary.json") or {}; m = read_json_artifact(pkg / "MANIFEST.json")
+    s = _read_json_if_present(pkg / "export_summary.json") or {}; m = _read_json_if_present(pkg / "MANIFEST.json")
     ip = pkg / "index.md"; rp = pkg / "README.md"
-    return {"ok": bool(s), "export_id": pkg.name, "package_dir": str(pkg), "zip_path": str(pkg.parent / f"{pkg.name}.zip"), "export_summary": s, "manifest": m, "index_md": ip.read_text(encoding="utf-8") if ip.exists() else None, "readme_md": rp.read_text(encoding="utf-8") if rp.exists() else None}
+    zip_path = pkg.parent / f"{pkg.name}.zip"
+    zip_size = int(zip_path.stat().st_size) if zip_path.exists() else None
+    if s and not s.get("_read_error"):
+        s = {**s, "zip_size_bytes": s.get("zip_size_bytes") or zip_size}
+    missing = [name for name in ("export_summary.json", "MANIFEST.json") if not (pkg / name).exists()]
+    if not zip_path.exists():
+        missing.append(f"{pkg.name}.zip")
+    result = {"ok": bool(s) and not s.get("_read_error") and not missing, "export_id": pkg.name, "package_dir": str(pkg), "zip_path": str(zip_path), "zip_size_bytes": zip_size, "export_summary": s, "manifest": m, "index_md": ip.read_text(encoding="utf-8") if ip.exists() else None, "readme_md": rp.read_text(encoding="utf-8") if rp.exists() else None}
+    if missing:
+        result["missing_evidence"] = missing
+    return result
 
 def list_rsfmri_report_exports(exports_dir: str = "./exports") -> dict[str, Any]:
     proot = Path(exports_dir) / "rsfmri_report_package"; packages = []
     if proot.exists():
         for c in sorted(proot.iterdir()):
             if c.is_dir():
-                s = read_json_artifact(c / "export_summary.json") or {}
-                packages.append({"export_id": c.name, "package_dir": str(c), "zip_path": str(proot / f"{c.name}.zip"), "created_at": s.get("created_at"), "ok": s.get("ok"), "exported_files_total": s.get("exported_files_total"), "exported_subjects_total": s.get("exported_subjects_total")})
+                packages.append(_summarize_export_dir(c))
     return {"ok": True, "exports_total": len(packages), "exports": packages}
 
 def get_latest_rsfmri_report_export(exports_dir: str = "./exports") -> dict[str, Any]:
     proot = Path(exports_dir) / "rsfmri_report_package"
     if not proot.exists(): return {"ok": False, "errors": ["No exports found."], "warnings": []}
-    pkgs = sorted([c for c in proot.iterdir() if c.is_dir()])
-    if not pkgs: return {"ok": False, "errors": ["No exports found."], "warnings": []}
+    pkgs = sorted([c for c in proot.iterdir() if c.is_dir() and _is_readable_export(c)])
+    if not pkgs: return {"ok": False, "errors": ["No complete report exports found."], "warnings": []}
     return _read_export(pkgs[-1])

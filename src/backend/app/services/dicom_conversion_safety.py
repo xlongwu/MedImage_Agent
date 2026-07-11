@@ -5,7 +5,7 @@ dry-run rollback plans.  External tools are never called.  Rawdata is
 never modified.  No files are deleted in dry-run mode.
 
 Reference:
-  docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md
+  docs/预处理与科学计算/DICOM转换/DICOM到NIfTI执行包装契约.md
   src/backend/app/schemas/dicom_conversion_safety.py
 """
 

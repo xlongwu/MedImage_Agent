@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json; from pathlib import Path
 import nibabel as nib; import numpy as np
+from src.backend.app.tools import functional_connectivity as fc_module
 from src.backend.app.tools.functional_connectivity import run_python_functional_connectivity_subject
 
 def test_python_fc_outputs_matrices(tmp_path: Path):
@@ -71,6 +72,68 @@ def test_python_fc_with_real_atlas_outputs_reloadable_grounded_artifacts(tmp_pat
     assert provenance["atlas_grounded"] is True
     assert provenance["atlas_checksum"]
     assert fcd.exists()
+
+
+def test_python_fc_materializes_known_template_atlas_before_execution(tmp_path: Path, monkeypatch):
+    d = tmp_path / "derivatives"; sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    ip = fd / "filt_resid_rsub-001_bold.nii"
+    nt = 10
+    t = np.linspace(0, 2*np.pi, nt, dtype=np.float32)
+    data = np.zeros((4,4,3,nt), dtype=np.float32)
+    data[:2,:,:,:] = np.sin(t)
+    data[2:,:,:,:] = np.cos(t)
+    nib.save(nib.Nifti1Image(data, affine=np.eye(4)), str(ip))
+
+    template_root = tmp_path / "repo_templates"
+    template_root.mkdir()
+    atlas = np.zeros((4,4,3), dtype=np.int16)
+    atlas[:2,:,:] = 1
+    atlas[2:,:,:] = 2
+    template_atlas = template_root / "aal.nii"
+    nib.save(nib.Nifti1Image(atlas, affine=np.eye(4)), str(template_atlas))
+    monkeypatch.setattr(fc_module, "_known_template_atlas_roots", lambda: [template_root])
+
+    result = run_python_functional_connectivity_subject(
+        subject_id=sid,
+        derivatives_dir=str(d),
+        atlas_path=str(template_atlas),
+    )
+
+    assert result["ok"] is True, result["errors"]
+    assert result["stage_status"] == "succeeded"
+    assert result["fc_status"] == "atlas_grounded_computed"
+    assert result["atlas_grounded"] is True
+    assert result["preview_only"] is False
+    atlas_file = Path(result["atlas_file"])
+    assert atlas_file.exists()
+    assert str(atlas_file).startswith(str(d))
+    assert "registered_templates" in str(atlas_file)
+    assert atlas_file != template_atlas
+    provenance = json.loads(Path(result["provenance_json"]).read_text(encoding="utf-8"))
+    assert provenance["atlas_source"] == "registered_template_atlas"
+    assert provenance["atlas_template_source"]["source_checksum"]
+    assert Path(provenance["atlas_template_source"]["provenance_path"]).exists()
+
+
+def test_python_fc_rejects_unregistered_external_atlas(tmp_path: Path):
+    d = tmp_path / "derivatives"; sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    ip = fd / "filt_resid_rsub-001_bold.nii"
+    nib.save(nib.Nifti1Image(np.zeros((4,4,3,8), dtype=np.float32), np.eye(4)), str(ip))
+    atlas_path = tmp_path / "outside" / "atlas.nii"
+    atlas_path.parent.mkdir()
+    nib.save(nib.Nifti1Image(np.ones((4,4,3), dtype=np.int16), np.eye(4)), str(atlas_path))
+
+    result = run_python_functional_connectivity_subject(
+        subject_id=sid,
+        derivatives_dir=str(d),
+        atlas_path=str(atlas_path),
+    )
+
+    assert result["ok"] is False
+    assert result["stage_status"] == "failed"
+    assert "unsafe atlas" in " ".join(result["errors"]).lower()
 
 
 def test_python_fc_rejects_atlas_shape_mismatch(tmp_path: Path):

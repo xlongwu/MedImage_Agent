@@ -66,16 +66,35 @@ class PreprocessingPlanPreviewResponse(BaseModel):
 
 _DPARSFA_STAGES: list[dict[str, Any]] = build_legacy_dparsfa_stages()
 
+_NATIVE_PREVIEW_STAGE_IDS = {
+    "slice_timing",
+    "realignment",
+    "t1_coregistration",
+    "segmentation",
+    "normalization",
+    "spatial_smoothing",
+    "nuisance_regression",
+    "temporal_filtering",
+    "alff_falff",
+    "reho",
+    "functional_connectivity",
+}
+
 
 def build_default_dparsfa_style_plan(project_id: str = "", input_registered: bool = False) -> PreprocessingPlanPreviewResponse:
     stages: list[PreprocessingStagePreview] = []
     for spec in iter_preprocessing_stage_specs():
+        native_preview = spec.stage_id in _NATIVE_PREVIEW_STAGE_IDS
+        supported_backends = list(spec.supported_backends)
+        if native_preview and "native_python" not in supported_backends:
+            supported_backends = ["native_python", *supported_backends]
+        backend = "native_python" if native_preview else spec.default_backend
         stages.append(PreprocessingStagePreview(
             stage_id=spec.stage_id,
             name=spec.display_name,
-            backend=spec.default_backend,
+            backend=backend,
             subject_level=spec.subject_level,
-            requires_external_tool=spec.requires_external_tool,
+            requires_external_tool=False if native_preview else spec.requires_external_tool,
             enabled=spec.default_enabled,
             optional=spec.optional,
             description=spec.description,
@@ -84,14 +103,17 @@ def build_default_dparsfa_style_plan(project_id: str = "", input_registered: boo
             required_for_fc=spec.required_for_fc,
             input_artifact_types=list(spec.input_artifact_types),
             output_artifact_types=list(spec.output_artifact_types),
-            supported_backends=list(spec.supported_backends),
-            default_backend=spec.default_backend,
-            requires_approval=spec.requires_approval,
-            requires_env_flags=list(spec.requires_env_flags),
-            can_run_in_ci=spec.can_run_in_ci,
-            scientific_status=spec.scientific_status,
-            validation_status=spec.validation_status,
+            supported_backends=supported_backends,
+            default_backend=backend,
+            requires_approval=False if native_preview else spec.requires_approval,
+            requires_env_flags=[] if native_preview else list(spec.requires_env_flags),
+            can_run_in_ci=True if native_preview else spec.can_run_in_ci,
+            scientific_status="computed" if native_preview else spec.scientific_status,
+            validation_status=(
+                "native_synthetic_tested_reference_pending"
+                if native_preview else spec.validation_status
+            ),
         ))
     enabled_count = sum(1 for s in stages if s.enabled)
     w = [] if input_registered else ["Preprocessing input has not been registered."]
-    return PreprocessingPlanPreviewResponse(ok=True, status="preview_only", project_id=project_id, stages=stages, stage_count=len(stages), enabled_stage_count=enabled_count, execution_disabled=True, preprocessing_input_registered=input_registered, warnings=w, next_actions=["Register converted BIDS as preprocessing input.", "Review blocked SPM/MATLAB stages before any external-tool execution.", "Keep preview_only and metadata_only stages distinct from succeeded outputs."], safety_flags={"preview_only": True, "no_preprocessing_executed": True, "no_external_tools_executed": True, "spm_dpabi_matlab_disabled": True, "rawdata_read_only": True, "research_use_only": True})
+    return PreprocessingPlanPreviewResponse(ok=True, status="preview_only", project_id=project_id, stages=stages, stage_count=len(stages), enabled_stage_count=enabled_count, execution_disabled=True, preprocessing_input_registered=input_registered, warnings=w, next_actions=["Register converted BIDS as preprocessing input.", "Use native full preprocessing API for Python-native execution; keep external SPM/DPABI as reference-only unless explicitly gated.", "Keep preview_only and metadata_only stages distinct from succeeded outputs."], safety_flags={"preview_only": True, "no_preprocessing_executed": True, "no_external_tools_executed": True, "native_backend_default": True, "spm_dpabi_matlab_disabled": True, "rawdata_read_only": True, "research_use_only": True})

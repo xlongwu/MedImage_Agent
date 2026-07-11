@@ -19,9 +19,22 @@ beforeEach(() => {
 });
 
 describe("RsfmriReportExporterPanel", () => {
-  it("keeps a successful request as metadata-only until package evidence exists", async () => {
+  it("loads latest package evidence after a successful generation request", async () => {
     const user = userEvent.setup();
-    apiMocks.runRsfmriReportExport.mockResolvedValue({ ok: true, status: "accepted" });
+    apiMocks.runRsfmriReportExport.mockResolvedValue({ ok: true, status: "SUCCESS" });
+    apiMocks.getLatestRsfmriReportExport.mockResolvedValue({
+      export_id: "exp-generated",
+      export_summary: {
+        exported_files_total: 10,
+        exported_subjects_total: 0,
+      },
+      manifest: {
+        files: ["README.md", "index.md"],
+      },
+      package_dir: "reports/exp-generated",
+      zip_path: "reports/exp-generated.zip",
+      zip_size_bytes: 6179,
+    });
 
     render(<RsfmriReportExporterPanel baseUrl="http://localhost" />);
 
@@ -33,7 +46,10 @@ describe("RsfmriReportExporterPanel", () => {
         pipeline_path: "examples/pipeline_rsfmri_report_exporter.yaml",
       }),
     );
-    expect(await screen.findByText("Metadata only")).toBeInTheDocument();
+    expect(apiMocks.getLatestRsfmriReportExport).toHaveBeenCalledWith("http://localhost");
+    expect(await screen.findByText("Created")).toBeInTheDocument();
+    expect(screen.getByText("exp-generated")).toBeInTheDocument();
+    expect(screen.getByText("6179")).toBeInTheDocument();
     expect(screen.getByText("Request complete")).toBeInTheDocument();
     expect(screen.queryByText("Validated")).not.toBeInTheDocument();
   });
@@ -51,6 +67,7 @@ describe("RsfmriReportExporterPanel", () => {
       },
       package_dir: "reports/exp-001",
       zip_path: "reports/exp-001.zip",
+      zip_size_bytes: 6179,
     });
 
     render(<RsfmriReportExporterPanel baseUrl="http://localhost" />);
@@ -59,6 +76,7 @@ describe("RsfmriReportExporterPanel", () => {
 
     expect(await screen.findByText("Created")).toBeInTheDocument();
     expect(screen.getByText("exp-001")).toBeInTheDocument();
+    expect(screen.getByText("6179")).toBeInTheDocument();
     expect(screen.queryByText("Validated")).not.toBeInTheDocument();
   });
 });

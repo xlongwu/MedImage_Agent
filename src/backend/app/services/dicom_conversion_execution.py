@@ -8,8 +8,8 @@ Real dcm2niix execution is ENABLED in Phase 6B.
 No rawdata is modified. All output goes to workspace.
 
 Reference:
-  docs/DICOM_TO_NIFTI_EXECUTION_WRAPPER_CONTRACT.md
-  docs/REAL_PREPROCESSING_EXECUTION_CONTRACT.md
+  docs/预处理与科学计算/DICOM转换/DICOM到NIfTI执行包装契约.md
+  docs/预处理与科学计算/原生预处理/真实预处理执行契约.md
   specs/PHASE6_SPEC.md
 """
 

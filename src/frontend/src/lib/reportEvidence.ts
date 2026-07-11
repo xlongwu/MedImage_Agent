@@ -144,11 +144,14 @@ export function deriveReportValidationEvidence(
   }
 
   const passed = ["passed", "pass", "success", "ok", "valid", "validated"].includes(status);
+  const warningOnly = status === "warning";
   const zeroCounts = counts.every((count) => count === 0) && zipTestOk !== false;
 
-  if (passed && zeroCounts) {
+  if ((passed || warningOnly) && zeroCounts) {
     return {
-      detail: "Validation passed with zero mismatch, missing-file, and safety counts.",
+      detail: warningOnly
+        ? "Validation completed with warnings but zero mismatch, missing-file, and safety counts."
+        : "Validation passed with zero mismatch, missing-file, and safety counts.",
       level: "validated",
     };
   }

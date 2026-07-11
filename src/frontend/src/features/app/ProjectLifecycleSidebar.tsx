@@ -85,7 +85,14 @@ export function ProjectLifecycleSidebar({
           const lifecycle = deriveWorkflowLifecycleState(tab.id, dataState, hasPreprocessingRun);
           const isActive = !projectsPageOpen && activeTab === tab.id;
           const isBlocked = lifecycle === "blocked";
-          const stateLabel = lifecycleStateLabels[lifecycle];
+          const stateLabel = lifecycleLabel(tab.id, lifecycle, dataState, hasPreprocessingRun);
+          const description = lifecycleDescription(
+            tab.id,
+            tab.description,
+            dataState,
+            hasPreprocessingRun,
+          );
+          const disabledReason = lifecycleDisabledReason(tab.id, dataState, hasPreprocessingRun);
           const buttonClassName = [
             styles.button,
             lifecycleStateClasses[lifecycle],
@@ -105,6 +112,7 @@ export function ProjectLifecycleSidebar({
                 aria-disabled={isBlocked}
                 aria-label={`${tab.label}, ${stateLabel}`}
                 disabled={isBlocked}
+                title={disabledReason || description}
                 onClick={() => {
                   if (isBlocked) {
                     return;
@@ -118,7 +126,7 @@ export function ProjectLifecycleSidebar({
                 </span>
                 <span className={styles.text}>
                   <span className={styles.label}>{tab.label}</span>
-                  <span className={styles.description}>{tab.description}</span>
+                  <span className={styles.description}>{description}</span>
                 </span>
                 <span className={styles.stateText}>{stateLabel}</span>
               </button>
@@ -128,6 +136,56 @@ export function ProjectLifecycleSidebar({
       </ol>
     </nav>
   );
+}
+
+function lifecycleLabel(
+  tabId: WorkflowTab,
+  lifecycle: WorkflowLifecycleState,
+  dataState: ProjectDataState | undefined,
+  hasPreprocessingRun: boolean,
+): string {
+  if (tabId === "preprocessing" && lifecycle === "blocked" && dataState === "raw_dicom") {
+    return "Convert";
+  }
+  if (tabId === "reports" && lifecycle === "blocked" && dataState === "raw_dicom") {
+    return "Run first";
+  }
+  if (tabId === "results" && lifecycle === "blocked" && !hasPreprocessingRun) {
+    return "Run first";
+  }
+  return lifecycleStateLabels[lifecycle];
+}
+
+function lifecycleDescription(
+  tabId: WorkflowTab,
+  fallback: string,
+  dataState: ProjectDataState | undefined,
+  hasPreprocessingRun: boolean,
+): string {
+  if (tabId === "preprocessing" && dataState === "raw_dicom") {
+    return "Needs BIDS/NIfTI";
+  }
+  if ((tabId === "reports" || tabId === "results") && !hasPreprocessingRun) {
+    return "Needs run evidence";
+  }
+  return fallback;
+}
+
+function lifecycleDisabledReason(
+  tabId: WorkflowTab,
+  dataState: ProjectDataState | undefined,
+  hasPreprocessingRun: boolean,
+): string {
+  if (tabId === "preprocessing" && dataState === "raw_dicom") {
+    return "Convert raw DICOM to registered BIDS/NIfTI before preprocessing.";
+  }
+  if (tabId === "reports" && !hasPreprocessingRun) {
+    return "Create or run preprocessing before QC reports are available.";
+  }
+  if (tabId === "results" && !hasPreprocessingRun) {
+    return "Create or run preprocessing before result artifacts are available.";
+  }
+  return "";
 }
 
 function firstReachableIndex(

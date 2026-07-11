@@ -1,7 +1,7 @@
 """Regression tests for partial/preview status in ALFF/ReHo and FC sandbox execution.
 
 Ensures that:
-- Processing >10 files returns 'partial' (preview mode per AGENTS contract).
+- ALFF/ReHo only returns 'partial' for an explicit preview_limit.
 - FC returns 'partial' when some selected files fail to produce matrices.
 """
 from __future__ import annotations
@@ -48,10 +48,10 @@ def _make_dry_run_ar(tmp_path, run_id="pp-test", dry_id="dr-synth"):
 
 
 class TestAlffRehoPartialStatus:
-    """ALFF/ReHo: preview mode (>10 files) returns 'partial'."""
+    """ALFF/ReHo: explicit preview mode returns 'partial'."""
 
-    def test_more_than_10_files_returns_partial(self, tmp_path, monkeypatch):
-        """Processing >10 discovered BOLD files → status='partial' (preview)."""
+    def test_more_than_10_files_default_processes_all_and_succeeds(self, tmp_path, monkeypatch):
+        """Processing >10 discovered BOLD files defaults to full dataset."""
         from src.backend.app.schemas.preprocessing_alff_reho_execution import (
             AlffRehoSandboxExecutionRequest,
         )
@@ -63,7 +63,7 @@ class TestAlffRehoPartialStatus:
         func_dir = tmp_path / "func_input"
         func_dir.mkdir()
 
-        # Create 15 subjects → only first 10 processed, preview mode
+        # Create 15 subjects. ALFF/ReHo no longer defaults to first-10 preview.
         for i in range(1, 16):
             _make_synth_bold_ar(func_dir, subject=f"sub-{i:03d}", tr=2.0, with_sidecar=True)
 
@@ -76,15 +76,46 @@ class TestAlffRehoPartialStatus:
             "proj", "pp-test", req, env=_ALL_AR, project_dir=str(tmp_path),
         )
         assert result.ok
+        assert result.status == "succeeded", \
+            f"Expected succeeded for default full-dataset ALFF/ReHo, got {result.status}: {result.warnings}"
+        assert result.files_discovered == 15
+        assert result.files_selected == 15
+        assert result.dataset_complete
+
+    def test_explicit_preview_limit_returns_partial(self, tmp_path, monkeypatch):
+        """Explicit preview_limit < discovered files → status='partial'."""
+        from src.backend.app.schemas.preprocessing_alff_reho_execution import (
+            AlffRehoSandboxExecutionRequest,
+        )
+        from src.backend.app.services.preprocessing_alff_reho_execution import (
+            run_alff_reho_sandbox_execution,
+        )
+
+        _setup_ar(tmp_path, monkeypatch)
+        func_dir = tmp_path / "func_input"
+        func_dir.mkdir()
+
+        for i in range(1, 16):
+            _make_synth_bold_ar(func_dir, subject=f"sub-{i:03d}", tr=2.0, with_sidecar=True)
+
+        _make_dry_run_ar(tmp_path)
+        req = AlffRehoSandboxExecutionRequest(
+            dry_run_id="dr-synth", functional_input_dir=str(func_dir),
+            confirm_sandbox_copy=True, preview_limit=10,
+        )
+        result = run_alff_reho_sandbox_execution(
+            "proj", "pp-test", req, env=_ALL_AR, project_dir=str(tmp_path),
+        )
+        assert result.ok
         assert result.status == "partial", \
-            f"Expected partial for >10 files, got {result.status}: {result.warnings}"
+            f"Expected partial for explicit preview limit, got {result.status}: {result.warnings}"
         assert result.files_discovered == 15
         assert result.files_selected == 10
         assert not result.dataset_complete
-        preview_warnings = [w for w in result.warnings if "preview mode" in w.lower()
-                           or "first 10" in w.lower() or "only" in w.lower()]
+        preview_warnings = [w for w in result.warnings if "preview" in w.lower()
+                           or "only" in w.lower()]
         assert len(preview_warnings) >= 1, \
-            f"Expected preview-mode warning, got warnings: {result.warnings}"
+            f"Expected explicit preview warning, got warnings: {result.warnings}"
 
     def test_10_or_fewer_files_all_succeed_returns_succeeded(self, tmp_path, monkeypatch):
         """10 or fewer files with all metrics succeeding → status='succeeded'."""

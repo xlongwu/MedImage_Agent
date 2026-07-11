@@ -173,3 +173,51 @@ def test_missing_root_returns_fail_with_issue(tmp_path):
     # Depending on path validation, the root may be filtered out
     # If the path is reachable, confirm issue(s)
     assert isinstance(result.issues, list)
+
+
+def test_dataset_description_utf8_bom_is_accepted(tmp_path):
+    root = tmp_path / "converted_bids"
+    func = root / "sub-001" / "func"
+    func.mkdir(parents=True)
+    (root / "dataset_description.json").write_bytes(
+        b"\xef\xbb\xbf"
+        + json.dumps(
+            {"Name": "Converted test dataset", "BIDSVersion": "1.8.0"}
+        ).encode("utf-8")
+    )
+    (func / "sub-001_task-rest_bold.json").write_text(
+        json.dumps({"TaskName": "rest", "RepetitionTime": 2.0}),
+        encoding="utf-8",
+    )
+    (func / "sub-001_task-rest_bold.nii.gz").write_bytes(b"")
+
+    result = bids_validation.validate_bids([str(root)])
+    codes = {issue.code for issue in result.issues}
+
+    assert result.status == "pass"
+    assert "DATASET_DESC_MALFORMED" not in codes
+    assert not any(
+        "dataset_description.json" in action.lower()
+        for action in result.next_actions
+    )
+
+
+def test_malformed_dataset_description_gives_specific_next_action(tmp_path):
+    root = tmp_path / "converted_bids"
+    func = root / "sub-001" / "func"
+    func.mkdir(parents=True)
+    (root / "dataset_description.json").write_text("{not json", encoding="utf-8")
+    (func / "sub-001_task-rest_bold.json").write_text(
+        json.dumps({"TaskName": "rest", "RepetitionTime": 2.0}),
+        encoding="utf-8",
+    )
+    (func / "sub-001_task-rest_bold.nii.gz").write_bytes(b"")
+
+    result = bids_validation.validate_bids([str(root)])
+    codes = {issue.code for issue in result.issues}
+    next_actions = "\n".join(result.next_actions)
+
+    assert result.status == "fail"
+    assert "DATASET_DESC_MALFORMED" in codes
+    assert "Fix or regenerate dataset_description.json" in next_actions
+    assert "Provide a valid BIDS rawdata directory" not in next_actions

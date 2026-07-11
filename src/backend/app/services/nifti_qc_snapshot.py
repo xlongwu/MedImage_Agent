@@ -24,6 +24,7 @@ from src.backend.app.services.image_preview import (
     _subject_from_path,
 )
 from src.backend.app.services.mock_store import mock_store
+from src.backend.app.services.qc_evidence_roots import collect_qc_evidence_roots
 
 _NIFTI_EXT = (".nii", ".nii.gz")
 _MAX_PIXELS_FOR_STATS = 1_000_000
@@ -43,25 +44,18 @@ def _is_nifti(path: Path) -> bool:
 def _discover_nifti(project_id: str) -> list[Path]:
     """Discover NIfTI files from project metadata and image sources.
 
-    Only uses synthetic fallback when the real project has no rawdata_dir
-    configured.  Real projects with a valid rawdata but no NIfTI return
-    an empty list (no synthetic pollution).
+    Only uses synthetic fallback when no real project evidence roots are
+    configured. Real projects with data roots but no NIfTI return an empty
+    list (no synthetic pollution).
     """
-    project = mock_store.get_project(project_id)
     paths: list[Path] = []
-    has_real_rawdata = False
 
-    if project and project.metadata:
-        metadata = project.metadata if isinstance(project.metadata, dict) else {}
-        rawdata_dir = metadata.get("rawdata_dir", "")
-        if rawdata_dir:
-            rawdata = Path(rawdata_dir).expanduser().resolve()
-            if rawdata.is_dir():
-                has_real_rawdata = True
-                paths.extend(_iter_nifti_files(rawdata))
+    roots = collect_qc_evidence_roots(project_id, include_native_outputs=True)
+    for root in roots:
+        paths.extend(_iter_nifti_files(root))
 
-    # Only use synthetic fallback when no real rawdata is configured
-    if not has_real_rawdata:
+    # Only use synthetic fallback when no real project root is configured.
+    if not roots:
         search_roots = [
             Path("examples/synthetic_bids/rawdata"),
         ]
@@ -248,7 +242,7 @@ def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
     if not paths:
         status = "warning"
         all_warnings.append(
-            "No NIfTI (.nii / .nii.gz) files found in the project rawdata directory. "
+            "No NIfTI (.nii / .nii.gz) files found in registered project evidence roots. "
             "If the dataset contains DICOM (.dcm) files, run Conversion Dry-Run to "
             "plan a DICOM-to-NIfTI conversion."
         )

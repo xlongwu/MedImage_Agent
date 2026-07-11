@@ -65,10 +65,12 @@ def api_plan_from_goal(request: PlanFromGoalRequest) -> dict[str, Any]:
     except ProjectContextError as exc:
         return _context_error_response(request, str(exc))
 
+    planner_constraints = dict(request.constraints or {})
+    planner_constraints.setdefault("project_context", context.to_dict())
     result = generate_plan_from_goal(
         goal=request.goal,
         provider=request.provider,
-        constraints=request.constraints,
+        constraints=planner_constraints,
         project_config_path=request.project_config_path,
     ).to_dict()
 

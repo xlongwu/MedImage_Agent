@@ -19,8 +19,12 @@ PreprocessingRerunPolicy = Literal["skip_succeeded", "require_explicit", "rerun_
 
 
 class PreprocessingBackendPolicy(BaseModel):
-    motion_correction: str = "spm12"
-    normalization: str = "skip"
+    slice_timing: str = "native_python"
+    motion_correction: str = "native_python"
+    t1_coregistration: str = "native_python"
+    segmentation: str = "native_python"
+    normalization: str = "native_python"
+    spatial_smoothing: str = "native_python"
     nuisance_regression: str = "python"
     temporal_filtering: str = "python"
     functional_connectivity: str = "python"

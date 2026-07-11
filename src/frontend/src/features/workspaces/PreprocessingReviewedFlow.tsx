@@ -1,7 +1,18 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-import { executeReviewedPreprocessingPipeline } from "../../lib/api/preprocessing";
+import {
+  executeNativeFullPreprocessing,
+  executeReviewedPreprocessingPipeline,
+  getLatestNativeFullPreprocessingRun,
+  getNativeFullPreprocessingReport,
+  getNativeFullPreprocessingValidation,
+  runNativeFullPreprocessingDryRun,
+} from "../../lib/api/preprocessing";
 import type {
+  NativeFullPreprocConfirmations,
+  NativeFullPreprocRequest,
+  NativeFullPreprocResponse,
+  NativeFullStageApiResult,
   PreprocessingPipelineExecuteRequest,
   PreprocessingPipelineExecuteResponse,
   PreprocessingPipelineStageResult,
@@ -21,6 +32,8 @@ import styles from "./PreprocessingWorkspace.module.css";
 
 type Profile = NonNullable<PreprocessingPipelineExecuteRequest["pipeline_profile"]>;
 type ConfirmationKey = keyof NonNullable<PreprocessingPipelineExecuteRequest["confirmations"]>;
+type NativeConfirmationKey = keyof NativeFullPreprocConfirmations;
+type NativeAction = "" | "dry-run" | "execute" | "validation" | "report";
 
 type Props = {
   baseUrl: string;
@@ -69,6 +82,38 @@ const CONFIRMATIONS: Array<{
   },
 ];
 
+const NATIVE_CONFIRMATIONS: Array<{
+  key: NativeConfirmationKey;
+  label: string;
+  detail: string;
+}> = [
+  {
+    key: "confirm_reviewed_native_execution",
+    label: "Reviewed native execution",
+    detail: "The full native runner receives a reviewed request, not free-form commands.",
+  },
+  {
+    key: "confirm_rawdata_readonly",
+    label: "Native rawdata read-only",
+    detail: "Native preprocessing writes only derivatives under the project workspace.",
+  },
+  {
+    key: "confirm_no_external_tools",
+    label: "No external tools",
+    detail: "MATLAB, SPM, DPABI, shell converters, and third-party tools remain disabled.",
+  },
+  {
+    key: "confirm_research_use_only",
+    label: "Native research use only",
+    detail: "Outputs are research artifacts and are not clinical evidence.",
+  },
+  {
+    key: "confirm_no_clinical_use",
+    label: "Native no clinical use",
+    detail: "No diagnosis, treatment, or decision-support claim is made.",
+  },
+];
+
 const STAGE_ROWS: Array<{
   stageId: string;
   label: string;
@@ -99,47 +144,47 @@ const STAGE_ROWS: Array<{
   {
     stageId: "realignment",
     label: "Realignment",
-    backend: "SPM12",
+    backend: "Native Python",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "External stage remains approval/env gated or resume-only.",
-    state: "external",
+    note: "Native default uses the current simplified motion-correction kernel.",
+    state: "computed",
   },
   {
     stageId: "t1_coregistration",
     label: "T1 coregistration",
-    backend: "SPM12",
+    backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional spatial stage; required before segmentation/normalization.",
-    state: "external",
+    note: "Optional affine coregistration; external SPM remains explicit and gated.",
+    state: "optional",
   },
   {
     stageId: "segmentation",
     label: "Segmentation",
-    backend: "SPM12",
+    backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional source for WM/CSF nuisance and normalization.",
-    state: "external",
+    note: "Optional intensity-based segmentation for WM/CSF nuisance masks.",
+    state: "optional",
   },
   {
     stageId: "normalization",
     label: "Normalization",
-    backend: "SPM12",
+    backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Required for MNI atlas FC; not required for matched native atlas FC.",
-    state: "external",
+    note: "Optional affine normalization; nonlinear SPM-equivalence is not claimed.",
+    state: "optional",
   },
   {
     stageId: "spatial_smoothing",
     label: "Smoothing",
-    backend: "SPM12",
+    backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional and does not block native-space Minimal FC.",
-    state: "external",
+    note: "Optional native smoothing; external SPM smoothing stays opt-in.",
+    state: "optional",
   },
   {
     stageId: "nuisance_regression",
@@ -214,6 +259,14 @@ const defaultConfirmations: Record<ConfirmationKey, boolean> = {
   confirm_no_clinical_use: false,
 };
 
+const defaultNativeConfirmations: Record<NativeConfirmationKey, boolean> = {
+  confirm_reviewed_native_execution: false,
+  confirm_rawdata_readonly: false,
+  confirm_no_external_tools: false,
+  confirm_research_use_only: false,
+  confirm_no_clinical_use: false,
+};
+
 export function PreprocessingReviewedFlow({
   baseUrl,
   hasPreprocessingRun,
@@ -233,6 +286,13 @@ export function PreprocessingReviewedFlow({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<PreprocessingPipelineExecuteResponse | null>(null);
   const [error, setError] = useState("");
+  const [nativeConfirmations, setNativeConfirmations] =
+    useState<Record<NativeConfirmationKey, boolean>>(defaultNativeConfirmations);
+  const [nativeAction, setNativeAction] = useState<NativeAction>("");
+  const [nativeResult, setNativeResult] = useState<NativeFullPreprocResponse | null>(null);
+  const [nativeValidation, setNativeValidation] = useState<Record<string, unknown> | null>(null);
+  const [nativeReport, setNativeReport] = useState<Record<string, unknown> | null>(null);
+  const [nativeError, setNativeError] = useState("");
 
   const visibleStages = useMemo(
     () =>
@@ -245,12 +305,39 @@ export function PreprocessingReviewedFlow({
   );
 
   const allConfirmationsChecked = CONFIRMATIONS.every((item) => confirmations[item.key]);
+  const allNativeConfirmationsChecked = NATIVE_CONFIRMATIONS.every(
+    (item) => nativeConfirmations[item.key],
+  );
   const canSubmit = Boolean(
     projectId && preprocessingRunId && allConfirmationsChecked && !submitting,
   );
+  const nativeRunId = nativeResult?.run_id || preprocessingRunId || "";
+  const canNativeDryRun = Boolean(projectId && nativeRunId && !nativeAction);
+  const canNativeExecute = Boolean(canNativeDryRun && allNativeConfirmationsChecked);
+  const canRefreshNative = Boolean(projectId && nativeRunId && !nativeAction);
   const fcResult = result?.stage_results.find(
     (stage) => stage.stage_id === "functional_connectivity",
   );
+  const nativeFcResult = nativeResult?.stage_results.find(
+    (stage) => stage.stage_id === "functional_connectivity",
+  );
+
+  useEffect(() => {
+    if (!projectId || nativeResult) return;
+    let cancelled = false;
+    void Promise.resolve(getLatestNativeFullPreprocessingRun(baseUrl, projectId))
+      .then((response) => {
+        if (!cancelled && response?.run_id) {
+          setNativeResult(response);
+        }
+      })
+      .catch(() => {
+        // The latest native manifest is optional; an empty project should stay quiet.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUrl, projectId, nativeResult]);
 
   const executeReviewedFlow = async () => {
     if (!projectId || !preprocessingRunId || !canSubmit) return;
@@ -277,6 +364,87 @@ export function PreprocessingReviewedFlow({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const runNativeDryRun = async () => {
+    if (!projectId || !nativeRunId || !canNativeDryRun) return;
+    setNativeAction("dry-run");
+    setNativeError("");
+    setNativeValidation(null);
+    setNativeReport(null);
+    try {
+      const response = await runNativeFullPreprocessingDryRun(
+        baseUrl,
+        projectId,
+        buildNativeRequest({
+          atlasPath,
+          fallbackTr,
+          includeGlobalSignal,
+          labelsPath,
+          preprocessingRunId: nativeRunId,
+          profile,
+        }),
+      );
+      setNativeResult(response);
+    } catch (err) {
+      setNativeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setNativeAction("");
+    }
+  };
+
+  const executeNativeFlow = async () => {
+    if (!projectId || !nativeRunId || !canNativeExecute) return;
+    setNativeAction("execute");
+    setNativeError("");
+    setNativeValidation(null);
+    setNativeReport(null);
+    try {
+      const response = await executeNativeFullPreprocessing(
+        baseUrl,
+        projectId,
+        buildNativeRequest({
+          atlasPath,
+          confirmations: nativeConfirmations,
+          fallbackTr,
+          includeGlobalSignal,
+          labelsPath,
+          preprocessingRunId: nativeRunId,
+          profile,
+        }),
+      );
+      setNativeResult(response);
+    } catch (err) {
+      setNativeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setNativeAction("");
+    }
+  };
+
+  const refreshNativeValidation = async () => {
+    if (!projectId || !nativeRunId || !canRefreshNative) return;
+    setNativeAction("validation");
+    setNativeError("");
+    try {
+      setNativeValidation(await getNativeFullPreprocessingValidation(baseUrl, projectId, nativeRunId));
+    } catch (err) {
+      setNativeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setNativeAction("");
+    }
+  };
+
+  const refreshNativeReport = async () => {
+    if (!projectId || !nativeRunId || !canRefreshNative) return;
+    setNativeAction("report");
+    setNativeError("");
+    try {
+      setNativeReport(await getNativeFullPreprocessingReport(baseUrl, projectId, nativeRunId));
+    } catch (err) {
+      setNativeError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setNativeAction("");
     }
   };
 
@@ -425,11 +593,34 @@ export function PreprocessingReviewedFlow({
         {error ? <div className={styles.inlineError}>{error}</div> : null}
       </Card>
 
-      <PipelineDashboard result={result} />
+      <NativeFullWorkflowCard
+        allConfirmationsChecked={allNativeConfirmationsChecked}
+        canDryRun={canNativeDryRun}
+        canExecute={canNativeExecute}
+        canRefresh={canRefreshNative}
+        confirmations={nativeConfirmations}
+        error={nativeError}
+        onConfirmationToggle={(key) =>
+          setNativeConfirmations((current) => ({ ...current, [key]: !current[key] }))
+        }
+        onDryRun={runNativeDryRun}
+        onExecute={executeNativeFlow}
+        onRefreshReport={refreshNativeReport}
+        onRefreshValidation={refreshNativeValidation}
+        pendingAction={nativeAction}
+        report={nativeReport}
+        result={nativeResult}
+        runId={nativeRunId}
+        validation={nativeValidation}
+      />
+
+      {result || !nativeResult ? <PipelineDashboard result={result} /> : null}
       <FcResultsPanel
         atlasPath={atlasPath}
         baseUrl={baseUrl}
         fcResult={fcResult}
+        nativeFcResult={nativeFcResult}
+        nativeResult={nativeResult}
         preprocessingRunId={preprocessingRunId}
         projectId={projectId}
         result={result}
@@ -473,6 +664,157 @@ function ConversionHandoffCard({
       <Button variant="secondary" onClick={onOpenDataConversion}>
         Review conversion input
       </Button>
+    </Card>
+  );
+}
+
+function NativeFullWorkflowCard({
+  allConfirmationsChecked,
+  canDryRun,
+  canExecute,
+  canRefresh,
+  confirmations,
+  error,
+  onConfirmationToggle,
+  onDryRun,
+  onExecute,
+  onRefreshReport,
+  onRefreshValidation,
+  pendingAction,
+  report,
+  result,
+  runId,
+  validation,
+}: {
+  allConfirmationsChecked: boolean;
+  canDryRun: boolean;
+  canExecute: boolean;
+  canRefresh: boolean;
+  confirmations: Record<NativeConfirmationKey, boolean>;
+  error: string;
+  onConfirmationToggle: (key: NativeConfirmationKey) => void;
+  onDryRun: () => void;
+  onExecute: () => void;
+  onRefreshReport: () => void;
+  onRefreshValidation: () => void;
+  pendingAction: NativeAction;
+  report: Record<string, unknown> | null;
+  result: NativeFullPreprocResponse | null;
+  runId: string;
+  validation: Record<string, unknown> | null;
+}) {
+  const status = result?.status ?? "not_started";
+
+  return (
+    <Card className={styles.dashboardCard} aria-label="Native full preprocessing workflow">
+      <div className={styles.sectionHeader}>
+        <div>
+          <h3>Native full preprocessing</h3>
+          <p>Dry-run, execute, validation, and report calls use the native API boundary.</p>
+        </div>
+        <Badge tone={statusTone(status)}>{status}</Badge>
+      </div>
+
+      <div className={styles.gateSummary} aria-label="Native full run summary">
+        <div>
+          <span>Run</span>
+          <strong>{runId || "Required"}</strong>
+        </div>
+        <div>
+          <span>Artifacts</span>
+          <strong>{result ? result.artifact_count : "Awaiting run"}</strong>
+        </div>
+        <div>
+          <span>Gate</span>
+          <strong>{allConfirmationsChecked ? "Ready" : "Confirmations required"}</strong>
+        </div>
+      </div>
+
+      <div className={styles.confirmationList} aria-label="Native full safety confirmations">
+        {NATIVE_CONFIRMATIONS.map((item) => (
+          <label className={styles.confirmationItem} key={item.key}>
+            <input
+              type="checkbox"
+              checked={confirmations[item.key]}
+              onChange={() => onConfirmationToggle(item.key)}
+            />
+            <span>
+              <strong>{item.label}</strong>
+              <small>{item.detail}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+
+      <div className={styles.reviewedActions}>
+        <Button variant="secondary" onClick={onDryRun} disabled={!canDryRun}>
+          {pendingAction === "dry-run" ? "Planning..." : "Run native dry-run"}
+        </Button>
+        <Button variant="primary" onClick={onExecute} disabled={!canExecute}>
+          {pendingAction === "execute" ? "Executing..." : "Execute native full preprocessing"}
+        </Button>
+        <Button variant="secondary" onClick={onRefreshValidation} disabled={!canRefresh}>
+          {pendingAction === "validation" ? "Refreshing..." : "Refresh native validation"}
+        </Button>
+        <Button variant="secondary" onClick={onRefreshReport} disabled={!canRefresh}>
+          {pendingAction === "report" ? "Refreshing..." : "Refresh native report"}
+        </Button>
+      </div>
+      {error ? <div className={styles.inlineError}>{error}</div> : null}
+
+      <Table caption="Native full preprocessing stage results">
+        <thead>
+          <tr>
+            <th>Stage</th>
+            <th>Status</th>
+            <th>Artifacts</th>
+            <th>Issue</th>
+          </tr>
+        </thead>
+        <tbody>
+          {result?.stage_results.length ? (
+            result.stage_results.map((stage) => (
+              <tr key={stage.stage_id}>
+                <td>{stage.display_name || stage.stage_id}</td>
+                <td>
+                  <Badge tone={statusTone(stage.status)} size="sm">
+                    {stage.status}
+                  </Badge>
+                </td>
+                <td>{stage.output_artifacts.length}</td>
+                <td>{firstNativeIssue(stage)}</td>
+              </tr>
+            ))
+          ) : (
+            <TableEmpty colSpan={4}>
+              Native dry-run and execution stage rows appear after the backend returns a manifest.
+            </TableEmpty>
+          )}
+        </tbody>
+      </Table>
+
+      <div className={styles.reportRail} aria-label="Native validation and report outputs">
+        <div>
+          <span>Validation</span>
+          <strong>
+            {formatUnknown(validation?.validation_report_path) ||
+              result?.validation_report_path ||
+              "Not generated"}
+          </strong>
+        </div>
+        <div>
+          <span>Report</span>
+          <strong>
+            {formatUnknown(report?.final_report_path) || result?.final_report_path || "Not generated"}
+          </strong>
+        </div>
+        <div>
+          <span>Blocked</span>
+          <strong>
+            {Array.isArray(result?.blocked_stages) ? result?.blocked_stages.length : "Awaiting run"}
+          </strong>
+        </div>
+      </div>
     </Card>
   );
 }
@@ -559,6 +901,8 @@ function FcResultsPanel({
   atlasPath,
   baseUrl,
   fcResult,
+  nativeFcResult,
+  nativeResult,
   preprocessingRunId,
   projectId,
   result,
@@ -566,22 +910,43 @@ function FcResultsPanel({
   atlasPath: string;
   baseUrl: string;
   fcResult?: PreprocessingPipelineStageResult;
+  nativeFcResult?: NativeFullStageApiResult;
+  nativeResult: NativeFullPreprocResponse | null;
   preprocessingRunId?: string | null;
   projectId: string | null;
   result: PreprocessingPipelineExecuteResponse | null;
 }) {
-  const status = fcResult?.status ?? (result ? "not_started" : "waiting");
-  const artifactCount = fcResult?.output_artifact_ids.length ?? 0;
-  const matrixShape = extractMatrixShape(fcResult?.result);
-  const roiCount = extractNumber(fcResult?.result, ["roi_count"]);
-  const qcStatus = extractString(fcResult?.result, ["fc_qc_status", "qc_status", "status"]);
-  const atlasSource = extractString(fcResult?.result, ["atlas_source"]);
+  const nativeArtifacts = nativeFcResult?.output_artifacts ?? [];
+  const nativeFcArtifacts = nativeArtifacts.filter((artifact) =>
+    ["fc_matrix", "fisher_z_matrix", "roi_timeseries", "roi_labels"].includes(
+      String(artifact.artifact_type || ""),
+    ),
+  );
+  const status =
+    fcResult?.status ?? nativeFcResult?.status ?? (result || nativeResult ? "not_started" : "waiting");
+  const artifactCount = fcResult?.output_artifact_ids.length || nativeFcArtifacts.length || 0;
+  const pipelineMatrixShape = extractMatrixShape(fcResult?.result);
+  const matrixShape =
+    pipelineMatrixShape !== "Awaiting backend evidence"
+      ? pipelineMatrixShape
+      : extractNativeMatrixShape(nativeFcResult);
+  const roiCount =
+    extractNumber(fcResult?.result, ["roi_count"]) ??
+    extractNumber(nativeFcResult?.result, ["roi_count"]);
+  const qcStatus =
+    extractString(fcResult?.result, ["fc_qc_status", "qc_status", "status"]) ||
+    extractString(nativeFcResult?.result, ["fc_qc_status", "qc_status", "status"]);
+  const atlasSource =
+    extractString(fcResult?.result, ["atlas_source"]) ||
+    extractString(nativeFcResult?.result, ["atlas_source"]);
   const atlasName =
     atlasPath.trim() ||
     extractString(fcResult?.result, ["atlas_file", "atlas_path", "atlas"]) ||
+    extractString(nativeFcResult?.result, ["atlas_file", "atlas_path", "atlas"]) ||
     "Awaiting atlas evidence";
   const previewOnly =
     status === "preview_only" || result?.preview_only_stages.includes("functional_connectivity");
+  const nativeIssue = nativeFcResult ? firstNativeIssue(nativeFcResult) : "";
 
   return (
     <Card className={styles.fcCard} aria-label="FC results panel">
@@ -670,6 +1035,28 @@ function FcResultsPanel({
                 </td>
               </tr>
             ))
+          ) : nativeFcArtifacts.length ? (
+            nativeFcArtifacts.map((artifact, index) => (
+              <tr key={`${String(artifact.artifact_type || "artifact")}-${index}`}>
+                <td>{String(artifact.artifact_type || artifact.artifact_id || "native artifact")}</td>
+                <td>
+                  <Badge tone="info" size="sm">
+                    native artifact
+                  </Badge>
+                </td>
+                <td>{formatUnknown(artifact.path) || "Path unavailable"}</td>
+              </tr>
+            ))
+          ) : nativeIssue && nativeIssue !== "-" ? (
+            <tr>
+              <td>functional_connectivity</td>
+              <td>
+                <Badge tone={statusTone(status)} size="sm">
+                  {status}
+                </Badge>
+              </td>
+              <td>{nativeIssue}</td>
+            </tr>
           ) : (
             <TableEmpty colSpan={3}>
               FC downloads appear only after the backend registers matrix, Fisher-z, ROI timeseries,
@@ -720,8 +1107,12 @@ function buildReviewedRequest({
     pipeline_profile: profile,
     start_from: "existing_preprocessing_input",
     backend_policy: {
-      motion_correction: "spm12",
-      normalization: profile === "dparsfa_like" ? "spm12" : "skip",
+      slice_timing: "native_python",
+      motion_correction: "native_python",
+      t1_coregistration: profile === "dparsfa_like" ? "native_python" : "skip",
+      segmentation: profile === "dparsfa_like" ? "native_python" : "skip",
+      normalization: profile === "dparsfa_like" ? "native_python" : "skip",
+      spatial_smoothing: profile === "dparsfa_like" ? "native_python" : "skip",
       nuisance_regression: "python",
       temporal_filtering: "python",
       functional_connectivity: "python",
@@ -773,6 +1164,72 @@ function buildReviewedRequest({
   };
 }
 
+function buildNativeRequest({
+  atlasPath,
+  confirmations,
+  fallbackTr,
+  includeGlobalSignal,
+  labelsPath,
+  preprocessingRunId,
+  profile,
+}: {
+  atlasPath: string;
+  confirmations?: Record<NativeConfirmationKey, boolean>;
+  fallbackTr: string;
+  includeGlobalSignal: boolean;
+  labelsPath: string;
+  preprocessingRunId: string;
+  profile: Profile;
+}): NativeFullPreprocRequest {
+  const tr = parseOptionalNumber(fallbackTr);
+  return {
+    run_id: preprocessingRunId,
+    atlas: atlasPath.trim() || undefined,
+    atlas_labels: labelsPath.trim() || undefined,
+    tr,
+    include_global_signal: includeGlobalSignal,
+    stage_overrides: nativeStageOverrides(profile),
+    confirmations,
+  };
+}
+
+function nativeStageOverrides(profile: Profile): Record<string, boolean> {
+  if (profile === "dparsfa_like") {
+    return {
+      atlas_resampling: true,
+      roi_timeseries: true,
+      functional_connectivity: true,
+      alff: true,
+      falff: true,
+      reho: true,
+      subject_qc: true,
+      group_summary: true,
+    };
+  }
+  if (profile === "custom") {
+    return {
+      functional_connectivity: true,
+      alff: true,
+      falff: true,
+      reho: true,
+      subject_qc: true,
+      group_summary: true,
+    };
+  }
+  return {
+    t1_coregistration: false,
+    segmentation: false,
+    normalization: false,
+    smoothing: false,
+    alff: false,
+    falff: false,
+    reho: false,
+    functional_connectivity: true,
+    subject_qc: true,
+    group_summary: true,
+  };
+}
+
 function parseOptionalNumber(value: string): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
@@ -787,6 +1244,20 @@ function firstIssue(stage: PreprocessingPipelineStageResult): string {
   return (
     stage.blocking_issues[0] || stage.errors[0] || stage.warnings[0] || stage.skipped_reason || "-"
   );
+}
+
+function firstNativeIssue(stage: NativeFullPreprocResponse["stage_results"][number]): string {
+  return (
+    stage.blocking_issues[0] ||
+    stage.errors[0] ||
+    stage.warnings[0] ||
+    stage.validation_errors[0] ||
+    "-"
+  );
+}
+
+function formatUnknown(value: unknown): string {
+  return typeof value === "string" && value.trim() ? value : "";
 }
 
 function profileLabel(profile: Profile): string {
@@ -865,6 +1336,16 @@ function extractMatrixShape(value: unknown): string {
   for (const item of Object.values(record)) {
     const nested = extractMatrixShape(item);
     if (nested !== "Awaiting backend evidence") return nested;
+  }
+  return "Awaiting backend evidence";
+}
+
+function extractNativeMatrixShape(stage?: NativeFullStageApiResult): string {
+  const resultShape = extractMatrixShape(stage?.result);
+  if (resultShape !== "Awaiting backend evidence") return resultShape;
+  for (const artifact of stage?.output_artifacts ?? []) {
+    const artifactShape = extractMatrixShape(artifact);
+    if (artifactShape !== "Awaiting backend evidence") return artifactShape;
   }
   return "Awaiting backend evidence";
 }

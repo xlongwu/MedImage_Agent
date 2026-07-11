@@ -35,6 +35,26 @@ def _read_component_source() -> str:
     return open(path, encoding="utf-8").read()
 
 
+def _read_review_panel_source() -> str:
+    path = os.path.join(
+        os.getcwd(),
+        "src/frontend/src/components/DicomConversionReviewPanel.tsx",
+    )
+    if not os.path.exists(path):
+        pytest.skip("DicomConversionReviewPanel.tsx not found")
+    return open(path, encoding="utf-8").read()
+
+
+def _read_workflow_hook_source() -> str:
+    path = os.path.join(
+        os.getcwd(),
+        "src/frontend/src/hooks/useDicomConversionWorkflow.ts",
+    )
+    if not os.path.exists(path):
+        pytest.skip("useDicomConversionWorkflow.ts not found")
+    return open(path, encoding="utf-8").read()
+
+
 class TestFeatureFlagGating:
     """Execute UI hidden when VITE_ENABLE_DICOM_EXECUTE_UI is not set."""
 
@@ -130,6 +150,37 @@ class TestConfirmationDialog:
         assert "/conversion/execute" in content, (
             "dicom.ts must reference /conversion/execute for Phase 4L-4"
         )
+
+    def test_prepare_response_is_reported_to_parent(self):
+        """Prepare must return its authoritative run/readiness response to the parent."""
+        source = _read_component_source()
+        assert "onPrepared" in source
+        assert "handlePrepare" in source
+        assert "const resp = await workflow.prepare()" in source
+        assert "onPrepared?.(resp)" in source
+
+    def test_prepare_ready_transitions_to_final_confirmation(self):
+        """Ready prepare responses should move the UI to the final execute confirmation."""
+        source = _read_component_source()
+        assert "resp.execution_ready" in source
+        assert 'setUiState("confirming")' in source
+
+    def test_hook_keeps_prepare_state_when_parent_receives_run_id(self):
+        """The hook must not reset prepareResponse when a prepared run id is echoed by parent."""
+        source = _read_workflow_hook_source()
+        assert "[projectId]" in source
+        assert "[projectId, initialConversionRunId]" not in source
+        assert "current || initialConversionRunId" in source
+        assert "erases the prepared response" in source
+
+    def test_review_panel_shares_readiness_with_execute_panel(self):
+        """Release readiness state must be shared by parent and execute panel."""
+        source = _read_review_panel_source()
+        assert "const [releaseReadiness, setReleaseReadiness]" in source
+        assert "onReadinessChange={setReleaseReadiness}" in source
+        assert "readiness={releaseReadiness}" in source
+        assert "activeConversionRunId" in source
+        assert "onPrepared={handlePrepared}" in source
 
 
 class TestResponseRendering:

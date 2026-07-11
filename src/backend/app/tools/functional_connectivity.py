@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import json
+import re
+import shutil
 from pathlib import Path
 from statistics import mean
 from typing import Any
@@ -65,6 +67,117 @@ def _safe_atlas(path: Path, derivatives_dir: str) -> bool:
         except ValueError:
             continue
     return False
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _known_template_atlas_roots() -> list[Path]:
+    return [
+        _repo_root() / "third_party" / "DPABI_V8.2_240510" / "Templates",
+    ]
+
+
+def _relative_to_repo(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(_repo_root()).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
+def _safe_output_stem(path: Path, fallback: str) -> str:
+    ext = _nifti_ext(path)
+    name = path.name
+    stem = name[: -len(ext)] if ext and name.lower().endswith(ext) else path.stem
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "-", stem).strip("-")
+    return cleaned[:80] if cleaned else fallback
+
+
+def _is_known_template_resource(path: Path, *, allowed_suffixes: set[str]) -> bool:
+    suffix = _nifti_ext(path) if ".nii" in "".join(path.suffixes).lower() else path.suffix.lower()
+    if suffix not in allowed_suffixes:
+        return False
+    resolved = path.resolve()
+    for root in _known_template_atlas_roots():
+        try:
+            resolved.relative_to(root.resolve())
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _materialize_known_template_atlas(
+    source_path: Path,
+    derivatives_dir: str,
+    warnings: list[str],
+) -> dict[str, str] | None:
+    if not _is_known_template_resource(source_path, allowed_suffixes={".nii", ".nii.gz"}):
+        return None
+    if not source_path.exists() or not source_path.is_file():
+        raise ValueError(f"Template atlas not found: {source_path}")
+
+    checksum = sha256_file(source_path)
+    ext = _nifti_ext(source_path)
+    stem = _safe_output_stem(source_path, "template")
+    atlas_dir = Path(derivatives_dir) / "atlases" / "registered_templates"
+    atlas_dir.mkdir(parents=True, exist_ok=True)
+    dest = atlas_dir / f"{stem}_atlas_sha256-{checksum[:12]}{ext}"
+    if not dest.exists() or sha256_file(dest) != checksum:
+        shutil.copy2(source_path, dest)
+
+    provenance = {
+        "source_kind": "known_repo_template_atlas",
+        "source_path": _relative_to_repo(source_path),
+        "source_checksum": checksum,
+        "registered_atlas_path": str(dest),
+        "registered_atlas_checksum": sha256_file(dest),
+        "safety": {
+            "source_rawdata": False,
+            "execution_input_is_derivative_copy": True,
+            "arbitrary_absolute_path_allowed": False,
+        },
+    }
+    provenance_path = atlas_dir / f"{stem}_atlas_sha256-{checksum[:12]}_provenance.json"
+    atomic_write_json(provenance_path, provenance, schema_version=1)
+    warnings.append(
+        "Known repository template atlas was copied into derivatives before FC execution."
+    )
+    return {
+        "atlas_path": str(dest),
+        "provenance_path": str(provenance_path),
+        "source_path": provenance["source_path"],
+        "source_checksum": checksum,
+    }
+
+
+def _materialize_known_template_labels(
+    source_path: Path,
+    derivatives_dir: str,
+    warnings: list[str],
+) -> dict[str, str] | None:
+    if not _is_known_template_resource(source_path, allowed_suffixes={".json", ".tsv", ".txt", ".csv"}):
+        return None
+    if not source_path.exists() or not source_path.is_file():
+        raise ValueError(f"Template atlas labels file not found: {source_path}")
+
+    checksum = sha256_file(source_path)
+    stem = _safe_output_stem(source_path, "labels")
+    labels_dir = Path(derivatives_dir) / "atlases" / "registered_templates"
+    labels_dir.mkdir(parents=True, exist_ok=True)
+    dest = labels_dir / f"{stem}_labels_sha256-{checksum[:12]}{source_path.suffix.lower()}"
+    if not dest.exists() or sha256_file(dest) != checksum:
+        shutil.copy2(source_path, dest)
+    warnings.append(
+        "Known repository template labels file was copied into derivatives before FC execution."
+    )
+    return {
+        "labels_path": str(dest),
+        "source_path": _relative_to_repo(source_path),
+        "source_checksum": checksum,
+    }
 
 
 def _write_tsv(path: Path, header: list[Any], rows: list[list[Any]]) -> None:
@@ -231,13 +344,24 @@ def run_python_functional_connectivity_subject(
         if atlas_path:
             atlas_file = Path(atlas_path)
             if not _safe_atlas(atlas_file, derivatives_dir):
-                raise ValueError(f"Unsafe atlas: {atlas_file}")
+                materialized = _materialize_known_template_atlas(atlas_file, derivatives_dir, warnings)
+                if materialized is None:
+                    raise ValueError(f"Unsafe atlas: {atlas_file}")
+                atlas_file = Path(materialized["atlas_path"])
+            else:
+                materialized = None
+
+            labels_path_for_load = labels_path
+            labels_materialized = None
             if labels_path and not _safe_atlas(Path(labels_path), derivatives_dir):
-                raise ValueError(f"Unsafe atlas labels: {labels_path}")
+                labels_materialized = _materialize_known_template_labels(Path(labels_path), derivatives_dir, warnings)
+                if labels_materialized is None:
+                    raise ValueError(f"Unsafe atlas labels: {labels_path}")
+                labels_path_for_load = labels_materialized["labels_path"]
             atlas_info = load_atlas_for_bold(
                 atlas_path=atlas_file,
                 bold_img=img,
-                labels_path=labels_path,
+                labels_path=labels_path_for_load,
             )
             atlas_data = atlas_info["atlas_data"]
             roi_definitions = atlas_info["roi_definitions"]
@@ -247,7 +371,10 @@ def run_python_functional_connectivity_subject(
             atlas_grounded = True
             preview_only = False
             stage_status = "succeeded"
-            atlas_source = "provided_atlas"
+            atlas_source = "registered_template_atlas" if materialized else "provided_atlas"
+            atlas_template_source = materialized or {}
+            labels_template_source = labels_materialized or {}
+            labels_path_for_output = str(labels_path_for_load or "")
         else:
             atlas_data, roi_definitions = _generate_atlas((nx, ny, nz), int(roi_count))
             atlas_file = fc_dir / "synthetic_roi_atlas.nii"
@@ -263,6 +390,9 @@ def run_python_functional_connectivity_subject(
             preview_only = True
             stage_status = "preview_only"
             atlas_source = "synthetic_x_chunk"
+            atlas_template_source = {}
+            labels_template_source = {}
+            labels_path_for_output = ""
             warnings.append("Synthetic atlas generated; FC result is preview_only, not atlas-grounded.")
 
         labels = [int(item["label"]) for item in roi_definitions]
@@ -298,7 +428,7 @@ def run_python_functional_connectivity_subject(
         labels_payload = {
             "subject_id": subject_id,
             "atlas_file": atlas_file_for_output,
-            "labels_path": labels_path or "",
+            "labels_path": labels_path_for_output,
             "roi_count": len(labels),
             "labels": roi_definitions,
             "synthetic": not atlas_grounded,
@@ -415,6 +545,8 @@ def run_python_functional_connectivity_subject(
             str(qc_json),
             str(qc_md),
         ]
+        if atlas_template_source.get("provenance_path"):
+            outputs.append(str(atlas_template_source["provenance_path"]))
         if seed_corr_map:
             outputs.append(str(seed_corr_map))
         if seed_fisher_map:
@@ -430,8 +562,10 @@ def run_python_functional_connectivity_subject(
             "atlas_file": atlas_file_for_output,
             "atlas_checksum": atlas_checksum,
             "atlas_source": atlas_source,
+            "atlas_template_source": atlas_template_source,
             "atlas_grounded": atlas_grounded,
-            "labels_path": labels_path or "",
+            "labels_path": labels_path_for_output,
+            "labels_template_source": labels_template_source,
             "roi_count": len(labels),
             "correlation_method": "pearson",
             "fisher_z": True,

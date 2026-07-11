@@ -76,10 +76,14 @@ export {
 
 export {
   createPreprocessingRun,
+  executeNativeFullPreprocessing,
   executeNuisanceRegressionSandbox,
   executePreprocessingPythonPreflight,
   executeSpmSandboxSliceTimingRealign,
   generateMotionMetricsDraft,
+  getNativeFullPreprocessingReport,
+  getNativeFullPreprocessingRun,
+  getNativeFullPreprocessingValidation,
   generateSpmRealignWrapperSkeleton,
   getPreprocessingPipelineReport,
   getPreprocessingPipelineValidation,
@@ -91,6 +95,7 @@ export {
   getProjectNiftiThumbnail,
   registerConvertedPreprocessingInput,
   registerSandboxSpmOutputs,
+  runNativeFullPreprocessingDryRun,
   runFilteringDryRun,
   runSpmRealignDryRun,
 } from "./preprocessing";

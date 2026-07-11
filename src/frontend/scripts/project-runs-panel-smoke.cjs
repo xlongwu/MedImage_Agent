@@ -613,6 +613,13 @@ const s4 = describeExecuteReviewedStatus("EXECUTION_FAILED");
 assert.equal(s4.severity, "error");
 assert.equal(s4.canAttemptExecute, true);
 
+// Native preprocessing readiness block
+const sNativeReadiness = describeExecuteReviewedStatus("NATIVE_PREPROC_READINESS_BLOCKED");
+assert.equal(sNativeReadiness.severity, "warning");
+assert.equal(sNativeReadiness.canRetryDryRun, true);
+assert.equal(sNativeReadiness.canAttemptExecute, false);
+assert.ok(sNativeReadiness.title.includes("inputs are not ready"));
+
 // Unknown status fallback
 const s5 = describeExecuteReviewedStatus("SOME_NEW_STATUS");
 assert.equal(s5.severity, "info");

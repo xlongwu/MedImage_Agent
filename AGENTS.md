@@ -99,9 +99,9 @@ tests, CI, or inspected artifacts.
 
 ### 2.5 Architecture and historical documents
 
-* `docs/architecture.md` describes current architecture.
+* `docs/架构与决策/系统架构.md` describes current architecture.
 * `README.md` and `README_CN.md` are user and developer entry points.
-* `docs/releases/` contains historical records tied to specific versions.
+* `docs/发布记录/` contains historical records tied to specific versions.
 * Historical task documents and Completion Reports must not override current
   code or current repository policy.
 
@@ -736,9 +736,9 @@ If only a subset of subjects, voxels, timepoints, or files is processed:
   file.
 * `PROJECT_STATE.md` records current verified state, limitations, validation
   environment, packaging status, and next work.
-* `docs/architecture.md` describes current architecture.
+* `docs/架构与决策/系统架构.md` describes current architecture.
 * `README.md` and `README_CN.md` are user and developer entry points.
-* `docs/releases/` contains version-specific historical records.
+* `docs/发布记录/` contains version-specific historical records.
 
 Define each durable rule in one authoritative location.
 
@@ -759,7 +759,7 @@ CI and current validation output remain authoritative for the latest result.
 
 ### 11.3 Task handoffs
 
-Local temporary handoffs may live under `docs/tasks/`.
+Local temporary handoffs may live under `docs/临时任务/`.
 
 Do not assume an ignored local task file will be available:
 
@@ -790,7 +790,7 @@ Routine Completion Reports belong in:
 * a release record for release work.
 
 Phase-level or milestone-level completion reports may be retained as
-historical records under `specs/completion/` when they:
+historical records under `specs/阶段记录/` when they:
 
 * document a completed phase's architecture decisions and outcomes;
 * serve as a historical reference for future developers;

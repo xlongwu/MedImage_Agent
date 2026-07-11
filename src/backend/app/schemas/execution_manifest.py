@@ -7,8 +7,8 @@ Schema-only module.  No runtime executor is imported or modified.
 No file I/O.  No external-tool execution is enabled.
 
 Reference:
-  docs/PIPELINE_EXECUTOR_PRODUCTIZATION_CONTRACT.md
-  docs/RUN_RETRY_RESUME_CONTRACT.md
+  docs/规划与运行时/流水线执行器产品化契约.md
+  docs/规划与运行时/运行重试与恢复契约.md
 """
 
 from __future__ import annotations

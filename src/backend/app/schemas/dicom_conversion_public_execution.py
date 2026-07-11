@@ -7,8 +7,8 @@ public DICOM-to-NIfTI conversion execute endpoint.
 must pass before real dcm2niix execution is reached.  No frontend button exists.
 
 Reference:
-  docs/DICOM_PUBLIC_EXECUTE_ENDPOINT_DESIGN.md
-  docs/DICOM_CONVERSION_RELEASE_HARDENING.md
+  docs/预处理与科学计算/DICOM转换/公开执行端点设计.md
+  docs/预处理与科学计算/DICOM转换/发布加固.md
 """
 
 from __future__ import annotations

@@ -13,13 +13,30 @@ FORBIDDEN_COMPOUND = {".nii.gz"}
 SAFETY_FALSE = ["rawdata_included","rawdata_modified","derivatives_modified","reports_modified","work_modified","spm_executed","matlab_executed","dpabi_executed","gpu_executed","files_deleted","clinical_conclusions_generated","statistical_inference_performed"]
 
 def _iso_now() -> str: return datetime.now().isoformat(timespec="seconds")
-def _safe_path(v: str) -> bool: return bool(v) and not v.startswith("/") and all(p not in {"..",""} for p in Path(v).parts)
+def _artifact_path(v: str) -> str: return v.replace("\\", "/")
+def _artifact_parts(v: str) -> list[str]: return _artifact_path(v).split("/")
+def _artifact_file(pkg: Path, v: str) -> Path: return pkg.joinpath(*_artifact_parts(v))
+def _safe_path(v: str) -> bool:
+    if not v:
+        return False
+    normalized = _artifact_path(v)
+    parts = normalized.split("/")
+    if normalized.startswith("/") or not parts or parts[0].endswith(":"):
+        return False
+    return all(p not in {"..",".",""} for p in parts)
 def _forbidden(v: str) -> bool:
-    l = v.lower()
-    if set(Path(l).parts) & FORBIDDEN_PARTS: return True
+    l = _artifact_path(v).lower()
+    if set(l.split("/")) & FORBIDDEN_PARTS: return True
     if any(l.endswith(s) for s in FORBIDDEN_COMPOUND): return True
     if Path(l).suffix in FORBIDDEN_SUFFIXES: return True
     return False
+
+def _is_complete_package(pkg: Path) -> bool:
+    return (
+        (pkg / "export_summary.json").is_file()
+        and (pkg / "MANIFEST.json").is_file()
+        and (pkg.parent / f"{pkg.name}.zip").is_file()
+    )
 
 def _load_checksums(path: Path) -> dict[str,str]:
     m: dict[str,str] = {}
@@ -28,7 +45,7 @@ def _load_checksums(path: Path) -> dict[str,str]:
         line = line.strip()
         if not line: continue
         parts = line.split(None,1)
-        if len(parts) == 2: m[parts[1].strip()] = parts[0].strip()
+        if len(parts) == 2: m[_artifact_path(parts[1].strip())] = parts[0].strip()
     return m
 
 def _locate(exports_dir: str, export_id: str | None, package_dir: str | None, zip_path: str | None) -> tuple[Path|None,Path|None,str|None,list[str],list[str]]:
@@ -37,8 +54,12 @@ def _locate(exports_dir: str, export_id: str | None, package_dir: str | None, zi
     elif export_id: pkg = root/export_id; rid = export_id
     else:
         if not root.exists(): return None,None,None,w,["No report package root found."]
-        pkgs = sorted([c for c in root.iterdir() if c.is_dir()])
+        dirs = sorted([c for c in root.iterdir() if c.is_dir()])
+        pkgs = [c for c in dirs if _is_complete_package(c)]
         if not pkgs: return None,None,None,w,["No packages found."]
+        skipped = len(dirs) - len(pkgs)
+        if skipped:
+            w.append(f"Skipped {skipped} incomplete report export(s).")
         pkg = pkgs[-1]; rid = pkg.name; w.append(f"Using latest: {rid}")
     zp = Path(zip_path) if zip_path else pkg.parent/f"{rid}.zip"
     return pkg, zp, rid, w, e
@@ -74,15 +95,16 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
             for item in files:
                 rel = item.get("relative_path"); esha = item.get("sha256"); esize = item.get("size_bytes")
                 if not isinstance(rel,str) or not _safe_path(rel): ms["unsafe_path_total"] += 1; e.append(f"Unsafe path: {rel}"); continue
-                if _forbidden(rel): ms["forbidden_file_total"] += 1; e.append(f"Forbidden file: {rel}")
-                fp = pkg/rel
+                rel_norm = _artifact_path(rel)
+                if _forbidden(rel_norm): ms["forbidden_file_total"] += 1; e.append(f"Forbidden file: {rel}"); continue
+                fp = _artifact_file(pkg, rel_norm)
                 if not fp.exists(): ms["missing_files_total"] += 1; e.append(f"Missing from package: {rel}"); continue
                 asize = int(fp.stat().st_size); asha = sha256_file(fp)
                 so = esize is None or int(esize) == asize; sho = esha == asha
-                cso = cm.get(rel); cfo = cso is None or cso == asha
+                cso = cm.get(rel_norm); cfo = cso is None or cso == asha
                 if not so: ms["size_mismatch_total"] += 1; e.append(f"Size mismatch: {rel}")
                 if not sho or (cso is not None and not cfo): ms["checksum_mismatch_total"] += 1; e.append(f"Checksum mismatch: {rel}")
-                checks.append({"name": "file_integrity", "relative_path": rel, "status": "PASS" if so and sho and cfo and not _forbidden(rel) else "FAIL", "size_ok": so, "sha256_ok": sho, "checksum_file_ok": cfo, "actual_size": asize, "actual_sha256": asha})
+                checks.append({"name": "file_integrity", "relative_path": rel_norm, "status": "PASS" if so and sho and cfo and not _forbidden(rel_norm) else "FAIL", "size_ok": so, "sha256_ok": sho, "checksum_file_ok": cfo, "actual_size": asize, "actual_sha256": asha})
 
     # ZIP
     zs = {"zip_exists": False, "zip_test_ok": False, "zip_entries_total": 0, "zip_unsafe_path_total": 0, "zip_forbidden_file_total": 0, "zip_missing_required_total": 0, "zip_missing_manifest_total": 0}
@@ -93,16 +115,19 @@ def validate_rsfmri_report_package(exports_dir: str = "./exports", export_id: st
             with zipfile.ZipFile(zp,"r") as zf:
                 bad = zf.testzip(); zs["zip_test_ok"] = bad is None
                 if bad: e.append(f"ZIP test failed: {bad}")
-                names = zf.namelist(); zs["zip_entries_total"] = len(names); nameset = set(names)
+                names = zf.namelist(); zs["zip_entries_total"] = len(names); nameset = {_artifact_path(name) for name in names}
                 for n in names:
-                    if not _safe_path(n): zs["zip_unsafe_path_total"] += 1; e.append(f"Unsafe ZIP path: {n}")
-                    if _forbidden(n): zs["zip_forbidden_file_total"] += 1; e.append(f"Forbidden in ZIP: {n}")
+                    n_norm = _artifact_path(n)
+                    if not _safe_path(n_norm): zs["zip_unsafe_path_total"] += 1; e.append(f"Unsafe ZIP path: {n}")
+                    if _forbidden(n_norm): zs["zip_forbidden_file_total"] += 1; e.append(f"Forbidden in ZIP: {n}")
                 for r in REQUIRED_FILES:
-                    if r not in nameset: zs["zip_missing_required_total"] += 1; e.append(f"Missing from ZIP: {r}")
+                    if _artifact_path(r) not in nameset: zs["zip_missing_required_total"] += 1; e.append(f"Missing from ZIP: {r}")
                 if manifest and isinstance(manifest.get("files"), list):
                     for item in manifest["files"]:
                         rel = item.get("relative_path")
-                        if isinstance(rel,str) and rel not in nameset and not rel.startswith("validation/"): zs["zip_missing_manifest_total"] += 1; e.append(f"Manifest file missing from ZIP: {rel}")
+                        if isinstance(rel,str):
+                            rel_norm = _artifact_path(rel)
+                            if rel_norm not in nameset and not rel_norm.startswith("validation/"): zs["zip_missing_manifest_total"] += 1; e.append(f"Manifest file missing from ZIP: {rel}")
         except Exception as exc: e.append(f"ZIP error: {exc}")
     checks.append({"name": "zip_integrity", "status": "PASS" if zs["zip_test_ok"] and zs["zip_unsafe_path_total"] == 0 and zs["zip_forbidden_file_total"] == 0 else "FAIL"})
 

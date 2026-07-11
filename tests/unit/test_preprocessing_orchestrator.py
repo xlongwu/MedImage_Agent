@@ -27,9 +27,18 @@ def _make_converted_bids(tmp_path: Path, subjects: int = 1) -> Path:
         anat = root / f"sub-{index:03d}" / "anat"
         func.mkdir(parents=True)
         anat.mkdir(parents=True)
-        (func / f"sub-{index:03d}_task-rest_bold.nii.gz").write_text("fake BOLD", encoding="utf-8")
-        (func / f"sub-{index:03d}_task-rest_bold.json").write_text('{"RepetitionTime": 2.0}', encoding="utf-8")
-        (anat / f"sub-{index:03d}_T1w.nii.gz").write_text("fake T1w", encoding="utf-8")
+        nib.save(
+            nib.Nifti1Image(np.ones((3, 3, 3, 12), dtype=np.float32), affine=np.eye(4)),
+            str(func / f"sub-{index:03d}_task-rest_bold.nii.gz"),
+        )
+        (func / f"sub-{index:03d}_task-rest_bold.json").write_text(
+            '{"RepetitionTime": 2.0, "SliceTiming": [0.0, 0.6, 1.2]}',
+            encoding="utf-8",
+        )
+        nib.save(
+            nib.Nifti1Image(np.ones((3, 3, 3), dtype=np.float32), affine=np.eye(4)),
+            str(anat / f"sub-{index:03d}_T1w.nii.gz"),
+        )
     return root
 
 
@@ -60,6 +69,7 @@ def test_reviewed_orchestrator_blocks_external_stage_without_approval(tmp_path, 
 
     request = PreprocessingPipelineExecuteRequest(
         stages={"dummy_scan_removal": "disabled"},
+        backend_policy={"motion_correction": "spm12"},
         confirmations=_confirmations(),
     )
     result = execute_reviewed_preprocessing_pipeline(
@@ -77,6 +87,32 @@ def test_reviewed_orchestrator_blocks_external_stage_without_approval(tmp_path, 
     assert Path(result.manifest_path).exists()
     realignment = next(item for item in result.stage_results if item.stage_id == "realignment")
     assert any("Approval Gate" in issue for issue in realignment.blocking_issues)
+
+
+def test_reviewed_orchestrator_delegates_default_execution_to_native_full(tmp_path, monkeypatch):
+    created, store = _create_run(tmp_path, monkeypatch)
+    from src.backend.app.schemas.preprocessing_pipeline import PreprocessingPipelineExecuteRequest
+    from src.backend.app.services.preprocessing_orchestrator import execute_reviewed_preprocessing_pipeline
+
+    request = PreprocessingPipelineExecuteRequest(
+        pipeline_profile="fc_minimal",
+        stages={"dummy_scan_removal": "disabled", "functional_connectivity": "disabled"},
+        confirmations=_confirmations(),
+    )
+    result = execute_reviewed_preprocessing_pipeline(
+        "brain-tumor-study",
+        created.preprocessing_run_id,
+        request,
+        project_dir=str(tmp_path),
+        store=store,
+    )
+
+    assert result.approval_gate["native_full_delegated"] is True
+    assert result.safety_flags["reviewed_native_full_delegated"] is True
+    assert result.safety_flags["no_external_tools_executed"] is True
+    realignment = next(item for item in result.stage_results if item.stage_id == "realignment")
+    assert realignment.node_id == "native_preproc_realignment"
+    assert not any(item.node_id.startswith("spm_") for item in result.stage_results)
 
 
 def test_reviewed_orchestrator_resume_reuses_registered_external_outputs(tmp_path, monkeypatch):
@@ -113,6 +149,7 @@ def test_reviewed_orchestrator_resume_reuses_registered_external_outputs(tmp_pat
     request = PreprocessingPipelineExecuteRequest(
         pipeline_profile="custom",
         stages={"realignment": "enabled"},
+        backend_policy={"motion_correction": "spm12"},
         confirmations=_confirmations(),
     )
     result = execute_reviewed_preprocessing_pipeline(
@@ -169,7 +206,7 @@ def test_nuisance_blocks_when_realignment_motion_qc_is_missing(tmp_path, monkeyp
 
     nuisance = next(item for item in result.stage_results if item.stage_id == "nuisance_regression")
     assert nuisance.status == "blocked"
-    assert any("fd_timeseries" in issue for issue in nuisance.blocking_issues)
+    assert any("motion_parameters" in issue for issue in nuisance.blocking_issues)
 
 
 def test_preview_limit_marks_computed_stage_preview_only(tmp_path, monkeypatch):
@@ -210,7 +247,8 @@ def test_preview_limit_marks_computed_stage_preview_only(tmp_path, monkeypatch):
 
     request = PreprocessingPipelineExecuteRequest(
         pipeline_profile="custom",
-        stages={"nuisance_regression": "enabled"},
+        stages={"realignment": "enabled", "nuisance_regression": "enabled"},
+        backend_policy={"motion_correction": "spm12"},
         execution_limits={"preview_limit": 1},
         confirmations=_confirmations(),
     )
@@ -237,6 +275,7 @@ def test_report_and_validation_include_orchestrator_blocked_status(tmp_path, mon
 
     request = PreprocessingPipelineExecuteRequest(
         stages={"dummy_scan_removal": "disabled"},
+        backend_policy={"motion_correction": "spm12"},
         confirmations=_confirmations(),
     )
     execute_reviewed_preprocessing_pipeline(
@@ -258,15 +297,26 @@ def test_report_and_validation_include_orchestrator_blocked_status(tmp_path, mon
     assert validation_realignment["orchestrator_result"]["stage_id"] == "realignment"
 
 
-def test_reviewed_endpoint_is_registered():
+def test_reviewed_endpoint_is_registered(tmp_path):
     from fastapi.testclient import TestClient
+    from src.backend.app.api.dependencies import get_project_store
     from src.backend.app.main import app
+    from src.backend.app.services.mock_store import SQLiteDesktopStore
 
+    store = SQLiteDesktopStore(tmp_path / "api.sqlite")
+    project = store.get_project("brain-tumor-study")
+    assert project is not None
+    project.metadata = {**(project.metadata or {}), "project_dir": str(tmp_path)}
+    store.add_project(project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True)
+    app.dependency_overrides[get_project_store] = lambda: store
     client = TestClient(app)
-    response = client.post(
-        "/api/projects/brain-tumor-study/preprocessing/runs/missing-run/execute-reviewed",
-        json={"confirmations": _confirmations()},
-    )
+    try:
+        response = client.post(
+            "/api/projects/brain-tumor-study/preprocessing/runs/missing-run/execute-reviewed",
+            json={"confirmations": _confirmations()},
+        )
+    finally:
+        app.dependency_overrides.pop(get_project_store, None)
 
     assert response.status_code == 200
     payload = response.json()

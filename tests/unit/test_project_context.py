@@ -127,6 +127,48 @@ def test_plan_api_injects_created_project_paths_before_review(created_project):
         )
 
 
+def test_plan_api_uses_registered_nifti_context_for_native_full_preprocessing(
+    created_project,
+):
+    converted_root = Path(created_project["project_dir"]) / "converted_bids"
+    for subject in ("sub-001", "sub-002", "sub-003"):
+        func_dir = converted_root / subject / "func"
+        anat_dir = converted_root / subject / "anat"
+        func_dir.mkdir(parents=True, exist_ok=True)
+        anat_dir.mkdir(parents=True, exist_ok=True)
+        (func_dir / f"{subject}_task-rest_bold.nii.gz").write_bytes(b"")
+        (anat_dir / f"{subject}_T1w.nii.gz").write_bytes(b"")
+
+    response = client.post(
+        "/api/planner/plan-from-goal",
+        json={
+            "goal": (
+                "rs-fMRI preprocessing with slice timing, realignment, motion QC, "
+                "nuisance regression, detrending, temporal filtering, ROI time series, "
+                "and functional connectivity"
+            ),
+            "project_id": created_project["project_id"],
+            "project_config_path": created_project["project_config_path"],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["project_context"]["diagnostics"]["status"] == "CONVERTED_BIDS"
+    assert payload["project_context"]["diagnostics"]["nifti_file_count"] == 6
+    assert payload["project_context"]["diagnostics"]["subjects_total"] == 3
+    assert payload["project_context"]["diagnostics"]["subject_candidates"] == [
+        "sub-001",
+        "sub-002",
+        "sub-003",
+    ]
+    assert payload["plan"]["pipeline_id"] == "native_full_preprocessing"
+    node_ids = [node["id"] for node in payload["plan"]["nodes"]]
+    assert node_ids == ["native_preproc_full_execute"]
+    assert "spm_realign_subject" not in node_ids
+
+
 def test_plan_api_rejects_synthetic_node_for_created_project(
     created_project,
     monkeypatch,

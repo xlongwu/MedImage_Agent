@@ -206,6 +206,34 @@ def _parse_confounds_tsv(path: Path) -> dict[str, Any] | None:
     return result
 
 
+def _parseable_motion_paths(candidate: dict[str, Any]) -> list[Path]:
+    """Return metric sources worth parsing for one BOLD candidate.
+
+    Readiness may surface auxiliary native TSV outputs such as Friston design
+    matrices next to the actual FD series.  Prefer the explicit FD source when
+    present so those auxiliary files do not become misleading dashboard
+    warnings.
+    """
+
+    fd_source = candidate.get("fd_source_path")
+    if isinstance(fd_source, str) and fd_source:
+        return [Path(fd_source)]
+
+    paths: list[Path] = []
+    for raw in candidate.get("motion_param_paths", []) or []:
+        path = Path(str(raw))
+        name = path.name.lower()
+        if name.startswith("rp_") and name.endswith(".txt"):
+            paths.append(path)
+        elif name.endswith(".tsv") and (
+            "confound" in name
+            or "framewise_displacement" in name
+            or "fd" in name
+        ):
+            paths.append(path)
+    return sorted(set(paths))
+
+
 def _qc_flags(metrics: dict[str, Any]) -> list[str]:
     flags: list[str] = []
     fd = metrics.get("fd_mean")
@@ -331,11 +359,11 @@ def build_motion_metrics_draft(project_id: str) -> MotionMetricsDraftResponse:
     fd_count = 0
 
     for candidate in ready_dict.get("candidates", []):
-        motion_paths = candidate.get("motion_param_paths", [])
+        motion_paths = _parseable_motion_paths(candidate)
         if not motion_paths:
             continue
         for mp in motion_paths:
-            path = Path(mp)
+            path = mp
             subj = candidate.get("subject_id")
             sess = candidate.get("session_id")
             bold = candidate.get("bold_path")

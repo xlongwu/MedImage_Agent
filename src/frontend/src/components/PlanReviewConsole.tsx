@@ -14,7 +14,9 @@ import {
 import { describeExecuteReviewedStatus } from "../lib/executeReviewedStatus";
 import {
   detectExternalToolNodes,
+  detectNativePreprocNodes,
   isExternalToolApprovalComplete,
+  isNativePreprocApprovalComplete,
 } from "../lib/externalToolApproval";
 import type { ExecuteReviewedSeverity } from "../lib/executeReviewedStatus";
 import type { ProjectDetail } from "../lib/types/project";
@@ -141,6 +143,9 @@ export default function PlanReviewConsole({
   const [outputDirectoryConfirmed, setOutputDirectoryConfirmed] = useState(false);
   const [riskAcknowledgement, setRiskAcknowledgement] = useState(false);
   const [subjectScopeConfirmed, setSubjectScopeConfirmed] = useState(false);
+  const [nativePreprocessingAcknowledgement, setNativePreprocessingAcknowledgement] =
+    useState(false);
+  const [noExternalToolsConfirmed, setNoExternalToolsConfirmed] = useState(false);
   const [overwritePolicy, setOverwritePolicy] = useState<
     "fail_if_exists" | "require_explicit_overwrite_approval"
   >("fail_if_exists");
@@ -187,6 +192,11 @@ export default function PlanReviewConsole({
     return detectExternalToolNodes(plan as Record<string, unknown> | null);
   }, [result]);
 
+  const nativePreprocReq = useMemo(() => {
+    const plan = result?.plan ?? null;
+    return detectNativePreprocNodes(plan as Record<string, unknown> | null);
+  }, [result]);
+
   // Helper: build the external-tool approval fields to merge into the approval payload
   function externalToolApprovalFields() {
     if (!externalToolReq.required) return {};
@@ -200,6 +210,17 @@ export default function PlanReviewConsole({
     };
   }
 
+  function nativePreprocApprovalFields() {
+    if (!nativePreprocReq.required) return {};
+    return {
+      native_preprocessing_acknowledgement: nativePreprocessingAcknowledgement,
+      no_external_tools_confirmed: noExternalToolsConfirmed,
+      rawdata_read_only_confirmed: rawdataReadOnlyConfirmed,
+      risk_acknowledgement: riskAcknowledgement,
+      subject_scope_confirmed: subjectScopeConfirmed,
+    };
+  }
+
   const externalToolApprovalComplete = isExternalToolApprovalComplete(externalToolReq, {
     externalToolAcknowledgement,
     rawdataReadOnlyConfirmed,
@@ -207,6 +228,14 @@ export default function PlanReviewConsole({
     riskAcknowledgement,
     subjectScopeConfirmed,
     overwritePolicy,
+  });
+
+  const nativePreprocApprovalComplete = isNativePreprocApprovalComplete(nativePreprocReq, {
+    nativePreprocessingAcknowledgement,
+    noExternalToolsConfirmed,
+    rawdataReadOnlyConfirmed,
+    riskAcknowledgement,
+    subjectScopeConfirmed,
   });
 
   const effectiveProjectId = explicitDemoMode ? undefined : (selectedProjectId ?? undefined);
@@ -241,6 +270,8 @@ export default function PlanReviewConsole({
     setOutputDirectoryConfirmed(false);
     setRiskAcknowledgement(false);
     setSubjectScopeConfirmed(false);
+    setNativePreprocessingAcknowledgement(false);
+    setNoExternalToolsConfirmed(false);
   }, [selectedProjectId, selectedProjectConfigPath, explicitDemoMode, demoProjectConfigPath]);
 
   // ── Load preset draft ──
@@ -625,7 +656,11 @@ export default function PlanReviewConsole({
           review_draft_schema_version: "review-draft-v1",
         }
       : { approved: false };
-    const approval = { ...baseApproval, ...externalToolApprovalFields() };
+    const approval = {
+      ...baseApproval,
+      ...externalToolApprovalFields(),
+      ...nativePreprocApprovalFields(),
+    };
     setApprovalLoading(true);
     try {
       const data = await checkApprovalGate(baseUrl, { plan, validation, approval });
@@ -669,7 +704,11 @@ export default function PlanReviewConsole({
           review_draft_schema_version: "review-draft-v1",
         }
       : { approved: false };
-    const approval = { ...baseApproval, ...externalToolApprovalFields() };
+    const approval = {
+      ...baseApproval,
+      ...externalToolApprovalFields(),
+      ...nativePreprocApprovalFields(),
+    };
     setDryRunLoading(true);
     try {
       const data = await executeReviewedDryRun(baseUrl, {
@@ -729,7 +768,11 @@ export default function PlanReviewConsole({
           review_draft_schema_version: "review-draft-v1",
         }
       : { approved: false };
-    const approval = { ...baseApproval, ...externalToolApprovalFields() };
+    const approval = {
+      ...baseApproval,
+      ...externalToolApprovalFields(),
+      ...nativePreprocApprovalFields(),
+    };
     setExecutionLoading(true);
     try {
       const data = await executeReviewedPlan(baseUrl, {
@@ -1132,6 +1175,65 @@ export default function PlanReviewConsole({
       )}
 
       {/* ── Dry-run Execution Readiness ── */}
+      {result && nativePreprocReq.required && (
+        <div className={styles.style048}>
+          <h4 className={styles.style049}>Native Preprocessing Safety Acknowledgement</h4>
+          <p className={styles.style050}>
+            This plan contains native preprocessing execution nodes:{" "}
+            {nativePreprocReq.nodeIds.join(", ")}. These acknowledgements are required by
+            the backend approval gate before dry-run or execution.
+          </p>
+          <div className={styles.style051}>
+            <label>
+              <input
+                type="checkbox"
+                checked={nativePreprocessingAcknowledgement}
+                onChange={(e) => setNativePreprocessingAcknowledgement(e.target.checked)}
+              />{" "}
+              I acknowledge native full preprocessing will run the reviewed native Python pipeline.
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={noExternalToolsConfirmed}
+                onChange={(e) => setNoExternalToolsConfirmed(e.target.checked)}
+              />{" "}
+              I confirm MATLAB/SPM/DPABI/GPU and other external tools will not be executed.
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={rawdataReadOnlyConfirmed}
+                onChange={(e) => setRawdataReadOnlyConfirmed(e.target.checked)}
+              />{" "}
+              I confirm rawdata must remain read-only.
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={riskAcknowledgement}
+                onChange={(e) => setRiskAcknowledgement(e.target.checked)}
+              />{" "}
+              I acknowledge native preprocessing risks and simplified stages where reported.
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={subjectScopeConfirmed}
+                onChange={(e) => setSubjectScopeConfirmed(e.target.checked)}
+              />{" "}
+              I confirm the subject/session scope has been reviewed.
+            </label>
+          </div>
+          {!nativePreprocApprovalComplete && (
+            <div className={styles.style053}>
+              All native preprocessing acknowledgement checkboxes must be checked for the
+              approval gate to pass.
+            </div>
+          )}
+        </div>
+      )}
+
       {result && (
         <div className={styles.style054}>
           <h4 className={styles.style055}>Dry-run Execution Readiness</h4>
@@ -1143,12 +1245,15 @@ export default function PlanReviewConsole({
             disabled={
               dryRunLoading ||
               Boolean(projectContextError) ||
-              (externalToolReq.required && !externalToolApprovalComplete)
+              (externalToolReq.required && !externalToolApprovalComplete) ||
+              (nativePreprocReq.required && !nativePreprocApprovalComplete)
             }
             title={
               externalToolReq.required && !externalToolApprovalComplete
                 ? "Complete the External Tool Safety Acknowledgement before dry-run."
-                : ""
+                : nativePreprocReq.required && !nativePreprocApprovalComplete
+                  ? "Complete the Native Preprocessing Safety Acknowledgement before dry-run."
+                  : ""
             }
             className={styles.style057}
           >
@@ -1329,11 +1434,14 @@ export default function PlanReviewConsole({
               !effectiveProjectConfigPath ||
               (!explicitDemoMode && !reviewedPlanId) ||
               Boolean(projectContextError) ||
-              (externalToolReq.required && !externalToolApprovalComplete)
+              (externalToolReq.required && !externalToolApprovalComplete) ||
+              (nativePreprocReq.required && !nativePreprocApprovalComplete)
             }
             title={
               externalToolReq.required && !externalToolApprovalComplete
                 ? "Complete the External Tool Safety Acknowledgement before execute."
+                : nativePreprocReq.required && !nativePreprocApprovalComplete
+                  ? "Complete the Native Preprocessing Safety Acknowledgement before execute."
                 : dryRunResult?.status !== "DRY_RUN_OK"
                   ? "Run Dry-run Execution Check first"
                   : !confirmExecution
@@ -1353,7 +1461,9 @@ export default function PlanReviewConsole({
                 confirmExecution &&
                 effectiveProjectConfigPath &&
                 (explicitDemoMode || reviewedPlanId) &&
-                !projectContextError
+                !projectContextError &&
+                !(externalToolReq.required && !externalToolApprovalComplete) &&
+                !(nativePreprocReq.required && !nativePreprocApprovalComplete)
                   ? "#c62828"
                   : "#ccc",
               color:
@@ -1361,7 +1471,9 @@ export default function PlanReviewConsole({
                 confirmExecution &&
                 effectiveProjectConfigPath &&
                 (explicitDemoMode || reviewedPlanId) &&
-                !projectContextError
+                !projectContextError &&
+                !(externalToolReq.required && !externalToolApprovalComplete) &&
+                !(nativePreprocReq.required && !nativePreprocApprovalComplete)
                   ? "#fff"
                   : "#888",
               border: "none",
@@ -1371,11 +1483,21 @@ export default function PlanReviewConsole({
               fontSize: 14,
             }}
           >
-            {executionLoading ? "Requesting..." : "Execute Reviewed Plan"}
+            {executionLoading
+              ? nativePreprocReq.required
+                ? "Running native preprocessing..."
+                : "Requesting..."
+              : "Execute Reviewed Plan"}
           </button>
           <span className={styles.style080}>
             (dry_run=false, confirm_execution=true, persist_audit=true, write_pipeline_yaml=true)
           </span>
+          {executionLoading && nativePreprocReq.required && (
+            <div className={styles.style080}>
+              Native preprocessing is running in the backend and can take several minutes. Keep this
+              window open until the result is returned.
+            </div>
+          )}
 
           {executionError && <div className={styles.style081}>❌ {executionError}</div>}
 

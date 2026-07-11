@@ -51,7 +51,7 @@ def test_python_scientific_stages_are_not_matlab_only() -> None:
         assert spec.scientific_status == "computed"
 
 
-def test_spm_stages_remain_external_gated_and_not_ci_runnable() -> None:
+def test_spatial_stages_default_to_native_with_explicit_spm_backend_available() -> None:
     for stage_id in (
         "slice_timing",
         "realignment",
@@ -61,12 +61,15 @@ def test_spm_stages_remain_external_gated_and_not_ci_runnable() -> None:
         "spatial_smoothing",
     ):
         spec = get_preprocessing_stage_spec(stage_id)
-        assert spec.default_backend == "spm12"
-        assert spec.requires_external_tool
-        assert spec.requires_approval
-        assert spec.requires_env_flags
-        assert not spec.can_run_in_ci
-        assert spec.initial_status == "blocked"
+        assert spec.default_backend == "native_python"
+        assert "native_python" in spec.supported_backends
+        assert "spm12" in spec.supported_backends
+        assert not spec.requires_external_tool
+        assert not spec.requires_approval
+        assert spec.requires_env_flags == []
+        assert spec.can_run_in_ci
+        assert spec.initial_status in {"planned", "skipped"}
+        assert "reference_pending" in spec.validation_status
 
 
 def test_fc_catalog_distinguishes_real_fc_from_preview_risk() -> None:

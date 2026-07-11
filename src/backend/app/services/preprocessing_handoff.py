@@ -215,6 +215,12 @@ def register_converted_bids_as_preprocessing_input(
         project.metadata["preprocessing_input_registry_path"] = registry_result.registry_path
         project.metadata["preprocessing_input_artifact_count"] = registry_result.artifact_count
         project.metadata["preprocessing_input_inventory"] = inventory
+        project.metadata["native_full_preproc_handoff"] = {
+            "conversion_run_id": request.conversion_run_id,
+            "artifact_registry_path": registry_result.registry_path,
+            "input_resolution": "preprocessing_input_registry_path",
+            "status": "ready",
+        }
         try:
             if hasattr(project_store, "add_project"):
                 project_store.add_project(

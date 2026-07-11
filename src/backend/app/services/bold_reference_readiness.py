@@ -19,6 +19,7 @@ from src.backend.app.schemas.desktop import (
 )
 from src.backend.app.services.image_preview import list_image_sources
 from src.backend.app.services.mock_store import mock_store
+from src.backend.app.services.qc_evidence_roots import collect_qc_evidence_roots
 
 _NIFTI_EXT = (".nii", ".nii.gz")
 
@@ -91,15 +92,10 @@ def build_bold_reference_readiness(project_id: str) -> BoldReferenceReadinessRes
             safety_flags=_safety_flags(),
         )
 
-    metadata = project.metadata if isinstance(project.metadata, dict) else {}
-    search_roots: list[str] = []
-    rawdata = str(metadata.get("rawdata_dir") or "")
-    if rawdata:
-        search_roots.append(rawdata)
-    try:
-        search_roots.extend(mock_store.list_import_paths(project_id))
-    except Exception:
-        pass
+    search_roots = [
+        str(root)
+        for root in collect_qc_evidence_roots(project_id, include_native_outputs=False)
+    ]
 
     # Discover BOLD NIfTI files
     bold_paths: list[tuple[str | None, Path, str | None]] = []
@@ -136,8 +132,8 @@ def build_bold_reference_readiness(project_id: str) -> BoldReferenceReadinessRes
     if not bold_paths:
         return BoldReferenceReadinessResponse(
             ok=True, project_id=project_id, status="blocked", checked_at=now,
-            warnings=["No BOLD NIfTI files were found."],
-            next_actions=["Import a BIDS dataset with BOLD functional data."],
+            warnings=["No BOLD NIfTI files were found in registered project evidence roots."],
+            next_actions=["Run DICOM-to-NIfTI conversion or register a BIDS dataset with BOLD functional data."],
             safety_flags=_safety_flags(),
         )
 

@@ -32,7 +32,7 @@ describe("ProjectLifecycleSidebar", () => {
       "page",
     );
     expect(screen.getByRole("button", { name: /data & conversion, completed/i })).toBeEnabled();
-    expect(screen.getByRole("button", { name: /results, blocked/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /results, run first/i })).toBeDisabled();
   });
 
   it("opens reachable lifecycle workspaces from the side rail", async () => {
@@ -54,6 +54,26 @@ describe("ProjectLifecycleSidebar", () => {
     expect(handleChange).toHaveBeenCalledWith("plan");
   });
 
+  it("unlocks results when preprocessing run evidence exists", async () => {
+    const user = userEvent.setup();
+    const handleChange = vi.fn();
+    const handleOpenWorkspace = vi.fn();
+    render(
+      <ProjectLifecycleSidebar
+        activeTab="reports"
+        dataState="mixed"
+        hasPreprocessingRun={true}
+        onChange={handleChange}
+        onOpenWorkspace={handleOpenWorkspace}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /results, available/i }));
+
+    expect(handleOpenWorkspace).toHaveBeenCalledTimes(1);
+    expect(handleChange).toHaveBeenCalledWith("results");
+  });
+
   it("keeps prerequisite-gated workspaces locked until converted data is available", async () => {
     const user = userEvent.setup();
     const handleChange = vi.fn();
@@ -67,10 +87,17 @@ describe("ProjectLifecycleSidebar", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /preprocessing, blocked/i }));
+    await user.click(screen.getByRole("button", { name: /preprocessing, convert/i }));
 
     expect(handleOpenWorkspace).not.toHaveBeenCalled();
     expect(handleChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /preprocessing, convert/i })).toHaveTextContent(
+      "Needs BIDS/NIfTI",
+    );
+    expect(screen.getByRole("button", { name: /preprocessing, convert/i })).toHaveAttribute(
+      "title",
+      "Convert raw DICOM to registered BIDS/NIfTI before preprocessing.",
+    );
   });
 
   it("does not mark a workflow as current while the project library page is open", () => {
@@ -118,7 +145,7 @@ describe("ProjectLifecycleSidebar", () => {
     screen.getByRole("button", { name: "Plan, Available" }).focus();
     await user.keyboard("{ArrowRight}");
 
-    expect(screen.getByRole("button", { name: "Preprocessing, Blocked" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Preprocessing, Convert" })).toBeDisabled();
     expect(handleChange).toHaveBeenCalledWith("runs");
   });
 

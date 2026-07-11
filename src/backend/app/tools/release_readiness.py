@@ -101,8 +101,8 @@ def build_release_readiness():
 
     readme_lines = len(Path("README.md").read_text(encoding="utf-8").splitlines()) if Path("README.md").is_file() else 0
     chk("documentation", "README.md >= 100 lines", readme_lines >= 100, f"Found {readme_lines}")
-    chk("documentation", "planner/gui/desktop doc", Path("docs/planner_gui_desktop.md").is_file())
-    chk("documentation", "external smoke docs", "external smoke" in Path("docs/planner_gui_desktop.md").read_text(encoding="utf-8").lower() if Path("docs/planner_gui_desktop.md").is_file() else False)
+    chk("documentation", "planner/gui/desktop doc", Path("docs/桌面与前端/规划器桌面界面.md").is_file())
+    chk("documentation", "external smoke docs", "external smoke" in Path("docs/桌面与前端/规划器桌面界面.md").read_text(encoding="utf-8").lower() if Path("docs/桌面与前端/规划器桌面界面.md").is_file() else False)
     chk("safety_boundaries", "no DPARSF_run in codebase", True)
     chk("safety_boundaries", "approved=false default", True)
 
@@ -110,14 +110,14 @@ def build_release_readiness():
     m1_docs = [
         ("AGENTS.md", "Codex/通用 Agent 开发指南"),
         ("CLAUDE.md", "Claude Code 专属指南"),
-        ("docs/PROJECT_GOAL.md", "项目长期目标"),
-        ("docs/architecture.md", "完整架构文档"),
-        ("docs/ROADMAP.md", "开发路线图"),
-        ("docs/TASK_BACKLOG.md", "任务待办池"),
-        ("docs/SAFETY_BOUNDARIES.md", "安全边界文档"),
-        ("docs/DEVELOPMENT_WORKFLOW.md", "Agent 开发工作流"),
-        ("docs/DECISIONS/0001-agent-runtime-boundary.md", "ADR-001"),
-        ("docs/DECISIONS/0002-rawdata-readonly.md", "ADR-002"),
+        ("docs/项目概览/项目目标.md", "项目长期目标"),
+        ("docs/架构与决策/系统架构.md", "完整架构文档"),
+        ("docs/项目概览/路线图.md", "开发路线图"),
+        ("docs/项目概览/任务清单.md", "任务待办池"),
+        ("docs/安全与审批/安全边界.md", "安全边界文档"),
+        ("docs/开发与测试/开发工作流.md", "Agent 开发工作流"),
+        ("docs/架构与决策/决策记录/0001_智能体运行时边界.md", "ADR-001"),
+        ("docs/架构与决策/决策记录/0002_原始数据只读.md", "ADR-002"),
     ]
     for path, desc in m1_docs:
         chk("docs_m1", f"file:{path}", Path(path).is_file(), desc)
@@ -131,7 +131,7 @@ def build_release_readiness():
             chk("docs_m1", f"AGENTS.md contains '{kw}'", found)
 
     # ── ARCHITECTURE.md line count ──
-    arch_path = Path("docs/architecture.md")
+    arch_path = Path("docs/架构与决策/系统架构.md")
     if arch_path.is_file():
         arch_lines = len(arch_path.read_text(encoding="utf-8").splitlines())
         chk("docs_m1", "architecture.md >= 100 lines", arch_lines >= 100, f"Found {arch_lines} lines")

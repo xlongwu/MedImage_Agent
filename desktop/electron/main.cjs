@@ -12,9 +12,39 @@ const BACKEND_PAYLOAD_NAME = "medimage-backend.bin";
 const HEALTH_PATH = "/api/health";
 const IS_SMOKE_TEST = process.env.MEDIMAGE_DESKTOP_SMOKE === "1";
 
-if (process.env.MEDIMAGE_DESKTOP_USER_DATA) {
-  app.setPath("userData", path.resolve(process.env.MEDIMAGE_DESKTOP_USER_DATA));
+function findRepositoryRoot(startPath) {
+  let current = path.resolve(startPath);
+  while (true) {
+    if (
+      fs.existsSync(path.join(current, "pyproject.toml")) &&
+      fs.existsSync(path.join(current, "desktop", "electron"))
+    ) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
 }
+
+function resolveDefaultDataRoot() {
+  const anchor = app.isPackaged ? path.dirname(process.execPath) : __dirname;
+  const repositoryRoot = findRepositoryRoot(anchor);
+  return repositoryRoot
+    ? path.join(repositoryRoot, "workspace")
+    : path.join(path.dirname(process.execPath), "workspace");
+}
+
+const DEFAULT_DATA_ROOT = resolveDefaultDataRoot();
+const configuredUserData = process.env.MEDIMAGE_DESKTOP_USER_DATA;
+app.setPath(
+  "userData",
+  configuredUserData
+    ? path.resolve(configuredUserData)
+    : path.join(DEFAULT_DATA_ROOT, ".desktop")
+);
 
 let backendProcess = null;
 let backendStopping = false;
@@ -43,15 +73,17 @@ function getResourcesRoot() {
 }
 
 function getUserWorkspace() {
-  return app.isPackaged
-    ? path.join(app.getPath("userData"), "workspace")
-    : getRepoRoot();
+  if (process.env.MEDIMAGE_DESKTOP_WORKSPACE) {
+    return path.resolve(process.env.MEDIMAGE_DESKTOP_WORKSPACE);
+  }
+  if (configuredUserData) {
+    return path.join(app.getPath("userData"), "workspace");
+  }
+  return DEFAULT_DATA_ROOT;
 }
 
 function getLogPath() {
-  const base = app.isPackaged
-    ? path.join(app.getPath("userData"), "logs")
-    : path.join(getRepoRoot(), "outputs", "work", "desktop");
+  const base = path.join(getUserWorkspace(), "logs", "desktop");
   fs.mkdirSync(base, { recursive: true });
   return path.join(base, "backend-sidecar.log");
 }
@@ -82,6 +114,7 @@ function copySeedDirectory(source, destination) {
 function ensureDesktopWorkspace() {
   const workspace = getUserWorkspace();
   fs.mkdirSync(workspace, { recursive: true });
+  process.env.MEDIMAGE_DESKTOP_WORKSPACE = workspace;
 
   if (app.isPackaged) {
     const seedRoot = path.join(getResourcesRoot(), "workspace_seed");
@@ -92,6 +125,17 @@ function ensureDesktopWorkspace() {
 
   fs.mkdirSync(path.join(workspace, "outputs"), { recursive: true });
   return workspace;
+}
+
+function resolveDcm2niixPath() {
+  const candidates = [
+    process.env.MEDIMAGE_DCM2NIIX_PATH,
+    path.join(getResourcesRoot(), "tools", "windows-x64", "dcm2niix.exe"),
+    path.join(getResourcesRoot(), "tools", "dcm2niix.exe"),
+    path.join(getRepoRoot(), "desktop", "resources", "tools", "windows-x64", "dcm2niix.exe"),
+    path.join(getRepoRoot(), "desktop", "resources", "tools", "dcm2niix.exe"),
+  ];
+  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || "";
 }
 
 function syncRuntimeEnv() {
@@ -164,7 +208,7 @@ function ensureBackendFromPayload(backendResourceDir) {
   }
 
   const payloadStat = fs.statSync(payloadPath);
-  const destinationDir = path.join(app.getPath("userData"), "backend-sidecar");
+  const destinationDir = path.join(getUserWorkspace(), ".runtime", "backend-sidecar");
   const executablePath = path.join(destinationDir, BACKEND_EXE_NAME);
   const stampPath = path.join(destinationDir, ".backend-payload.json");
   const stamp = JSON.stringify({
@@ -270,6 +314,11 @@ async function startBackend() {
   appendBackendLog("desktop", `backend executable: ${backend.executablePath}\n`);
   appendBackendLog("desktop", `backend port: ${port}\n`);
   appendBackendLog("desktop", `frontend path: ${resolveFrontendIndex()}\n`);
+  const dcm2niixPath = resolveDcm2niixPath();
+  appendBackendLog(
+    "desktop",
+    `dcm2niix path: ${dcm2niixPath || "not found in bundled resources"}\n`
+  );
 
   backendProcess = spawn(backend.command, backend.args, {
     cwd: backend.cwd,
@@ -281,6 +330,16 @@ async function startBackend() {
       MEDIMAGE_BACKEND_HOST: API_HOST,
       MEDIMAGE_BACKEND_PORT: String(port),
       MEDIMAGE_GUI_AGENT_PROVIDER: "mock",
+      MEDIMAGE_ENABLE_DICOM_CONVERSION: "1",
+      MEDIMAGE_ENABLE_REVIEWED_EXECUTION: "1",
+      MEDIMAGE_ALLOW_USER_DATA_CONVERSION: "1",
+      MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT: "1",
+      MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE: "1",
+      MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE: "1",
+      MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION: "1",
+      MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE: "1",
+      MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE: "1",
+      ...(dcm2niixPath ? { MEDIMAGE_DCM2NIIX_PATH: dcm2niixPath } : {}),
     },
     stdio: "pipe",
     windowsHide: true,

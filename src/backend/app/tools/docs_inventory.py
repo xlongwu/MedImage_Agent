@@ -8,10 +8,10 @@ def build_docs_inventory() -> dict[str, Any]:
     required = [
         ("README.md", Path("README.md")),
         ("specs/", Path("specs")),
-        ("docs/architecture.md", docs_dir/"architecture.md"),
-        ("docs/user_guide.md", docs_dir/"user_guide.md"),
-        ("docs/developer_guide.md", docs_dir/"developer_guide.md"),
-        ("docs/safety_and_limitations.md", docs_dir/"safety_and_limitations.md"),
+        ("docs/架构与决策/系统架构.md", docs_dir/"architecture.md"),
+        ("docs/用户指南/用户指南.md", docs_dir/"user_guide.md"),
+        ("docs/开发与测试/开发者指南.md", docs_dir/"developer_guide.md"),
+        ("docs/安全与审批/安全与限制.md", docs_dir/"safety_and_limitations.md"),
     ]
 
     for name, path in required:

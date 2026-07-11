@@ -142,6 +142,10 @@ export interface DicomConversionPrepareConfirmations {
   external_converter: boolean;
   rollback_policy: boolean;
   risk_acknowledgement: boolean;
+  approval_audit: boolean;
+  public_endpoint: boolean;
+  frontend_execute: boolean;
+  spm_dpabi_matlab_disabled: boolean;
   confirm_execution: boolean;
 }
 

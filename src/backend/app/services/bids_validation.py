@@ -155,7 +155,7 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
         dd = root / "dataset_description.json"
         if dd.is_file():
             try:
-                json.loads(dd.read_text(encoding="utf-8"))
+                json.loads(dd.read_text(encoding="utf-8-sig"))
             except (JSONDecodeError, OSError):
                 issues.append(_issue(
                     "error", "DATASET_DESC_MALFORMED",
@@ -346,8 +346,13 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
 
     # ── Next actions ──
     next_actions: list[str] = []
+    issue_codes = {str(issue["code"]) for issue in issues}
+    has_bids_content = bool(subject_count or nifti_file_count)
     if status == "fail":
-        next_actions.append("Provide a valid BIDS rawdata directory with sub-* folders.")
+        if "DATASET_DESC_MALFORMED" in issue_codes:
+            next_actions.append("Fix or regenerate dataset_description.json in the root directory.")
+        if not has_bids_content or "ROOT_MISSING" in issue_codes or "LOOSE_NIFTI" in issue_codes:
+            next_actions.append("Provide a valid BIDS rawdata directory with sub-* folders.")
     elif is_raw_dicom:
         next_actions.append("Run DICOM-to-BIDS conversion to produce NIfTI/BIDS outputs.")
     if any(i["code"] == "DATASET_DESC_MISSING" for i in issues):

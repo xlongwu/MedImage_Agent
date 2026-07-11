@@ -88,8 +88,17 @@ def test_endpoint_returns_safety_flags():
     resp = client.get("/api/projects/brain-tumor-study/conversion/release-readiness/conv-test")
     payload = resp.json()
     sf = payload["safety_flags"]
-    assert sf["public_endpoint_disabled"] is True
     assert "public_endpoint_state" in sf
+    assert sf["public_endpoint_state"] in (
+        "absent",
+        "present_default_blocked",
+        "present_enabled",
+        "present_unsafe",
+    )
+    assert sf["public_endpoint_state"] != "present_unsafe"
+    assert sf["public_endpoint_disabled"] is (
+        sf["public_endpoint_state"] == "absent"
+    )
     assert sf["spm_dpabi_matlab_disabled"] is True
     assert sf["full_preprocessing_disabled"] is True
     assert sf["human_release_approval_required"] is True

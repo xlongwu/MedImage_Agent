@@ -38,9 +38,12 @@ export function DataConversionWorkspace({
   const [dryRunRestoreMessage, setDryRunRestoreMessage] = useState("");
   const [detailedChecksOpen, setDetailedChecksOpen] = useState(false);
   const dryRunRequestRef = useRef(0);
-  const isConverted = inventory.dataState === "converted_bids";
-  const isRawConversionState =
-    inventory.dataState === "raw_dicom" || inventory.dataState === "mixed";
+  const hasRegisteredConvertedInput =
+    inventory.hasConvertedData &&
+    !inventory.metadataOnlyNiftiInventory &&
+    (inventory.convertedSubjects > 0 || inventory.niftiFileCount > 0);
+  const isConverted = inventory.dataState === "converted_bids" || hasRegisteredConvertedInput;
+  const isRawConversionState = inventory.dataState === "raw_dicom";
 
   useEffect(() => {
     if (!projectId || !isRawConversionState) {
@@ -115,12 +118,17 @@ export function DataConversionWorkspace({
       <div className={layoutStyles.stack}>
         <WorkspaceHeader
           title="Data & Conversion"
-          subtitle="Converted BIDS/NIfTI project overview."
+          subtitle={
+            inventory.dataState === "mixed"
+              ? "Converted BIDS/NIfTI outputs are registered while source DICOM remains available for audit."
+              : "Converted BIDS/NIfTI project overview."
+          }
           status="Ready"
         />
         <div className={layoutStyles.modeNote}>
-          This project is already in converted BIDS/NIfTI mode. DICOM conversion is not the primary
-          workflow.
+          {inventory.dataState === "mixed"
+            ? "DICOM conversion has completed and registered preprocessing input. Raw DICOM evidence remains visible in detailed checks for audit and review."
+            : "This project is already in converted BIDS/NIfTI mode. DICOM conversion is not the primary workflow."}
         </div>
         <ConvertedInventorySummary inventory={inventory} />
         <div className={layoutStyles.summaryRow}>
@@ -145,7 +153,7 @@ export function DataConversionWorkspace({
         <DetailedDataChecks
           baseUrl={baseUrl}
           includeBidsValidation={false}
-          includeConversionReview={false}
+          includeConversionReview={inventory.dataState === "mixed"}
           inventory={inventory}
           isOpen={detailedChecksOpen}
           onToggle={() => setDetailedChecksOpen((open) => !open)}

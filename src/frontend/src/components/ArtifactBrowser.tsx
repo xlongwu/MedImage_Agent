@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 
 import { getArtifacts, previewArtifact, refreshArtifacts } from "../lib/api/legacy";
+import { getLatestNativeFullPreprocessingRun } from "../lib/api/preprocessing";
 import type { EvidenceLevel } from "../lib/evidence";
 import type { ArtifactSelection } from "../lib/workspaceSelection";
+import type { NativeFullPreprocResponse, NativeFullStageApiResult } from "../types";
 import { EvidenceBadge } from "./domain/EvidenceBadge";
 import { Badge, Button, Card, EmptyState, Table, TableEmpty } from "./ui";
 import { TextViewer } from "./TextViewer";
@@ -10,6 +12,7 @@ import styles from "./ArtifactBrowser.module.css";
 
 type Props = {
   baseUrl: string;
+  projectId?: string | null;
   onSelectedArtifactChange?: (artifact: ArtifactSelection | null) => void;
 };
 
@@ -22,7 +25,10 @@ type ArtifactRecord = {
   category: string;
   preview_supported: boolean;
   preview_type: string;
+  artifact_id?: string | null;
   run_id_guess?: string | null;
+  source?: string | null;
+  stage_id?: string | null;
 };
 
 type ArtifactIndexMeta = {
@@ -49,6 +55,103 @@ function asArtifacts(payload: Record<string, unknown> | null): ArtifactRecord[] 
   return artifacts as ArtifactRecord[];
 }
 
+async function loadArtifactPayload(
+  baseUrl: string,
+  projectId: string | null | undefined,
+  mode: "load" | "refresh",
+): Promise<Record<string, unknown>> {
+  if (projectId) {
+    const projectPayload = await loadProjectNativeArtifactPayload(baseUrl, projectId);
+    if (projectPayload && asArtifacts(projectPayload).length > 0) {
+      return projectPayload;
+    }
+  }
+
+  return mode === "refresh" ? refreshArtifacts(baseUrl) : getArtifacts(baseUrl);
+}
+
+async function loadProjectNativeArtifactPayload(baseUrl: string, projectId: string) {
+  try {
+    const run = await getLatestNativeFullPreprocessingRun(baseUrl, projectId);
+    const artifacts = nativeRunArtifacts(run);
+    if (!artifacts.length) return null;
+
+    return {
+      index: {
+        artifacts_total: artifacts.length,
+        generated_at: latestTimestamp(artifacts) ?? new Date().toISOString(),
+        project_id: run.project_id,
+        run_id: run.run_id,
+        source: "native_preprocessing_latest",
+        artifacts,
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function nativeRunArtifacts(run: NativeFullPreprocResponse): ArtifactRecord[] {
+  if (run.dry_run || !Array.isArray(run.stage_results)) return [];
+
+  const artifacts = run.stage_results.flatMap((stage) =>
+    stage.output_artifacts
+      .map((artifact, index) => nativeArtifactToRecord(run, stage, artifact, index))
+      .filter((artifact): artifact is ArtifactRecord => Boolean(artifact)),
+  );
+
+  const byPath = new Map<string, ArtifactRecord>();
+  for (const artifact of artifacts) {
+    if (!byPath.has(artifact.path)) {
+      byPath.set(artifact.path, artifact);
+    }
+  }
+  return Array.from(byPath.values());
+}
+
+function nativeArtifactToRecord(
+  run: NativeFullPreprocResponse,
+  stage: NativeFullStageApiResult,
+  artifact: Record<string, unknown>,
+  index: number,
+): ArtifactRecord | null {
+  const metadata = asRecord(artifact.metadata);
+  const path = firstString(artifact.path, metadata.path, metadata.relative_path);
+  if (!path) return null;
+
+  const extension = inferExtension(path);
+  const previewType = firstString(artifact.preview_type, metadata.preview_type) ?? previewTypeForExtension(extension);
+  const artifactId = firstString(artifact.artifact_id, metadata.artifact_id);
+  const category =
+    firstString(artifact.artifact_type, metadata.artifact_type, metadata.kind, stage.stage_id) ??
+    "artifact";
+
+  return {
+    artifact_id: artifactId,
+    category,
+    extension,
+    modified_time: firstString(artifact.modified_time, metadata.modified_time, metadata.created_at) ?? "",
+    name:
+      firstString(artifact.name, metadata.name, metadata.filename, fileNameFromPath(path), artifactId) ??
+      `${stage.stage_id}-${index + 1}`,
+    path,
+    preview_supported: coerceBoolean(artifact.preview_supported) ?? isPreviewableExtension(extension),
+    preview_type: previewType,
+    run_id_guess: run.run_id,
+    size_bytes: firstNumber(artifact.size_bytes, metadata.size_bytes) ?? 0,
+    source: "native_preprocessing",
+    stage_id: stage.stage_id,
+  };
+}
+
+function latestTimestamp(artifacts: ArtifactRecord[]): string | null {
+  const latest = artifacts
+    .map((artifact) => Date.parse(artifact.modified_time))
+    .filter(Number.isFinite)
+    .sort((a, b) => b - a)[0];
+  return Number.isFinite(latest) ? new Date(latest).toISOString() : null;
+}
+
 function formatBytes(value: number) {
   if (!Number.isFinite(value)) return "Unknown";
   if (value < 1024) return `${value} B`;
@@ -56,7 +159,7 @@ function formatBytes(value: number) {
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
+export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }: Props) {
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -72,7 +175,7 @@ export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
     onSelectedArtifactChange?.(null);
 
     try {
-      const result = await getArtifacts(baseUrl);
+      const result = await loadArtifactPayload(baseUrl, projectId, "load");
       setPayload(result);
       setStatus("LOADED");
     } catch (e) {
@@ -88,7 +191,7 @@ export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
     onSelectedArtifactChange?.(null);
 
     try {
-      const result = await refreshArtifacts(baseUrl);
+      const result = await loadArtifactPayload(baseUrl, projectId, "refresh");
       setPayload(result);
       setStatus("LOADED");
     } catch (e) {
@@ -131,9 +234,15 @@ export function ArtifactBrowser({ baseUrl, onSelectedArtifactChange }: Props) {
       const matchesExtension = extensionFilter === "all" || a.extension === extensionFilter;
       const matchesSearch =
         !query ||
-        [a.name, a.path, a.category, a.extension, a.run_id_guess ?? ""].some((value) =>
-          value.toLowerCase().includes(query),
-        );
+        [
+          a.name,
+          a.path,
+          a.category,
+          a.extension,
+          a.artifact_id ?? "",
+          a.run_id_guess ?? "",
+          a.stage_id ?? "",
+        ].some((value) => value.toLowerCase().includes(query));
       return matchesCategory && matchesExtension && matchesSearch;
     });
   }, [allArtifacts, categoryFilter, extensionFilter, search]);
@@ -441,6 +550,8 @@ function inferSubject(path: string): string {
 }
 
 function inferStage(artifact: ArtifactRecord): string {
+  if (artifact.stage_id) return artifact.stage_id;
+
   const normalizedPath = artifact.path.toLowerCase();
   const knownStages = [
     "conversion",
@@ -453,5 +564,61 @@ function inferStage(artifact: ArtifactRecord): string {
   ];
   return (
     knownStages.find((stage) => normalizedPath.includes(stage)) ?? artifact.category ?? "unknown"
+  );
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function firstNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    const parsed = typeof value === "number" ? value : Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function coerceBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function fileNameFromPath(path: string): string {
+  const parts = path.split(/[/\\]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : path;
+}
+
+function inferExtension(path: string): string {
+  const name = fileNameFromPath(path);
+  const lowerName = name.toLowerCase();
+  if (lowerName.endsWith(".nii.gz")) return ".nii.gz";
+  const dotIndex = name.lastIndexOf(".");
+  return dotIndex >= 0 ? name.slice(dotIndex) : "";
+}
+
+function previewTypeForExtension(extension: string): string {
+  const normalized = extension.toLowerCase();
+  if (normalized === ".json") return "json";
+  if (normalized === ".tsv" || normalized === ".csv") return "table";
+  if (normalized === ".md" || normalized === ".markdown") return "markdown";
+  if (normalized === ".yaml" || normalized === ".yml") return "yaml";
+  if (normalized === ".txt" || normalized === ".log") return "text";
+  return "metadata_only";
+}
+
+function isPreviewableExtension(extension: string): boolean {
+  return [".json", ".md", ".markdown", ".txt", ".tsv", ".csv", ".yaml", ".yml", ".log"].includes(
+    extension.toLowerCase(),
   );
 }

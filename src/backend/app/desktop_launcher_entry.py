@@ -53,6 +53,22 @@ def _local_app_data() -> Path:
     return Path.home() / "AppData" / "Local"
 
 
+def _find_repository_root(start: Path) -> Path | None:
+    current = start.resolve()
+    while True:
+        if (current / "pyproject.toml").is_file() and (current / "desktop" / "electron").is_dir():
+            return current
+        if current.parent == current:
+            return None
+        current = current.parent
+
+
+def _default_packaged_workspace(executable_dir: Path | None = None) -> Path:
+    base = (executable_dir or Path(sys.executable).resolve().parent).resolve()
+    repository_root = _find_repository_root(base)
+    return (repository_root / "workspace") if repository_root else (base / "workspace")
+
+
 def _copy_seed_dir(seed_root: Path, workspace: Path, name: str) -> None:
     source = seed_root / name
     target = workspace / name
@@ -63,7 +79,7 @@ def _copy_seed_dir(seed_root: Path, workspace: Path, name: str) -> None:
 def prepare_workspace() -> Path:
     if hasattr(sys, "_MEIPASS"):
         workspace_env = os.environ.get("MEDIMAGE_DESKTOP_WORKSPACE")
-        workspace = Path(workspace_env) if workspace_env else _local_app_data() / "MedImage Agent" / "workspace"
+        workspace = Path(workspace_env) if workspace_env else _default_packaged_workspace()
         seed_root = _resource_root() / "workspace_seed"
         workspace.mkdir(parents=True, exist_ok=True)
         for name in ("examples", "docs", "matlab"):

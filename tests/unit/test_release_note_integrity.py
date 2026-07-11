@@ -45,26 +45,30 @@ class TestReleaseNoteTagIntegrity:
     """Historical release notes must match their tag content byte-for-byte."""
 
     RELEASE_NOTES = [
-        ("v0.5.0-rc1", "docs/releases/v0.5.0-rc1.md"),
+        (
+            "v0.5.0-rc1",
+            "docs/发布记录/v0.5.0-rc1.md",
+            "docs/releases/v0.5.0-rc1.md",
+        ),
     ]
 
-    @pytest.mark.parametrize("tag,path", RELEASE_NOTES)
-    def test_release_note_matches_tag(self, tag, path):
+    @pytest.mark.parametrize("tag,current_path,tagged_path", RELEASE_NOTES)
+    def test_release_note_matches_tag(self, tag, current_path, tagged_path):
         """Release note file content must be identical to the tagged version."""
         if not _tag_exists(tag):
             pytest.skip(
                 f"Tag '{tag}' not found in this clone (shallow clone without "
                 f"tags?). Cannot verify release note integrity without the tag."
             )
-        tagged_content = _git_show_file(tag, path)
-        current_content = (_PROJECT / path).read_text(encoding="utf-8")
+        tagged_content = _git_show_file(tag, tagged_path)
+        current_content = (_PROJECT / current_path).read_text(encoding="utf-8")
 
         # Normalise line endings: Windows CRLF ↔ LF
         tagged_normalised = tagged_content.replace("\r\n", "\n")
         current_normalised = current_content.replace("\r\n", "\n")
 
         assert tagged_normalised == current_normalised, (
-            f"{path} differs from tag {tag}. "
+            f"{current_path} differs from tag {tag}. "
             "Per AGENTS.md, historical release notes must not be rewritten "
             "with current main-branch content. "
             "Update the current version's release note, PROJECT_STATE.md, "

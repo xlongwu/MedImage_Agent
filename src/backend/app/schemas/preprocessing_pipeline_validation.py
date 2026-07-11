@@ -13,6 +13,7 @@ class PipelineValidationResponse(BaseModel):
     sandbox_executed_stages: list[str] = Field(default_factory=list)
     registered_outputs: list[str] = Field(default_factory=list)
     metadata_only_stages: list[str] = Field(default_factory=list)
+    preview_only_stages: list[str] = Field(default_factory=list)
     blocked_stages: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)

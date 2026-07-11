@@ -91,6 +91,20 @@ def _make_synth_bold(func_dir, tr=1.5, with_sidecar=True):
         sidecar.write_text(json.dumps({"RepetitionTime": tr, "TaskName": "rest"}))
     return bold_path
 
+def _make_many_synth_bold(func_dir, count=12, tr=2.0):
+    np = pytest.importorskip("numpy")
+    nib = pytest.importorskip("nibabel")
+    for idx in range(1, count + 1):
+        subject = f"sub-{idx:03d}"
+        sub_dir = func_dir / subject / "func"
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        bold_path = sub_dir / f"{subject}_task-rest_bold.nii.gz"
+        data = np.ones((4, 4, 4, 8), dtype=np.float32) * idx
+        nib.save(nib.Nifti1Image(data, np.eye(4)), str(bold_path))
+        (sub_dir / f"{subject}_task-rest_bold.json").write_text(
+            json.dumps({"RepetitionTime": tr, "TaskName": "rest"})
+        )
+
 def _make_dry_run(tmp_path, dry_run_id="dr-synth"):
     dd = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / dry_run_id
     dd.mkdir(parents=True, exist_ok=True)
@@ -168,6 +182,55 @@ def test_succeeded_all_metrics(tmp_path, monkeypatch):
     assert result.subjects_partial == 0
     assert result.alff_computed is True
     assert result.reho_computed is True
+
+def test_default_processes_all_files_and_preview_limit_is_explicit(tmp_path, monkeypatch):
+    np = pytest.importorskip("numpy")
+    _setup(tmp_path, monkeypatch)
+    func_dir = tmp_path / "func_input"; func_dir.mkdir()
+    _make_many_synth_bold(func_dir, count=12, tr=2.0)
+    _make_dry_run(tmp_path)
+
+    def mock_alff(data, *a, **kw):
+        return {
+            "ok": True,
+            "backend": "cpu-numpy",
+            "alff": np.zeros(data.shape[:3], dtype=np.float32),
+            "falff": np.zeros(data.shape[:3], dtype=np.float32),
+            "errors": [],
+        }
+
+    def mock_reho(data, *a, **kw):
+        return {
+            "ok": True,
+            "backend": "cpu-numpy",
+            "reho": np.zeros(data.shape[:3], dtype=np.float32),
+            "valid_voxel_count": int(np.prod(data.shape[:3])),
+            "errors": [],
+        }
+
+    monkeypatch.setattr("src.backend.app.tools.alff_compute.compute_alff_backend", mock_alff)
+    monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_backend", mock_reho)
+
+    full_req = AlffRehoSandboxExecutionRequest(
+        dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
+    full = run_alff_reho_sandbox_execution("proj", "pp-test", full_req, env=_ALL, project_dir=str(tmp_path))
+    assert full.ok
+    assert full.files_discovered == 12
+    assert full.files_selected == 12
+    assert full.dataset_complete is True
+    assert full.status == "succeeded"
+
+    preview_req = AlffRehoSandboxExecutionRequest(
+        dry_run_id="dr-synth", functional_input_dir=str(func_dir), confirm_sandbox_copy=True,
+        preview_limit=3)
+    preview = run_alff_reho_sandbox_execution("proj", "pp-test", preview_req, env=_ALL, project_dir=str(tmp_path))
+    assert preview.ok
+    assert preview.files_discovered == 12
+    assert preview.files_selected == 3
+    assert preview.dataset_complete is False
+    assert preview.status == "partial"
+    provenance = json.loads(Path(preview.provenance_path).read_text())
+    assert provenance["dataset_selection"]["selection_policy"] == "explicit_preview_limit"
 
 def test_partial_status_alff_only(tmp_path, monkeypatch):
     """ALFF succeeds but ReHo fails → status='partial'."""

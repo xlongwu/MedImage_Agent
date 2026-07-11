@@ -417,6 +417,7 @@ class SQLiteDesktopStore:
         """Persist a dashboard project and its referenced rawdata atomically."""
         dataset_id = f"created-{project.id}-rawdata"
         created_at = str(project.metadata.get("created_at") or utc_now_iso())
+        rawdata_dir = rawdata_dir.strip()
         with self._lock, self._connect() as conn:
             existing = conn.execute(
                 "SELECT 1 FROM projects WHERE id = ?",
@@ -447,18 +448,19 @@ class SQLiteDesktopStore:
                 """,
                 (project.id, health_status),
             )
-            conn.execute(
-                """
-                INSERT INTO imports (dataset_id, project_id, path, dataset_type, created_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(dataset_id) DO UPDATE SET
-                    project_id = excluded.project_id,
-                    path = excluded.path,
-                    dataset_type = excluded.dataset_type,
-                    created_at = excluded.created_at
-                """,
-                (dataset_id, project.id, rawdata_dir, dataset_type, created_at),
-            )
+            if rawdata_dir:
+                conn.execute(
+                    """
+                    INSERT INTO imports (dataset_id, project_id, path, dataset_type, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(dataset_id) DO UPDATE SET
+                        project_id = excluded.project_id,
+                        path = excluded.path,
+                        dataset_type = excluded.dataset_type,
+                        created_at = excluded.created_at
+                    """,
+                    (dataset_id, project.id, rawdata_dir, dataset_type, created_at),
+                )
         return project
 
     def remove_project(self, project_id: str) -> bool:
@@ -956,7 +958,7 @@ class SQLiteDesktopStore:
                 """,
                 (project_id,),
             ).fetchall()
-        return [str(row["path"]) for row in rows]
+        return [path for row in rows if (path := str(row["path"]).strip())]
 
     def list_import_records(self, project_id: str) -> list[dict[str, object]]:
         with self._lock, self._connect() as conn:
@@ -975,7 +977,7 @@ class SQLiteDesktopStore:
                 "path": row["path"],
                 "dataset_type": row["dataset_type"],
                 "created_at": row["created_at"],
-                "exists": Path(str(row["path"])).exists(),
+                "exists": bool(path := str(row["path"]).strip()) and Path(path).exists(),
             }
             for row in rows
         ]

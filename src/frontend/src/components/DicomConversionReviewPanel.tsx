@@ -9,6 +9,7 @@ import type {
   Dcm2niixCommandTemplate,
   DicomConversionMapping,
   DicomConversionPlanPersistenceResponse,
+  DicomConversionPrepareResponse,
   DicomConversionPreflightResponse,
   DicomConversionReleaseReadinessReport,
   DicomConversionSafetyFlags,
@@ -70,13 +71,16 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
   const [showTechDetails, setShowTechDetails] = useState(false);
   const [releaseReadiness, setReleaseReadiness] =
     useState<DicomConversionReleaseReadinessReport | null>(null);
+  const [preparedConversionRunId, setPreparedConversionRunId] = useState("");
   const reqRef = useRef(0);
   const canPersistReview = Boolean(data && data.mapping_count > 0);
+  const activeConversionRunId = preparedConversionRunId || persistResult?.conversion_run_id || "";
 
   useEffect(() => {
     setData(null);
     setPersistResult(null);
     setReleaseReadiness(null);
+    setPreparedConversionRunId("");
     if (projectId) {
       handleRun();
     }
@@ -127,6 +131,13 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
     }
   }
 
+  function handlePrepared(response: DicomConversionPrepareResponse) {
+    if (response.conversion_run_id) {
+      setPreparedConversionRunId(response.conversion_run_id);
+      setReleaseReadiness(null);
+    }
+  }
+
   if (!projectId)
     return (
       <Sect>
@@ -162,7 +173,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
 
       <div className={styles.style002}>
         <button onClick={handleRun} disabled={loading} className={styles.style003}>
-          {loading ? "Running preflight..." : "Run conversion preflight"}
+          {loading ? "Checking readiness..." : data ? "Refresh readiness" : "Check conversion readiness"}
         </button>
         {data && (
           <button
@@ -184,15 +195,15 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
               opacity: canPersistReview ? 1 : 0.82,
             }}
           >
-            {persisting ? "Saving..." : "Persist review package"}
+            {persisting ? "Saving..." : "Save review draft"}
           </button>
         )}
       </div>
 
-      {loading && <div className={`empty ${styles.style049}`}>Running conversion preflight...</div>}
+      {loading && <div className={`empty ${styles.style049}`}>Checking conversion readiness...</div>}
       {!data && !loading && (
         <div className={`empty ${styles.style050}`}>
-          Click the button above to run a conversion readiness preflight.
+          Click the button above to check conversion readiness.
         </div>
       )}
       {data && data.mapping_count <= 0 && (
@@ -434,20 +445,24 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
       )}
 
       {/* Phase 4K-1: Release Readiness Panel */}
-      {persistResult?.conversion_run_id && (
+      {activeConversionRunId && (
         <ReleaseReadinessSection
+          baseUrl={effectiveBase}
           projectId={projectId!}
-          conversionRunId={persistResult.conversion_run_id}
+          conversionRunId={activeConversionRunId}
+          readiness={releaseReadiness}
+          onReadinessChange={setReleaseReadiness}
         />
       )}
 
       {/* Phase 4L-4: Flag-gated DICOM Conversion Execute Panel */}
-      {persistResult?.conversion_run_id && (
+      {(activeConversionRunId || (data && data.mapping_count > 0)) && (
         <DicomConversionExecutePanel
           baseUrl={effectiveBase}
           projectId={projectId!}
-          conversionRunId={persistResult.conversion_run_id}
+          conversionRunId={activeConversionRunId}
           readiness={releaseReadiness}
+          onPrepared={handlePrepared}
         />
       )}
     </Sect>
@@ -520,13 +535,18 @@ const Sub: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 function ReleaseReadinessSection({
+  baseUrl,
   projectId,
   conversionRunId,
+  readiness,
+  onReadinessChange,
 }: {
+  baseUrl: string;
   projectId: string;
   conversionRunId: string;
+  readiness: DicomConversionReleaseReadinessReport | null;
+  onReadinessChange: (readiness: DicomConversionReleaseReadinessReport | null) => void;
 }) {
-  const [rr, setRr] = useState<DicomConversionReleaseReadinessReport | null>(null);
   const [rrLoading, setRrLoading] = useState(false);
   const [rrError, setRrError] = useState("");
 
@@ -535,11 +555,11 @@ function ReleaseReadinessSection({
     setRrError("");
     try {
       const res = await getProjectDicomConversionReleaseReadiness(
-        DEFAULT_API_BASE,
+        baseUrl,
         projectId,
         conversionRunId,
       );
-      setRr(res as DicomConversionReleaseReadinessReport);
+      onReadinessChange(res as DicomConversionReleaseReadinessReport);
     } catch (e) {
       setRrError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -549,7 +569,7 @@ function ReleaseReadinessSection({
 
   return (
     <DicomConversionReleaseReadinessPanel
-      readiness={rr}
+      readiness={readiness}
       loading={rrLoading}
       error={rrError}
       onRefresh={handleCheck}

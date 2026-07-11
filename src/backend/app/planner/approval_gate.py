@@ -38,6 +38,17 @@ def _high_risk_node_ids_from_plan(plan: dict[str, Any]) -> set[str]:
     return result
 
 
+def _native_full_execute_node_ids_from_plan(plan: dict[str, Any]) -> set[str]:
+    nodes = plan.get("nodes", []) or []
+    result: set[str] = set()
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        if node.get("id") == "native_preproc_full_execute":
+            result.add("native_preproc_full_execute")
+    return result
+
+
 # ── Dataclasses ──────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
@@ -59,6 +70,8 @@ class ApprovalRecord:
     risk_acknowledgement: bool | None = None
     overwrite_policy: str | None = None
     subject_scope_confirmed: bool | None = None
+    native_preprocessing_acknowledgement: bool | None = None
+    no_external_tools_confirmed: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -181,6 +194,8 @@ def check_approval_gate(
             "risk_acknowledgement": approval.risk_acknowledgement,
             "overwrite_policy": approval.overwrite_policy,
             "subject_scope_confirmed": approval.subject_scope_confirmed,
+            "native_preprocessing_acknowledgement": approval.native_preprocessing_acknowledgement,
+            "no_external_tools_confirmed": approval.no_external_tools_confirmed,
         }
     else:
         appr_dict = approval
@@ -286,6 +301,84 @@ def check_approval_gate(
                 errors=errors,
             )
 
+    # ── 12. Native full preprocessing requires explicit safety acknowledgements ──
+    native_full_execute_nodes = _native_full_execute_node_ids_from_plan(plan)
+    if native_full_execute_nodes:
+        native_ack = appr_dict.get("native_preprocessing_acknowledgement")
+        if native_ack is not True:
+            errors.append(ApprovalGateIssue(
+                "NATIVE_PREPROC_ACKNOWLEDGEMENT_REQUIRED",
+                "native_preproc_full_execute requires native_preprocessing_acknowledgement=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False,
+                execution_allowed=False,
+                approval_required=True,
+                approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        no_external_tools = appr_dict.get("no_external_tools_confirmed")
+        if no_external_tools is not True:
+            errors.append(ApprovalGateIssue(
+                "NATIVE_PREPROC_NO_EXTERNAL_TOOLS_CONFIRMATION_REQUIRED",
+                "native_preproc_full_execute requires no_external_tools_confirmed=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False,
+                execution_allowed=False,
+                approval_required=True,
+                approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        rawdata_confirm = appr_dict.get("rawdata_read_only_confirmed")
+        if rawdata_confirm is not True:
+            errors.append(ApprovalGateIssue(
+                "NATIVE_PREPROC_RAWDATA_READ_ONLY_CONFIRMATION_REQUIRED",
+                "native_preproc_full_execute requires rawdata_read_only_confirmed=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False,
+                execution_allowed=False,
+                approval_required=True,
+                approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        risk_ack = appr_dict.get("risk_acknowledgement")
+        if risk_ack is not True:
+            errors.append(ApprovalGateIssue(
+                "NATIVE_PREPROC_RISK_ACKNOWLEDGEMENT_REQUIRED",
+                "native_preproc_full_execute requires risk_acknowledgement=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False,
+                execution_allowed=False,
+                approval_required=True,
+                approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
+        subject_scope = appr_dict.get("subject_scope_confirmed")
+        if subject_scope is not True:
+            errors.append(ApprovalGateIssue(
+                "NATIVE_PREPROC_SUBJECT_SCOPE_CONFIRMATION_REQUIRED",
+                "native_preproc_full_execute requires subject_scope_confirmed=true.",
+            ))
+            return ApprovalGateResult(
+                ok=False,
+                execution_allowed=False,
+                approval_required=True,
+                approved=True,
+                missing_approval_nodes=list(approval_required_nodes),
+                errors=errors,
+            )
+
     # ── 12. manual_required nodes block execution (MVP) ──
     if manual_required_nodes:
         errors.append(ApprovalGateIssue(
@@ -388,6 +481,12 @@ def check_approval_gate(
         warnings.append(ApprovalGateIssue(
             "HIGH_RISK_APPROVED",
             f"High-risk nodes approved: {', '.join(high_risk_nodes)}. Proceed with caution.",
+            severity="warning",
+        ))
+    if native_full_execute_nodes:
+        warnings.append(ApprovalGateIssue(
+            "NATIVE_PREPROC_APPROVED",
+            "Native full preprocessing execution approved with rawdata-readonly and no-external-tool acknowledgements.",
             severity="warning",
         ))
 

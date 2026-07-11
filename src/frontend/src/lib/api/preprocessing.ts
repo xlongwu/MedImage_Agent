@@ -99,6 +99,70 @@ export async function executeReviewedPreprocessingPipeline(
   );
 }
 
+export async function runNativeFullPreprocessingDryRun(
+  baseUrl: string,
+  projectId: string,
+  body: import("../../types").NativeFullPreprocRequest,
+) {
+  return requestJson<import("../../types").NativeFullPreprocResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/full/dry-run`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export async function executeNativeFullPreprocessing(
+  baseUrl: string,
+  projectId: string,
+  body: import("../../types").NativeFullPreprocRequest,
+) {
+  return requestJson<import("../../types").NativeFullPreprocResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/full/execute`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
+export async function getNativeFullPreprocessingRun(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+) {
+  return requestJson<import("../../types").NativeFullPreprocResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/runs/${encodeURIComponent(runId)}`,
+  );
+}
+
+export async function getLatestNativeFullPreprocessingRun(baseUrl: string, projectId: string) {
+  return requestJson<import("../../types").NativeFullPreprocResponse>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/runs/latest`,
+  );
+}
+
+export async function getNativeFullPreprocessingValidation(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+) {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/runs/${encodeURIComponent(runId)}/validation`,
+  );
+}
+
+export async function getNativeFullPreprocessingReport(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+) {
+  return requestJson<Record<string, unknown>>(
+    baseUrl,
+    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/runs/${encodeURIComponent(runId)}/report`,
+  );
+}
+
 export async function executeSpmSandboxSliceTimingRealign(
   baseUrl: string,
   projectId: string,

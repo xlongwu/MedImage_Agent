@@ -1,7 +1,7 @@
 # MedImage Agent
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/version-v0.6.0--rc1-1976d2)](docs/releases/v0.6.0-rc1.md)
+[![Version](https://img.shields.io/badge/version-v0.6.0--rc1-1976d2)](docs/发布记录/v0.6.0-rc1.md)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.136%2B-green)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18%2B-61dafb)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5%2B-3178c6)](https://www.typescriptlang.org/)
@@ -15,7 +15,7 @@ Pipeline Runtime 和注册节点 runner 内。
 本项目是研究工程平台，不用于临床诊断或医疗决策。
 
 当前发布线：**v0.6.0-rc1**。详见
-[发布说明](docs/releases/v0.6.0-rc1.md)。
+[发布说明](docs/发布记录/v0.6.0-rc1.md)。
 
 ## 快速开始
 
@@ -78,7 +78,7 @@ powershell -ExecutionPolicy Bypass -File desktop\packaging\build_all_windows.ps1
 `desktop/electron/dist/win-unpacked/MedImage Agent.exe`。构建成功只证明制品已组装，
 不能替代交互式 GUI 工作流 smoke 验证。
 
-详见[桌面应用打包](docs/DESKTOP_APP_PACKAGING.md)。
+详见[桌面应用打包](docs/桌面与前端/桌面应用打包.md)。
 
 ## 架构
 
@@ -97,7 +97,7 @@ artifact。运行时状态写入使用原子文件写入。Pipeline Runtime 是�
 执行路径。
 
 当前 router、service、schema、node registry、前端 API、存储和桌面边界见
-[架构文档](docs/architecture.md)。
+[架构文档](docs/架构与决策/系统架构.md)。
 
 ## 当前稳定工作流
 
@@ -183,13 +183,13 @@ tests/
 ## 文档
 
 - [当前项目状态](PROJECT_STATE.md)
-- [架构文档](docs/architecture.md)
-- [发布说明 v0.6.0-rc1](docs/releases/v0.6.0-rc1.md)
-- [发布说明 v0.4.0-rc1](docs/releases/v0.4.0-rc1.md)
-- [发布说明 v0.3.0-rc1](docs/releases/v0.3.0-rc1.md)
-- [桌面应用打包](docs/DESKTOP_APP_PACKAGING.md)
-- [真实项目运行生命周期](docs/REAL_PROJECT_RUN_LIFECYCLE.md)
-- [安全边界](docs/SAFETY_BOUNDARIES.md)
+- [架构文档](docs/架构与决策/系统架构.md)
+- [发布说明 v0.6.0-rc1](docs/发布记录/v0.6.0-rc1.md)
+- [发布说明 v0.4.0-rc1](docs/发布记录/v0.4.0-rc1.md)
+- [发布说明 v0.3.0-rc1](docs/发布记录/v0.3.0-rc1.md)
+- [桌面应用打包](docs/桌面与前端/桌面应用打包.md)
+- [真实项目运行生命周期](docs/安全与审批/真实项目运行生命周期.md)
+- [安全边界](docs/安全与审批/安全边界.md)
 
 ## 许可证
 

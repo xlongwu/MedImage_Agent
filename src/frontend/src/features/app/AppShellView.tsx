@@ -9,14 +9,16 @@ import type {
 } from "../../lib/types/image";
 import type { ProjectDetail } from "../../lib/types/project";
 import type { PresetPlanDraft } from "../../types";
+import type { NativeFullPreprocResponse } from "../../types";
 import type { ModelStatus } from "../../lib/types/model";
 import type { DatasetSummary } from "../../lib/types/dataset";
 import type { AppController } from "../app/useAppController";
 import type { ProjectController } from "../projects/useProjectController";
 import type { TaskController } from "../tasks/useTaskController";
 import type { ThemePreference } from "../../hooks/useAppState";
-import type { ProjectInventory } from "../../lib/projectWorkflow";
-import type { WorkflowTab } from "../../lib/projectWorkflow";
+import { getLatestNativeFullPreprocessingRun } from "../../lib/api/preprocessing";
+import { hasNativePreprocessingRunEvidence } from "../../lib/projectWorkflow";
+import type { ProjectInventory, WorkflowTab } from "../../lib/projectWorkflow";
 import type {
   ArtifactSelection,
   DataSeriesSelection,
@@ -83,6 +85,7 @@ export type AppShellViewProps = {
     | "reloadTaskDiagnostics"
     | "taskStreamConnected"
     | "hasPreprocessingRun"
+    | "latestPreprocessingRunId"
   >;
   taskStream: { error: string | null };
   app: Pick<
@@ -198,6 +201,8 @@ export function AppShellView({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
   const [projectsPageOpen, setProjectsPageOpen] = useState(false);
+  const [latestNativePreprocessingRun, setLatestNativePreprocessingRun] =
+    useState<NativeFullPreprocResponse | null>(null);
   const selectedProject = selectedProjectId ? project : null;
   const projectDir =
     typeof selectedProject?.data.metadata?.project_dir === "string"
@@ -222,6 +227,14 @@ export function AppShellView({
     activeWorkflow: app.activeWorkflow as WorkflowTab,
     inventory: projectInventory,
   });
+  const hasPreprocessingRun =
+    taskController.hasPreprocessingRun ||
+    hasNativePreprocessingRunEvidence(latestNativePreprocessingRun);
+  const latestPreprocessingRunId =
+    taskController.latestPreprocessingRunId ||
+    (hasNativePreprocessingRunEvidence(latestNativePreprocessingRun)
+      ? latestNativePreprocessingRun?.run_id ?? null
+      : null);
   const hasSystemMessages = Boolean(
     app.notice ||
     projectController.projectCreateResult ||
@@ -241,6 +254,35 @@ export function AppShellView({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setLatestNativePreprocessingRun(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLatestNativePreprocessingRun(null);
+
+    const refreshLatestNativeRun = () => {
+      void getLatestNativeFullPreprocessingRun(baseUrl, selectedProjectId)
+        .then((response) => {
+          if (!cancelled && response?.run_id) {
+            setLatestNativePreprocessingRun(response);
+          }
+        })
+        .catch(() => {
+          // Native preprocessing is optional for new projects; keep the shell quiet.
+        });
+    };
+
+    refreshLatestNativeRun();
+    const intervalId = window.setInterval(refreshLatestNativeRun, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [baseUrl, selectedProjectId]);
 
   return (
     <AppShell
@@ -301,7 +343,7 @@ export function AppShellView({
           <ProjectLifecycleSidebar
             activeTab={app.activeWorkflow as WorkflowTab}
             dataState={projectInventory?.dataState}
-            hasPreprocessingRun={taskController.hasPreprocessingRun}
+            hasPreprocessingRun={hasPreprocessingRun}
             projectsPageOpen={projectsPageOpen}
             onChange={app.setActiveWorkflow}
             onOpenWorkspace={() => setProjectsPageOpen(false)}
@@ -392,7 +434,7 @@ export function AppShellView({
           overview={
             <ProjectOverviewHeader
               inventory={projectInventory}
-              hasPreprocessingRun={taskController.hasPreprocessingRun}
+              hasPreprocessingRun={hasPreprocessingRun}
               onPrimaryAction={() => {
                 app.setActiveWorkflow(
                   projectInventory?.dataState === "converted_bids" ? "preprocessing" : "data",
@@ -458,7 +500,8 @@ export function AppShellView({
                 projectId={selectedProjectId}
                 dataState={projectInventory?.dataState ?? "raw_dicom"}
                 inventory={projectInventory}
-                hasPreprocessingRun={taskController.hasPreprocessingRun}
+                hasPreprocessingRun={hasPreprocessingRun}
+                preprocessingRunId={latestPreprocessingRunId}
                 onOpenDataConversion={() => app.setActiveWorkflow("data")}
                 onOpenToolsDrawer={() => app.setDrawerOpen(true)}
               />

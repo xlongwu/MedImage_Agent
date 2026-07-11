@@ -23,6 +23,8 @@ from src.backend.app.runtime import desktop_config
 from src.backend.app.services import (
     bold_reference_readiness,
     motion_qc_readiness,
+    nifti_qc_snapshot,
+    qc_evidence_roots,
     spm_realign_dry_run,
     spm_realign_wrapper_skeleton,
 )
@@ -34,7 +36,7 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, spm_realign_dry_run, spm_realign_wrapper_skeleton,
+    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, nifti_qc_snapshot, qc_evidence_roots, spm_realign_dry_run, spm_realign_wrapper_skeleton,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
@@ -124,6 +126,39 @@ def test_empty_rawdata_returns_wellformed(tmp_path, monkeypatch):
     body = client.get(f"/api/projects/{c['project_id']}/nifti-qc/snapshot").json()
     assert "status" in body
     assert isinstance(body["image_count"], int)
+
+
+def test_registered_converted_bids_is_used_when_rawdata_has_no_nifti(tmp_path, monkeypatch):
+    try:
+        import nibabel as nib
+    except ImportError:
+        pytest.skip("nibabel not installed")
+
+    rawdata = tmp_path / "dicom_rawdata"
+    rawdata.mkdir()
+    converted = tmp_path / "converted_bids"
+    bold_dir = converted / "sub-001" / "func"
+    bold_dir.mkdir(parents=True)
+    bold_path = bold_dir / "sub-001_task-rest_bold.nii.gz"
+    img = nib.Nifti1Image(np.random.randn(4, 4, 4, 5).astype(np.float32), np.eye(4))
+    nib.save(img, str(bold_path))
+
+    store = _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+    c = _create(client, tmp_path, rawdata, "converted")
+    project = store.get_project(c["project_id"])
+    assert project is not None
+    metadata = dict(project.metadata or {})
+    metadata["preprocessing_input_dir"] = str(converted)
+    metadata["converted_bids_dir"] = str(converted)
+    updated = project.model_copy(update={"metadata": metadata})
+    store.add_project(updated, health_status="Review", rawdata_dir=str(rawdata), overwrite=True)
+
+    body = client.get(f"/api/projects/{c['project_id']}/nifti-qc/snapshot").json()
+    assert body["image_count"] == 1
+    assert body["four_d_count"] == 1
+    assert body["warnings"] == []
+    assert body["images"][0]["path"] == str(bold_path.resolve())
 
 
 def test_ignores_arbitrary_path(tmp_path, monkeypatch):

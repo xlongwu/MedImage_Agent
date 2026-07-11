@@ -24,6 +24,7 @@ export interface TaskController {
   selectedTask: TaskLogEntry | null;
   taskCounts: { completed: number; running: number; failed: number };
   hasPreprocessingRun: boolean;
+  latestPreprocessingRunId: string | null;
   taskEvents: TaskEvent[];
   taskEventsLoading: boolean;
   taskEventsError: string;
@@ -135,6 +136,14 @@ export function useTaskController(
     );
   }, [tasks.data]);
 
+  const latestPreprocessingRunId = useMemo(() => {
+    for (const task of tasks.data) {
+      const candidate = preprocessingRunIdFromTask(task);
+      if (candidate) return candidate;
+    }
+    return null;
+  }, [tasks.data]);
+
   const handleApproveSelectedTask = useCallback(async () => {
     if (!selectedTaskId) return;
     if (!approvalName.trim()) {
@@ -191,6 +200,7 @@ export function useTaskController(
     selectedTask,
     taskCounts,
     hasPreprocessingRun,
+    latestPreprocessingRunId,
     taskEvents: taskEvents.data,
     taskEventsLoading: taskEvents.loading,
     taskEventsError: taskEvents.error,
@@ -209,4 +219,17 @@ export function useTaskController(
     setAuditPackage,
     taskEventsSetData: taskEvents.setData,
   };
+}
+
+function preprocessingRunIdFromTask(task: TaskLogEntry): string | null {
+  const searchable = [task.id, task.run_name, task.pipeline, task.result_path ?? ""].join(" ");
+  if (!/preprocess/i.test(searchable)) {
+    return null;
+  }
+  const pathMatch = searchable.match(/preprocessing_runs[\\/]+([A-Za-z0-9_-]+)/i);
+  if (pathMatch?.[1]) {
+    return pathMatch[1];
+  }
+  const ppMatch = searchable.match(/\b(pp-[A-Za-z0-9_-]+)\b/i);
+  return ppMatch?.[1] ?? null;
 }

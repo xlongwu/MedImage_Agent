@@ -8,7 +8,7 @@ Does NOT execute dcm2niix.  Does NOT modify rawdata.  Does NOT create
 converted outputs.  Does NOT call subprocess.
 
 Reference:
-  docs/DICOM_CONVERSION_RELEASE_HARDENING.md
+  docs/预处理与科学计算/DICOM转换/发布加固.md
   src/backend/app/schemas/dicom_conversion_release_readiness.py
 """
 
@@ -172,17 +172,16 @@ def evaluate_conversion_release_readiness(
 def _is_public_conversion_endpoint_present() -> bool:
     """Check whether a public /conversion/execute endpoint exists.
 
-    Inspects the API routes to verify no public execute endpoint is registered.
-    Does NOT call any endpoint.  Does NOT import FastAPI test clients.
+    Inspects the registered conversion router at runtime.  It does NOT scan
+    source files, call any endpoint, or import FastAPI test clients.
     """
-    # The public endpoint must NOT exist.  We verify by checking routes.
     try:
-        from src.backend.app.api.routes import router
-        for route in router.routes:
+        from src.backend.app.api.conversion_routes import router as conversion_router
+
+        for route in conversion_router.routes:
             if hasattr(route, "path"):
                 rp = str(getattr(route, "path", ""))
                 if "conversion/execute" in rp or "conversion/run" in rp:
-                    # Check if it's a POST (execute) or just a GET (readiness check)
                     methods = getattr(route, "methods", set())
                     if "POST" in methods:
                         return True
@@ -227,30 +226,34 @@ def _classify_public_endpoint_state() -> str:
 
 
 def _is_frontend_execute_button_present() -> bool:
-    """Check whether a frontend 'Run Conversion' button exists.
+    """Check whether frontend DICOM execute UI is enabled at runtime.
 
-    Scans the DicomConversionReviewPanel for onClick handlers that trigger
-    conversion execution.  Does NOT import React or run JS.
+    The backend must not scan packaged frontend source files.  Runtime
+    readiness therefore relies on explicit build/runtime flags mirrored into
+    the backend environment or desktop config.
     """
     import os
-    panel_paths = [
-        "src/frontend/src/components/DicomConversionReviewPanel.tsx",
-        "src/frontend/src/components/DicomConversionReviewPanel.jsx",
-    ]
-    for rel_path in panel_paths:
-        full = os.path.join(os.getcwd(), rel_path)
-        if os.path.exists(full):
-            try:
-                lines = open(full, encoding="utf-8").read().splitlines()
-                for line in lines:
-                    stripped = line.strip()
-                    if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
-                        continue
-                    if "onClick" in stripped and ("Run Conversion" in stripped or "runConversion" in stripped):
-                        return True
-            except Exception:
-                pass
-    return False
+
+    env_flags = (
+        "MEDIMAGE_FRONTEND_DICOM_EXECUTE_UI_ENABLED",
+        "MEDIMAGE_DICOM_EXECUTE_UI_ENABLED",
+        "VITE_ENABLE_DICOM_EXECUTE_UI",
+    )
+    if any(os.environ.get(flag) == "1" for flag in env_flags):
+        return True
+
+    try:
+        from src.backend.app.runtime.desktop_config import get_desktop_config
+
+        config = get_desktop_config(redacted=True)
+        frontend = config.get("frontend", {}) if isinstance(config, dict) else {}
+        dicom = config.get("dicom_conversion", {}) if isinstance(config, dict) else {}
+        return bool(
+            frontend.get("dicom_execute_ui_enabled")
+            or dicom.get("execute_ui_enabled")
+        )
+    except Exception:
+        return False
 
 
 def _is_spm_dpabi_matlab_enabled() -> bool:
