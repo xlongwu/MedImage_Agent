@@ -9,7 +9,7 @@ describe("AppShell", () => {
       <AppShell
         topBar={<header>Top bar</header>}
         systemMessages={<div>Backend offline</div>}
-        sidebar={<nav aria-label="Project lifecycle">Lifecycle</nav>}
+        lifecycle={<nav aria-label="Project lifecycle">Lifecycle</nav>}
         inspector={<aside aria-label="Context inspector">Inspector</aside>}
         inspectorOpen={true}
         runActivity={<div role="status">Run active</div>}
@@ -28,7 +28,7 @@ describe("AppShell", () => {
 
   it("omits optional inspector and message slots when closed", () => {
     render(
-      <AppShell topBar={<header>Top bar</header>} sidebar={<nav>Lifecycle</nav>}>
+      <AppShell topBar={<header>Top bar</header>} lifecycle={<nav>Lifecycle</nav>}>
         Workspace
       </AppShell>,
     );

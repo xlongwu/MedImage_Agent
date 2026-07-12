@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_API_BASE, getDesktopHealth } from "../lib/api";
+import { useI18n } from "../i18n/useI18n";
 
 type Props = { baseUrl?: string };
 
@@ -15,6 +16,7 @@ const pill: React.CSSProperties = {
 };
 
 export default function EnvironmentHealthPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,8 +26,10 @@ export default function EnvironmentHealthPanel({ baseUrl }: Props) {
   useEffect(() => {
     const id = reqRef.current + 1;
     reqRef.current = id;
+    /* eslint-disable react-hooks/set-state-in-effect -- A base URL change starts a new guarded health request. */
     setLoading(true);
     setError("");
+    /* eslint-enable react-hooks/set-state-in-effect */
     getDesktopHealth(effectiveBase)
       .then((d) => {
         if (id === reqRef.current) setData(d);
@@ -41,14 +45,14 @@ export default function EnvironmentHealthPanel({ baseUrl }: Props) {
   if (loading)
     return (
       <Sec>
-        <H3>Environment Health</H3>
-        <div className="empty">Checking...</div>
+        <H3>{t("settings.health.title")}</H3>
+        <div className="empty">{t("settings.health.checking")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>Environment Health</H3>
+        <H3>{t("settings.health.title")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -70,8 +74,8 @@ export default function EnvironmentHealthPanel({ baseUrl }: Props) {
         }}
       >
         <div>
-          <H3>Environment Health</H3>
-          <Sub>MATLAB / SPM readiness for future SPM execution.</Sub>
+          <H3>{t("settings.health.title")}</H3>
+          <Sub>{t("settings.health.description")}</Sub>
         </div>
         <span
           style={{
@@ -105,33 +109,34 @@ export default function EnvironmentHealthPanel({ baseUrl }: Props) {
           marginBottom: 12,
         }}
       >
-        MATLAB/SPM health check is configuration readiness only. It does not enable real
-        preprocessing. spm_realign_subject is not currently executable and remains outside the safe
-        execution allowlist.
+        {t("settings.health.boundary")}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         <div style={card}>
           <strong style={{ fontSize: 13 }}>MATLAB</strong>
-          <BoolRow label="configured" v={matlab.configured as boolean} />
-          <BoolRow label="exists" v={matlab.exists as boolean} />
-          <ValRow label="path" v={matlab.executable_path as string} />
-          <ValRow label="version" v={matlab.version as string} />
-          <BoolRow label="version ok" v={matlab.version_check_ok as boolean} />
+          <BoolRow label={t("settings.health.configured")} v={matlab.configured as boolean} />
+          <BoolRow label={t("settings.health.exists")} v={matlab.exists as boolean} />
+          <ValRow label={t("settings.health.path")} v={matlab.executable_path as string} />
+          <ValRow label={t("settings.health.version")} v={matlab.version as string} />
+          <BoolRow label={t("settings.health.versionOk")} v={matlab.version_check_ok as boolean} />
         </div>
         <div style={card}>
           <strong style={{ fontSize: 13 }}>SPM</strong>
-          <BoolRow label="configured" v={spm.configured as boolean} />
-          <BoolRow label="exists" v={spm.exists as boolean} />
-          <ValRow label="path" v={spm.spm_path as string} />
-          <ValRow label="version" v={spm.version as string} />
-          <BoolRow label="version ok" v={spm.version_check_ok as boolean} />
+          <BoolRow label={t("settings.health.configured")} v={spm.configured as boolean} />
+          <BoolRow label={t("settings.health.exists")} v={spm.exists as boolean} />
+          <ValRow label={t("settings.health.path")} v={spm.spm_path as string} />
+          <ValRow label={t("settings.health.version")} v={spm.version as string} />
+          <BoolRow label={t("settings.health.versionOk")} v={spm.version_check_ok as boolean} />
         </div>
       </div>
 
       <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
-        <BoolRow label="real execution enabled" v={ms.real_execution_enabled as boolean} />
-        <BoolRow label="safe allowlist enabled" v={ms.safe_allowlist_enabled as boolean} />
+        <BoolRow
+          label={t("settings.health.realExecution")}
+          v={ms.real_execution_enabled as boolean}
+        />
+        <BoolRow label={t("settings.health.allowlist")} v={ms.safe_allowlist_enabled as boolean} />
       </div>
 
       {(ms.notes as string[] | undefined)?.length ? (

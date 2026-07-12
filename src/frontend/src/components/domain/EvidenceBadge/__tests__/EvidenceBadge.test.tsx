@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { I18nProvider } from "../../../../i18n/I18nProvider";
 import { EvidenceBadge } from "../EvidenceBadge";
 
 describe("EvidenceBadge", () => {
@@ -22,6 +23,19 @@ describe("EvidenceBadge", () => {
     expect(screen.getByText("Preview boundary")).toHaveAttribute(
       "title",
       "Preview evidence exists without export, validation, or full artifact handoff.",
+    );
+  });
+
+  it("localizes shared evidence truth labels and descriptions", () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <EvidenceBadge level="metadata_only" />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("仅元数据")).toHaveAttribute(
+      "title",
+      "存在元数据，但持久化数值或产物证据不足。",
     );
   });
 });

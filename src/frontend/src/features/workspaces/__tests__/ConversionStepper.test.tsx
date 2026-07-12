@@ -74,7 +74,7 @@ describe("ConversionStepper", () => {
     const dryRunStep = screen.getByText("Dry Run Preview").closest("li");
 
     expect(screen.getByLabelText("Dry-run stepper status")).toHaveTextContent("1 blocking issue");
-    expect(dryRunStep).toHaveTextContent("blocked");
+    expect(dryRunStep).toHaveAttribute("data-state", "blocked");
     expect(dryRunStep).toHaveTextContent("Output root is outside the safe project directory.");
   });
 
@@ -106,9 +106,9 @@ describe("ConversionStepper", () => {
 
     const mappingStep = screen.getByText("Series Mapping").closest("li");
 
-    expect(mappingStep).toHaveTextContent("current");
+    expect(mappingStep).toHaveAttribute("data-state", "current");
     expect(mappingStep).toHaveTextContent("human review before approval material");
-    expect(mappingStep).not.toHaveTextContent("completed");
+    expect(mappingStep).not.toHaveAttribute("data-state", "completed");
   });
 
   it("keeps the dry-run action owned by the DICOM series browser", () => {

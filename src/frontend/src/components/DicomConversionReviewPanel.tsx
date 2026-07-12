@@ -1,32 +1,28 @@
 import { useEffect, useRef, useState } from "react";
+import type { MessageKey } from "../i18n/messages/en";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
 import {
-  DEFAULT_API_BASE,
   getProjectDicomConversionReleaseReadiness,
   persistProjectDicomConversionPlan,
   runProjectDicomConversionPreflight,
-} from "../lib/api/legacy";
+} from "../lib/api/dicom";
 import type {
   Dcm2niixCommandTemplate,
-  DicomConversionMapping,
   DicomConversionPlanPersistenceResponse,
   DicomConversionPrepareResponse,
   DicomConversionPreflightResponse,
   DicomConversionReleaseReadinessReport,
-  DicomConversionSafetyFlags,
 } from "../types";
 import DicomConversionReleaseReadinessPanel from "./DicomConversionReleaseReadinessPanel";
 import DicomConversionExecutePanel from "./DicomConversionExecutePanel";
 import { CollapsibleDetails, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 import styles from "./DicomConversionReviewPanel.module.css";
 
-type Props = { baseUrl?: string; projectId: string | null };
-
-const statusBadge: Record<string, React.CSSProperties> = {
-  ready: { background: "#e8f5e9", color: "#176b3b", borderColor: "rgba(33, 150, 83, 0.24)" },
-  warning: { background: "#fff7ed", color: "#9a5a15", borderColor: "rgba(242, 153, 74, 0.28)" },
-  blocked: { background: "#ffebee", color: "#b53b3b", borderColor: "rgba(235, 87, 87, 0.26)" },
-  disabled: { background: "#eef1f6", color: "#667085", borderColor: "rgba(137, 150, 171, 0.28)" },
-  unknown: { background: "#eef1f6", color: "#667085", borderColor: "rgba(137, 150, 171, 0.28)" },
+type Props = {
+  baseUrl?: string;
+  projectId: string | null;
+  onConversionRegistered?: () => void | Promise<void>;
 };
 
 const dcm2niixStatusBadge: Record<string, React.CSSProperties> = {
@@ -58,7 +54,12 @@ const mono: React.CSSProperties = {
 };
 const subH: React.CSSProperties = { margin: "0 0 6px", fontSize: 13 };
 
-export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props) {
+export default function DicomConversionReviewPanel({
+  baseUrl,
+  projectId,
+  onConversionRegistered,
+}: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<DicomConversionPreflightResponse | null>(null);
   const [persistResult, setPersistResult] = useState<DicomConversionPlanPersistenceResponse | null>(
@@ -77,6 +78,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
   const activeConversionRunId = preparedConversionRunId || persistResult?.conversion_run_id || "";
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset stale conversion state before loading a new project.
     setData(null);
     setPersistResult(null);
     setReleaseReadiness(null);
@@ -84,6 +86,8 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
     if (projectId) {
       handleRun();
     }
+    // handleRun is intentionally scoped to this project transition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   async function handleRun() {
@@ -105,7 +109,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
   async function handlePersist() {
     if (!projectId || !data) return;
     if (data.mapping_count <= 0) {
-      setPersistError("Run conversion preflight and review at least one mapping before saving.");
+      setPersistError(t("technical.DicomConversionReview.persist.mappingRequired"));
       return;
     }
     setPersisting(true);
@@ -141,14 +145,14 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
   if (!projectId)
     return (
       <Sect>
-        <H3>DICOM Conversion Review</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.DicomConversionReview.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sect>
     );
   if (error)
     return (
       <Sect>
-        <H3>DICOM Conversion Review</H3>
+        <H3>{t("technical.DicomConversionReview.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sect>
     );
@@ -157,23 +161,24 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
     <Sect>
       <div className={styles.style001}>
         <div>
-          <H3>DICOM Conversion Review</H3>
-          <Sub>Readiness inspection, command-template review, and safety validation only.</Sub>
+          <H3>{t("technical.DicomConversionReview.001")}</H3>
+          <Sub>{t("technical.DicomConversionReview.002")}</Sub>
         </div>
         {data && <StatusPill status={data.status} />}
       </div>
 
       <SafetyBanner tone="warning">
-        <strong>
-          Real DICOM-to-NIfTI conversion for user data is not enabled in this release.
-        </strong>{" "}
-        This panel is for readiness review, command-template inspection, and safety validation only.
-        No files are written. No rawdata is modified. No external tools are executed.
+        <strong>{t("technical.DicomConversionReview.safety.disabled")}</strong>{" "}
+        {t("technical.DicomConversionReview.safety.description")}
       </SafetyBanner>
 
       <div className={styles.style002}>
         <button onClick={handleRun} disabled={loading} className={styles.style003}>
-          {loading ? "Checking readiness..." : data ? "Refresh readiness" : "Check conversion readiness"}
+          {loading
+            ? t("technical.DicomConversionReview.action.checking")
+            : data
+              ? t("technical.DicomConversionReview.action.refresh")
+              : t("technical.DicomConversionReview.action.check")}
         </button>
         {data && (
           <button
@@ -181,7 +186,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
             disabled={persisting || !canPersistReview}
             title={
               !canPersistReview
-                ? "Run preflight until at least one DICOM mapping is available."
+                ? t("technical.DicomConversionReview.persist.mappingUnavailable")
                 : undefined
             }
             style={{
@@ -195,21 +200,24 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
               opacity: canPersistReview ? 1 : 0.82,
             }}
           >
-            {persisting ? "Saving..." : "Save review draft"}
+            {persisting
+              ? t("technical.DicomConversionReview.action.saving")
+              : t("technical.DicomConversionReview.action.saveDraft")}
           </button>
         )}
       </div>
 
-      {loading && <div className={`empty ${styles.style049}`}>Checking conversion readiness...</div>}
+      {loading && (
+        <div className={`empty ${styles.style049}`}>{t("technical.DicomConversionReview.003")}</div>
+      )}
       {!data && !loading && (
         <div className={`empty ${styles.style050}`}>
-          Click the button above to check conversion readiness.
+          {t("technical.DicomConversionReview.empty.checkReadiness")}
         </div>
       )}
       {data && data.mapping_count <= 0 && (
         <div className={`empty ${styles.style051}`}>
-          No conversion mappings were found. Generate the conversion dry-run or re-run preflight
-          after selecting a raw DICOM project.
+          {t("technical.DicomConversionReview.empty.noMappings")}
         </div>
       )}
 
@@ -218,22 +226,31 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
       {persistResult && (
         <div className={styles.style004}>
           <div className={styles.style005}>
-            Review package persisted - status: {persistResult.status}
+            {t("technical.DicomConversionReview.persist.saved", {
+              status: persistResult.status,
+            })}
           </div>
           <div className={styles.style006}>
-            This saves review metadata only. It does not run conversion.
+            {t("technical.DicomConversionReview.persist.metadataOnly")}
           </div>
           {persistResult.conversion_run_id && (
-            <div style={mono}>run: {persistResult.conversion_run_id}</div>
+            <div style={mono}>
+              {t("technical.DicomConversionReview.label.run")}: {persistResult.conversion_run_id}
+            </div>
           )}
           {persistResult.reservation && (
             <div className={styles.style007}>
               {persistResult.reservation.run_dir && (
-                <div style={mono}>dir: {persistResult.reservation.run_dir}</div>
+                <div style={mono}>
+                  {t("technical.DicomConversionReview.label.directory")}:{" "}
+                  {persistResult.reservation.run_dir}
+                </div>
               )}
               {persistResult.written_files.length > 0 && (
                 <div className={styles.style008}>
-                  {persistResult.written_files.length} file(s) written
+                  {t("technical.DicomConversionReview.persist.filesWritten", {
+                    count: persistResult.written_files.length,
+                  })}
                 </div>
               )}
             </div>
@@ -245,26 +262,29 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
         <>
           {/* A. Conversion readiness summary */}
           <div className={styles.style009}>
-            <h4 style={subH}>Conversion Readiness</h4>
+            <h4 style={subH}>{t("technical.DicomConversionReview.004")}</h4>
             <div className={styles.style010}>
-              <MetricTile label="Status" value={data.status} />
               <MetricTile
-                label="Disabled by default"
+                label={t("technical.DicomConversionReview.label.status")}
+                value={data.status}
+              />
+              <MetricTile
+                label={t("technical.DicomConversionReview.label.disabledByDefault")}
                 value={String(data.conversion_disabled_by_default)}
                 tone={data.conversion_disabled_by_default ? "amber" : "green"}
               />
               <MetricTile
-                label="Mapping count"
+                label={t("technical.DicomConversionReview.label.mappingCount")}
                 value={data.mapping_count}
                 tone={data.mapping_count > 0 ? "blue" : "neutral"}
               />
               <MetricTile
-                label="Approval required"
+                label={t("technical.DicomConversionReview.label.approvalRequired")}
                 value={String(data.approval_required)}
                 tone={data.approval_required ? "amber" : "neutral"}
               />
               <MetricTile
-                label="Audit required"
+                label={t("technical.DicomConversionReview.label.auditRequired")}
                 value={String(data.audit_required)}
                 tone={data.audit_required ? "amber" : "neutral"}
               />
@@ -275,15 +295,20 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
             <div className={styles.style011}>
               <div className={styles.style012}>
                 <span>
-                  <strong>Conversion is blocked by safety gates.</strong>{" "}
-                  {data.blocking_issues.length} prerequisite(s) missing.
+                  <strong>{t("technical.DicomConversionReview.005")}</strong>{" "}
+                  {t("technical.DicomConversionReview.blocked.prerequisites", {
+                    count: data.blocking_issues.length,
+                  })}
                 </span>
                 <span className={styles.style013}>
-                  Next safe action: <strong>Run conversion preflight</strong>
+                  {t("technical.DicomConversionReview.006")}{" "}
+                  <strong>{t("technical.DicomConversionReview.007")}</strong>
                 </span>
               </div>
               <details className={styles.style014}>
-                <summary className={styles.style015}>Why blocked? Show technical details</summary>
+                <summary className={styles.style015}>
+                  {t("technical.DicomConversionReview.008")}
+                </summary>
                 <div className={styles.style016}>
                   {data.blocking_issues.map((b, i) => (
                     <span key={i} className={styles.style017}>
@@ -307,7 +332,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
                 checked={showTechDetails}
                 onChange={(e) => setShowTechDetails(e.target.checked)}
               />
-              Show technical details
+              {t("technical.DicomConversionReview.action.showTechnicalDetails")}
             </label>
           </div>
 
@@ -315,7 +340,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
             <>
               {/* B. dcm2niix availability */}
               <div className={styles.style020}>
-                <h4 style={subH}>dcm2niix Availability</h4>
+                <h4 style={subH}>{t("technical.DicomConversionReview.dcm2niix.title")}</h4>
                 <div className={styles.style021}>
                   <span
                     style={{
@@ -331,11 +356,13 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
                   )}
                 </div>
                 <div className={styles.style023}>
-                  env enabled: {String(data.env_enabled)}
+                  {t("technical.DicomConversionReview.dcm2niix.envEnabled")}:{" "}
+                  {String(data.env_enabled)}
                   {data.missing_env_flags.length > 0 && (
                     <span className={styles.style024}>
                       {" "}
-                      - missing flags: {data.missing_env_flags.join(", ")}
+                      - {t("technical.DicomConversionReview.dcm2niix.missingFlags")}:{" "}
+                      {data.missing_env_flags.join(", ")}
                     </span>
                   )}
                 </div>
@@ -344,11 +371,13 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
               {/* C. Command templates */}
               {data.command_templates.length > 0 && (
                 <CollapsibleDetails
-                  title="Command templates"
-                  summary={`${data.command_templates.length} template(s)`}
+                  title={t("technical.DicomConversionReview.templates.title")}
+                  summary={t("technical.DicomConversionReview.templates.count", {
+                    count: data.command_templates.length,
+                  })}
                 >
                   <div className={styles.style025}>
-                    Command preview only - not executed for user rawdata in this release.
+                    {t("technical.DicomConversionReview.templates.previewOnly")}
                   </div>
                   <div className={styles.style026}>
                     {data.command_templates.map((t, i) => (
@@ -360,7 +389,10 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
 
               {/* D. Safety flags */}
               {data.safety_flags && (
-                <CollapsibleDetails title="Safety flags" summary="Approval and rawdata protections">
+                <CollapsibleDetails
+                  title={t("technical.DicomConversionReview.safetyFlags.title")}
+                  summary={t("technical.DicomConversionReview.safetyFlags.summary")}
+                >
                   <div className={styles.style027}>
                     {Object.entries(data.safety_flags as Record<string, boolean>).map(([k, v]) => (
                       <span
@@ -382,10 +414,12 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
               {/* E. Output root */}
               {data.output_root_preview && (
                 <div className={styles.style028}>
-                  <h4 style={subH}>Output Root</h4>
+                  <h4 style={subH}>{t("technical.DicomConversionReview.009")}</h4>
                   <div style={mono}>{data.output_root_preview}</div>
                   <span style={{ color: data.output_dir_safe ? "#176b3b" : "#b53b3b" }}>
-                    {data.output_dir_safe ? "safe" : "unsafe"}
+                    {data.output_dir_safe
+                      ? t("technical.DicomConversionReview.output.safe")
+                      : t("technical.DicomConversionReview.output.unsafe")}
                   </span>
                 </div>
               )}
@@ -393,8 +427,10 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
               {/* Mappings */}
               {data.mappings.length > 0 && (
                 <CollapsibleDetails
-                  title="DICOM mapping preview"
-                  summary={`${data.mappings.length} mapping(s)`}
+                  title={t("technical.DicomConversionReview.mappings.title")}
+                  summary={t("technical.DicomConversionReview.mappings.count", {
+                    count: data.mappings.length,
+                  })}
                 >
                   <div className={styles.style029}>
                     {data.mappings.slice(0, 20).map((m, i) => (
@@ -416,19 +452,18 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
 
               {/* F. Approval Gate Requirements (read-only checklist) */}
               <CollapsibleDetails
-                title="Show approval requirements"
-                summary="17 preconditions, NO-GO"
+                title={t("technical.DicomConversionReview.approval.title")}
+                summary={t("technical.DicomConversionReview.approval.summary")}
               >
                 <div className={styles.style033}>
-                  All 17 preconditions below must be satisfied before real user-data conversion can
-                  be enabled.
-                  <strong> Real conversion remains disabled in this release.</strong>
+                  {t("technical.DicomConversionReview.approval.description")}{" "}
+                  <strong>{t("technical.DicomConversionReview.approval.disabled")}</strong>
                 </div>
                 <div className={styles.style034}>
                   {APPROVAL_CHECKLIST.map((item, i) => (
                     <div key={i} className={styles.style035}>
                       <span className={styles.style036}>x</span>
-                      <span className={styles.style037}>{item}</span>
+                      <span className={styles.style037}>{t(item)}</span>
                     </div>
                   ))}
                 </div>
@@ -436,8 +471,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
 
               {/* No smoke results notice */}
               <div className={styles.style038}>
-                No conversion smoke results have been generated. Real user-data conversion remains
-                disabled.
+                {t("technical.DicomConversionReview.smoke.none")}
               </div>
             </>
           )}
@@ -463,6 +497,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
           conversionRunId={activeConversionRunId}
           readiness={releaseReadiness}
           onPrepared={handlePrepared}
+          onConversionRegistered={onConversionRegistered}
         />
       )}
     </Sect>
@@ -470,6 +505,7 @@ export default function DicomConversionReviewPanel({ baseUrl, projectId }: Props
 }
 
 function TemplateRow({ template }: { template: Dcm2niixCommandTemplate }) {
+  const { t } = useI18n();
   return (
     <div className={styles.style039}>
       <div className={styles.style040}>
@@ -478,9 +514,16 @@ function TemplateRow({ template }: { template: Dcm2niixCommandTemplate }) {
       </div>
       <div style={mono}>{template.command_preview}</div>
       <div className={styles.style043}>
-        <span>compress: {template.compress}</span>
-        <span>bids_sidecar: {String(template.bids_sidecar)}</span>
-        <span>create_bids: {String(template.create_bids)}</span>
+        <span>
+          {t("technical.DicomConversionReview.template.compress")}: {template.compress}
+        </span>
+        <span>
+          {t("technical.DicomConversionReview.template.bidsSidecar")}:{" "}
+          {String(template.bids_sidecar)}
+        </span>
+        <span>
+          {t("technical.DicomConversionReview.template.createBids")}: {String(template.create_bids)}
+        </span>
       </div>
     </div>
   );
@@ -495,33 +538,24 @@ function Warn({ items }: { items: string[] }) {
     </div>
   );
 }
-function M({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div className={styles.style045}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-const APPROVAL_CHECKLIST: string[] = [
-  "User approval record with all required fields",
-  "Audit record persisted before dcm2niix is called",
-  "confirm_execution=true",
-  "Conversion-specific approval ID",
-  "Selected mappings reviewed (operator confirms each mapping)",
-  "Output root under project output directory (validated)",
-  "Output root NOT under rawdata directory (validated)",
-  "Overwrite policy explicitly set",
-  "Rawdata read-only acknowledgement",
-  "Command templates reviewed",
-  "No shell string acknowledgement",
-  "dcm2niix availability verified (on PATH, version recorded)",
-  "All required environment flags present",
-  "Manifest and provenance paths planned",
-  "stdout/stderr log paths planned",
-  "Rollback/cleanup policy accepted",
-  "Clinical-use prohibition acknowledged",
+const APPROVAL_CHECKLIST: MessageKey[] = [
+  "technical.DicomConversionReview.approval.item.userApproval",
+  "technical.DicomConversionReview.approval.item.auditBeforeExecution",
+  "technical.DicomConversionReview.approval.item.confirmExecution",
+  "technical.DicomConversionReview.approval.item.approvalId",
+  "technical.DicomConversionReview.approval.item.mappingsReviewed",
+  "technical.DicomConversionReview.approval.item.outputUnderProject",
+  "technical.DicomConversionReview.approval.item.outputOutsideRawdata",
+  "technical.DicomConversionReview.approval.item.overwritePolicy",
+  "technical.DicomConversionReview.approval.item.rawdataReadonly",
+  "technical.DicomConversionReview.approval.item.templatesReviewed",
+  "technical.DicomConversionReview.approval.item.noShellString",
+  "technical.DicomConversionReview.approval.item.dcm2niixAvailable",
+  "technical.DicomConversionReview.approval.item.environmentFlags",
+  "technical.DicomConversionReview.approval.item.artifactPaths",
+  "technical.DicomConversionReview.approval.item.logPaths",
+  "technical.DicomConversionReview.approval.item.rollbackPolicy",
+  "technical.DicomConversionReview.approval.item.nonClinical",
 ];
 
 const Sect: React.FC<{ children: React.ReactNode }> = ({ children }) => (

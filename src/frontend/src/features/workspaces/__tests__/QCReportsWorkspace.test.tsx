@@ -1,13 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { getLatestQcDashboardReport } from "../../../lib/api/qc";
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import {
-  getLatestQcDashboardReport,
   getProjectBoldReferenceReadiness,
   getProjectMotionQcReadiness,
   getProjectNiftiQcSnapshot,
-} from "../../../lib/api/legacy";
-import { getLatestNativeFullPreprocessingRun } from "../../../lib/api/preprocessing";
+  getLatestNativeFullPreprocessingRun,
+} from "../../../lib/api/preprocessing";
 import type {
   BoldReferenceReadinessResponse,
   MotionQcReadinessResponse,
@@ -17,14 +18,14 @@ import type {
 } from "../../../types";
 import { QCReportsWorkspace } from "../QCReportsWorkspace";
 
-vi.mock("../../../lib/api/legacy", () => ({
+vi.mock("../../../lib/api/qc", () => ({
   getLatestQcDashboardReport: vi.fn(),
-  getProjectBoldReferenceReadiness: vi.fn(),
-  getProjectMotionQcReadiness: vi.fn(),
-  getProjectNiftiQcSnapshot: vi.fn(),
 }));
 
 vi.mock("../../../lib/api/preprocessing", () => ({
+  getProjectBoldReferenceReadiness: vi.fn(),
+  getProjectMotionQcReadiness: vi.fn(),
+  getProjectNiftiQcSnapshot: vi.fn(),
   getLatestNativeFullPreprocessingRun: vi.fn(),
 }));
 
@@ -96,9 +97,7 @@ const boldReadinessMock = vi.mocked(getProjectBoldReferenceReadiness);
 const motionReadinessMock = vi.mocked(getProjectMotionQcReadiness);
 const latestNativeRunMock = vi.mocked(getLatestNativeFullPreprocessingRun);
 
-function niftiSnapshot(
-  overrides: Partial<NiftiQcSnapshotResponse> = {},
-): NiftiQcSnapshotResponse {
+function niftiSnapshot(overrides: Partial<NiftiQcSnapshotResponse> = {}): NiftiQcSnapshotResponse {
   return {
     ok: true,
     project_id: "project-1",
@@ -277,6 +276,40 @@ describe("QCReportsWorkspace", () => {
     latestNativeRunMock.mockRejectedValue(new Error("404"));
   });
 
+  it("renders project selection and module gates in simplified Chinese", () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <QCReportsWorkspace baseUrl="http://localhost" projectId={null} />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("质量控制复核前请选择项目")).toBeInTheDocument();
+    expect(screen.getByLabelText("详细质量控制模块")).toHaveTextContent(
+      "质量控制模块正在等待项目上下文",
+    );
+    expect(screen.getByLabelText("派生指标模块")).toHaveTextContent(
+      "加载指标专用质量控制模块前请选择项目",
+    );
+  });
+
+  it("renders conservative QC evidence states in simplified Chinese", async () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <QCReportsWorkspace baseUrl="http://localhost" projectId="project-1" />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "证据优先质量控制面板" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText("质量控制摘要状态")).toHaveTextContent(
+        "没有来源证据时不作通过／失败结论",
+      ),
+    );
+    expect(screen.getByLabelText("质量控制异常值重点区域")).toHaveTextContent("运动异常值");
+    expect(screen.getByLabelText("影像对比产物门控")).toHaveTextContent("没有可用对比产物");
+    expect(screen.getByLabelText("质量控制可视化要求")).toHaveTextContent("数据范围");
+  });
+
   it("shows a unified QC dashboard before detailed modules", async () => {
     renderWorkspace();
 
@@ -285,9 +318,7 @@ describe("QCReportsWorkspace", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("QC summary states")).toHaveTextContent("Evidence");
     await waitFor(() =>
-      expect(screen.getByLabelText("QC summary states")).toHaveTextContent(
-        "No pass/fail decision",
-      ),
+      expect(screen.getByLabelText("QC summary states")).toHaveTextContent("No pass/fail decision"),
     );
     expect(screen.getByRole("table", { name: "Subject-level QC status" })).toHaveTextContent(
       "Subject rows appear only after dashboard reports",
@@ -405,7 +436,9 @@ describe("QCReportsWorkspace", () => {
     expect(screen.getByRole("table", { name: "Subject-level QC status" })).toHaveTextContent(
       "FD available",
     );
-    expect(screen.queryByText("sub-001_T1w_desc-coregistered_t1w_desc-brainMask.nii.gz")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("sub-001_T1w_desc-coregistered_t1w_desc-brainMask.nii.gz"),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText("QC outlier focus areas")).toHaveTextContent(
       "1 subject(s) FD ready",
     );

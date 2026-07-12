@@ -2,16 +2,14 @@
   position: relative;
   z-index: 20;
   display: grid;
-  grid-template-columns: minmax(190px, 260px) minmax(240px, 1fr) auto;
-  gap: 18px;
+  grid-template-columns: minmax(250px, auto) minmax(220px, 1fr) auto;
+  gap: 14px;
   align-items: center;
   min-height: var(--shell-topbar-height);
-  padding: 10px 20px;
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-card);
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(18px);
-  box-shadow: var(--shadow-card);
+  height: var(--shell-topbar-height);
+  padding: 0 18px;
+  background: #1d2026;
+  color: #f5f5f7;
 }
 
 .caption,
@@ -27,8 +25,8 @@
 }
 
 .caption strong {
-  color: var(--color-text-primary);
-  font-size: 16px;
+  color: #f5f5f7;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -38,32 +36,30 @@
   height: 24px;
   place-items: center;
   border-radius: 6px;
-  background: linear-gradient(145deg, var(--blue), #6f8ef6);
+  background: var(--color-accent);
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35);
   color: #ffffff;
   font-size: 13px;
   font-weight: 700;
 }
 
+.version {
+  color: #9da3ae;
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+}
+
 .context {
   min-width: 0;
   gap: 10px;
   padding: 0 12px;
-  color: var(--color-text-secondary);
-}
-
-.context span {
-  flex-shrink: 0;
-  color: var(--color-accent);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
+  color: #aeb3bd;
 }
 
 .context strong {
   min-width: 0;
   overflow: hidden;
-  color: var(--color-text-primary);
+  color: #f5f5f7;
   font-size: 14px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -80,9 +76,34 @@
 
 .context small {
   flex-shrink: 0;
-  color: var(--color-text-secondary);
+  color: #aeb3bd;
   font-size: 13px;
   font-weight: 600;
+}
+
+.backButton,
+.localeButton {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: #c9cdd5;
+}
+
+.backButton:hover,
+.localeButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.localeButton {
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .actions {
@@ -96,10 +117,10 @@
   min-height: 32px;
   gap: 8px;
   padding: 0 12px;
-  border: 1px solid var(--color-divider);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--radius-pill);
-  background: var(--color-surface-secondary);
-  color: var(--color-text-secondary);
+  background: rgba(255, 255, 255, 0.07);
+  color: #c9cdd5;
   cursor: default;
   font-size: 12px;
   font-weight: 500;
@@ -109,7 +130,7 @@
 }
 
 .healthButton:hover {
-  background: var(--color-surface-primary);
+  background: rgba(255, 255, 255, 0.11);
 }
 
 .healthDot {
@@ -154,7 +175,7 @@
 }
 
 .assistantButton {
-  color: var(--color-text-primary);
+  color: #e8eaf0;
 }
 
 .assistantIcon {
@@ -205,11 +226,11 @@
 
 @media (max-width: 1120px) {
   .topbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: auto minmax(200px, 1fr) auto;
   }
 
-  .actions {
-    justify-content: flex-start;
-    flex-wrap: wrap;
+  .healthLabel,
+  .assistantButton :global(.buttonLabel) {
+    display: none;
   }
 }

@@ -1,5 +1,6 @@
 import type { FormEvent } from "react";
 import type { ChatMessage } from "../../lib/types/assistant";
+import { useI18n } from "../../i18n/useI18n";
 
 export interface AssistantPanelProps {
   messages: ChatMessage[];
@@ -20,11 +21,12 @@ export function AssistantPanel({
   onSubmit,
   onNewChat,
 }: AssistantPanelProps) {
+  const { t } = useI18n();
   return (
     <section className="assistant-card">
       <div className="card-row">
-        <div className="card-title">AI Assistant</div>
-        <button onClick={onNewChat}>New Chat</button>
+        <div className="card-title">{t("assistant.panel.title")}</div>
+        <button onClick={onNewChat}>{t("assistant.panel.newChat")}</button>
       </div>
       <div className="chat-thread">
         {messages.map((message, index) => (
@@ -32,18 +34,20 @@ export function AssistantPanel({
             {message.text}
           </div>
         ))}
-        {loading ? <div className="chat-bubble assistant">Thinking...</div> : null}
+        {loading ? (
+          <div className="chat-bubble assistant">{t("assistant.panel.thinking")}</div>
+        ) : null}
         {error ? <div className="chat-error">{error}</div> : null}
       </div>
       <form className="prompt-box" onSubmit={onSubmit}>
         <input
           value={input}
           onChange={(event) => onInput(event.target.value)}
-          placeholder="Ask a question..."
-          aria-label="Ask AI Assistant"
+          placeholder={t("assistant.panel.placeholder")}
+          aria-label={t("assistant.panel.inputAria")}
         />
         <button type="submit" disabled={loading}>
-          Go
+          {t("assistant.panel.submit")}
         </button>
       </form>
     </section>

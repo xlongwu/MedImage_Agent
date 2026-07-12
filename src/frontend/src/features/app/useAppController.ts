@@ -1,6 +1,5 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import type { FormEvent } from "react";
 import type { PresetPlanDraft } from "../../types";
 import {
   DEFAULT_API_BASE,
@@ -11,15 +10,14 @@ import {
   sendAssistantMessage,
 } from "../../lib/api";
 import { useTasks } from "../../hooks/useTasks";
-import type { TaskAuditPackage } from "../../lib/types/task";
-import type { ChatMessage } from "../../lib/types/assistant";
+import packageMetadata from "../../../package.json";
 
 export interface AppController {
   baseUrl: string;
   setBaseUrl: (url: string) => void;
-  activeWorkflow: import("../../lib/projectWorkflow").WorkflowTab;
-  setActiveWorkflow: (tab: import("../../lib/projectWorkflow").WorkflowTab) => void;
   health: boolean | null;
+  version: string;
+  versionFromBackend: boolean;
   apiError: string;
   setApiError: (error: string) => void;
   notice: string;
@@ -46,9 +44,9 @@ export interface AppController {
 
 export function useAppController(): AppController {
   const [baseUrl, setBaseUrl] = useState(DEFAULT_API_BASE);
-  const [activeWorkflow, setActiveWorkflow] =
-    useState<import("../../lib/projectWorkflow").WorkflowTab>("data");
   const [health, setHealth] = useState<boolean | null>(null);
+  const [version, setVersion] = useState(packageMetadata.version);
+  const [versionFromBackend, setVersionFromBackend] = useState(false);
   const [apiError, setApiError] = useState("");
   const [notice, setNotice] = useState("");
   const [presetPlanDraft, setPresetPlanDraft] = useState<PresetPlanDraft | null>(null);
@@ -63,6 +61,12 @@ export function useAppController(): AppController {
         const status = typeof result.status === "string" ? result.status.toLowerCase() : "";
         const connected = status ? status === "ok" || status === "healthy" : Boolean(result);
         setHealth(connected);
+        if (typeof result.version === "string" && result.version.trim()) {
+          setVersion(result.version.trim());
+          setVersionFromBackend(true);
+        } else {
+          setVersionFromBackend(false);
+        }
         if (!connected) {
           setApiError("Backend health check returned a non-ready status.");
         }
@@ -72,6 +76,8 @@ export function useAppController(): AppController {
       }
     }
     setHealth(false);
+    setVersion(packageMetadata.version);
+    setVersionFromBackend(false);
     setApiError(
       "Backend disconnected. Start it with:\npython -m uvicorn src.backend.app.main:app --host 127.0.0.1 --port 8000",
     );
@@ -90,7 +96,10 @@ export function useAppController(): AppController {
   }, []);
 
   useEffect(() => {
-    checkHealth();
+    const timeoutId = window.setTimeout(() => {
+      void checkHealth();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [checkHealth]);
 
   const handleScrollToPanel = useCallback((panelId: string) => {
@@ -153,9 +162,9 @@ export function useAppController(): AppController {
   return {
     baseUrl,
     setBaseUrl,
-    activeWorkflow,
-    setActiveWorkflow,
     health,
+    version,
+    versionFromBackend,
     apiError,
     setApiError,
     notice,

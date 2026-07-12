@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, generateSpmRealignWrapperSkeleton } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { generateSpmRealignWrapperSkeleton } from "../lib/api/preprocessing";
 import type { SpmRealignWrapperSkeletonResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };
@@ -22,6 +24,7 @@ const pill: React.CSSProperties = {
 };
 
 export default function SpmRealignWrapperSkeletonPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<SpmRealignWrapperSkeletonResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,14 +51,14 @@ export default function SpmRealignWrapperSkeletonPanel({ baseUrl, projectId }: P
   if (!projectId)
     return (
       <Sec>
-        <H3>SPM Wrapper Skeleton</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.SpmRealignWrapperSkeleton.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>SPM Wrapper Skeleton</H3>
+        <H3>{t("technical.SpmRealignWrapperSkeleton.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -72,8 +75,8 @@ export default function SpmRealignWrapperSkeletonPanel({ baseUrl, projectId }: P
         }}
       >
         <div>
-          <H3>SPM Wrapper Skeleton</H3>
-          <Sub>Preview MATLAB batch and provenance without execution.</Sub>
+          <H3>{t("technical.SpmRealignWrapperSkeleton.001")}</H3>
+          <Sub>{t("technical.SpmRealignWrapperSkeleton.002")}</Sub>
         </div>
         {data && (
           <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
@@ -108,7 +111,9 @@ export default function SpmRealignWrapperSkeletonPanel({ baseUrl, projectId }: P
           fontWeight: 600,
         }}
       >
-        {loading ? "Generating..." : "Generate Wrapper Skeleton"}
+        {loading
+          ? t("technical.MotionMetricsDraft.004")
+          : t("technical.SpmRealignWrapperSkeleton.003")}
       </button>
 
       {data && (
@@ -269,7 +274,9 @@ export default function SpmRealignWrapperSkeletonPanel({ baseUrl, projectId }: P
           )}
           {data.next_actions.length > 0 && (
             <div>
-              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
+              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+                {t("technical.BoldReferenceReadiness.011")}
+              </h4>
               <div style={{ display: "grid", gap: 5 }}>
                 {data.next_actions.map((a, i) => (
                   <div

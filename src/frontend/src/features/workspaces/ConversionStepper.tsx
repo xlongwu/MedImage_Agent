@@ -1,6 +1,8 @@
 import { Badge, Card } from "../../components/ui";
 import type { ConversionDryRunResponse } from "../../types";
 import type { ProjectInventory } from "../../lib/projectWorkflow";
+import { useI18n } from "../../i18n/useI18n";
+import type { I18nContextValue } from "../../i18n/context";
 import styles from "./ConversionStepper.module.css";
 
 type StepState = "completed" | "current" | "available" | "blocked";
@@ -22,23 +24,20 @@ export interface ConversionStepperProps {
 }
 
 export function ConversionStepper({ dryRun, error, inventory }: ConversionStepperProps) {
-  const steps = buildSteps(inventory, dryRun);
+  const { t } = useI18n();
+  const steps = buildSteps(inventory, dryRun, t);
 
   return (
     <Card className={styles.card}>
       <div className={styles.header}>
         <div>
-          <h3>Conversion stepper</h3>
-          <p>Six reviewed stages from source detection to output registration.</p>
+          <h3>{t("data.stepper.title")}</h3>
+          <p>{t("data.stepper.description")}</p>
         </div>
       </div>
 
       {!dryRun && inventory.hasRawDicom ? (
-        <div className={styles.note}>
-          Start the no-write dry-run from the DICOM series browser. This stepper then tracks the
-          reviewed mapping, safety review, and output registration stages without running external
-          converters.
-        </div>
+        <div className={styles.note}>{t("data.stepper.startNote")}</div>
       ) : null}
       {error ? (
         <div className={styles.error} role="alert">
@@ -46,44 +45,44 @@ export function ConversionStepper({ dryRun, error, inventory }: ConversionSteppe
         </div>
       ) : null}
       {dryRun ? (
-        <div className={styles.statusNote} aria-label="Dry-run stepper status">
-          <strong>Dry-run status: {dryRun.status}</strong>
+        <div className={styles.statusNote} aria-label={t("data.stepper.statusAria")}>
+          <strong>{t("data.stepper.dryRunStatus", { status: dryRun.status })}</strong>
           <span>
             {dryRun.blocking_issues.length > 0
-              ? `${dryRun.blocking_issues.length} blocking issue(s) must be resolved before safety review.`
+              ? t("data.stepper.blockerCount", { count: dryRun.blocking_issues.length })
               : dryRun.warnings.length > 0
-                ? `${dryRun.warnings.length} warning(s) require human review.`
-                : "Mappings are ready for human review; no conversion has run."}
+                ? t("data.stepper.warningCount", { count: dryRun.warnings.length })
+                : t("data.stepper.ready")}
           </span>
         </div>
       ) : null}
 
-      <ol className={styles.stepList} aria-label="DICOM conversion steps">
+      <ol className={styles.stepList} aria-label={t("data.stepper.steps")}>
         {steps.map((step, index) => (
-          <li className={styles.step} key={step.label}>
+          <li className={styles.step} data-state={step.state} key={step.label}>
             <span className={styles.stepIndex}>{index + 1}</span>
             <span className={styles.stepBody}>
               <span className={styles.stepTitle}>
                 <strong>{step.label}</strong>
                 <Badge tone={stepTone(step.state)} size="sm">
-                  {step.state}
+                  {stepStateLabel(step.state, t)}
                 </Badge>
               </span>
               <dl className={styles.facts}>
                 <div className={styles.fact}>
-                  <dt>Input</dt>
+                  <dt>{t("data.stepper.input")}</dt>
                   <dd title={step.input}>{step.input}</dd>
                 </div>
                 <div className={styles.fact}>
-                  <dt>Output</dt>
+                  <dt>{t("data.stepper.output")}</dt>
                   <dd title={step.output}>{step.output}</dd>
                 </div>
                 <div className={styles.fact}>
-                  <dt>Writes</dt>
+                  <dt>{t("data.stepper.writes")}</dt>
                   <dd>{step.writes}</dd>
                 </div>
                 <div className={styles.fact}>
-                  <dt>Approval</dt>
+                  <dt>{t("data.stepper.approval")}</dt>
                   <dd>{step.approval}</dd>
                 </div>
               </dl>
@@ -99,6 +98,7 @@ export function ConversionStepper({ dryRun, error, inventory }: ConversionSteppe
 function buildSteps(
   inventory: ProjectInventory,
   dryRun: ConversionDryRunResponse | null,
+  t: I18nContextValue["t"],
 ): ConversionStep[] {
   const hasDryRun = Boolean(dryRun);
   const dryRunReady = dryRun?.status === "ready" || dryRun?.status === "warning";
@@ -110,7 +110,8 @@ function buildSteps(
   );
   const hasBlocking = (dryRun?.blocking_issues.length ?? 0) > 0;
   const firstBlockingIssue = dryRun?.blocking_issues[0] ?? "";
-  const outputRoot = dryRun?.output_root_preview || dryRun?.output_root_name || "BIDS output root";
+  const outputRoot =
+    dryRun?.output_root_preview || dryRun?.output_root_name || t("data.stepper.bidsOutputRoot");
   const mappingState: StepState = hasMappings
     ? hasManualMappings
       ? "current"
@@ -128,69 +129,67 @@ function buildSteps(
 
   return [
     {
-      label: "Source Detection",
+      label: t("data.stepper.sourceDetection"),
       state: inventory.hasRawDicom ? "completed" : "current",
-      input: "Project rawdata and readiness diagnostics",
-      output: `${inventory.rawDicomCandidates} subject candidate(s), ${inventory.dicomSeriesCount} series`,
-      writes: "No writes",
-      approval: "Not required",
-      blocker: inventory.hasRawDicom ? "" : "Import or reference raw DICOM data first.",
+      input: t("data.stepper.sourceInput"),
+      output: t("data.stepper.sourceOutput", {
+        subjects: inventory.rawDicomCandidates,
+        series: inventory.dicomSeriesCount,
+      }),
+      writes: t("data.stepper.noWrites"),
+      approval: t("data.stepper.notRequired"),
+      blocker: inventory.hasRawDicom ? "" : t("data.stepper.importRaw"),
     },
     {
-      label: "Series Mapping",
+      label: t("data.stepper.seriesMapping"),
       state: mappingState,
-      input: "Dry-run mapping preview",
+      input: t("data.stepper.mappingPreview"),
       output: hasMappings
-        ? `${dryRun?.mapping_preview.length ?? 0} suggested mapping(s)`
-        : "Mapping not generated",
-      writes: "No writes",
-      approval: "Mapping review required",
+        ? t("data.stepper.suggestedMappings", { count: dryRun?.mapping_preview.length ?? 0 })
+        : t("data.stepper.mappingNotGenerated"),
+      writes: t("data.stepper.noWrites"),
+      approval: t("data.stepper.mappingReviewRequired"),
       blocker: hasManualMappings
-        ? "Low confidence or manual-required mappings need human review before approval material is prepared."
+        ? t("data.stepper.manualMappingBlocker")
         : hasMappings
           ? ""
-          : "Generate a dry-run preview before approving mappings.",
+          : t("data.stepper.generatePreviewBlocker"),
     },
     {
-      label: "Dry Run Preview",
+      label: t("data.stepper.dryRunPreview"),
       state: dryRunState,
-      input: "Read-only DICOM / loose NIfTI sources",
-      output: hasDryRun ? outputRoot : "Preview package pending",
-      writes: "No writes",
-      approval: "Not execution approval",
+      input: t("data.stepper.readOnlySources"),
+      output: hasDryRun ? outputRoot : t("data.stepper.previewPending"),
+      writes: t("data.stepper.noWrites"),
+      approval: t("data.stepper.notExecutionApproval"),
       blocker: firstBlockingIssue,
     },
     {
-      label: "Safety Review",
+      label: t("data.stepper.safetyReview"),
       state: hasDryRun && !hasBlocking ? "current" : "blocked",
-      input: "Mappings, output root, overwrite policy, safety flags",
-      output: "Approval package and operator confirmations",
-      writes: "Plan/audit metadata only",
-      approval: "Required",
-      blocker: hasBlocking
-        ? firstBlockingIssue
-        : hasDryRun
-          ? ""
-          : "Dry-run preview is required first.",
+      input: t("data.stepper.safetyInput"),
+      output: t("data.stepper.safetyOutput"),
+      writes: t("data.stepper.auditMetadataOnly"),
+      approval: t("data.stepper.required"),
+      blocker: hasBlocking ? firstBlockingIssue : hasDryRun ? "" : t("data.stepper.dryRunRequired"),
     },
     {
-      label: "Approved Conversion",
+      label: t("data.stepper.approvedConversion"),
       state: "blocked",
-      input: "Approved review package",
-      output: "BIDS/NIfTI files from external converter",
-      writes: "Writes outputs only after gate",
-      approval: "Approval Gate",
-      blocker:
-        "External conversion remains disabled by default until explicitly enabled and approved.",
+      input: t("data.stepper.approvedPackage"),
+      output: t("data.stepper.converterOutput"),
+      writes: t("data.stepper.writesAfterGate"),
+      approval: t("data.stepper.approvalGate"),
+      blocker: t("data.stepper.externalDisabled"),
     },
     {
-      label: "Output Registration",
+      label: t("data.stepper.outputRegistration"),
       state: inventory.hasConvertedData ? "completed" : "blocked",
-      input: "Generated outputs and manifest",
-      output: "Registered BIDS/NIfTI inventory",
-      writes: "Project metadata",
-      approval: "After successful conversion",
-      blocker: inventory.hasConvertedData ? "" : "No converted outputs registered yet.",
+      input: t("data.stepper.generatedManifest"),
+      output: t("data.stepper.registeredInventory"),
+      writes: t("data.stepper.projectMetadata"),
+      approval: t("data.stepper.afterConversion"),
+      blocker: inventory.hasConvertedData ? "" : t("data.stepper.noOutputs"),
     },
   ];
 }
@@ -200,4 +199,11 @@ function stepTone(state: StepState): "neutral" | "info" | "success" | "warning" 
   if (state === "current") return "info";
   if (state === "blocked") return "warning";
   return "neutral";
+}
+
+function stepStateLabel(state: StepState, t: I18nContextValue["t"]): string {
+  if (state === "completed") return t("common.completed");
+  if (state === "current") return t("common.current");
+  if (state === "blocked") return t("common.blocked");
+  return t("common.available");
 }

@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
 import {
-  DEFAULT_API_BASE,
   generateQcDashboardReport,
   getLatestQcDashboardReport,
   getQcDashboardFingerprint,
-} from "../lib/api/legacy";
+} from "../lib/api/qc";
 import type { QcDashboardFingerprintResponse } from "../types";
 import type { QcDashboardReportResponse } from "../types";
 import {
@@ -42,6 +43,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<QcDashboardReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -94,14 +96,14 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
   if (!projectId)
     return (
       <Sec>
-        <H3>QC Dashboard Report</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.QcDashboardSummary.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>QC Dashboard Report</H3>
+        <H3>{t("technical.QcDashboardSummary.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -110,18 +112,16 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
     <Sec>
       <div className={styles.style001}>
         <div>
-          <H3>QC Dashboard Report</H3>
-          <Sub>Aggregate summary of all QC checks. No preprocessing is executed.</Sub>
+          <H3>{t("technical.QcDashboardSummary.001")}</H3>
+          <Sub>{t("technical.QcDashboardSummary.002")}</Sub>
         </div>
         {data && <StatusPill status={data.status} />}
       </div>
-      <SafetyBanner tone="warning">
-        Dashboard report only. No preprocessing is executed. Rawdata is not modified.
-      </SafetyBanner>
+      <SafetyBanner tone="warning">{t("technical.QcDashboardSummary.003")}</SafetyBanner>
 
       <div className={styles.style002}>
         <button onClick={handleGenerate} disabled={loading} className={styles.style003}>
-          {loading ? "Generating..." : "Generate Dashboard Report"}
+          {loading ? t("technical.MotionMetricsDraft.004") : t("technical.QcDashboardSummary.004")}
         </button>
         <button onClick={handleLoadLatest} disabled={loading} className={styles.style004}>
           Load Latest
@@ -240,7 +240,7 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
 
           {fpData && (
             <div className={styles.style016}>
-              <div className={styles.style017}>Rawdata Fingerprint</div>
+              <div className={styles.style017}>{t("technical.QcDashboardSummary.005")}</div>
               <div className={styles.style018}>
                 <span>
                   <b>hash:</b> {fpData.fingerprint.fingerprint?.slice(0, 12) ?? "—"}
@@ -355,7 +355,7 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
           )}
           {data.next_actions.length > 0 && (
             <div>
-              <h4 className={styles.style033}>Next Actions</h4>
+              <h4 className={styles.style033}>{t("technical.BoldReferenceReadiness.011")}</h4>
               <ActionList actions={data.next_actions} />
             </div>
           )}
@@ -374,15 +374,6 @@ function Warn({ items }: { items: string[] }) {
     </div>
   );
 }
-function M({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className={styles.style035}>
-      <span>{label}</span>
-      <strong style={{ color }}>{value}</strong>
-    </div>
-  );
-}
-
 const Sec: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <section className={styles.style036}>{children}</section>
 );

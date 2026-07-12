@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { useI18n } from "../i18n/useI18n";
 import {
   createImportDiagnosticsPackage,
   getDatasetImportHistory,
-  getDicomPreflight,
-  getImageManifestReport,
-  getImageValidationReport,
   getLatestImportDiagnosticsPackage,
   verifyImportDiagnosticsPackage,
-} from "../lib/api/legacy";
+} from "../lib/api/diagnostic";
+import { getDicomPreflight } from "../lib/api/dicom";
+import { getImageManifestReport, getImageValidationReport } from "../lib/api/qc";
 import { JsonBlock } from "./JsonBlock";
 import { TextViewer } from "./TextViewer";
 
@@ -115,6 +115,7 @@ export default function ImportDiagnosticsPanel({
   projectId: activeProjectId,
   rawdataDir,
 }: Props) {
+  const { t } = useI18n();
   const [projectId, setProjectId] = useState(activeProjectId ?? "");
   const [validation, setValidation] = useState<Record<string, unknown> | null>(null);
   const [manifest, setManifest] = useState<Record<string, unknown> | null>(null);
@@ -135,9 +136,12 @@ export default function ImportDiagnosticsPanel({
     if (projectId.trim()) {
       void refresh();
     }
+    // Refresh only when the API origin changes; project context is synchronized separately below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseUrl]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear stale form context when the active project changes.
     setProjectId(activeProjectId ?? "");
     setDicomPath(rawdataDir ?? "");
     if (activeProjectId || rawdataDir) {
@@ -267,7 +271,7 @@ export default function ImportDiagnosticsPanel({
       const payload = await getDicomPreflight(baseUrl, trimmedProjectId, dicomPath, dicomMaxFiles);
       setDicomPreflight(payload);
       setNotice(
-        Boolean(payload.ok)
+        payload.ok
           ? `DICOM metadata preflight complete: ${String(payload.report_path || "")}`
           : "DICOM metadata preflight needs review.",
       );
@@ -316,132 +320,144 @@ export default function ImportDiagnosticsPanel({
       ) : null}
       <div className="formGrid">
         <label>
-          Project ID
+          {t("technical.ImportDiagnostics.001")}
           <input
-            placeholder="Enter project ID"
+            placeholder={t("technical.ImportDiagnostics.002")}
             value={projectId}
             onChange={(event) => setProjectId(event.target.value)}
           />
         </label>
         <label>
-          Active project context
+          {t("technical.ImportDiagnostics.003")}
           <input
             readOnly
             value={
               activeProjectId
                 ? `${activeProjectId}${rawdataDir ? ` | ${rawdataDir}` : ""}`
-                : "No active project selected"
+                : t("technical.ImportDiagnostics.004")
             }
           />
         </label>
         <label>
-          Validation report
-          <input readOnly value={reportPath || "Not generated yet"} />
+          {t("technical.ImportDiagnostics.005")}
+          <input readOnly value={reportPath || t("technical.ImportDiagnostics.006")} />
         </label>
         <label>
-          Validation JSON
-          <input readOnly value={jsonPath || "Not generated yet"} />
+          {t("technical.ImportDiagnostics.007")}
+          <input readOnly value={jsonPath || t("technical.ImportDiagnostics.006")} />
         </label>
         <label>
-          Manifest path
-          <input readOnly value={manifestPath || "Not generated yet"} />
+          {t("technical.ImportDiagnostics.008")}
+          <input readOnly value={manifestPath || t("technical.ImportDiagnostics.006")} />
         </label>
       </div>
 
       <div className="row">
         <button onClick={useActiveProjectContext} disabled={!activeProjectId && !rawdataDir}>
-          Use current project context
+          {t("technical.ImportDiagnostics.009")}
         </button>
         <button onClick={refresh} disabled={busy || !hasProjectId}>
-          {busy ? "Refreshing..." : "Revalidate imports"}
+          {busy ? t("technical.ImportDiagnostics.010") : t("technical.ImportDiagnostics.011")}
         </button>
         <button
           onClick={() => void openArtifact(reportPath, "validation report")}
           disabled={!reportPath}
         >
-          Open report
+          {t("technical.ImportDiagnostics.012")}
         </button>
         <button onClick={() => void openArtifact(jsonPath, "validation JSON")} disabled={!jsonPath}>
-          Open JSON
+          {t("technical.ImportDiagnostics.013")}
         </button>
         <button
           onClick={() => void openArtifact(manifestPath, "image manifest")}
           disabled={!manifestPath}
         >
-          Open manifest
+          {t("technical.ImportDiagnostics.014")}
         </button>
         <button onClick={generatePackage} disabled={packaging || !hasProjectId}>
-          {packaging ? "Packaging..." : "Generate handoff package"}
+          {packaging ? t("technical.ImportDiagnostics.015") : t("technical.ImportDiagnostics.016")}
         </button>
         <button
           onClick={() => void openArtifact(packageReportPath, "handoff report")}
           disabled={!packageReportPath}
         >
-          Open handoff
+          {t("technical.ImportDiagnostics.017")}
         </button>
         <button
           onClick={() => void openArtifact(packageZipPath, "handoff ZIP")}
           disabled={!packageZipPath}
         >
-          Open ZIP
+          {t("technical.ImportDiagnostics.018")}
         </button>
         <button
           onClick={() => void openArtifact(packageDir, "handoff folder")}
           disabled={!packageDir}
         >
-          Open folder
+          {t("technical.ImportDiagnostics.019")}
         </button>
         <button
           onClick={() => void openArtifact(checksumPath, "handoff checksums")}
           disabled={!checksumPath}
         >
-          Open checksums
+          {t("technical.ImportDiagnostics.020")}
         </button>
         <button onClick={verifyPackage} disabled={verifying || !packageZipPath}>
-          {verifying ? "Verifying..." : "Verify package"}
+          {verifying ? t("technical.ImportDiagnostics.021") : t("technical.ImportDiagnostics.022")}
         </button>
         <span className="status-pill">
-          {issueCount === 0 ? "No blocking issues" : `${issueCount} validation issues`}
+          {issueCount === 0
+            ? t("technical.ImportDiagnostics.023")
+            : t("technical.ImportDiagnostics.024", { value0: issueCount })}
         </span>
-        <span className="status-pill">{sourceCount} image sources</span>
-        {checksumCount ? <span className="status-pill">{checksumCount} checksums</span> : null}
+        <span className="status-pill">
+          {sourceCount} {t("technical.ImportDiagnostics.025")}
+        </span>
+        {checksumCount ? (
+          <span className="status-pill">
+            {checksumCount} {t("technical.ImportDiagnostics.026")}
+          </span>
+        ) : null}
       </div>
 
       <div className="metricGrid" style={{ marginTop: 12 }}>
         <div className="metricCard">
-          <div className="muted">Validation</div>
-          <strong>{String(validation?.ok ?? false) === "true" ? "Pass" : "Needs review"}</strong>
+          <div className="muted">{t("technical.ImportDiagnostics.027")}</div>
+          <strong>
+            {String(validation?.ok ?? false) === "true"
+              ? t("technical.ImportDiagnostics.028")
+              : t("technical.ImportDiagnostics.029")}
+          </strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Issues</div>
+          <div className="muted">{t("technical.ImportDiagnostics.030")}</div>
           <strong>{issueCount}</strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Sources</div>
+          <div className="muted">{t("technical.ImportDiagnostics.031")}</div>
           <strong>{sourceCount}</strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Warnings</div>
+          <div className="muted">{t("technical.DicomConversionReleaseReadiness.012")}</div>
           <strong>{manifestWarnings.length}</strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Imports</div>
+          <div className="muted">{t("technical.ImportDiagnostics.032")}</div>
           <strong>{imports.length}</strong>
         </div>
       </div>
 
-      <h3>DICOM metadata preflight</h3>
+      <h3>{t("technical.ImportDiagnostics.033")}</h3>
       <div className="formGrid">
         <label>
-          DICOM root
+          {t("technical.ImportDiagnostics.034")}
           <input
-            placeholder="Optional DICOM root path"
+            placeholder={t("technical.ImportDiagnostics.035")}
             value={dicomPath}
             onChange={(event) => setDicomPath(event.target.value)}
           />
         </label>
         <label>
-          Max files sampled
+          {t("technical.ImportDiagnostics.036")}
           <input
             type="number"
             min={1}
@@ -451,12 +467,12 @@ export default function ImportDiagnosticsPanel({
           />
         </label>
         <label>
-          DICOM report
-          <input readOnly value={dicomReportPath || "Not generated yet"} />
+          {t("technical.ImportDiagnostics.037")}
+          <input readOnly value={dicomReportPath || t("technical.ImportDiagnostics.006")} />
         </label>
         <label>
-          DICOM JSON
-          <input readOnly value={dicomJsonPath || "Not generated yet"} />
+          {t("technical.ImportDiagnostics.038")}
+          <input readOnly value={dicomJsonPath || t("technical.ImportDiagnostics.006")} />
         </label>
       </div>
       {!dicomInputConfigured ? (
@@ -468,19 +484,19 @@ export default function ImportDiagnosticsPanel({
       ) : null}
       <div className="row">
         <button onClick={runDicomMetadataPreflight} disabled={dicomBusy || !hasProjectId}>
-          {dicomBusy ? "Checking DICOM..." : "Run DICOM preflight"}
+          {dicomBusy ? t("technical.ImportDiagnostics.039") : t("technical.ImportDiagnostics.040")}
         </button>
         <button
           onClick={() => void openArtifact(dicomReportPath, "DICOM preflight report")}
           disabled={!dicomReportPath}
         >
-          Open DICOM report
+          {t("technical.ImportDiagnostics.041")}
         </button>
         <button
           onClick={() => void openArtifact(dicomJsonPath, "DICOM preflight JSON")}
           disabled={!dicomJsonPath}
         >
-          Open DICOM JSON
+          {t("technical.ImportDiagnostics.042")}
         </button>
         <span className="status-pill">
           {Number(dicomPreflight?.dicom_file_count || 0)} DICOM files
@@ -492,23 +508,27 @@ export default function ImportDiagnosticsPanel({
       </div>
       <div className="metricGrid" style={{ marginTop: 12 }}>
         <div className="metricCard">
-          <div className="muted">Preflight</div>
-          <strong>{Boolean(dicomPreflight?.ok) ? "Pass" : "Needs review"}</strong>
+          <div className="muted">{t("technical.ImportDiagnostics.043")}</div>
+          <strong>
+            {dicomPreflight?.ok
+              ? t("technical.ImportDiagnostics.028")
+              : t("technical.ImportDiagnostics.029")}
+          </strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Subjects</div>
+          <div className="muted">{t("technical.ImportDiagnostics.044")}</div>
           <strong>{stringList(dicomPreflight?.subjects).length}</strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Modalities</div>
+          <div className="muted">{t("technical.ImportDiagnostics.045")}</div>
           <strong>{stringList(dicomPreflight?.modalities).join(", ") || "-"}</strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Warnings</div>
+          <div className="muted">{t("technical.DicomConversionReleaseReadiness.012")}</div>
           <strong>{dicomWarnings.length}</strong>
         </div>
         <div className="metricCard">
-          <div className="muted">Errors</div>
+          <div className="muted">{t("technical.ImportDiagnostics.046")}</div>
           <strong>{dicomErrors.length}</strong>
         </div>
       </div>
@@ -517,7 +537,11 @@ export default function ImportDiagnosticsPanel({
           {Object.entries(dicomSafetyFlags).map(([key, value]) => (
             <div className="metricCard" key={key}>
               <div className="muted">{key}</div>
-              <strong>{Boolean(value) ? "Yes" : "No"}</strong>
+              <strong>
+                {value
+                  ? t("technical.ImportDiagnostics.047")
+                  : t("technical.ImportDiagnostics.048")}
+              </strong>
             </div>
           ))}
         </div>
@@ -561,8 +585,8 @@ export default function ImportDiagnosticsPanel({
       ) : (
         <div className="empty">
           {dicomInputConfigured
-            ? "No DICOM series metadata loaded yet"
-            : "No DICOM series metadata loaded because diagnostics input is not configured."}
+            ? t("technical.ImportDiagnostics.049")
+            : t("technical.ImportDiagnostics.050")}
         </div>
       )}
       {dicomWarnings.length || dicomErrors.length ? (
@@ -577,12 +601,15 @@ export default function ImportDiagnosticsPanel({
           ))}
         </div>
       ) : null}
-      <h3>DICOM preflight report</h3>
-      <TextViewer text={dicomReportText || "No DICOM preflight report loaded"} maxHeight="260px" />
-      <h3>DICOM preflight payload</h3>
-      <JsonBlock value={dicomPreflight} emptyText="No DICOM preflight loaded" />
+      <h3>{t("technical.ImportDiagnostics.051")}</h3>
+      <TextViewer
+        text={dicomReportText || t("technical.ImportDiagnostics.052")}
+        maxHeight="260px"
+      />
+      <h3>{t("technical.ImportDiagnostics.053")}</h3>
+      <JsonBlock value={dicomPreflight} emptyText={t("technical.ImportDiagnostics.054")} />
 
-      <h3>Imported paths</h3>
+      <h3>{t("technical.ImportDiagnostics.055")}</h3>
       {imports.length ? (
         <div style={{ display: "grid", gap: 8 }}>
           {imports.map((item) => (
@@ -608,10 +635,10 @@ export default function ImportDiagnosticsPanel({
           ))}
         </div>
       ) : (
-        <div className="empty">No imported paths recorded for this project</div>
+        <div className="empty">{t("technical.ImportDiagnostics.056")}</div>
       )}
 
-      <h3>Validation issues</h3>
+      <h3>{t("technical.ImportDiagnostics.057")}</h3>
       {issues.length ? (
         <div style={{ display: "grid", gap: 8 }}>
           {issues.map((issue, index) => (
@@ -650,12 +677,12 @@ export default function ImportDiagnosticsPanel({
           ))}
         </div>
       ) : (
-        <div className="empty">No validation issues found</div>
+        <div className="empty">{t("technical.ImportDiagnostics.058")}</div>
       )}
 
       {manifestWarnings.length ? (
         <>
-          <h3>Manifest warnings</h3>
+          <h3>{t("technical.ImportDiagnostics.059")}</h3>
           <div style={{ display: "grid", gap: 6 }}>
             {manifestWarnings.map((warning, index) => (
               <div key={`${warning}-${index}`} className="errorBox">
@@ -666,21 +693,25 @@ export default function ImportDiagnosticsPanel({
         </>
       ) : null}
 
-      <h3>Validation report</h3>
+      <h3>{t("technical.ImportDiagnostics.005")}</h3>
       <TextViewer text={reportText || "No validation report text loaded"} maxHeight="300px" />
-      <h3>Validation payload</h3>
+      <h3>{t("technical.ImportDiagnostics.060")}</h3>
       <JsonBlock value={validation} emptyText="No validation report loaded" />
-      <h3>Manifest payload</h3>
+      <h3>{t("technical.ImportDiagnostics.061")}</h3>
       <JsonBlock value={manifest} emptyText="No manifest loaded" />
-      <h3>Import history payload</h3>
+      <h3>{t("technical.ImportDiagnostics.062")}</h3>
       <JsonBlock value={importHistory} emptyText="No import history loaded" />
-      <h3>Handoff package payload</h3>
+      <h3>{t("technical.ImportDiagnostics.063")}</h3>
       {safetyFlags ? (
         <div className="metricGrid" style={{ marginTop: 8 }}>
           {Object.entries(safetyFlags).map(([key, value]) => (
             <div className="metricCard" key={key}>
               <div className="muted">{key}</div>
-              <strong>{value ? "Yes" : "No"}</strong>
+              <strong>
+                {value
+                  ? t("technical.ImportDiagnostics.047")
+                  : t("technical.ImportDiagnostics.048")}
+              </strong>
             </div>
           ))}
         </div>
@@ -690,11 +721,11 @@ export default function ImportDiagnosticsPanel({
           onClick={() => void openArtifact(packageJsonPath, "handoff JSON")}
           disabled={!packageJsonPath}
         >
-          Open handoff JSON
+          {t("technical.ImportDiagnostics.064")}
         </button>
       </div>
       <JsonBlock value={handoffPackage} emptyText="No handoff package generated in this session" />
-      <h3>Verify result</h3>
+      <h3>{t("technical.ImportDiagnostics.065")}</h3>
       <JsonBlock value={verifyResult} emptyText="No package verification run in this session" />
     </div>
   );

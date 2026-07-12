@@ -1,15 +1,39 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { ComponentProps, ReactElement } from "react";
 import { TopBar, WorkspaceSuspenseFallback } from "../DashboardChrome";
+import { I18nProvider } from "../../../i18n/I18nProvider";
+
+const defaultTopBarProps: ComponentProps<typeof TopBar> = {
+  activePageLabel: "Data",
+  apiError: "",
+  health: true,
+  locale: "en",
+  onBackToProjects: vi.fn(),
+  onLocaleChange: vi.fn(),
+  onOpenAssistant: vi.fn(),
+  onOpenInspector: vi.fn(),
+  onOpenRuns: vi.fn(),
+  onOpenSettings: vi.fn(),
+  onRetry: vi.fn(),
+  projectName: "Demo Project",
+  version: "0.6.0-rc1",
+  versionFromBackend: true,
+};
+
+function renderTopBar(element: ReactElement) {
+  return render(<I18nProvider locale="en">{element}</I18nProvider>);
+}
 
 describe("TopBar", () => {
   it("shows project context and opens the inspector", async () => {
     const user = userEvent.setup();
     const openInspector = vi.fn();
     const openAssistant = vi.fn();
-    render(
+    renderTopBar(
       <TopBar
+        {...defaultTopBarProps}
         health={true}
         apiError=""
         onRetry={vi.fn()}
@@ -24,18 +48,19 @@ describe("TopBar", () => {
     expect(screen.getByText("Demo Project")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /advanced console/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /open assistant/i }));
+    await user.click(screen.getByRole("button", { name: "Assistant" }));
     expect(openAssistant).toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: /open inspector/i }));
+    await user.click(screen.getByRole("button", { name: "Inspector" }));
     expect(openInspector).toHaveBeenCalled();
   });
 
   it("surfaces backend errors with retry", async () => {
     const user = userEvent.setup();
     const retry = vi.fn();
-    render(
+    renderTopBar(
       <TopBar
+        {...defaultTopBarProps}
         health={false}
         apiError="Backend disconnected"
         onRetry={retry}
@@ -59,8 +84,9 @@ describe("TopBar", () => {
       configurable: true,
       value: { writeText },
     });
-    render(
+    renderTopBar(
       <TopBar
+        {...defaultTopBarProps}
         health={false}
         apiError="Backend disconnected"
         onRetry={vi.fn()}

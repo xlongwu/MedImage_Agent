@@ -3,13 +3,14 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import PlanReviewConsole from "../../components/PlanReviewConsole";
 import { TechnicalModuleSection } from "../../components/domain/TechnicalModuleSection";
 import { Badge, Button, Card, EmptyState } from "../../components/ui";
-import { evidenceLabel } from "../../lib/evidence";
 import type { ProjectDetail } from "../../lib/types/project";
 import type { PlanNodeSelection } from "../../lib/workspaceSelection";
 import type { PresetPlanDraft } from "../../types";
 import { WorkspaceHeader } from "../dashboard/DashboardChrome";
 import styles from "./PlanWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
+import { useI18n } from "../../i18n/useI18n";
+import type { I18nContextValue } from "../../i18n/context";
 
 export interface PlanWorkspaceProps {
   baseUrl: string;
@@ -64,10 +65,11 @@ export function PlanWorkspace({
   onOpenDataConversion,
   onOpenEnvironment,
 }: PlanWorkspaceProps) {
+  const { t } = useI18n();
   const [showTechnicalPlanTools, setShowTechnicalPlanTools] = useState(false);
   const plan = initialPresetDraft?.plan ?? null;
-  const validation = initialPresetDraft?.validation ?? {};
-  const nodes = useMemo(() => normalizePlanNodes(plan, validation), [plan, validation]);
+  const validation = useMemo(() => initialPresetDraft?.validation ?? {}, [initialPresetDraft]);
+  const nodes = useMemo(() => normalizePlanNodes(plan, validation, t), [plan, t, validation]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(nodes[0]?.id ?? null);
   const status = derivePlanStatus(
     projectId,
@@ -75,20 +77,13 @@ export function PlanWorkspace({
     projectConfigPath,
     initialPresetDraft,
   );
-  const summary = summarizePlan(status, initialPresetDraft, nodes.length, validation);
+  const summary = summarizePlan(status, initialPresetDraft, nodes.length, validation, t);
   const hasProjectContext = Boolean(projectId && selectedProject);
   const validationIssues = countValidationIssues(validation);
   const nextActions = initialPresetDraft?.next_actions ?? [];
-  const reviewSteps = planReviewSteps(status, validation);
-  const gateEvidence = summarizeGateEvidence(validation);
+  const reviewSteps = planReviewSteps(status, validation, t);
+  const gateEvidence = summarizeGateEvidence(validation, t);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? nodes[0] ?? null;
-
-  useEffect(() => {
-    setSelectedNodeId((current) => {
-      if (current && nodes.some((node) => node.id === current)) return current;
-      return nodes[0]?.id ?? null;
-    });
-  }, [nodes]);
 
   useEffect(() => {
     onSelectedNodeChange?.(
@@ -98,68 +93,70 @@ export function PlanWorkspace({
             detail: selectedNode.detail,
             id: selectedNode.id,
             name: selectedNode.name,
-            risk: riskLabel(selectedNode.risk),
+            risk: riskLabel(selectedNode.risk, t),
           }
         : null,
     );
-  }, [onSelectedNodeChange, selectedNode]);
+  }, [onSelectedNodeChange, selectedNode, t]);
 
   return (
     <div className={layoutStyles.stack}>
       <WorkspaceHeader
-        title="Plan"
-        subtitle="Review the planned workflow before dry-run, approval, or deterministic execution."
+        title={t("plan.title")}
+        subtitle={t("plan.subtitle")}
         status={summary.badge}
       />
 
       {!hasProjectContext ? (
         <EmptyState
-          title="Select a project before planning"
-          description="Plan review is project-scoped so input paths, data state, and audit records stay attached to the selected research workspace."
-          action={<Button onClick={onOpenDataConversion}>Open Data &amp; Conversion</Button>}
+          title={t("plan.selectProjectTitle")}
+          description={t("plan.selectProjectDescription")}
+          action={<Button onClick={onOpenDataConversion}>{t("plan.openData")}</Button>}
         />
       ) : !projectConfigPath ? (
         <EmptyState
-          title="Project config required"
-          description="The selected project is missing metadata.project_config_path. Review the environment and project registration before generating a plan."
-          action={<Button onClick={onOpenEnvironment}>Open Settings / Environment</Button>}
+          title={t("plan.configRequired")}
+          description={t("plan.configDescription")}
+          action={<Button onClick={onOpenEnvironment}>{t("plan.openSettings")}</Button>}
         />
       ) : null}
 
-      <section className={styles.planGrid} aria-label="Plan workspace overview">
+      <section className={styles.planGrid} aria-label={t("plan.overview")}>
         <Card className={styles.outlineCard} tone="muted">
           <div className={styles.cardHeader}>
             <div>
-              <h3>Plan outline</h3>
-              <p>Plain-language review before opening the technical console.</p>
+              <h3>{t("plan.outline")}</h3>
+              <p>{t("plan.outlineDescription")}</p>
             </div>
             <Badge tone={summary.tone}>{summary.badge}</Badge>
           </div>
           <dl className={styles.outlineList}>
             <div>
-              <dt>Goal</dt>
-              <dd>{initialPresetDraft?.goal || "No draft goal loaded yet"}</dd>
+              <dt>{t("plan.goal")}</dt>
+              <dd>{initialPresetDraft?.goal || t("plan.noGoal")}</dd>
             </div>
             <div>
-              <dt>Data scope</dt>
+              <dt>{t("plan.dataScope")}</dt>
               <dd>
                 {selectedProject
-                  ? `${selectedProject.name} · ${selectedProject.subjects_count} subject(s)`
-                  : "Select project"}
+                  ? `${selectedProject.name} · ${t("plan.subjectCount", { count: selectedProject.subjects_count })}`
+                  : t("plan.selectProject")}
               </dd>
             </div>
             <div>
-              <dt>Nodes</dt>
-              <dd>{nodes.length ? `${nodes.length} planned node(s)` : "No node list available"}</dd>
+              <dt>{t("plan.nodes")}</dt>
+              <dd>
+                {nodes.length ? t("plan.plannedNodes", { count: nodes.length }) : t("plan.noNodes")}
+              </dd>
             </div>
             <div>
-              <dt>Validation</dt>
+              <dt>{t("plan.validation")}</dt>
               <dd>{summary.validationText}</dd>
             </div>
           </dl>
           {nextActions.length ? (
-            <div className={styles.nextActions} aria-label="Plan next actions">
-              <strong>Next actions</strong>
+            <div className={styles.nextActions} aria-label={t("plan.nextActions")}>
+              <strong>{t("plan.nextActions")}</strong>
               <ul>
                 {nextActions.slice(0, 4).map((action) => (
                   <li key={action}>{action}</li>
@@ -172,12 +169,12 @@ export function PlanWorkspace({
         <Card className={styles.graphCard}>
           <div className={styles.cardHeader}>
             <div>
-              <h3>Pipeline graph</h3>
-              <p>Ordered node cards with review focus and risk markers.</p>
+              <h3>{t("plan.pipelineGraph")}</h3>
+              <p>{t("plan.pipelineDescription")}</p>
             </div>
           </div>
           {nodes.length ? (
-            <ol className={styles.nodeList} aria-label="Plan pipeline steps">
+            <ol className={styles.nodeList} aria-label={t("plan.pipelineSteps")}>
               {nodes.map((node, index) => (
                 <li
                   className={styles.nodeItem}
@@ -189,7 +186,7 @@ export function PlanWorkspace({
                     type="button"
                     className={styles.nodeSelectButton}
                     onClick={() => setSelectedNodeId(node.id)}
-                    aria-label={`Inspect ${node.name}`}
+                    aria-label={t("plan.inspectNode", { name: node.name })}
                   >
                     <span className={styles.nodeIndex}>{index + 1}</span>
                   </button>
@@ -197,13 +194,13 @@ export function PlanWorkspace({
                     <div className={styles.nodeTitleRow}>
                       <strong>{node.name}</strong>
                       <Badge tone={riskTone(node.risk)} size="sm">
-                        {riskLabel(node.risk)}
+                        {riskLabel(node.risk, t)}
                       </Badge>
                     </div>
                     <p>{node.detail}</p>
                     <div className={styles.nodeMetaRow}>
-                      <span>Depends on: {node.dependsOn}</span>
-                      <span>Backend: {node.backend}</span>
+                      <span>{t("plan.dependsOn", { value: node.dependsOn })}</span>
+                      <span>{t("plan.backend", { value: node.backend })}</span>
                     </div>
                   </div>
                 </li>
@@ -211,33 +208,33 @@ export function PlanWorkspace({
             </ol>
           ) : (
             <EmptyState
-              title="No plan draft loaded"
-              description="Generate or load a reviewed draft in the technical plan tools. The plan will remain review-only until backend validation and approval gates pass."
+              title={t("plan.noDraft")}
+              description={t("plan.noDraftDescription")}
               action={
                 <Button variant="secondary" onClick={() => setShowTechnicalPlanTools(true)}>
-                  Open technical plan tools
+                  {t("plan.openTechnical")}
                 </Button>
               }
             />
           )}
         </Card>
 
-        <Card className={styles.inspectorCard} aria-label="Plan inspector">
+        <Card className={styles.inspectorCard} aria-label={t("plan.inspector")}>
           <div className={styles.cardHeader}>
             <div>
-              <h3>Inspector</h3>
-              <p>Inputs, parameters, risk, and outputs for the selected node.</p>
+              <h3>{t("plan.inspectorTitle")}</h3>
+              <p>{t("plan.inspectorDescription")}</p>
             </div>
           </div>
           <NodeInspector node={selectedNode} />
           <div className={styles.machineHeader}>
-            <strong>Plan state machine</strong>
-            <span>Backend gates remain authoritative.</span>
+            <strong>{t("plan.stateMachine")}</strong>
+            <span>{t("plan.backendAuthoritative")}</span>
           </div>
-          <ol className={styles.stateList} aria-label="Plan state machine">
+          <ol className={styles.stateList} aria-label={t("plan.stateMachine")}>
             {reviewSteps.map((step) => (
               <li
-                aria-label={`${step.label}: ${stepLabel(step.state)}`}
+                aria-label={`${step.label}: ${stepLabel(step.state, t)}`}
                 className={styles.stateItem}
                 data-state={step.state}
                 key={step.label}
@@ -247,70 +244,68 @@ export function PlanWorkspace({
                   <small>{step.description}</small>
                 </span>
                 <Badge tone={stepTone(step.state)} size="sm">
-                  {stepLabel(step.state)}
+                  {stepLabel(step.state, t)}
                 </Badge>
               </li>
             ))}
           </ol>
-          <div className={styles.reviewFacts} aria-label="Plan review facts">
+          <div className={styles.reviewFacts} aria-label={t("plan.reviewFacts")}>
             <div>
-              <span>Validation issues</span>
+              <span>{t("plan.validationIssues")}</span>
               <strong>{validationIssues}</strong>
             </div>
             <div>
-              <span>Project config</span>
-              <strong>{projectConfigPath ? "Registered" : "Missing"}</strong>
+              <span>{t("plan.projectConfig")}</span>
+              <strong>{projectConfigPath ? t("plan.registered") : t("plan.missing")}</strong>
             </div>
             <div>
-              <span>Execution</span>
-              <strong>Backend gated</strong>
+              <span>{t("plan.execution")}</span>
+              <strong>{t("plan.backendGated")}</strong>
             </div>
             <div>
-              <span>Approval evidence</span>
+              <span>{t("plan.approvalEvidence")}</span>
               <strong>{gateEvidence.approval}</strong>
             </div>
             <div>
-              <span>Dry-run evidence</span>
+              <span>{t("plan.dryRunEvidence")}</span>
               <strong>{gateEvidence.dryRun}</strong>
             </div>
             <div>
-              <span>Ready evidence</span>
+              <span>{t("plan.readyEvidence")}</span>
               <strong>{gateEvidence.ready}</strong>
             </div>
           </div>
         </Card>
       </section>
 
-      <section className={styles.reviewBar} aria-label="Plan review bar">
+      <section className={styles.reviewBar} aria-label={t("plan.reviewBar")}>
         <div>
           <strong>{summary.title}</strong>
           <p>{summary.description}</p>
         </div>
         <div className={styles.reviewBarActions}>
           <Button variant="ghost" onClick={onOpenEnvironment}>
-            Review environment
+            {t("plan.reviewEnvironment")}
           </Button>
           <Button variant="primary" onClick={() => setShowTechnicalPlanTools((value) => !value)}>
-            {showTechnicalPlanTools ? "Hide technical plan tools" : "Open technical plan tools"}
+            {showTechnicalPlanTools ? t("plan.hideTechnical") : t("plan.openTechnical")}
           </Button>
         </div>
       </section>
 
       <TechnicalModuleSection
-        ariaLabel="Technical plan tools"
+        ariaLabel={t("plan.openTechnical")}
         bodyVisible={showTechnicalPlanTools}
         className={styles.advancedSection}
-        description="JSON editing, approval checks, dry-run checks, and reviewed execution remain secondary to the review workspace."
+        description={t("plan.technicalDescription")}
         evidenceLevel="backend_required"
         helperText={
-          showTechnicalPlanTools
-            ? "Technical tools are open for review."
-            : "Use the review bar to open the technical console when needed."
+          showTechnicalPlanTools ? t("plan.technicalOpenHelp") : t("plan.technicalClosedHelp")
         }
-        safetyNote="Plan tools stay review-only until backend validation, approval, and dry-run gates pass."
-        status={showTechnicalPlanTools ? "Open" : "On demand"}
+        safetyNote={t("plan.technicalSafety")}
+        status={showTechnicalPlanTools ? t("plan.open") : t("plan.onDemand")}
         statusTone="info"
-        title="Technical plan tools"
+        title={t("plan.openTechnical")}
       >
         <>
           <PlanReviewConsole
@@ -345,6 +340,7 @@ function summarizePlan(
   draft: PresetPlanDraft | null | undefined,
   nodeCount: number,
   validation: Record<string, unknown>,
+  t: I18nContextValue["t"],
 ): {
   badge: string;
   description: string;
@@ -356,53 +352,52 @@ function summarizePlan(
   const validationText =
     draft?.validation?.ok === true
       ? issueCount
-        ? `${issueCount} issue(s) to review`
-        : "Validation metadata present"
+        ? t("plan.issueCount", { count: issueCount })
+        : t("plan.validationPresent")
       : draft
-        ? "Review required"
-        : "No validation yet";
+        ? t("plan.reviewRequired")
+        : t("plan.noValidation");
 
   if (status === "needs-project") {
     return {
-      badge: "Needs project",
-      description: "Planning is waiting for an active project context.",
-      title: "Project context required",
+      badge: t("plan.needsProject"),
+      description: t("plan.waitingProject"),
+      title: t("plan.projectContextRequired"),
       tone: "warning",
       validationText,
     };
   }
   if (status === "needs-config") {
     return {
-      badge: "Needs config",
-      description: "Project metadata is missing the config path used by reviewed planning.",
-      title: "Project config is missing",
+      badge: t("plan.needsConfig"),
+      description: t("plan.configMissingDescription"),
+      title: t("plan.configMissing"),
       tone: "warning",
       validationText,
     };
   }
   if (status === "validated") {
     return {
-      badge: "Validated draft",
-      description: `${nodeCount} node(s) are ready for human review before approval or dry-run.`,
-      title: "Draft is ready for review",
+      badge: t("plan.validatedDraft"),
+      description: t("plan.validatedDescription", { count: nodeCount }),
+      title: t("plan.draftReady"),
       tone: "success",
       validationText,
     };
   }
   if (status === "needs-review") {
     return {
-      badge: "Needs review",
-      description:
-        "A draft exists, but review issues or missing validation metadata need attention.",
-      title: "Review the draft before approval",
+      badge: t("plan.needsReview"),
+      description: t("plan.needsReviewDescription"),
+      title: t("plan.reviewDraft"),
       tone: "info",
       validationText,
     };
   }
   return {
-    badge: "Draft",
-    description: "Generate or load a draft in the technical plan tools; execution remains locked.",
-    title: "Draft has not been generated",
+    badge: t("plan.draft"),
+    description: t("plan.draftDescription"),
+    title: t("plan.draftMissing"),
     tone: "neutral",
     validationText,
   };
@@ -411,6 +406,7 @@ function summarizePlan(
 function normalizePlanNodes(
   plan: Record<string, unknown> | null,
   validation: Record<string, unknown>,
+  t: I18nContextValue["t"],
 ): NormalizedPlanNode[] {
   const rawNodes = Array.isArray(plan?.nodes) ? plan.nodes : [];
   const highRiskNodes = stringSet(validation.high_risk_nodes);
@@ -421,14 +417,16 @@ function normalizePlanNodes(
     const node = isRecord(rawNode) ? rawNode : {};
     const id = String(node.id ?? node.node_id ?? `node-${index + 1}`);
     const name = String(node.name ?? node.label ?? id);
-    const detail = String(node.description ?? node.type ?? node.operation ?? "Pipeline node");
-    const backend = String(node.backend ?? node.runner ?? node.type ?? "registered runner");
+    const detail = String(
+      node.description ?? node.type ?? node.operation ?? t("plan.pipelineNode"),
+    );
+    const backend = String(node.backend ?? node.runner ?? node.type ?? t("plan.registeredRunner"));
     const dependsOn = Array.isArray(node.depends_on)
-      ? node.depends_on.map(String).join(", ") || "None"
-      : "None";
+      ? node.depends_on.map(String).join(", ") || t("plan.none")
+      : t("plan.none");
     const inputs = stringArray(node.inputs);
     const outputs = stringArray(node.outputs);
-    const parameters = normalizeParameters(node.params ?? node.parameters);
+    const parameters = normalizeParameters(node.params ?? node.parameters, t);
     const risk = highRiskNodes.has(id)
       ? "high"
       : approvalNodes.has(id)
@@ -438,18 +436,22 @@ function normalizePlanNodes(
           : "normal";
     const riskReason =
       risk === "high"
-        ? "High-risk or approval-sensitive node flagged by backend validation."
+        ? t("plan.riskHighReason")
         : risk === "approval"
-          ? "Human approval is required before this node can execute."
+          ? t("plan.riskApprovalReason")
           : risk === "unknown"
-            ? "Node is not fully recognized by the current validation result."
-            : "Cataloged node with no special risk marker in the current draft.";
+            ? t("plan.riskUnknownReason")
+            : t("plan.riskNormalReason");
 
     return { backend, id, inputs, name, outputs, parameters, detail, dependsOn, riskReason, risk };
   });
 }
 
-function planReviewSteps(status: PlanStatus, validation: Record<string, unknown>): ReviewStep[] {
+function planReviewSteps(
+  status: PlanStatus,
+  validation: Record<string, unknown>,
+  t: I18nContextValue["t"],
+): ReviewStep[] {
   const hasContext = status !== "needs-project" && status !== "needs-config";
   const hasDraft = status === "validated" || status === "needs-review";
   const issueCount = countValidationIssues(validation);
@@ -465,68 +467,73 @@ function planReviewSteps(status: PlanStatus, validation: Record<string, unknown>
 
   return [
     {
-      label: "Draft",
-      description: hasDraft ? "Draft loaded" : "Generate or load draft",
+      label: t("plan.stepDraft"),
+      description: hasDraft ? t("plan.draftLoaded") : t("plan.generateDraft"),
       state: hasContext ? (hasDraft ? "completed" : "current") : "locked",
     },
     {
-      label: "Validated",
-      description: validationOk ? "Validator passed" : "Validator pending",
+      label: t("plan.stepValidated"),
+      description: validationOk ? t("plan.validatorPassed") : t("plan.validatorPending"),
       state: validationOk ? "completed" : hasDraft ? "attention" : "locked",
     },
     {
-      label: "Needs Review",
-      description: issueCount ? `${issueCount} issue(s)` : "Human review required",
+      label: t("plan.stepNeedsReview"),
+      description: issueCount
+        ? t("plan.issueCount", { count: issueCount })
+        : t("plan.humanReviewRequired"),
       state: hasDraft && !approved ? "current" : approved ? "completed" : "locked",
     },
     {
-      label: "Approved",
-      description: approved ? "Approval gate passed" : "Awaiting approval gate",
+      label: t("plan.stepApproved"),
+      description: approved ? t("plan.approvalPassed") : t("plan.awaitingApproval"),
       state: approved ? "completed" : hasDraft ? "pending-evidence" : "locked",
     },
     {
-      label: "Dry-run Passed",
+      label: t("plan.stepDryRun"),
       description: dryRunPassed
-        ? "Backend dry-run evidence present"
+        ? t("plan.dryRunPresent")
         : approved
-          ? "Pending backend dry-run evidence"
-          : "Dry-run not passed",
+          ? t("plan.dryRunPending")
+          : t("plan.dryRunNotPassed"),
       state: dryRunPassed ? "completed" : approved ? "pending-evidence" : "locked",
     },
     {
-      label: "Ready to Execute",
+      label: t("plan.stepReady"),
       description: readyToExecute
-        ? "Backend readiness evidence present"
+        ? t("plan.readinessPresent")
         : dryRunPassed
-          ? "Pending backend readiness evidence"
-          : "Execution locked",
+          ? t("plan.readinessPending")
+          : t("plan.executionLocked"),
       state: readyToExecute ? "completed" : dryRunPassed ? "pending-evidence" : "locked",
     },
     {
-      label: "Executed",
+      label: t("plan.stepExecuted"),
       description: executed
-        ? "Persisted execution record present"
+        ? t("plan.executionPresent")
         : readyToExecute
-          ? "Pending persisted execution record"
-          : "No execution recorded",
+          ? t("plan.executionPending")
+          : t("plan.noExecution"),
       state: executed ? "completed" : readyToExecute ? "pending-evidence" : "locked",
     },
   ];
 }
 
-function summarizeGateEvidence(validation: Record<string, unknown>): {
+function summarizeGateEvidence(
+  validation: Record<string, unknown>,
+  t: I18nContextValue["t"],
+): {
   approval: string;
   dryRun: string;
   ready: string;
 } {
   return {
-    approval: approvalEvidenceSignal(validation) ? "Created" : evidenceLabel("backend_required"),
+    approval: approvalEvidenceSignal(validation) ? t("plan.created") : t("plan.backendRequired"),
     dryRun: booleanSignal(validation, ["dry_run_passed", "dry_run_ok", "dry_run_completed"])
-      ? "Created"
-      : evidenceLabel("backend_required"),
+      ? t("plan.created")
+      : t("plan.backendRequired"),
     ready: booleanSignal(validation, ["ready_to_execute", "execution_ready"])
-      ? "Created"
-      : evidenceLabel("backend_required"),
+      ? t("plan.created")
+      : t("plan.backendRequired"),
   };
 }
 
@@ -546,22 +553,25 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
-function normalizeParameters(value: unknown): Array<{ key: string; value: string }> {
+function normalizeParameters(
+  value: unknown,
+  t: I18nContextValue["t"],
+): Array<{ key: string; value: string }> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   return Object.entries(value as Record<string, unknown>)
     .slice(0, 8)
-    .map(([key, entry]) => ({ key, value: stringifyValue(entry) }));
+    .map(([key, entry]) => ({ key, value: stringifyValue(entry, t) }));
 }
 
-function stringifyValue(value: unknown): string {
-  if (value === null || value === undefined || value === "") return "not set";
+function stringifyValue(value: unknown, t: I18nContextValue["t"]): string {
+  if (value === null || value === undefined || value === "") return t("plan.notSet");
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
   try {
     return JSON.stringify(value);
   } catch {
-    return "complex value";
+    return t("plan.complexValue");
   }
 }
 
@@ -597,11 +607,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function riskLabel(risk: NormalizedPlanNode["risk"]): string {
-  if (risk === "high") return "High risk";
-  if (risk === "approval") return "Approval";
-  if (risk === "unknown") return "Unknown";
-  return "Cataloged";
+function riskLabel(risk: NormalizedPlanNode["risk"], t: I18nContextValue["t"]): string {
+  if (risk === "high") return t("plan.highRisk");
+  if (risk === "approval") return t("plan.approval");
+  if (risk === "unknown") return t("plan.unknown");
+  return t("plan.cataloged");
 }
 
 function riskTone(
@@ -620,18 +630,20 @@ function stepTone(state: StepState): "neutral" | "info" | "success" | "warning" 
   return "neutral";
 }
 
-function stepLabel(state: StepState): string {
-  if (state === "pending-evidence") return evidenceLabel("backend_required").toLowerCase();
-  return state;
+function stepLabel(state: StepState, t: I18nContextValue["t"]): string {
+  if (state === "pending-evidence") return t("plan.pendingEvidence");
+  if (state === "completed") return t("common.completed");
+  if (state === "current") return t("common.current");
+  if (state === "locked") return t("common.blocked");
+  if (state === "available") return t("common.available");
+  return t("plan.needsReview");
 }
 
 function NodeInspector({ node }: { node: NormalizedPlanNode | null }) {
+  const { t } = useI18n();
   if (!node) {
     return (
-      <EmptyState
-        title="No node selected"
-        description="Load a draft to inspect node inputs, parameters, risk, and outputs."
-      />
+      <EmptyState title={t("plan.noNodeSelected")} description={t("plan.noNodeDescription")} />
     );
   }
 
@@ -640,16 +652,16 @@ function NodeInspector({ node }: { node: NormalizedPlanNode | null }) {
       <div className={styles.inspectorTitle}>
         <strong>{node.name}</strong>
         <Badge tone={riskTone(node.risk)} size="sm">
-          {riskLabel(node.risk)}
+          {riskLabel(node.risk, t)}
         </Badge>
       </div>
       <p>{node.detail}</p>
-      <InspectorSection title="Inputs" emptyText="Inputs are inferred during backend validation.">
+      <InspectorSection title={t("plan.inputs")} emptyText={t("plan.inputsEmpty")}>
         {node.inputs.map((input) => (
           <li key={input}>{input}</li>
         ))}
       </InspectorSection>
-      <InspectorSection title="Parameters" emptyText="No high-level parameters were provided.">
+      <InspectorSection title={t("plan.parameters")} emptyText={t("plan.parametersEmpty")}>
         {node.parameters.map((parameter) => (
           <li key={parameter.key}>
             <strong>{parameter.key}</strong>
@@ -657,10 +669,10 @@ function NodeInspector({ node }: { node: NormalizedPlanNode | null }) {
           </li>
         ))}
       </InspectorSection>
-      <InspectorSection title="Risk" emptyText="">
+      <InspectorSection title={t("plan.risk")} emptyText="">
         <li>{node.riskReason}</li>
       </InspectorSection>
-      <InspectorSection title="Outputs" emptyText="Outputs are planned by the registered runner.">
+      <InspectorSection title={t("plan.outputs")} emptyText={t("plan.outputsEmpty")}>
         {node.outputs.map((output) => (
           <li key={output}>{output}</li>
         ))}

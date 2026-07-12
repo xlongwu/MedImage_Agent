@@ -113,14 +113,18 @@ export function useDicomConversionWorkflow(
   // hook; treating that as a full reset erases the prepared response and makes
   // the UI look unchanged after the operator clicks "Prepare conversion".
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Project changes intentionally reset operator workflow state.
     setPrepareResponse(null);
     setConversionRunId(initialConversionRunId);
     setError("");
     setConfirmations(emptyConfirmations());
+    // initialConversionRunId is synchronized separately so a new prepared run does not reset this workflow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   useEffect(() => {
     if (!initialConversionRunId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Adopt a parent-provided run id only when local preparation has not produced one.
     setConversionRunId((current) => current || initialConversionRunId);
   }, [initialConversionRunId]);
 

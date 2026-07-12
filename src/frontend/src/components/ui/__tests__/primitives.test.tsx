@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { Dialog, Sheet } from "../overlays";
-import { Badge, Button, EmptyState, IconButton, Skeleton, Tooltip } from "../primitives";
+import { Badge, Button, EmptyState, IconButton, Progress, Skeleton, Tooltip } from "../primitives";
 import { SegmentedControl } from "../segmented-control";
 import { Table, TableEmpty } from "../table";
 
@@ -62,6 +62,15 @@ describe("ui primitives", () => {
     expect(screen.getByText("Ready")).toBeInTheDocument();
     expect(screen.getByTestId("loading-line")).toHaveAttribute("aria-hidden", "true");
     expect(screen.getByRole("tooltip")).toHaveTextContent("Open context inspector");
+  });
+
+  it("clamps progress and exposes an accessible value", () => {
+    render(<Progress label="Overall progress" value={142} />);
+
+    expect(screen.getByRole("progressbar", { name: "Overall progress" })).toHaveAttribute(
+      "aria-valuenow",
+      "100",
+    );
   });
 
   it("renders controlled dialog and closes with Escape", async () => {

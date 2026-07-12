@@ -16,6 +16,9 @@ import type { PreprocessingRunCreateResponse } from "../../types";
 import { PreprocessingReviewedFlow } from "./PreprocessingReviewedFlow";
 import styles from "./PreprocessingWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
+import { useI18n } from "../../i18n/useI18n";
+import type { I18nContextValue } from "../../i18n/context";
+import type { MessageKey } from "../../i18n/messages/en";
 
 export interface PreprocessingWorkspaceProps {
   baseUrl: string;
@@ -26,6 +29,7 @@ export interface PreprocessingWorkspaceProps {
   preprocessingRunId?: string | null;
   onOpenDataConversion: () => void;
   onOpenToolsDrawer: () => void;
+  onOpenRuns?: (runId: string | null) => void;
 }
 
 export function PreprocessingWorkspace({
@@ -37,10 +41,12 @@ export function PreprocessingWorkspace({
   preprocessingRunId,
   onOpenDataConversion,
   onOpenToolsDrawer,
+  onOpenRuns,
 }: PreprocessingWorkspaceProps) {
+  const { t } = useI18n();
   const [showTechnicalModules, setShowTechnicalModules] = useState(false);
   const [showDetailedValidation, setShowDetailedValidation] = useState(false);
-  const [selectedStageName, setSelectedStageName] = useState(preprocessingStages[0].name);
+  const [selectedStageName, setSelectedStageName] = useState(preprocessingStages[0].id);
   const [configMode, setConfigMode] = useState<ConfigMode>("basic");
   const [localRunId, setLocalRunId] = useState<string | null>(null);
   const [createRunResult, setCreateRunResult] = useState<PreprocessingRunCreateResponse | null>(
@@ -48,7 +54,7 @@ export function PreprocessingWorkspace({
   );
   const [createRunError, setCreateRunError] = useState("");
   const [creatingRun, setCreatingRun] = useState(false);
-  const resolvedInventory = inventory ?? emptyProjectInventory(dataState);
+  const resolvedInventory = inventory ?? emptyProjectInventory(dataState, t);
   const isRawDicom = dataState === "raw_dicom";
   const hasRegisteredConvertedInput =
     resolvedInventory.hasConvertedData &&
@@ -73,9 +79,7 @@ export function PreprocessingWorkspace({
         setLocalRunId(response.preprocessing_run_id);
       } else {
         setCreateRunError(
-          response.blocking_issues[0] ||
-            response.errors[0] ||
-            "Backend did not create a preprocessing run.",
+          response.blocking_issues[0] || response.errors[0] || t("preprocessing.createFailed"),
         );
       }
     } catch (error) {
@@ -89,43 +93,47 @@ export function PreprocessingWorkspace({
     return (
       <div className={layoutStyles.stack}>
         <WorkspaceHeader
-          title="Preprocessing"
-          subtitle="Validate the preprocessing pipeline after conversion or BIDS registration."
-          status="Blocked"
+          title={t("preprocessing.title")}
+          subtitle={t("preprocessing.validationSubtitle")}
+          status={t("common.blocked")}
         />
-        <section className={layoutStyles.blockedNotice} aria-label="Preprocessing blocked">
+        <section className={layoutStyles.blockedNotice} aria-label={t("preprocessing.blockedAria")}>
           <div className={layoutStyles.blockedBody}>
-            <h3>Preprocessing is blocked</h3>
-            <p>
-              Raw DICOM has not been converted to registered BIDS/NIfTI data. Complete data
-              conversion before preprocessing validation.
-            </p>
-            <ol className={layoutStyles.dependencyChain} aria-label="Dependency chain">
+            <h3>{t("preprocessing.blocked")}</h3>
+            <p>{t("preprocessing.blockedDescription")}</p>
+            <ol
+              className={layoutStyles.dependencyChain}
+              aria-label={t("preprocessing.dependencyChain")}
+            >
               <li className={layoutStyles.dependencyDone}>
-                <span className={layoutStyles.dependencyLabel}>Data Detection</span>
-                <span className={layoutStyles.dependencyStatus}>Done</span>
+                <span className={layoutStyles.dependencyLabel}>
+                  {t("preprocessing.dataDetection")}
+                </span>
+                <span className={layoutStyles.dependencyStatus}>{t("preprocessing.done")}</span>
               </li>
               <li className={layoutStyles.dependencyCurrent}>
-                <span className={layoutStyles.dependencyLabel}>Conversion Review</span>
-                <span className={layoutStyles.dependencyStatus}>Required</span>
+                <span className={layoutStyles.dependencyLabel}>
+                  {t("preprocessing.conversionReview")}
+                </span>
+                <span className={layoutStyles.dependencyStatus}>{t("preprocessing.required")}</span>
               </li>
               <li>
-                <span className={layoutStyles.dependencyLabel}>BIDS Validation</span>
-                <span className={layoutStyles.dependencyStatus}>Pending</span>
+                <span className={layoutStyles.dependencyLabel}>
+                  {t("preprocessing.bidsValidation")}
+                </span>
+                <span className={layoutStyles.dependencyStatus}>{t("preprocessing.pending")}</span>
               </li>
               <li>
-                <span className={layoutStyles.dependencyLabel}>Preprocessing</span>
-                <span className={layoutStyles.dependencyStatus}>Locked</span>
+                <span className={layoutStyles.dependencyLabel}>{t("preprocessing.title")}</span>
+                <span className={layoutStyles.dependencyStatus}>{t("preprocessing.locked")}</span>
               </li>
             </ol>
           </div>
           <div className={layoutStyles.blockedActions}>
             <Button variant="primary" onClick={onOpenDataConversion}>
-              Return to Data &amp; Conversion
+              {t("preprocessing.returnData")}
             </Button>
-            <span className={layoutStyles.blockedHint}>
-              Raw data is mounted read-only. Outputs are written to the project workspace.
-            </span>
+            <span className={layoutStyles.blockedHint}>{t("preprocessing.rawReadOnly")}</span>
           </div>
         </section>
       </div>
@@ -139,43 +147,54 @@ export function PreprocessingWorkspace({
     return (
       <div className={layoutStyles.stack}>
         <WorkspaceHeader
-          title="Preprocessing"
-          subtitle="Register converted BIDS/NIfTI input before reviewing preprocessing setup."
-          status="Input required"
+          title={t("preprocessing.title")}
+          subtitle={t("preprocessing.registerSubtitle")}
+          status={t("preprocessing.inputRequired")}
         />
-        <section className={styles.inputRequiredGrid} aria-label="Preprocessing input required">
+        <section
+          className={styles.inputRequiredGrid}
+          aria-label={t("preprocessing.inputRequiredAria")}
+        >
           <Card className={styles.inputRequiredCard} tone="muted">
             <div className={styles.sectionHeader}>
               <div>
-                <h3>Register converted outputs before preprocessing</h3>
-                <p>
-                  Preprocessing setup needs backend-visible BIDS/NIfTI input. Source data remains
-                  read-only; derived outputs are managed inside the project workspace.
-                </p>
+                <h3>{t("preprocessing.registerTitle")}</h3>
+                <p>{t("preprocessing.registerDescription")}</p>
               </div>
-              <Badge tone="warning">Input required</Badge>
+              <Badge tone="warning">{t("preprocessing.inputRequired")}</Badge>
             </div>
-            <ol className={styles.requirementList} aria-label="Preprocessing input requirements">
+            <ol
+              className={styles.requirementList}
+              aria-label={t("preprocessing.inputRequirements")}
+            >
               <li data-state="complete">
-                <span>Project context</span>
-                <strong>{projectId ? "Selected" : "Missing"}</strong>
+                <span>{t("preprocessing.projectContext")}</span>
+                <strong>
+                  {projectId ? t("preprocessing.selected") : t("preprocessing.missing")}
+                </strong>
               </li>
               <li data-state={resolvedInventory.hasConvertedData ? "complete" : "blocked"}>
-                <span>Converted data evidence</span>
+                <span>{t("preprocessing.convertedEvidence")}</span>
                 <strong>
-                  {resolvedInventory.hasConvertedData ? "Detected" : "Not registered"}
+                  {resolvedInventory.hasConvertedData
+                    ? t("preprocessing.detected")
+                    : t("preprocessing.notRegistered")}
                 </strong>
               </li>
               <li data-state={hasRegisteredConvertedInput ? "complete" : "blocked"}>
-                <span>Registered input</span>
-                <strong>{hasRegisteredConvertedInput ? "Ready" : "Required"}</strong>
+                <span>{t("preprocessing.registeredInput")}</span>
+                <strong>
+                  {hasRegisteredConvertedInput
+                    ? t("preprocessing.ready")
+                    : t("preprocessing.required")}
+                </strong>
               </li>
             </ol>
             <div className={styles.inputRequiredActions}>
               <Button variant="primary" onClick={onOpenDataConversion}>
-                Open Data &amp; Conversion
+                {t("preprocessing.openData")}
               </Button>
-              <span>Configuration panels stay locked until registered input evidence exists.</span>
+              <span>{t("preprocessing.configLocked")}</span>
             </div>
           </Card>
           <InputReadinessCard inventory={resolvedInventory} />
@@ -197,21 +216,21 @@ export function PreprocessingWorkspace({
   return (
     <div className={layoutStyles.stack}>
       <WorkspaceHeader
-        title="Preprocessing"
-        subtitle="Configure, gate, and monitor reviewed preprocessing after BIDS/NIfTI registration."
+        title={t("preprocessing.title")}
+        subtitle={t("preprocessing.subtitle")}
         status={
           isMissingRegistration
-            ? "Input required"
+            ? t("preprocessing.inputRequired")
             : effectiveHasPreprocessingRun
-              ? "Run available"
-              : "Ready to configure"
+              ? t("preprocessing.runAvailable")
+              : t("preprocessing.readyConfigure")
         }
       />
       {!effectiveHasPreprocessingRun && (
         <EmptyState
           className={styles.setupCallout}
-          title="Ready to create preprocessing run"
-          description="A reviewed preprocessing run records the converted input registry and opens the execution dashboard. It does not run MATLAB, SPM, DPABI, or mark scientific outputs computed."
+          title={t("preprocessing.createTitle")}
+          description={t("preprocessing.createDescription")}
           action={
             <div className={styles.createRunActions}>
               <Button
@@ -219,10 +238,10 @@ export function PreprocessingWorkspace({
                 onClick={handleCreatePreprocessingRun}
                 disabled={!projectId || !hasRegisteredConvertedInput || creatingRun}
               >
-                {creatingRun ? "Creating..." : "Create preprocessing run"}
+                {creatingRun ? t("preprocessing.creating") : t("preprocessing.createRun")}
               </Button>
               <Button variant="secondary" onClick={onOpenToolsDrawer}>
-                Open setup context
+                {t("preprocessing.openSetup")}
               </Button>
             </div>
           }
@@ -233,12 +252,38 @@ export function PreprocessingWorkspace({
         <Card className={styles.runBridgeCard}>
           <div className={styles.sectionHeader}>
             <div>
-              <h3>Reviewed run created</h3>
-              <p>Run {effectivePreprocessingRunId} is ready for reviewed execution setup.</p>
+              <h3>{t("preprocessing.runCreated")}</h3>
+              <p>{t("preprocessing.runReady", { runId: effectivePreprocessingRunId })}</p>
             </div>
-            <Badge tone="success">Run available</Badge>
+            <Badge tone="success">{t("preprocessing.runAvailable")}</Badge>
+          </div>
+          <div className={styles.createRunActions}>
+            <Button
+              onClick={handleCreatePreprocessingRun}
+              disabled={!projectId || !hasRegisteredConvertedInput || creatingRun}
+              variant="primary"
+            >
+              {creatingRun ? t("preprocessing.creating") : t("preprocessing.createNewRun")}
+            </Button>
+            <Button onClick={() => onOpenRuns?.(null)} variant="secondary">
+              {t("preprocessing.viewLogs")}
+            </Button>
           </div>
         </Card>
+      ) : null}
+      {effectiveHasPreprocessingRun && !createRunResult?.ok ? (
+        <div className={styles.runUtilityAction}>
+          <Button
+            onClick={handleCreatePreprocessingRun}
+            disabled={!projectId || !hasRegisteredConvertedInput || creatingRun}
+            variant="primary"
+          >
+            {creatingRun ? t("preprocessing.creating") : t("preprocessing.createNewRun")}
+          </Button>
+          <Button onClick={() => onOpenRuns?.(null)} variant="secondary">
+            {t("preprocessing.viewDetails")}
+          </Button>
+        </div>
       ) : null}
       <PreprocessingStageOverview
         configMode={configMode}
@@ -283,16 +328,18 @@ type ConfigParameter = {
 };
 
 type PreprocessingStageDefinition = {
-  name: string;
-  description: string;
+  id: string;
+  nameKey: MessageKey;
+  descriptionKey: MessageKey;
   basic: ConfigParameter[];
   advanced: ConfigParameter[];
 };
 
 const preprocessingStages: PreprocessingStageDefinition[] = [
   {
-    name: "Data preparation",
-    description: "Confirm registered BIDS/NIfTI input, subject scope, and read-only source policy.",
+    id: "data-preparation",
+    nameKey: "preprocessing.stageDataPreparation",
+    descriptionKey: "preprocessing.stageDataPreparationDescription",
     basic: [
       { label: "Input dataset", value: "Registered BIDS/NIfTI", note: "Required before planning." },
       {
@@ -307,8 +354,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Slice timing",
-    description: "Prepare timing metadata before motion-sensitive processing.",
+    id: "slice-timing",
+    nameKey: "preprocessing.stageSliceTiming",
+    descriptionKey: "preprocessing.stageSliceTimingDescription",
     basic: [
       {
         label: "TR",
@@ -324,8 +372,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Motion correction",
-    description: "Review realignment settings and motion summary expectations.",
+    id: "motion-correction",
+    nameKey: "preprocessing.stageMotionCorrection",
+    descriptionKey: "preprocessing.stageMotionCorrectionDescription",
     basic: [
       { label: "Realign", value: "enabled", note: "Dry-run before execution." },
       { label: "FD threshold", value: "0.5", unit: "mm", range: "0.2-1.0", note: "QC flag only." },
@@ -336,8 +385,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Coregistration",
-    description: "Align functional and anatomical inputs before template normalization.",
+    id: "coregistration",
+    nameKey: "preprocessing.stageCoregistration",
+    descriptionKey: "preprocessing.stageCoregistrationDescription",
     basic: [
       { label: "Alignment", value: "BOLD to T1w", note: "Requires anatomical input." },
       { label: "Preview", value: "QC overlay", note: "Review before downstream use." },
@@ -348,9 +398,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Segmentation",
-    description:
-      "Prepare tissue-class references needed by later nuisance and normalization steps.",
+    id: "segmentation",
+    nameKey: "preprocessing.stageSegmentation",
+    descriptionKey: "preprocessing.stageSegmentationDescription",
     basic: [
       { label: "Tissue classes", value: "GM / WM / CSF", note: "Used by nuisance model." },
       { label: "T1w source", value: "registered anatomical", note: "Required for segmentation." },
@@ -361,8 +411,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Normalization",
-    description: "Define standard-space registration and output voxel geometry.",
+    id: "normalization",
+    nameKey: "preprocessing.stageNormalization",
+    descriptionKey: "preprocessing.stageNormalizationDescription",
     basic: [
       { label: "Template", value: "MNI", note: "Standard space target." },
       { label: "Voxel size", value: "3 x 3 x 3", unit: "mm", note: "Typical rs-fMRI output." },
@@ -373,8 +424,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Smoothing",
-    description: "Set spatial smoothing parameters for downstream rs-fMRI measures.",
+    id: "smoothing",
+    nameKey: "preprocessing.stageSmoothing",
+    descriptionKey: "preprocessing.stageSmoothingDescription",
     basic: [
       { label: "FWHM", value: "6", unit: "mm", range: "4-8", note: "Common rs-fMRI default." },
       { label: "Apply to", value: "normalized BOLD", note: "After spatial normalization." },
@@ -385,9 +437,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Nuisance regression",
-    description:
-      "Define confound handling without executing external preprocessing from this page.",
+    id: "nuisance-regression",
+    nameKey: "preprocessing.stageNuisance",
+    descriptionKey: "preprocessing.stageNuisanceDescription",
     basic: [
       { label: "Motion model", value: "6 motion parameters", note: "Basic confound model." },
       { label: "Physiology", value: "WM + CSF", note: "Requires masks." },
@@ -398,8 +450,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Temporal filtering",
-    description: "Prepare pass-band settings for resting-state analysis.",
+    id: "temporal-filtering",
+    nameKey: "preprocessing.stageFiltering",
+    descriptionKey: "preprocessing.stageFilteringDescription",
     basic: [
       { label: "Band", value: "0.01-0.08", unit: "Hz", note: "Canonical rs-fMRI band." },
       { label: "Detrend", value: "linear", note: "Review with nuisance model." },
@@ -410,8 +463,9 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
     ],
   },
   {
-    name: "Derived measures",
-    description: "Reserve ALFF, ReHo, and connectivity outputs for later validation pages.",
+    id: "derived-measures",
+    nameKey: "preprocessing.stageMeasures",
+    descriptionKey: "preprocessing.stageMeasuresDescription",
     basic: [
       { label: "Metrics", value: "ALFF / ReHo / FC", note: "Computed in validated kernels only." },
       { label: "Capability", value: "review required", note: "Do not mark validated by UI alone." },
@@ -423,21 +477,134 @@ const preprocessingStages: PreprocessingStageDefinition[] = [
   },
 ];
 
-function emptyProjectInventory(dataState: ProjectDataState | undefined): ProjectInventory {
+const parameterLabelKeys: Record<string, MessageKey> = {
+  "Input dataset": "preprocessing.param.inputDataset",
+  "Subject scope": "preprocessing.param.subjectScope",
+  "BIDS filter": "preprocessing.param.bidsFilter",
+  "Derivative root": "preprocessing.param.derivativeRoot",
+  TR: "preprocessing.param.tr",
+  "Reference slice": "preprocessing.param.referenceSlice",
+  "Slice order": "preprocessing.param.sliceOrder",
+  "Acquisition timing": "preprocessing.param.acquisitionTiming",
+  Realign: "preprocessing.param.realign",
+  "FD threshold": "preprocessing.param.fdThreshold",
+  Interpolation: "preprocessing.param.interpolation",
+  Quality: "preprocessing.param.quality",
+  Alignment: "preprocessing.param.alignment",
+  Preview: "preprocessing.param.preview",
+  "Cost function": "preprocessing.param.costFunction",
+  Sampling: "preprocessing.param.sampling",
+  "Tissue classes": "preprocessing.param.tissueClasses",
+  "T1w source": "preprocessing.param.t1wSource",
+  "Bias correction": "preprocessing.param.biasCorrection",
+  "Tissue priors": "preprocessing.param.tissuePriors",
+  Template: "preprocessing.param.template",
+  "Voxel size": "preprocessing.param.voxelSize",
+  "Warp regularization": "preprocessing.param.warpRegularization",
+  "Bounding box": "preprocessing.param.boundingBox",
+  FWHM: "preprocessing.param.fwhm",
+  "Apply to": "preprocessing.param.applyTo",
+  "Kernel shape": "preprocessing.param.kernelShape",
+  "Mask policy": "preprocessing.param.maskPolicy",
+  "Motion model": "preprocessing.param.motionModel",
+  Physiology: "preprocessing.param.physiology",
+  Scrubbing: "preprocessing.param.scrubbing",
+  "Polynomial terms": "preprocessing.param.polynomialTerms",
+  Band: "preprocessing.param.band",
+  Detrend: "preprocessing.param.detrend",
+  "Filter edge": "preprocessing.param.filterEdge",
+  Order: "preprocessing.param.order",
+  Metrics: "preprocessing.param.metrics",
+  Capability: "preprocessing.param.capability",
+  Atlas: "preprocessing.param.atlas",
+  Precision: "preprocessing.param.precision",
+};
+
+const parameterValueKeys: Record<string, MessageKey> = {
+  "Registered BIDS/NIfTI": "preprocessing.value.registeredBids",
+  "All registered subjects": "preprocessing.value.allSubjects",
+  "project derivatives": "preprocessing.value.projectDerivatives",
+  "from sidecar": "preprocessing.value.fromSidecar",
+  middle: "preprocessing.value.middle",
+  "sidecar timing": "preprocessing.value.sidecarTiming",
+  enabled: "preprocessing.value.enabled",
+  "QC overlay": "preprocessing.value.qcOverlay",
+  "registered anatomical": "preprocessing.value.registeredAnatomical",
+  "template defaults": "preprocessing.value.templateDefaults",
+  default: "preprocessing.value.default",
+  "normalized BOLD": "preprocessing.value.normalizedBold",
+  "preserve brain mask": "preprocessing.value.preserveMask",
+  "6 motion parameters": "preprocessing.value.motionParameters",
+  "FD-based": "preprocessing.value.fdBased",
+  linear: "preprocessing.value.linear",
+  "pad and trim": "preprocessing.value.padTrim",
+  automatic: "preprocessing.value.automatic",
+  "review required": "preprocessing.value.reviewRequired",
+  "not selected": "preprocessing.value.notSelected",
+  "backend default": "preprocessing.value.backendDefault",
+};
+
+const parameterNoteKeys: Record<string, MessageKey> = {
+  "Required before planning.": "preprocessing.note.requiredPlanning",
+  "Review exclusions later.": "preprocessing.note.reviewExclusions",
+  "Default functional input pattern.": "preprocessing.note.defaultFunctional",
+  "Must stay under project.": "preprocessing.note.projectOnly",
+  "Loaded from BIDS JSON when present.": "preprocessing.note.loadedSidecar",
+  "Common default for review.": "preprocessing.note.commonReference",
+  "Fallback requires manual review.": "preprocessing.note.manualFallback",
+  "No inference in UI.": "preprocessing.note.noInference",
+  "Dry-run before execution.": "preprocessing.note.dryRunFirst",
+  "QC flag only.": "preprocessing.note.qcFlag",
+  "SPM-style parameter.": "preprocessing.note.spmParameter",
+  "Registration quality setting.": "preprocessing.note.registrationQuality",
+  "Requires anatomical input.": "preprocessing.note.requiresAnatomical",
+  "Review before downstream use.": "preprocessing.note.reviewDownstream",
+  "Normalized mutual information.": "preprocessing.note.normalizedMutual",
+  "SPM-style separation.": "preprocessing.note.spmSeparation",
+  "Used by nuisance model.": "preprocessing.note.nuisanceModel",
+  "Required for segmentation.": "preprocessing.note.requiredSegmentation",
+  "Review scanner/site assumptions.": "preprocessing.note.reviewScanner",
+  "Environment-dependent.": "preprocessing.note.environmentDependent",
+  "Standard space target.": "preprocessing.note.standardTarget",
+  "Typical rs-fMRI output.": "preprocessing.note.typicalOutput",
+  "SPM deformation setting.": "preprocessing.note.spmDeformation",
+  "Review before execution.": "preprocessing.note.reviewExecution",
+  "Common rs-fMRI default.": "preprocessing.note.commonRsfmri",
+  "After spatial normalization.": "preprocessing.note.afterNormalization",
+  "SPM-compatible.": "preprocessing.note.spmCompatible",
+  "Avoid silent extrapolation.": "preprocessing.note.avoidExtrapolation",
+  "Basic confound model.": "preprocessing.note.basicConfound",
+  "Requires masks.": "preprocessing.note.requiresMasks",
+  "Threshold reviewed in QC.": "preprocessing.note.thresholdQc",
+  "Avoid overfitting by default.": "preprocessing.note.avoidOverfitting",
+  "Canonical rs-fMRI band.": "preprocessing.note.canonicalBand",
+  "Review with nuisance model.": "preprocessing.note.reviewNuisance",
+  "Backend-defined behavior.": "preprocessing.note.backendBehavior",
+  "Document final backend choice.": "preprocessing.note.documentBackend",
+  "Computed in validated kernels only.": "preprocessing.note.validatedKernels",
+  "Do not mark validated by UI alone.": "preprocessing.note.uiNotValidation",
+  "Required for atlas FC.": "preprocessing.note.requiredAtlasFc",
+  "Record in provenance.": "preprocessing.note.recordProvenance",
+};
+
+function emptyProjectInventory(
+  dataState: ProjectDataState | undefined,
+  t: I18nContextValue["t"],
+): ProjectInventory {
   const resolvedState = dataState ?? "unknown";
   return {
-    projectName: "No project inventory",
+    projectName: t("preprocessing.noInventory"),
     modality: "rs-fMRI",
     dataState: resolvedState,
     dataStateLabel:
       resolvedState === "raw_dicom"
-        ? "Raw DICOM"
+        ? t("preprocessing.rawDicom")
         : resolvedState === "mixed"
-          ? "Mixed"
+          ? t("preprocessing.mixed")
           : resolvedState === "converted_bids"
-            ? "Converted BIDS/NIfTI"
-            : "Empty project",
-    stateSentence: "Project inventory is not loaded yet.",
+            ? t("preprocessing.converted")
+            : t("preprocessing.emptyProject"),
+    stateSentence: t("preprocessing.inventoryNotLoaded"),
     rawDicomCandidates: 0,
     dicomSeriesCount: 0,
     dicomFileCount: 0,
@@ -468,24 +635,29 @@ function PreprocessingTechnicalSections({
   showDetailedValidation: boolean;
   showTechnicalModules: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <>
       <TechnicalModuleSection
         actionDisabled={isMissingRegistration}
-        ariaLabel="Detailed preprocessing checks"
-        description="Metadata-only backend checks stay secondary to staged preprocessing setup."
-        disabledReason="Register converted BIDS/NIfTI inputs before preprocessing validation checks."
+        ariaLabel={t("preprocessing.detailedChecks")}
+        description={t("preprocessing.detailedDescription")}
+        disabledReason={t("preprocessing.validationDisabled")}
         evidenceLevel={isMissingRegistration ? "blocked" : "backend_required"}
-        hideActionLabel="Hide validation checks"
+        hideActionLabel={t("preprocessing.hideValidation")}
         isOpen={showDetailedValidation}
         onToggle={onToggleDetailedValidation}
-        openLabel="Open validation checks"
-        safetyNote="Opening validation checks does not run MATLAB, SPM, DPABI, or write outputs."
+        openLabel={t("preprocessing.openValidation")}
+        safetyNote={t("preprocessing.validationSafety")}
         status={
-          isMissingRegistration ? "Input required" : showDetailedValidation ? "Open" : "On demand"
+          isMissingRegistration
+            ? t("preprocessing.inputRequired")
+            : showDetailedValidation
+              ? t("preprocessing.open")
+              : t("preprocessing.onDemand")
         }
         statusTone={isMissingRegistration ? "warning" : "info"}
-        title="Detailed validation"
+        title={t("preprocessing.detailedValidation")}
       >
         <AdvancedPreprocessingPipelinePanel
           projectId={projectId}
@@ -495,20 +667,24 @@ function PreprocessingTechnicalSections({
 
       <TechnicalModuleSection
         actionDisabled={isMissingRegistration}
-        ariaLabel="SPM technical modules"
-        description="Technical preprocessing panels stay secondary and rely on backend approval, environment, and safe-path gates for any execution."
-        disabledReason="Register converted BIDS/NIfTI inputs before technical SPM panels are available."
+        ariaLabel={t("preprocessing.spmModules")}
+        description={t("preprocessing.spmDescription")}
+        disabledReason={t("preprocessing.spmDisabled")}
         evidenceLevel={isMissingRegistration ? "blocked" : "backend_required"}
-        hideActionLabel="Hide SPM modules"
+        hideActionLabel={t("preprocessing.hideSpm")}
         isOpen={showTechnicalModules}
         onToggle={onToggleTechnicalModules}
-        openLabel="Open SPM modules"
-        safetyNote="Opening this section does not run MATLAB, SPM, or DPABI by itself."
+        openLabel={t("preprocessing.openSpm")}
+        safetyNote={t("preprocessing.spmSafety")}
         status={
-          isMissingRegistration ? "Input required" : showTechnicalModules ? "Open" : "On demand"
+          isMissingRegistration
+            ? t("preprocessing.inputRequired")
+            : showTechnicalModules
+              ? t("preprocessing.open")
+              : t("preprocessing.onDemand")
         }
         statusTone={isMissingRegistration ? "warning" : "info"}
-        title="SPM technical modules"
+        title={t("preprocessing.spmModules")}
       >
         <div className={layoutStyles.panelGrid}>
           <div id="rsfmri-slice-timing-panel">
@@ -536,25 +712,26 @@ function PreprocessingTechnicalSections({
 }
 
 function InputReadinessCard({ inventory }: { inventory: ProjectInventory }) {
+  const { t } = useI18n();
   return (
     <Card className={styles.readinessCard}>
       <div className={styles.sectionHeader}>
         <div>
-          <h3>Input readiness</h3>
-          <p>Derived from the current project inventory.</p>
+          <h3>{t("preprocessing.inputReadiness")}</h3>
+          <p>{t("preprocessing.inventoryDerived")}</p>
         </div>
       </div>
-      <div className={styles.readinessMetrics} aria-label="Preprocessing input readiness">
+      <div className={styles.readinessMetrics} aria-label={t("preprocessing.inputReadiness")}>
         <div>
-          <span>Data state</span>
+          <span>{t("preprocessing.dataState")}</span>
           <strong>{inventory.dataStateLabel}</strong>
         </div>
         <div>
-          <span>Subjects</span>
+          <span>{t("preprocessing.subjects")}</span>
           <strong>{inventory.convertedSubjects}</strong>
         </div>
         <div>
-          <span>NIfTI files</span>
+          <span>{t("preprocessing.niftiFiles")}</span>
           <strong>{inventory.niftiFileCount.toLocaleString()}</strong>
         </div>
       </div>
@@ -579,8 +756,9 @@ function PreprocessingStageOverview({
   onSelectStage: (stageName: string) => void;
   selectedStageName: string;
 }) {
+  const { t } = useI18n();
   const selectedStage =
-    preprocessingStages.find((stage) => stage.name === selectedStageName) ?? preprocessingStages[0];
+    preprocessingStages.find((stage) => stage.id === selectedStageName) ?? preprocessingStages[0];
   const activeParams = configMode === "basic" ? selectedStage.basic : selectedStage.advanced;
 
   return (
@@ -588,50 +766,52 @@ function PreprocessingStageOverview({
       <Card className={styles.flowCard} tone="muted">
         <div className={styles.sectionHeader}>
           <div>
-            <h3 id="preprocessing-stage-title">Preprocessing stages</h3>
-            <p>
-              The page follows the rs-fMRI setup order before any reviewed runtime action is used.
-            </p>
+            <h3 id="preprocessing-stage-title">{t("preprocessing.stages")}</h3>
+            <p>{t("preprocessing.stagesDescription")}</p>
           </div>
           <Badge
             tone={isMissingRegistration ? "warning" : hasPreprocessingRun ? "info" : "success"}
           >
-            {isMissingRegistration ? "Input required" : hasPreprocessingRun ? "Review" : "Ready"}
+            {isMissingRegistration
+              ? t("preprocessing.inputRequired")
+              : hasPreprocessingRun
+                ? t("preprocessing.review")
+                : t("preprocessing.ready")}
           </Badge>
         </div>
-        <ol className={styles.stageList} aria-label="Preprocessing stages">
+        <ol className={styles.stageList} aria-label={t("preprocessing.stages")}>
           {preprocessingStages.map((stage, index) => {
             const status = stageStatus(index, isMissingRegistration, hasPreprocessingRun);
             return (
               <li
                 className={styles.stageItem}
-                data-selected={stage.name === selectedStage.name ? "true" : "false"}
-                key={stage.name}
+                data-selected={stage.id === selectedStage.id ? "true" : "false"}
+                key={stage.id}
               >
                 <button
                   type="button"
                   className={styles.stageSelectButton}
-                  onClick={() => onSelectStage(stage.name)}
-                  aria-label={`Inspect ${stage.name}`}
+                  onClick={() => onSelectStage(stage.id)}
+                  aria-label={t("preprocessing.inspectStage", { name: t(stage.nameKey) })}
                 >
                   <span className={styles.stageIndex}>{index + 1}</span>
                 </button>
                 <div className={styles.stageBody}>
                   <div className={styles.stageTitleRow}>
-                    <strong>{stage.name}</strong>
+                    <strong>{t(stage.nameKey)}</strong>
                     <Badge tone={stageStatusTone(status)} size="sm">
-                      {stageStatusLabel(status)}
+                      {stageStatusLabel(status, t)}
                     </Badge>
                   </div>
-                  <p>{stage.description}</p>
+                  <p>{t(stage.descriptionKey)}</p>
                   <dl className={styles.stageConfig}>
                     <div>
-                      <dt>Basic</dt>
-                      <dd>{summarizeParameters(stage.basic)}</dd>
+                      <dt>{t("preprocessing.basic")}</dt>
+                      <dd>{summarizeParameters(stage.basic, t)}</dd>
                     </div>
                     <div>
-                      <dt>Advanced</dt>
-                      <dd>{summarizeParameters(stage.advanced)}</dd>
+                      <dt>{t("preprocessing.advanced")}</dt>
+                      <dd>{summarizeParameters(stage.advanced, t)}</dd>
                     </div>
                   </dl>
                 </div>
@@ -642,40 +822,43 @@ function PreprocessingStageOverview({
       </Card>
 
       <div className={styles.supportStack}>
-        <Card className={styles.configCard} aria-label="Selected preprocessing stage configuration">
+        <Card className={styles.configCard} aria-label={t("preprocessing.selectedConfiguration")}>
           <div className={styles.sectionHeader}>
             <div>
-              <h3>{selectedStage.name}</h3>
-              <p>{selectedStage.description}</p>
+              <h3>{t(selectedStage.nameKey)}</h3>
+              <p>{t(selectedStage.descriptionKey)}</p>
             </div>
           </div>
-          <div className={styles.configModeSwitch} aria-label="Configuration mode">
+          <div
+            className={styles.configModeSwitch}
+            aria-label={t("preprocessing.configurationMode")}
+          >
             <button
               type="button"
               aria-pressed={configMode === "basic"}
               onClick={() => onConfigModeChange("basic")}
             >
-              Basic
+              {t("preprocessing.basic")}
             </button>
             <button
               type="button"
               aria-pressed={configMode === "advanced"}
               onClick={() => onConfigModeChange("advanced")}
             >
-              Advanced
+              {t("preprocessing.advanced")}
             </button>
           </div>
           <dl className={styles.paramList}>
             {activeParams.map((param) => (
               <div key={`${configMode}-${param.label}`}>
                 <dt>
-                  <span>{param.label}</span>
+                  <span>{localizeParameterText(param.label, parameterLabelKeys, t)}</span>
                   {param.range ? <small>{param.range}</small> : null}
                 </dt>
                 <dd>
-                  <strong>{param.value}</strong>
+                  <strong>{localizeParameterText(param.value, parameterValueKeys, t)}</strong>
                   {param.unit ? <span>{param.unit}</span> : null}
-                  <p>{param.note}</p>
+                  <p>{localizeParameterText(param.note, parameterNoteKeys, t)}</p>
                 </dd>
               </div>
             ))}
@@ -687,28 +870,28 @@ function PreprocessingStageOverview({
         <Card className={styles.progressiveCard}>
           <div className={styles.sectionHeader}>
             <div>
-              <h3>Progressive configuration</h3>
-              <p>Common parameters stay first; technical settings stay reviewable.</p>
+              <h3>{t("preprocessing.progressive")}</h3>
+              <p>{t("preprocessing.progressiveDescription")}</p>
             </div>
           </div>
-          <div className={styles.modeList} aria-label="Preprocessing configuration modes">
+          <div className={styles.modeList} aria-label={t("preprocessing.configurationModes")}>
             <div>
               <Badge tone="info" size="sm">
-                Basic
+                {t("preprocessing.basic")}
               </Badge>
-              <p>TR, slice reference, smoothing kernel, nuisance model, and filter band.</p>
+              <p>{t("preprocessing.basicDescription")}</p>
             </div>
             <div>
               <Badge tone="neutral" size="sm">
-                Advanced
+                {t("preprocessing.advanced")}
               </Badge>
-              <p>SPM/DPABI-specific parameters remain visible without changing execution gates.</p>
+              <p>{t("preprocessing.advancedDescription")}</p>
             </div>
             <div>
               <Badge tone="warning" size="sm">
-                Safety
+                {t("preprocessing.safety")}
               </Badge>
-              <p>External execution, writes, and approvals remain controlled by backend gates.</p>
+              <p>{t("preprocessing.safetyDescription")}</p>
             </div>
           </div>
         </Card>
@@ -717,8 +900,19 @@ function PreprocessingStageOverview({
   );
 }
 
-function summarizeParameters(parameters: ConfigParameter[]): string {
-  return parameters.map((parameter) => parameter.label).join(", ");
+function summarizeParameters(parameters: ConfigParameter[], t: I18nContextValue["t"]): string {
+  return parameters
+    .map((parameter) => localizeParameterText(parameter.label, parameterLabelKeys, t))
+    .join(", ");
+}
+
+function localizeParameterText(
+  value: string,
+  keys: Record<string, MessageKey>,
+  t: I18nContextValue["t"],
+): string {
+  const key = keys[value];
+  return key ? t(key) : value;
 }
 
 function stageStatus(
@@ -735,13 +929,13 @@ function stageStatus(
   return index === 0 ? "registered" : "configure";
 }
 
-function stageStatusLabel(status: StageStatus): string {
+function stageStatusLabel(status: StageStatus, t: I18nContextValue["t"]): string {
   const labels: Record<StageStatus, string> = {
-    registered: "Registered",
-    configure: "Configure",
-    waiting: "Waiting",
-    review: "Review",
-    locked: "Locked",
+    registered: t("preprocessing.statusRegistered"),
+    configure: t("preprocessing.statusConfigure"),
+    waiting: t("preprocessing.statusWaiting"),
+    review: t("preprocessing.statusReview"),
+    locked: t("preprocessing.locked"),
   };
   return labels[status];
 }

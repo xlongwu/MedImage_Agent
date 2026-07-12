@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState } from "react";
+import type { I18nContextValue } from "../i18n/context";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
 import {
-  DEFAULT_API_BASE,
   checkApprovalGate,
   executeReviewedDryRun,
   executeReviewedPlan,
@@ -10,7 +12,7 @@ import {
   listProjectReviewedPlans,
   saveReviewedPlan,
   validatePlan,
-} from "../lib/api/legacy";
+} from "../lib/api/pipeline";
 import { describeExecuteReviewedStatus } from "../lib/executeReviewedStatus";
 import {
   detectExternalToolNodes,
@@ -76,28 +78,30 @@ function reviewedPlanIssues(plan: unknown): string[] {
   return issues;
 }
 
-function invalidReviewedPlanMessage(issues: string[]): string {
-  return `Generated plan is invalid and was not persisted. Missing or empty: ${issues.join(", ")}.`;
+type Translate = I18nContextValue["t"];
+
+function invalidReviewedPlanMessage(issues: string[], t: Translate): string {
+  return t("technical.PlanReviewConsole.invalidPlan", { issues: issues.join(", ") });
 }
 
-function providerStatusMessage(provider: string): string {
+function providerStatusMessage(provider: string, t: Translate): string {
   if (provider === "openai_compatible") {
-    return "Real LLM provider selected: requires MEDIMAGE_LLM_API_KEY. If the key is missing, the backend blocks generation before any external API call.";
+    return t("technical.PlanReviewConsole.provider.openai");
   }
   if (provider === "rule_based") {
-    return "Rule-based provider: local deterministic planner, no external API used.";
+    return t("technical.PlanReviewConsole.provider.ruleBased");
   }
-  return "Mock provider: no external API used. Generates a deterministic metadata-only reviewed-plan draft.";
+  return t("technical.PlanReviewConsole.provider.mock");
 }
 
-function providerFailureMessage(provider: string, errors: string[]): string {
+function providerFailureMessage(provider: string, errors: string[], t: Translate): string {
   if (
     provider === "openai_compatible" &&
     errors.some((item) => item.includes("LLM_API_KEY_MISSING"))
   ) {
-    return "LLM provider disabled: API key not configured. MEDIMAGE_LLM_API_KEY is missing, so openai_compatible generation was blocked before any external API call. Select mock/rule_based for local deterministic planning or configure the key before using openai_compatible.";
+    return t("technical.PlanReviewConsole.provider.keyMissing");
   }
-  return errors[0] || "Plan generation did not produce a valid reviewed plan.";
+  return errors[0] || t("technical.PlanReviewConsole.provider.invalidPlan");
 }
 
 export default function PlanReviewConsole({
@@ -108,6 +112,7 @@ export default function PlanReviewConsole({
   rawdataDir,
   initialPresetDraft,
 }: Props) {
+  const { t } = useI18n();
   const baseUrl = DEFAULT_API_BASE;
   const [goal, setGoal] = useState("");
   const [provider, setProvider] = useState("mock");
@@ -130,7 +135,7 @@ export default function PlanReviewConsole({
   // ── Approval Gate ──
   const [approvalApproved, setApprovalApproved] = useState(true);
   const [approvalBy, setApprovalBy] = useState("");
-  const [approvalReason, setApprovalReason] = useState("");
+  const [approvalReason] = useState("");
   const [approvalNodesInput, setApprovalNodesInput] = useState("");
   const [rejectedNodesInput, setRejectedNodesInput] = useState("");
   const [approvalResult, setApprovalResult] = useState<Record<string, unknown> | null>(null);
@@ -242,18 +247,19 @@ export default function PlanReviewConsole({
   const projectContextError = explicitDemoMode
     ? effectiveProjectConfigPath
       ? ""
-      : "Explicit demo mode requires a project config path."
+      : t("technical.PlanReviewConsole.001")
     : !selectedProjectId
-      ? "Select or create a real project before generating a plan."
+      ? t("technical.PlanReviewConsole.002")
       : !selectedProject
-        ? "Selected project details are still loading or unavailable."
+        ? t("technical.PlanReviewConsole.003")
         : !selectedProjectConfigPath
-          ? "Selected project is missing metadata.project_config_path."
+          ? t("technical.PlanReviewConsole.004")
           : "";
 
   const lastDraftKeyRef = useRef<string | null>(null);
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset stale review state when project context changes.
     setResult(null);
     setPlanJson("");
     setReValidation(null);
@@ -326,8 +332,11 @@ export default function PlanReviewConsole({
 
   React.useEffect(() => {
     if (selectedProjectId && selectedProjectConfigPath && !explicitDemoMode) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetching history intentionally owns the loading state.
       void refreshRecentPlans(selectedProjectId);
     }
+    // refreshRecentPlans is intentionally invoked only for project-context transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProjectId, selectedProjectConfigPath, explicitDemoMode]);
 
   async function persistReviewedPlan(
@@ -338,7 +347,7 @@ export default function PlanReviewConsole({
     if (planIssues.length > 0) {
       setReviewedPlanId(null);
       setPlanSaveStatus("");
-      setPlanHistoryError(invalidReviewedPlanMessage(planIssues));
+      setPlanHistoryError(invalidReviewedPlanMessage(planIssues, t));
       return;
     }
     if (explicitDemoMode || !selectedProjectId || !effectiveProjectConfigPath) return;
@@ -369,7 +378,7 @@ export default function PlanReviewConsole({
     const planIssues = reviewedPlanIssues(restoredPlan);
     if (planIssues.length > 0) {
       setPlanHistoryError(
-        `Stored reviewed plan is incomplete. ${invalidReviewedPlanMessage(planIssues)}`,
+        `${t("technical.PlanReviewConsole.005")} ${invalidReviewedPlanMessage(planIssues, t)}`,
       );
       return;
     }
@@ -450,13 +459,13 @@ export default function PlanReviewConsole({
       setResult(data);
       const responseErrors = Array.isArray(data?.errors) ? (data.errors as string[]) : [];
       if (data?.ok !== true) {
-        setError(providerFailureMessage(provider, responseErrors));
+        setError(providerFailureMessage(provider, responseErrors, t));
         return;
       }
       const plan = data?.plan;
       const planIssues = reviewedPlanIssues(plan);
       if (planIssues.length > 0 || !isRecord(plan)) {
-        setError(invalidReviewedPlanMessage(planIssues));
+        setError(invalidReviewedPlanMessage(planIssues, t));
         return;
       }
       setPlanJson(JSON.stringify(plan, null, 2));
@@ -480,7 +489,7 @@ export default function PlanReviewConsole({
     }
     const planIssues = reviewedPlanIssues(plan);
     if (planIssues.length > 0) {
-      setJsonError(invalidReviewedPlanMessage(planIssues));
+      setJsonError(invalidReviewedPlanMessage(planIssues, t));
       return;
     }
     setValidateLoading(true);
@@ -807,23 +816,23 @@ export default function PlanReviewConsole({
 
   return (
     <div className={styles.style001}>
-      <h2>Technical Plan Review</h2>
+      <h2>{t("technical.PlanReviewConsole.006")}</h2>
 
       {loadedPresetBanner ? <div className={styles.style002}>{loadedPresetBanner}</div> : null}
 
       <div className={styles.style003}>
-        <div className={styles.style004}>Project Context</div>
+        <div className={styles.style004}>{t("technical.PlanReviewConsole.007")}</div>
         <label className={styles.style005}>
           <input
             type="checkbox"
             checked={explicitDemoMode}
             onChange={(event) => setExplicitDemoMode(event.target.checked)}
           />{" "}
-          Use explicit example/demo project config
+          {t("technical.PlanReviewConsole.008")}
         </label>
         {explicitDemoMode ? (
           <label>
-            Demo project config:{" "}
+            {t("technical.PlanReviewConsole.009")}{" "}
             <input
               type="text"
               value={demoProjectConfigPath}
@@ -834,17 +843,22 @@ export default function PlanReviewConsole({
         ) : (
           <div className={styles.style006}>
             <div>
-              <b>Project:</b>{" "}
-              {selectedProject ? `${selectedProject.name} (${selectedProject.id})` : "Unavailable"}
+              <b>{t("technical.PlanReviewConsole.010")}</b>{" "}
+              {selectedProject
+                ? `${selectedProject.name} (${selectedProject.id})`
+                : t("technical.PlanReviewConsole.011")}
             </div>
             <div>
-              <b>Config:</b> {selectedProjectConfigPath || "Unavailable"}
+              <b>{t("technical.PlanReviewConsole.012")}</b>{" "}
+              {selectedProjectConfigPath || t("technical.PlanReviewConsole.011")}
             </div>
             <div>
-              <b>Rawdata:</b> {rawdataDir || "Unavailable"}
+              <b>{t("technical.PlanReviewConsole.013")}</b>{" "}
+              {rawdataDir || t("technical.PlanReviewConsole.011")}
             </div>
             <div>
-              <b>Dataset index:</b> {datasetIndexPath || "Unavailable"}
+              <b>{t("technical.PlanReviewConsole.014")}</b>{" "}
+              {datasetIndexPath || t("technical.PlanReviewConsole.011")}
             </div>
           </div>
         )}
@@ -854,20 +868,26 @@ export default function PlanReviewConsole({
       {!explicitDemoMode && selectedProjectId && (
         <div className={styles.style008}>
           <div className={styles.style009}>
-            <strong>Recent Plans</strong>
+            <strong>{t("technical.PlanReviewConsole.015")}</strong>
             <button
               onClick={() => void refreshRecentPlans()}
               disabled={planHistoryLoading}
               className={styles.compactWhiteButton}
             >
-              {planHistoryLoading ? "Loading..." : "Refresh"}
+              {planHistoryLoading
+                ? t("technical.NiftiQcSnapshot.002")
+                : t("technical.PlanReviewConsole.016")}
             </button>
-            {reviewedPlanId && <span className={styles.style010}>Active: {reviewedPlanId}</span>}
+            {reviewedPlanId && (
+              <span className={styles.style010}>
+                {t("technical.PlanReviewConsole.017")} {reviewedPlanId}
+              </span>
+            )}
             {planSaveStatus && <span className={styles.style011}>{planSaveStatus}</span>}
           </div>
           {planHistoryError && <div className={styles.style012}>{planHistoryError}</div>}
           {recentPlans.length === 0 && !planHistoryLoading ? (
-            <div className={styles.style013}>No persisted reviewed plans for this project yet.</div>
+            <div className={styles.style013}>{t("technical.PlanReviewConsole.018")}</div>
           ) : (
             <div className={styles.style014}>
               {recentPlans.slice(0, 8).map((record) => (
@@ -876,11 +896,15 @@ export default function PlanReviewConsole({
                     onClick={() => restoreReviewedPlan(record)}
                     className={styles.restorePlanButton}
                   >
-                    Restore
+                    {t("technical.PlanReviewConsole.019")}
                   </button>
                   <span className={styles.style016}>{record.reviewed_plan_id}</span>
-                  <span>Status: {record.status}</span>
-                  <span>Execution: {record.execution_status}</span>
+                  <span>
+                    {t("technical.PlanReviewConsole.020")} {record.status}
+                  </span>
+                  <span>
+                    {t("technical.PlanReviewConsole.021")} {record.execution_status}
+                  </span>
                   <span className={styles.style017}>{record.updated_at}</span>
                 </div>
               ))}
@@ -891,19 +915,19 @@ export default function PlanReviewConsole({
 
       {/* ── Input ── */}
       <div className={styles.style018}>
-        <label className={styles.style019}>Goal</label>
+        <label className={styles.style019}>{t("technical.PlanReviewConsole.022")}</label>
         <input
           type="text"
           value={goal}
           onChange={(e) => setGoal(e.target.value)}
-          placeholder="e.g. 对 rs-fMRI 数据做 realign 和 motion QC"
+          placeholder={t("technical.PlanReviewConsole.023")}
           className={styles.goalInput}
           onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
         />
       </div>
 
       <div className={styles.style020}>
-        <label className={styles.style021}>Provider:</label>
+        <label className={styles.style021}>{t("technical.PlanReviewConsole.024")}</label>
         <select
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
@@ -918,24 +942,32 @@ export default function PlanReviewConsole({
           disabled={loading || Boolean(projectContextError)}
           className={styles.style022}
         >
-          {loading ? "Generating..." : "Generate Plan"}
+          {loading ? t("technical.MotionMetricsDraft.004") : t("technical.PlanReviewConsole.025")}
         </button>
         {/* Summary chips */}
         {result && (
           <>
-            <span style={chipStyle("#e3f2fd", "#1565c0")}>📋 {nodes.length} nodes</span>
+            <span style={chipStyle("#e3f2fd", "#1565c0")}>
+              📋 {nodes.length} {t("technical.PlanReviewConsole.026")}
+            </span>
             {catalogCount > 0 && (
-              <span style={chipStyle("#e8f5e9", "#2e7d32")}>📦 {catalogCount} tools</span>
+              <span style={chipStyle("#e8f5e9", "#2e7d32")}>
+                📦 {catalogCount} {t("technical.PlanReviewConsole.027")}
+              </span>
             )}
             {highRiskCount > 0 && (
-              <span style={chipStyle("#ffebee", "#c62828")}>⚡ {highRiskCount} high risk</span>
+              <span style={chipStyle("#ffebee", "#c62828")}>
+                ⚡ {highRiskCount} {t("technical.PlanReviewConsole.028")}
+              </span>
             )}
             {approvalCount > 0 && (
-              <span style={chipStyle("#fff3e0", "#e65100")}>🔒 {approvalCount} approval</span>
+              <span style={chipStyle("#fff3e0", "#e65100")}>
+                🔒 {approvalCount} {t("technical.PlanReviewConsole.029")}
+              </span>
             )}
             {unknownMetaCount > 0 && (
               <span style={chipStyle("#f3e5f5", "#7b1fa2")}>
-                ❓ {unknownMetaCount} unknown meta
+                ❓ {unknownMetaCount} {t("technical.PlanReviewConsole.030")}
               </span>
             )}
           </>
@@ -945,7 +977,7 @@ export default function PlanReviewConsole({
       {catalogError && <div className={styles.style023}>⚠️ {catalogError}</div>}
 
       <div className={styles.providerStatus} role="status">
-        {providerStatusMessage(provider)}
+        {providerStatusMessage(provider, t)}
       </div>
 
       {error && <div className={styles.style024}>{error}</div>}
@@ -954,31 +986,39 @@ export default function PlanReviewConsole({
       {result && (
         <div className={styles.style025}>
           <div className={styles.style026}>
-            <h4 className={styles.style027}>Candidate Plan JSON</h4>
+            <h4 className={styles.style027}>{t("technical.PlanReviewConsole.031")}</h4>
             <button
               onClick={handleRevalidate}
               disabled={validateLoading}
               className={styles.style028}
             >
-              {validateLoading ? "Validating..." : "Re-validate"}
+              {validateLoading
+                ? t("technical.PlanReviewConsole.032")
+                : t("technical.PlanReviewConsole.033")}
             </button>
             <button onClick={handleExport} disabled={!result} className={styles.style029}>
-              Export JSON
+              {t("technical.PlanReviewConsole.034")}
             </button>
             <button onClick={handleCopy} disabled={!result} className={styles.style030}>
-              Copy JSON
+              {t("technical.PlanReviewConsole.035")}
             </button>
             {copyStatus && <span className={styles.style031}>{copyStatus}</span>}
-            {reValidated && <span className={styles.style032}>(using re-validation result)</span>}
+            {reValidated && (
+              <span className={styles.style032}>{t("technical.PlanReviewConsole.036")}</span>
+            )}
           </div>
-          {jsonError && <div className={styles.style033}>JSON Parse Error: {jsonError}</div>}
+          {jsonError && (
+            <div className={styles.style033}>
+              {t("technical.PlanReviewConsole.037")} {jsonError}
+            </div>
+          )}
           <textarea
             value={planJson}
             onChange={(e) => {
               setPlanJson(e.target.value);
               setReValidation(null);
               setReviewedPlanId(null);
-              setPlanSaveStatus("Plan changed; re-validate to save this revision.");
+              setPlanSaveStatus(t("technical.PlanReviewConsole.038"));
               setJsonError("");
             }}
             rows={14}
@@ -991,7 +1031,7 @@ export default function PlanReviewConsole({
       {/* ── Approval Gate ── */}
       {result && (
         <div className={styles.style034}>
-          <h4 className={styles.style035}>Approval Gate Check</h4>
+          <h4 className={styles.style035}>{t("technical.PlanReviewConsole.039")}</h4>
           <div className={styles.style036}>
             <label>
               <input
@@ -999,10 +1039,10 @@ export default function PlanReviewConsole({
                 checked={approvalApproved}
                 onChange={(e) => setApprovalApproved(e.target.checked)}
               />{" "}
-              Approved
+              {t("technical.PlanReviewConsole.040")}
             </label>
             <label>
-              Approved by:{" "}
+              {t("technical.PlanReviewConsole.041")}{" "}
               <input
                 type="text"
                 value={approvalBy}
@@ -1012,7 +1052,7 @@ export default function PlanReviewConsole({
               />
             </label>
             <label className={styles.style037}>
-              Approved nodes (comma-separated, or *):
+              {t("technical.PlanReviewConsole.042")}
               <input
                 type="text"
                 value={approvalNodesInput}
@@ -1022,12 +1062,12 @@ export default function PlanReviewConsole({
               />
             </label>
             <label className={styles.style038}>
-              Rejected nodes:
+              {t("technical.PlanReviewConsole.043")}
               <input
                 type="text"
                 value={rejectedNodesInput}
                 onChange={(e) => setRejectedNodesInput(e.target.value)}
-                placeholder="optional"
+                placeholder={t("technical.PlanReviewConsole.044")}
                 className={styles.fullCompactInput}
               />
             </label>
@@ -1038,10 +1078,12 @@ export default function PlanReviewConsole({
               disabled={approvalLoading}
               className={styles.style040}
             >
-              {approvalLoading ? "Checking..." : "Check Approval Gate"}
+              {approvalLoading
+                ? t("technical.DicomConversionReleaseReadiness.013")
+                : t("technical.PlanReviewConsole.045")}
             </button>
             <button onClick={handleApproveAllRequired} className={styles.style041}>
-              Approve all required nodes
+              {t("technical.PlanReviewConsole.046")}
             </button>
           </div>
           {approvalError && <div className={styles.style042}>❌ {approvalError}</div>}
@@ -1056,23 +1098,26 @@ export default function PlanReviewConsole({
             >
               <div className={styles.style043}>
                 {approvalResult.execution_allowed
-                  ? "✅ Execution allowed by approval gate"
-                  : "🚫 Execution blocked by approval gate"}
+                  ? t("technical.PlanReviewConsole.047")
+                  : t("technical.PlanReviewConsole.048")}
               </div>
               <div>
-                Approval required: <b>{String(approvalResult.approval_required)}</b>
+                {t("technical.PlanReviewConsole.049")}{" "}
+                <b>{String(approvalResult.approval_required)}</b>
               </div>
               <div>
-                Approved: <b>{String(approvalResult.approved)}</b>
+                {t("technical.PlanReviewConsole.050")} <b>{String(approvalResult.approved)}</b>
               </div>
               {((approvalResult.missing_approval_nodes as string[]) || []).length > 0 && (
                 <div className={styles.style044}>
-                  Missing: {(approvalResult.missing_approval_nodes as string[]).join(", ")}
+                  {t("technical.PlanReviewConsole.051")}{" "}
+                  {(approvalResult.missing_approval_nodes as string[]).join(", ")}
                 </div>
               )}
               {((approvalResult.rejected_nodes as string[]) || []).length > 0 && (
                 <div className={styles.style045}>
-                  Rejected: {(approvalResult.rejected_nodes as string[]).join(", ")}
+                  {t("technical.PlanReviewConsole.052")}{" "}
+                  {(approvalResult.rejected_nodes as string[]).join(", ")}
                 </div>
               )}
               {((approvalResult.errors as Array<Record<string, unknown>>) || []).map((e, i) => (
@@ -1093,7 +1138,7 @@ export default function PlanReviewConsole({
       {/* ── External Tool Safety Acknowledgement ── */}
       {result && externalToolReq.required && (
         <div className={styles.style048}>
-          <h4 className={styles.style049}>External Tool Safety Acknowledgement</h4>
+          <h4 className={styles.style049}>{t("technical.PlanReviewConsole.053")}</h4>
           <p className={styles.style050}>
             This plan contains high-risk external-tool nodes: {externalToolReq.nodeIds.join(", ")}.
             These acknowledgements are required before future execution.
@@ -1105,7 +1150,7 @@ export default function PlanReviewConsole({
                 checked={externalToolAcknowledgement}
                 onChange={(e) => setExternalToolAcknowledgement(e.target.checked)}
               />{" "}
-              I understand this may call external MATLAB/SPM/DPABI tools in future execution.
+              {t("technical.PlanReviewConsole.054")}
             </label>
             <label>
               <input
@@ -1121,7 +1166,7 @@ export default function PlanReviewConsole({
                 checked={outputDirectoryConfirmed}
                 onChange={(e) => setOutputDirectoryConfirmed(e.target.checked)}
               />{" "}
-              I confirm outputs must be written only to approved project/derivatives directories.
+              {t("technical.PlanReviewConsole.055")}
             </label>
             <label>
               <input
@@ -1129,7 +1174,7 @@ export default function PlanReviewConsole({
                 checked={riskAcknowledgement}
                 onChange={(e) => setRiskAcknowledgement(e.target.checked)}
               />{" "}
-              I acknowledge the risk of external-tool execution and environment-dependent results.
+              {t("technical.PlanReviewConsole.056")}
             </label>
             <label>
               <input
@@ -1140,7 +1185,7 @@ export default function PlanReviewConsole({
               I confirm the subject/session scope has been reviewed.
             </label>
             <label className={styles.style052}>
-              <span>Overwrite policy:</span>
+              <span>{t("technical.PlanReviewConsole.057")}</span>
               <select
                 value={overwritePolicy}
                 onChange={(e) =>
@@ -1177,11 +1222,11 @@ export default function PlanReviewConsole({
       {/* ── Dry-run Execution Readiness ── */}
       {result && nativePreprocReq.required && (
         <div className={styles.style048}>
-          <h4 className={styles.style049}>Native Preprocessing Safety Acknowledgement</h4>
+          <h4 className={styles.style049}>{t("technical.PlanReviewConsole.058")}</h4>
           <p className={styles.style050}>
             This plan contains native preprocessing execution nodes:{" "}
-            {nativePreprocReq.nodeIds.join(", ")}. These acknowledgements are required by
-            the backend approval gate before dry-run or execution.
+            {nativePreprocReq.nodeIds.join(", ")}. These acknowledgements are required by the
+            backend approval gate before dry-run or execution.
           </p>
           <div className={styles.style051}>
             <label>
@@ -1206,7 +1251,7 @@ export default function PlanReviewConsole({
                 checked={rawdataReadOnlyConfirmed}
                 onChange={(e) => setRawdataReadOnlyConfirmed(e.target.checked)}
               />{" "}
-              I confirm rawdata must remain read-only.
+              {t("technical.PlanReviewConsole.059")}
             </label>
             <label>
               <input
@@ -1222,13 +1267,13 @@ export default function PlanReviewConsole({
                 checked={subjectScopeConfirmed}
                 onChange={(e) => setSubjectScopeConfirmed(e.target.checked)}
               />{" "}
-              I confirm the subject/session scope has been reviewed.
+              {t("technical.PlanReviewConsole.060")}
             </label>
           </div>
           {!nativePreprocApprovalComplete && (
             <div className={styles.style053}>
-              All native preprocessing acknowledgement checkboxes must be checked for the
-              approval gate to pass.
+              All native preprocessing acknowledgement checkboxes must be checked for the approval
+              gate to pass.
             </div>
           )}
         </div>
@@ -1236,10 +1281,8 @@ export default function PlanReviewConsole({
 
       {result && (
         <div className={styles.style054}>
-          <h4 className={styles.style055}>Dry-run Execution Readiness</h4>
-          <p className={styles.style056}>
-            Backend re-runs Plan Validator + Approval Gate. No pipeline is executed.
-          </p>
+          <h4 className={styles.style055}>{t("technical.PlanReviewConsole.061")}</h4>
+          <p className={styles.style056}>{t("technical.PlanReviewConsole.062")}</p>
           <button
             onClick={handleDryRunCheck}
             disabled={
@@ -1257,7 +1300,9 @@ export default function PlanReviewConsole({
             }
             className={styles.style057}
           >
-            {dryRunLoading ? "Checking..." : "Dry-run Execution Check"}
+            {dryRunLoading
+              ? t("technical.DicomConversionReleaseReadiness.013")
+              : t("technical.PlanReviewConsole.063")}
           </button>
           <label className={styles.style058}>
             <input
@@ -1265,7 +1310,7 @@ export default function PlanReviewConsole({
               checked={persistAudit}
               onChange={(e) => setPersistAudit(e.target.checked)}
             />{" "}
-            Persist audit record
+            {t("technical.PlanReviewConsole.064")}
           </label>
           {dryRunError && <div className={styles.style059}>❌ {dryRunError}</div>}
           {dryRunResult && (
@@ -1306,7 +1351,9 @@ export default function PlanReviewConsole({
                       cursor: "pointer",
                     }}
                   >
-                    {auditLoading ? "Loading..." : "View Audit Record"}
+                    {auditLoading
+                      ? t("technical.NiftiQcSnapshot.002")
+                      : t("technical.PlanReviewConsole.065")}
                   </button>
                   {auditFetchError && <div className={styles.style066}>❌ {auditFetchError}</div>}
                 </div>
@@ -1369,7 +1416,7 @@ export default function PlanReviewConsole({
       {/* ── Reviewed Execution ── */}
       {result && (
         <div className={styles.style069}>
-          <h4 className={styles.style070}>🚀 Reviewed Execution</h4>
+          <h4 className={styles.style070}>{t("technical.PlanReviewConsole.066")}</h4>
           <p className={styles.style071}>
             Backend gated execution only. The backend will re-run validation, approval gate, adapter
             policy, pipeline writer, audit, and safe allowlist checks.
@@ -1379,7 +1426,7 @@ export default function PlanReviewConsole({
 
           <div className={styles.style072}>
             <label className={styles.style073}>
-              Project config:{" "}
+              {t("technical.PlanReviewConsole.067")}{" "}
               <input
                 type="text"
                 value={effectiveProjectConfigPath}
@@ -1388,7 +1435,7 @@ export default function PlanReviewConsole({
               />
             </label>
             <label className={styles.style075}>
-              Actor:{" "}
+              {t("technical.PlanReviewConsole.068")}{" "}
               <input
                 type="text"
                 value={actorName}
@@ -1411,12 +1458,12 @@ export default function PlanReviewConsole({
                 checked={confirmExecution}
                 onChange={(e) => setConfirmExecution(e.target.checked)}
               />{" "}
-              I understand this will request backend gated execution for the reviewed plan.
+              {t("technical.PlanReviewConsole.069")}
             </label>
           </div>
 
           {!effectiveProjectConfigPath && (
-            <div className={styles.style078}>⚠️ Project config path is required.</div>
+            <div className={styles.style078}>{t("technical.PlanReviewConsole.070")}</div>
           )}
 
           {dryRunResult?.status !== "DRY_RUN_OK" && (
@@ -1442,17 +1489,17 @@ export default function PlanReviewConsole({
                 ? "Complete the External Tool Safety Acknowledgement before execute."
                 : nativePreprocReq.required && !nativePreprocApprovalComplete
                   ? "Complete the Native Preprocessing Safety Acknowledgement before execute."
-                : dryRunResult?.status !== "DRY_RUN_OK"
-                  ? "Run Dry-run Execution Check first"
-                  : !confirmExecution
-                    ? "Check the confirmation box"
-                    : !effectiveProjectConfigPath
-                      ? "Enter a project config path"
-                      : !explicitDemoMode && !reviewedPlanId
-                        ? "Save or re-validate this plan before execution"
-                        : projectContextError
-                          ? projectContextError
-                          : ""
+                  : dryRunResult?.status !== "DRY_RUN_OK"
+                    ? "Run Dry-run Execution Check first"
+                    : !confirmExecution
+                      ? "Check the confirmation box"
+                      : !effectiveProjectConfigPath
+                        ? "Enter a project config path"
+                        : !explicitDemoMode && !reviewedPlanId
+                          ? "Save or re-validate this plan before execution"
+                          : projectContextError
+                            ? projectContextError
+                            : ""
             }
             style={{
               padding: "8px 20px",
@@ -1485,18 +1532,15 @@ export default function PlanReviewConsole({
           >
             {executionLoading
               ? nativePreprocReq.required
-                ? "Running native preprocessing..."
-                : "Requesting..."
-              : "Execute Reviewed Plan"}
+                ? t("technical.PlanReviewConsole.071")
+                : t("technical.PlanReviewConsole.072")
+              : t("technical.PlanReviewConsole.073")}
           </button>
           <span className={styles.style080}>
             (dry_run=false, confirm_execution=true, persist_audit=true, write_pipeline_yaml=true)
           </span>
           {executionLoading && nativePreprocReq.required && (
-            <div className={styles.style080}>
-              Native preprocessing is running in the backend and can take several minutes. Keep this
-              window open until the result is returned.
-            </div>
+            <div className={styles.style080}>{t("technical.PlanReviewConsole.074")}</div>
           )}
 
           {executionError && <div className={styles.style081}>❌ {executionError}</div>}
@@ -1574,8 +1618,8 @@ export default function PlanReviewConsole({
             >
               <strong>
                 {result.ok
-                  ? "Plan generated and validated"
-                  : "Plan generation did not produce a valid reviewed plan"}
+                  ? t("technical.PlanReviewConsole.075")
+                  : t("technical.PlanReviewConsole.076")}
               </strong>
               {result.provider && <span> — provider: {String(result.provider)}</span>}
             </div>
@@ -1598,23 +1642,26 @@ export default function PlanReviewConsole({
             {/* Risk Summary */}
             <div className={styles.style095}>
               <h4 className={styles.style096}>
-                Risk Summary{reValidated ? " (re-validated)" : ""}
+                {t("technical.PlanReviewConsole.077")}
+                {reValidated ? t("technical.PlanReviewConsole.078") : ""}
               </h4>
               <div className={styles.style097}>
                 <span>
-                  Total nodes: <b>{String(riskSummary.nodes_total ?? "?")}</b>
+                  {t("technical.PlanReviewConsole.079")}{" "}
+                  <b>{String(riskSummary.nodes_total ?? "?")}</b>
                 </span>
                 <span>
-                  Requires approval:{" "}
+                  {t("technical.PlanReviewConsole.080")}{" "}
                   <b style={{ color: riskSummary.requires_approval ? "#c62828" : "#2e7d32" }}>
                     {String(riskSummary.requires_approval ?? "?")}
                   </b>
                 </span>
                 <span>
-                  Approval count: <b>{String(riskSummary.approval_required_count ?? "?")}</b>
+                  {t("technical.PlanReviewConsole.081")}{" "}
+                  <b>{String(riskSummary.approval_required_count ?? "?")}</b>
                 </span>
                 <span>
-                  High risk:{" "}
+                  {t("technical.PlanReviewConsole.082")}{" "}
                   <b
                     style={{
                       color: (Number(riskSummary.high_risk_count) || 0) > 0 ? "#c62828" : "#333",
@@ -1624,28 +1671,36 @@ export default function PlanReviewConsole({
                   </b>
                 </span>
                 <span>
-                  Manual required: <b>{String(riskSummary.manual_required ?? "?")}</b>
+                  {t("technical.PlanReviewConsole.083")}{" "}
+                  <b>{String(riskSummary.manual_required ?? "?")}</b>
                 </span>
                 <span>
-                  Unknown nodes: <b>{String(riskSummary.unknown_nodes_count ?? "?")}</b>
+                  {t("technical.PlanReviewConsole.084")}{" "}
+                  <b>{String(riskSummary.unknown_nodes_count ?? "?")}</b>
                 </span>
               </div>
               <div className={styles.style098}>
                 <div>
-                  🔴 <b>High risk</b> — requires careful manual review before execution
+                  🔴 <b>{t("technical.PlanReviewConsole.085")}</b> —{" "}
+                  {t("technical.PlanReviewConsole.086")}
                 </div>
                 <div>
-                  🟠 <b>Requires approval</b> — must pass approval gate before pipeline runs
+                  🟠 <b>{t("technical.PlanReviewConsole.087")}</b> —{" "}
+                  {t("technical.PlanReviewConsole.088")}
                 </div>
                 <div>
-                  🟣 <b>Uncataloged</b> — metadata not yet complete; treat as unknown risk
+                  🟣 <b>{t("technical.PlanReviewConsole.089")}</b> —{" "}
+                  {t("technical.PlanReviewConsole.090")}
                 </div>
               </div>
             </div>
 
             {/* Validation */}
             <div className={styles.style099}>
-              <h4 className={styles.style100}>Validation{reValidated ? " (re-validated)" : ""}</h4>
+              <h4 className={styles.style100}>
+                {t("technical.ImportDiagnostics.027")}
+                {reValidated ? t("technical.PlanReviewConsole.078") : ""}
+              </h4>
               {valErrors.length > 0 &&
                 valErrors.map((e, i) => (
                   <div key={`ve-${i}`} className={styles.style101}>
@@ -1676,17 +1731,18 @@ export default function PlanReviewConsole({
 
             {/* Nodes table */}
             <h4 className={styles.style107}>
-              Candidate Plan: {String(plan.pipeline_id ?? "?")} ({nodes.length} nodes)
+              {t("technical.PlanReviewConsole.091")} {String(plan.pipeline_id ?? "?")} (
+              {nodes.length} {t("technical.PlanReviewConsole.026")})
             </h4>
             <table className={styles.style108}>
               <thead>
                 <tr className={styles.style109}>
                   <th className={styles.style110}>#</th>
-                  <th className={styles.style111}>Node ID</th>
-                  <th className={styles.style112}>Name</th>
-                  <th className={styles.style113}>Risk</th>
-                  <th className={styles.style114}>Appr</th>
-                  <th className={styles.style115}>Tags</th>
+                  <th className={styles.style111}>{t("technical.PlanReviewConsole.092")}</th>
+                  <th className={styles.style112}>{t("technical.PlanReviewConsole.093")}</th>
+                  <th className={styles.style113}>{t("technical.PlanReviewConsole.094")}</th>
+                  <th className={styles.style114}>{t("technical.PlanReviewConsole.095")}</th>
+                  <th className={styles.style115}>{t("technical.PlanReviewConsole.096")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1718,7 +1774,11 @@ export default function PlanReviewConsole({
                           fontStyle: cat ? "normal" : "italic",
                         }}
                       >
-                        {cat?.name ?? <span title="Not in Tool Catalog">Unknown metadata ⚠️</span>}
+                        {cat?.name ?? (
+                          <span title={t("technical.PlanReviewConsole.097")}>
+                            {t("technical.PlanReviewConsole.098")} ⚠️
+                          </span>
+                        )}
                       </td>
                       <td className={styles.style118}>{cat ? riskBadge(cat.risk_level) : "—"}</td>
                       <td className={styles.style119}>{cat?.requires_approval ? "🔒" : "—"}</td>
@@ -1734,7 +1794,7 @@ export default function PlanReviewConsole({
             {/* Depends-on detail row for selected */}
             {selectedNodeId && (
               <div className={styles.style121}>
-                Depends on: {getNodeDependsOnText(selectedNodeId)}
+                {t("technical.PlanReviewConsole.099")} {getNodeDependsOnText(selectedNodeId)}
               </div>
             )}
           </div>
@@ -1743,42 +1803,48 @@ export default function PlanReviewConsole({
           <div className={styles.style122}>
             {selectedNodeId && (
               <div className={styles.style123}>
-                <h4 className={styles.style124}>Node Detail</h4>
+                <h4 className={styles.style124}>{t("technical.PlanReviewConsole.100")}</h4>
                 {selectedCatalog ? (
                   <>
                     <div className={styles.style125}>
                       <b>ID:</b> {selectedCatalog.id}
                     </div>
                     <div className={styles.style126}>
-                      <b>Name:</b> {selectedCatalog.name}
+                      <b>{t("technical.PlanReviewConsole.101")}</b> {selectedCatalog.name}
                     </div>
                     <div className={styles.style127}>
-                      <b>Description:</b> {selectedCatalog.description || "—"}
+                      <b>{t("technical.PlanReviewConsole.102")}</b>{" "}
+                      {selectedCatalog.description || "—"}
                     </div>
                     <div className={styles.style128}>
-                      <b>Backend:</b> {selectedCatalog.backend}
+                      <b>{t("technical.PlanReviewConsole.103")}</b> {selectedCatalog.backend}
                     </div>
                     <div className={styles.style129}>
-                      <b>Parallel:</b> {selectedCatalog.parallel_level}
+                      <b>{t("technical.PlanReviewConsole.104")}</b> {selectedCatalog.parallel_level}
                     </div>
                     <div className={styles.style130}>
-                      <b>Risk:</b> {riskBadge(selectedCatalog.risk_level)}
+                      <b>{t("technical.PlanReviewConsole.105")}</b>{" "}
+                      {riskBadge(selectedCatalog.risk_level)}
                     </div>
                     <div className={styles.style131}>
-                      <b>Approval:</b>{" "}
+                      <b>{t("technical.PlanReviewConsole.106")}</b>{" "}
                       {selectedCatalog.requires_approval ? "🔒 Required" : "✅ Not required"}
                     </div>
                     <div className={styles.style132}>
-                      <b>Manual:</b> {selectedCatalog.manual_required ? "👤 Required" : "—"}
+                      <b>{t("technical.PlanReviewConsole.107")}</b>{" "}
+                      {selectedCatalog.manual_required ? t("technical.PlanReviewConsole.108") : "—"}
                     </div>
                     <div className={styles.style133}>
-                      <b>Inputs:</b> {selectedCatalog.inputs.join(", ") || "—"}
+                      <b>{t("technical.PlanReviewConsole.109")}</b>{" "}
+                      {selectedCatalog.inputs.join(", ") || "—"}
                     </div>
                     <div className={styles.style134}>
-                      <b>Outputs:</b> {selectedCatalog.outputs.join(", ") || "—"}
+                      <b>{t("technical.PlanReviewConsole.110")}</b>{" "}
+                      {selectedCatalog.outputs.join(", ") || "—"}
                     </div>
                     <div>
-                      <b>Tags:</b> {selectedCatalog.tags.join(", ") || "—"}
+                      <b>{t("technical.PlanReviewConsole.111")}</b>{" "}
+                      {selectedCatalog.tags.join(", ") || "—"}
                     </div>
                   </>
                 ) : (

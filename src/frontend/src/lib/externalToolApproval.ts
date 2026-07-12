@@ -52,7 +52,6 @@ export function detectExternalToolNodes(
           nodeIds.push(id);
           if (backend && !backendIds.includes(backend)) backendIds.push(backend);
           reasons.push(`Node "${id}" matches high-risk prefix "${prefix}".`);
-          detected = true;
           break;
         }
       }

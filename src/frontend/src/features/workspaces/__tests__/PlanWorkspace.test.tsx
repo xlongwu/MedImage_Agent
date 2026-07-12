@@ -3,6 +3,7 @@ import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ProjectDetail } from "../../../lib/types/project";
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import type { PresetPlanDraft } from "../../../types";
 import { PlanWorkspace } from "../PlanWorkspace";
 
@@ -142,20 +143,50 @@ describe("PlanWorkspace", () => {
     expect(screen.queryByTestId("plan-review-console")).not.toBeInTheDocument();
   });
 
+  it("renders the plan review surface in simplified Chinese", () => {
+    const selectedProject = project();
+    render(
+      <I18nProvider locale="zh-CN">
+        <PlanWorkspace
+          baseUrl="http://localhost"
+          projectId="project-1"
+          selectedProject={selectedProject}
+          projectConfigPath={selectedProject.metadata?.project_config_path}
+          datasetIndexPath={selectedProject.metadata?.dataset_index_path}
+          rawdataDir={selectedProject.metadata?.rawdata_dir}
+          projectDir={selectedProject.metadata?.project_dir}
+          initialPresetDraft={draft()}
+          onOpenDataConversion={vi.fn()}
+          onOpenEnvironment={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "方案概要" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "流程图" })).toBeInTheDocument();
+    expect(screen.getByLabelText("方案状态机")).toHaveTextContent("试运行已通过");
+    expect(screen.getByRole("button", { name: "打开技术方案工具" })).toBeInTheDocument();
+  });
+
   it("does not mark approval, dry-run, or execution readiness as reached without backend evidence", () => {
     renderWorkspace({ initialPresetDraft: draft() });
 
     const stateMachine = screen.getByLabelText("Plan state machine");
 
-    expect(
-      within(stateMachine).getByLabelText("Approved: backend evidence required"),
-    ).toBeInTheDocument();
-    expect(within(stateMachine).getByLabelText("Dry-run Passed: locked")).toBeInTheDocument();
-    expect(within(stateMachine).getByLabelText("Ready to Execute: locked")).toBeInTheDocument();
-    expect(screen.getByLabelText("Plan review facts")).toHaveTextContent("Approval evidence");
-    expect(screen.getByLabelText("Plan review facts")).toHaveTextContent(
-      "Backend evidence required",
+    expect(within(stateMachine).getByText("Approved").closest("li")).toHaveAttribute(
+      "data-state",
+      "pending-evidence",
     );
+    expect(within(stateMachine).getByText("Dry-run Passed").closest("li")).toHaveAttribute(
+      "data-state",
+      "locked",
+    );
+    expect(within(stateMachine).getByText("Ready to Execute").closest("li")).toHaveAttribute(
+      "data-state",
+      "locked",
+    );
+    expect(screen.getByLabelText("Plan review facts")).toHaveTextContent("Approval evidence");
+    expect(screen.getByLabelText("Plan review facts")).toHaveTextContent("Backend required");
   });
 
   it("shows later plan gates only when backend evidence is present", () => {
@@ -177,12 +208,22 @@ describe("PlanWorkspace", () => {
 
     const stateMachine = screen.getByLabelText("Plan state machine");
 
-    expect(within(stateMachine).getByLabelText("Approved: completed")).toBeInTheDocument();
-    expect(within(stateMachine).getByLabelText("Dry-run Passed: completed")).toBeInTheDocument();
-    expect(within(stateMachine).getByLabelText("Ready to Execute: completed")).toBeInTheDocument();
-    expect(
-      within(stateMachine).getByLabelText("Executed: backend evidence required"),
-    ).toBeInTheDocument();
+    expect(within(stateMachine).getByText("Approved").closest("li")).toHaveAttribute(
+      "data-state",
+      "completed",
+    );
+    expect(within(stateMachine).getByText("Dry-run Passed").closest("li")).toHaveAttribute(
+      "data-state",
+      "completed",
+    );
+    expect(within(stateMachine).getByText("Ready to Execute").closest("li")).toHaveAttribute(
+      "data-state",
+      "completed",
+    );
+    expect(within(stateMachine).getByText("Executed").closest("li")).toHaveAttribute(
+      "data-state",
+      "pending-evidence",
+    );
   });
 
   it("updates the inspector and shared selection context when a pipeline node is selected", async () => {

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectInventory } from "../../../lib/projectWorkflow";
 import { getLatestConversionDryRun, runConversionDryRun } from "../../../lib/api/dicom";
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import { DataConversionWorkspace } from "../DataConversionWorkspace";
 
 vi.mock("../../../components/BidsValidationPanel", () => ({
@@ -19,7 +20,12 @@ vi.mock("../../../components/ConversionDryRunPanel", () => ({
 }));
 
 vi.mock("../../../components/DicomConversionReviewPanel", () => ({
-  default: () => <div data-testid="dicom-review-panel">DICOM review panel</div>,
+  default: ({ onConversionRegistered }: { onConversionRegistered?: () => void }) => (
+    <div data-testid="dicom-review-panel">
+      DICOM review panel
+      <button onClick={onConversionRegistered}>Simulate conversion registration</button>
+    </div>
+  ),
 }));
 
 vi.mock("../../../lib/api/dicom", () => ({
@@ -65,6 +71,25 @@ describe("DataConversionWorkspace", () => {
       safety_flags: { dry_run_only: true },
     });
     vi.mocked(runConversionDryRun).mockReset();
+  });
+
+  it("propagates successful conversion registration so the project inventory can refresh", async () => {
+    const user = userEvent.setup();
+    const onConversionRegistered = vi.fn();
+
+    render(
+      <DataConversionWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        inventory={inventory()}
+        onConversionRegistered={onConversionRegistered}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open detailed checks" }));
+    await user.click(screen.getByRole("button", { name: "Simulate conversion registration" }));
+
+    expect(onConversionRegistered).toHaveBeenCalledTimes(1);
   });
 
   it("prioritizes raw DICOM inventory and keeps detailed panels secondary", async () => {
@@ -260,6 +285,54 @@ describe("DataConversionWorkspace", () => {
     expect(screen.getByTestId("bids-validation-panel")).toBeInTheDocument();
     expect(screen.queryByTestId("preprocessing-validation-panel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("qc-summary-panel")).not.toBeInTheDocument();
+  });
+
+  it("renders the converted primary surface in simplified Chinese", () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <DataConversionWorkspace
+          baseUrl="http://localhost"
+          projectId="project-1"
+          inventory={inventory({
+            dataState: "converted_bids",
+            dataStateLabel: "Converted BIDS/NIfTI",
+            convertedSubjects: 4,
+            niftiFileCount: 24,
+            hasRawDicom: false,
+            hasConvertedData: true,
+          })}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "转换后影像清单" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "转换后数据就绪状态摘要" })).toHaveTextContent(
+      "已转换受试者",
+    );
+    expect(screen.getByText("验证转换后清单")).toBeInTheDocument();
+  });
+
+  it("renders the raw DICOM browser controls in simplified Chinese", async () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <DataConversionWorkspace
+          baseUrl="http://localhost"
+          projectId="project-1"
+          inventory={inventory()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "DICOM 序列浏览器" })).toBeInTheDocument();
+    expect(screen.getByLabelText("DICOM 清单摘要")).toHaveTextContent("受试者候选");
+    expect(await screen.findByRole("button", { name: "刷新试运行预览" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "搜索 DICOM 来源" })).toHaveAttribute(
+      "placeholder",
+      "受试者、序列 UID、模态、路径",
+    );
+    expect(screen.getByRole("heading", { name: "转换步骤" })).toBeInTheDocument();
+    expect(screen.getByLabelText("DICOM 转换步骤")).toHaveTextContent("来源检测");
+    expect(screen.getByLabelText("DICOM 转换步骤")).toHaveTextContent("已审批转换");
   });
 
   it("uses converted summary as the primary view when raw DICOM and registered NIfTI coexist", async () => {

@@ -10,6 +10,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $ElectronRoot = Join-Path $RepoRoot "desktop\electron"
 $ElectronDist = Join-Path $ElectronRoot "dist"
+$FrontendBuildScript = Join-Path $RepoRoot "desktop\packaging\build_frontend.ps1"
 $BackendDist = Join-Path $RepoRoot "desktop\packaging\dist\backend"
 $BackendExe = Join-Path $BackendDist "medimage-backend.exe"
 $BackendPayloadDir = Join-Path $RepoRoot "desktop\packaging\dist\backend_payload"
@@ -31,6 +32,13 @@ function Invoke-NpmChecked {
 
 Push-Location $RepoRoot
 try {
+    # Always build the renderer through the packaging entry point. A plain
+    # frontend build leaves the reviewed DICOM execution UI disabled.
+    & powershell.exe -ExecutionPolicy Bypass -File $FrontendBuildScript
+    if ($LASTEXITCODE -ne 0) {
+        throw "frontend static build failed with exit code $LASTEXITCODE"
+    }
+
     if (-not $SkipNpmInstall) {
         Push-Location $ElectronRoot
         try {

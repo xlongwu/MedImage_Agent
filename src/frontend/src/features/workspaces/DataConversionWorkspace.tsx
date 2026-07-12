@@ -15,6 +15,7 @@ import { ConversionStepper } from "./ConversionStepper";
 import { DicomSeriesTable } from "./DicomSeriesTable";
 import styles from "./DataConversionWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
+import { useI18n } from "../../i18n/useI18n";
 
 type DryRunRestoreState = "idle" | "loading" | "restored" | "refresh_required" | "error";
 
@@ -23,6 +24,7 @@ export interface DataConversionWorkspaceProps {
   projectId: string | null;
   inventory: ProjectInventory;
   onSelectedDataSeriesChange?: (selection: DataSeriesSelection | null) => void;
+  onConversionRegistered?: () => void | Promise<void>;
 }
 
 export function DataConversionWorkspace({
@@ -30,7 +32,9 @@ export function DataConversionWorkspace({
   projectId,
   inventory,
   onSelectedDataSeriesChange,
+  onConversionRegistered,
 }: DataConversionWorkspaceProps) {
+  const { t } = useI18n();
   const [dryRun, setDryRun] = useState<ConversionDryRunResponse | null>(null);
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [dryRunError, setDryRunError] = useState("");
@@ -46,27 +50,33 @@ export function DataConversionWorkspace({
   const isRawConversionState = inventory.dataState === "raw_dicom";
 
   useEffect(() => {
+    const requestId = dryRunRequestRef.current + 1;
+    dryRunRequestRef.current = requestId;
+
     if (!projectId || !isRawConversionState) {
-      setDryRun(null);
-      setDryRunRestoreState("idle");
-      setDryRunRestoreMessage("");
+      void Promise.resolve().then(() => {
+        if (dryRunRequestRef.current !== requestId) return;
+        setDryRun(null);
+        setDryRunRestoreState("idle");
+        setDryRunRestoreMessage("");
+      });
       return;
     }
 
-    const requestId = dryRunRequestRef.current + 1;
-    dryRunRequestRef.current = requestId;
-    setDryRun(null);
-    setDryRunError("");
-    setDryRunRestoreState("loading");
-    setDryRunRestoreMessage("Checking persisted dry-run review package...");
+    void Promise.resolve().then(async () => {
+      if (dryRunRequestRef.current !== requestId) return;
+      setDryRun(null);
+      setDryRunError("");
+      setDryRunRestoreState("loading");
+      setDryRunRestoreMessage(t("data.checkingDryRun"));
 
-    getLatestConversionDryRun(baseUrl, projectId)
-      .then((response) => {
+      try {
+        const response = await getLatestConversionDryRun(baseUrl, projectId);
         if (dryRunRequestRef.current !== requestId) return;
         if (response.ok && response.mapping_preview.length > 0) {
           setDryRun(response);
           setDryRunRestoreState("restored");
-          setDryRunRestoreMessage("Restored mappings from the latest persisted review package.");
+          setDryRunRestoreMessage(t("data.restoredDryRun"));
           return;
         }
         setDryRun(null);
@@ -74,20 +84,20 @@ export function DataConversionWorkspace({
         setDryRunRestoreMessage(
           response.blocking_issues[0]
             ? `Dry-run preview not loaded; refresh required. ${response.blocking_issues[0]}`
-            : "Dry-run preview not loaded; refresh required for the active project.",
+            : t("data.refreshDryRun"),
         );
-      })
-      .catch((error) => {
+      } catch (error) {
         if (dryRunRequestRef.current !== requestId) return;
         setDryRun(null);
         setDryRunRestoreState("error");
         setDryRunRestoreMessage(
-          `Dry-run mappings were not restored: ${
-            error instanceof Error ? error.message : String(error)
-          }. Refresh is required.`,
+          t("data.restoreDryRunFailed", {
+            error: error instanceof Error ? error.message : String(error),
+          }),
         );
-      });
-  }, [baseUrl, isRawConversionState, projectId]);
+      }
+    });
+  }, [baseUrl, isRawConversionState, projectId, t]);
 
   const handleGenerateDryRun = async () => {
     if (!projectId || dryRunLoading || dryRunRestoreState === "loading") return;
@@ -117,28 +127,26 @@ export function DataConversionWorkspace({
     return (
       <div className={layoutStyles.stack}>
         <WorkspaceHeader
-          title="Data & Conversion"
+          title={t("data.title")}
           subtitle={
             inventory.dataState === "mixed"
-              ? "Converted BIDS/NIfTI outputs are registered while source DICOM remains available for audit."
-              : "Converted BIDS/NIfTI project overview."
+              ? t("data.convertedMixedSubtitle")
+              : t("data.convertedSubtitle")
           }
-          status="Ready"
+          status={t("data.ready")}
         />
         <div className={layoutStyles.modeNote}>
-          {inventory.dataState === "mixed"
-            ? "DICOM conversion has completed and registered preprocessing input. Raw DICOM evidence remains visible in detailed checks for audit and review."
-            : "This project is already in converted BIDS/NIfTI mode. DICOM conversion is not the primary workflow."}
+          {inventory.dataState === "mixed" ? t("data.mixedModeNote") : t("data.convertedModeNote")}
         </div>
         <ConvertedInventorySummary inventory={inventory} />
         <div className={layoutStyles.summaryRow}>
           <div>
-            <span>Primary action</span>
-            <strong>Validate converted inventory</strong>
+            <span>{t("data.primaryAction")}</span>
+            <strong>{t("data.validateInventory")}</strong>
           </div>
           <div>
-            <span>Next workspace</span>
-            <strong>Preprocessing or QC</strong>
+            <span>{t("data.nextWorkspace")}</span>
+            <strong>{t("data.preprocessingOrQc")}</strong>
           </div>
         </div>
         <div className={layoutStyles.panelGrid}>
@@ -157,6 +165,7 @@ export function DataConversionWorkspace({
           inventory={inventory}
           isOpen={detailedChecksOpen}
           onToggle={() => setDetailedChecksOpen((open) => !open)}
+          onConversionRegistered={onConversionRegistered}
           projectId={projectId}
         />
       </div>
@@ -166,21 +175,19 @@ export function DataConversionWorkspace({
   return (
     <div className={layoutStyles.stack}>
       <WorkspaceHeader
-        title="Data & Conversion"
-        subtitle="Review raw input state, BIDS/NIfTI readiness, and conversion safety without writing files."
+        title={t("data.title")}
+        subtitle={t("data.subtitle")}
         status={
           inventory.hasRawDicom
-            ? "Expected before conversion"
+            ? t("data.expectedBeforeConversion")
             : inventory.hasConvertedData
-              ? "Ready"
-              : "Not started"
+              ? t("data.ready")
+              : t("data.notStarted")
         }
       />
       {inventory.dataState === "mixed" && (
         <div className={`${layoutStyles.modeNote} ${layoutStyles.modeNoteSpaced}`}>
-          <strong>Notice:</strong> Converted BIDS/NIfTI outputs are already present in this project,
-          but raw DICOM files have also been detected. Review the conversion state before
-          preprocessing.
+          <strong>{t("data.mixedNoticeLabel")}</strong> {t("data.mixedNotice")}
         </div>
       )}
       {isRawConversionState ? (
@@ -198,7 +205,7 @@ export function DataConversionWorkspace({
               restoreState={dryRunRestoreState}
             />
           </div>
-          <aside className={styles.rawAside} aria-label="Conversion readiness">
+          <aside className={styles.rawAside} aria-label={t("data.conversionReadiness")}>
             <ConversionStepper dryRun={dryRun} error={dryRunError} inventory={inventory} />
           </aside>
         </div>
@@ -212,6 +219,7 @@ export function DataConversionWorkspace({
         inventory={inventory}
         isOpen={detailedChecksOpen}
         onToggle={() => setDetailedChecksOpen((open) => !open)}
+        onConversionRegistered={onConversionRegistered}
         projectId={projectId}
       />
     </div>
@@ -225,6 +233,7 @@ function DetailedDataChecks({
   inventory,
   isOpen,
   onToggle,
+  onConversionRegistered,
   projectId,
 }: {
   baseUrl: string;
@@ -233,31 +242,33 @@ function DetailedDataChecks({
   inventory: ProjectInventory;
   isOpen: boolean;
   onToggle: () => void;
+  onConversionRegistered?: () => void | Promise<void>;
   projectId: string | null;
 }) {
+  const { t } = useI18n();
   const isEmpty = inventory.dataState === "empty" || inventory.dataState === "unknown";
-  const status = isOpen ? "Open for review" : "Collapsed";
+  const status = isOpen ? t("data.openForReview") : t("data.collapsed");
   const helperText = isEmpty
-    ? "Only inventory/readiness checks are available until data is referenced."
+    ? t("data.detailedChecksEmptyHelp")
     : includeConversionReview
-      ? "Dry-run and review panels stay read-only until backend approval gates allow more."
-      : "Converted projects keep validation checks separate from conversion workflow.";
+      ? t("data.detailedChecksReviewHelp")
+      : t("data.detailedChecksConvertedHelp");
 
   return (
     <TechnicalModuleSection
-      ariaLabel="Detailed data checks"
+      ariaLabel={t("data.detailedChecks")}
       bodyClassName={layoutStyles.panelGrid}
-      description="Secondary backend checks for readiness, validation, dry-run review, and diagnostics. These panels do not execute conversion or mark artifacts computed."
+      description={t("data.detailedChecksDescription")}
       evidenceLevel={isEmpty ? "backend_required" : "metadata_only"}
       helperText={helperText}
-      hideActionLabel="Hide detailed checks"
+      hideActionLabel={t("data.hideDetailedChecks")}
       isOpen={isOpen}
       onToggle={onToggle}
-      openLabel="Open detailed checks"
-      safetyNote="Backend gates remain authoritative. Opening these checks performs no conversion, no preprocessing, no source-data writes, and no scientific validation claim."
+      openLabel={t("data.openDetailedChecks")}
+      safetyNote={t("data.detailedChecksSafety")}
       status={status}
       statusTone={isOpen ? "info" : "neutral"}
-      title="Detailed data checks"
+      title={t("data.detailedChecks")}
     >
       <div id="data-readiness-panel">
         <DataReadinessPanel
@@ -281,7 +292,11 @@ function DetailedDataChecks({
             <ConversionDryRunPanel baseUrl={baseUrl} projectId={projectId} />
           </div>
           <div id="dicom-conversion-review-panel">
-            <DicomConversionReviewPanel baseUrl={baseUrl} projectId={projectId} />
+            <DicomConversionReviewPanel
+              baseUrl={baseUrl}
+              projectId={projectId}
+              onConversionRegistered={onConversionRegistered}
+            />
           </div>
         </>
       ) : null}
@@ -290,37 +305,38 @@ function DetailedDataChecks({
 }
 
 function ConvertedInventorySummary({ inventory }: { inventory: ProjectInventory }) {
+  const { t } = useI18n();
   return (
     <Card className={styles.summaryCard} tone="muted">
       <div className={styles.cardHeader}>
         <div>
-          <h3>Converted imaging inventory</h3>
-          <p>Data & Conversion is now focused on validation because BIDS/NIfTI outputs exist.</p>
+          <h3>{t("data.convertedInventory")}</h3>
+          <p>{t("data.convertedInventoryDescription")}</p>
         </div>
         <Badge tone="success">{inventory.dataStateLabel}</Badge>
       </div>
-      <Table caption="Converted data readiness summary">
+      <Table caption={t("data.convertedReadinessCaption")}>
         <thead>
           <tr>
-            <th>Scope</th>
-            <th>Evidence</th>
-            <th>Status</th>
-            <th>Next action</th>
+            <th>{t("data.scope")}</th>
+            <th>{t("data.evidence")}</th>
+            <th>{t("data.status")}</th>
+            <th>{t("data.nextAction")}</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Converted subjects</td>
+            <td>{t("data.convertedSubjects")}</td>
             <td>{inventory.convertedSubjects}</td>
             <td>
               <Badge tone="success" size="sm">
-                Registered
+                {t("data.registered")}
               </Badge>
             </td>
-            <td>Check preprocessing validation</td>
+            <td>{t("data.checkPreprocessing")}</td>
           </tr>
           <tr>
-            <td>NIfTI files</td>
+            <td>{t("data.niftiFiles")}</td>
             <td>{inventory.niftiFileCount.toLocaleString()}</td>
             <td>
               <EvidenceBadge
@@ -328,7 +344,7 @@ function ConvertedInventorySummary({ inventory }: { inventory: ProjectInventory 
                 size="sm"
               />
             </td>
-            <td>Review BIDS validation and QC summary</td>
+            <td>{t("data.reviewValidationQc")}</td>
           </tr>
         </tbody>
       </Table>
@@ -337,10 +353,6 @@ function ConvertedInventorySummary({ inventory }: { inventory: ProjectInventory 
 }
 
 function EmptyDataState() {
-  return (
-    <EmptyState
-      title="No imaging inventory yet"
-      description="Import a BIDS/NIfTI dataset or raw DICOM directory before conversion, QC, or preprocessing actions become available."
-    />
-  );
+  const { t } = useI18n();
+  return <EmptyState title={t("data.emptyTitle")} description={t("data.emptyDescription")} />;
 }

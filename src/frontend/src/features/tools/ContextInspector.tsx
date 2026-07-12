@@ -7,6 +7,7 @@ import type { WorkspaceSelectionContext } from "../../lib/workspaceSelection";
 import type { EvidenceLevel } from "../../lib/evidence";
 import { Badge, Button, Card } from "../../components/ui";
 import { EvidenceBadge } from "../../components/domain/EvidenceBadge";
+import { useI18n } from "../../i18n/useI18n";
 import styles from "./ContextInspector.module.css";
 
 export interface ContextInspectorProps {
@@ -38,50 +39,62 @@ export function ContextInspector({
   onConfigure,
   selectionContext,
 }: ContextInspectorProps) {
+  const { t } = useI18n();
   if (!isOpen) {
     return null;
   }
 
   const projectRows = [
-    ["Project", project?.name ?? "No project selected"],
-    ["Data state", inventory?.dataStateLabel ?? "Loading"],
-    ["Modality", inventory?.modality ?? project?.modality ?? "rs-fMRI"],
-    ["Subjects", formatCount(dataset?.subjects ?? project?.subjects_count)],
-    ["Scans", formatCount(dataset?.scans ?? project?.scans_count)],
-    ["Dataset health", dataset?.health_status ?? "Not loaded"],
+    [t("inspector.project"), project?.name ?? t("inspector.noProject")],
+    [t("inspector.dataState"), inventory?.dataStateLabel ?? t("inspector.loading")],
+    [t("inspector.modality"), inventory?.modality ?? project?.modality ?? "rs-fMRI"],
+    [t("inspector.subjects"), formatCount(dataset?.subjects ?? project?.subjects_count, t)],
+    [t("inspector.scans"), formatCount(dataset?.scans ?? project?.scans_count, t)],
+    [t("inspector.datasetHealth"), dataset?.health_status ?? t("inspector.notLoaded")],
   ];
   const executionRows = [
-    ["Workspace", activePageLabel],
-    ["Execution mode", formatExecutionMode(executionMode)],
-    ["Selected run", formatRunSelection(selectionContext)],
-    ["Model", model ? `${model.model_name} ${model.version}` : "Not loaded"],
-    ["External smoke", externalSmokeApprovedRun ? "Approved elsewhere" : "Not approved here"],
-    ["Approved by", externalSmokeApprovedRun ? externalSmokeApprovedBy || "Missing name" : "N/A"],
+    [t("inspector.workspace"), activePageLabel],
+    [t("inspector.executionMode"), formatExecutionMode(executionMode, t)],
+    [t("inspector.selectedRun"), formatRunSelection(selectionContext, t)],
+    [
+      t("inspector.model"),
+      model ? `${model.model_name} ${model.version}` : t("inspector.notLoaded"),
+    ],
+    [
+      t("inspector.externalSmoke"),
+      externalSmokeApprovedRun ? t("inspector.approvedElsewhere") : t("inspector.notApprovedHere"),
+    ],
+    [
+      t("inspector.approvedBy"),
+      externalSmokeApprovedRun
+        ? externalSmokeApprovedBy || t("inspector.missingName")
+        : t("inspector.na"),
+    ],
   ];
   const selectedObjectRows = [
-    ["Data table", formatDataSeries(selectionContext)],
-    ["Subject", selectionContext.image.subjectId || "No subject selected"],
-    ["Series", selectionContext.image.series || "No series selected"],
-    ["Plane", formatPlane(selectionContext.image.plane)],
-    ["Image source", selectionContext.image.source || "No source selected"],
-    ["Plan node", formatPlanNode(selectionContext)],
-    ["Artifact", formatArtifact(selectionContext)],
+    [t("inspector.dataTable"), formatDataSeries(selectionContext, t)],
+    [t("inspector.subject"), selectionContext.image.subjectId || t("inspector.noSubject")],
+    [t("inspector.series"), selectionContext.image.series || t("inspector.noSeries")],
+    [t("inspector.plane"), formatPlane(selectionContext.image.plane, t)],
+    [t("inspector.imageSource"), selectionContext.image.source || t("inspector.noSource")],
+    [t("inspector.planNode"), formatPlanNode(selectionContext, t)],
+    [t("inspector.artifact"), formatArtifact(selectionContext, t)],
   ];
-  const evidenceGroups = buildEvidenceGroups(inventory, selectionContext);
+  const evidenceGroups = buildEvidenceGroups(inventory, selectionContext, t);
 
   return (
-    <aside className={styles.inspector} aria-label="Context inspector">
+    <aside className={styles.inspector} aria-label={t("inspector.aria")}>
       <header className={styles.header}>
         <div>
-          <h3 className={styles.title}>Inspector</h3>
-          <p>Read-only project, workspace, run, and execution context</p>
+          <h3 className={styles.title}>{t("inspector.title")}</h3>
+          <p>{t("inspector.description")}</p>
         </div>
         <button
           type="button"
           className={styles.closeButton}
           onClick={onToggle}
-          aria-label="Close inspector"
-          title="Close"
+          aria-label={t("inspector.close")}
+          title={t("common.close")}
         >
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <path
@@ -99,10 +112,10 @@ export function ContextInspector({
         <Card className={styles.summaryCard} tone="muted">
           <div className={styles.cardHeader}>
             <div>
-              <h4>Project context</h4>
-              <p>Evidence and dataset facts stay read-only in the Inspector.</p>
+              <h4>{t("inspector.projectContext")}</h4>
+              <p>{t("inspector.projectDescription")}</p>
             </div>
-            <Badge tone="info">Summary</Badge>
+            <Badge tone="info">{t("inspector.summary")}</Badge>
           </div>
           <dl className={styles.summaryList}>
             {projectRows.map(([label, value]) => (
@@ -117,10 +130,10 @@ export function ContextInspector({
         <Card className={styles.summaryCard}>
           <div className={styles.cardHeader}>
             <div>
-              <h4>Workspace context</h4>
-              <p>Execution settings are surfaced here as status, not editable controls.</p>
+              <h4>{t("inspector.workspaceContext")}</h4>
+              <p>{t("inspector.workspaceDescription")}</p>
             </div>
-            <Badge tone="warning">Backend owned</Badge>
+            <Badge tone="warning">{t("inspector.backendOwned")}</Badge>
           </div>
           <dl className={styles.summaryList}>
             {executionRows.map(([label, value]) => (
@@ -135,10 +148,10 @@ export function ContextInspector({
         <Card className={styles.summaryCard} tone="muted">
           <div className={styles.cardHeader}>
             <div>
-              <h4>Selected objects</h4>
-              <p>Current data table, image, node, run, and artifact summaries.</p>
+              <h4>{t("inspector.selectedObjects")}</h4>
+              <p>{t("inspector.selectedDescription")}</p>
             </div>
-            <Badge tone="neutral">Read only</Badge>
+            <Badge tone="neutral">{t("inspector.readOnly")}</Badge>
           </div>
           <dl className={styles.summaryList}>
             {selectedObjectRows.map(([label, value]) => (
@@ -153,10 +166,10 @@ export function ContextInspector({
         <Card className={styles.summaryCard}>
           <div className={styles.cardHeader}>
             <div>
-              <h4>Evidence drilldown</h4>
-              <p>Truth levels are read from shared evidence definitions, not color alone.</p>
+              <h4>{t("inspector.evidenceDrilldown")}</h4>
+              <p>{t("inspector.evidenceDescription")}</p>
             </div>
-            <Badge tone="info">Read only</Badge>
+            <Badge tone="info">{t("inspector.readOnly")}</Badge>
           </div>
           <div className={styles.evidenceGrid}>
             {evidenceGroups.map((group) => (
@@ -183,15 +196,11 @@ export function ContextInspector({
 
         <Card className={styles.boundaryCard}>
           <div>
-            <h4>Configuration boundary</h4>
-            <p>
-              Change execution mode, environment readiness, external smoke approval, and other setup
-              controls in Settings / Environment. The Inspector does not run, approve, export, or
-              alter safety policy.
-            </p>
+            <h4>{t("inspector.configurationBoundary")}</h4>
+            <p>{t("inspector.configurationDescription")}</p>
           </div>
           <Button variant="secondary" onClick={onConfigure}>
-            Open Settings
+            {t("inspector.openSettings")}
           </Button>
         </Card>
       </div>
@@ -199,44 +208,46 @@ export function ContextInspector({
   );
 }
 
-function formatCount(value: number | null | undefined): string {
-  return Number.isFinite(Number(value)) ? String(value) : "Not loaded";
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function formatCount(value: number | null | undefined, t: Translate): string {
+  return Number.isFinite(Number(value)) ? String(value) : t("inspector.notLoaded");
 }
 
-function formatExecutionMode(mode: ExecutionMode): string {
-  if (mode === "external_smoke") return "External smoke";
-  if (mode === "rsfmri_python") return "rs-fMRI Python";
-  return "Simulated";
+function formatExecutionMode(mode: ExecutionMode, t: Translate): string {
+  if (mode === "external_smoke") return t("inspector.mode.externalSmoke");
+  if (mode === "rsfmri_python") return t("inspector.mode.python");
+  return t("inspector.mode.simulated");
 }
 
-function formatPlane(plane: WorkspaceSelectionContext["image"]["plane"]): string {
-  if (plane === "sagittal") return "Sagittal";
-  if (plane === "coronal") return "Coronal";
-  return "Axial";
+function formatPlane(plane: WorkspaceSelectionContext["image"]["plane"], t: Translate): string {
+  if (plane === "sagittal") return t("viewer.plane.sagittal");
+  if (plane === "coronal") return t("viewer.plane.coronal");
+  return t("viewer.plane.axial");
 }
 
-function formatPlanNode(selection: WorkspaceSelectionContext): string {
+function formatPlanNode(selection: WorkspaceSelectionContext, t: Translate): string {
   const node = selection.planNode;
-  if (!node) return "No plan node selected";
+  if (!node) return t("inspector.noPlanNode");
   return `${node.name} (${node.risk})`;
 }
 
-function formatDataSeries(selection: WorkspaceSelectionContext): string {
+function formatDataSeries(selection: WorkspaceSelectionContext, t: Translate): string {
   const dataSeries = selection.dataSeries;
-  if (!dataSeries) return "No data table row selected";
+  if (!dataSeries) return t("inspector.noDataRow");
   return `${dataSeries.subject} / ${dataSeries.series}`;
 }
 
-function formatArtifact(selection: WorkspaceSelectionContext): string {
+function formatArtifact(selection: WorkspaceSelectionContext, t: Translate): string {
   const artifact = selection.artifact;
-  if (!artifact) return "No artifact selected";
+  if (!artifact) return t("inspector.noArtifact");
   return `${artifact.name} - ${artifact.stage}`;
 }
 
-function formatRunSelection(selection: WorkspaceSelectionContext): string {
-  if (!selection.run.id) return "No run selected";
+function formatRunSelection(selection: WorkspaceSelectionContext, t: Translate): string {
+  if (!selection.run.id) return t("inspector.noRun");
   if (!selection.run.name) return selection.run.id;
-  return `${selection.run.name} (${selection.run.status ?? "status unknown"})`;
+  return `${selection.run.name} (${selection.run.status ?? t("inspector.statusUnknown")})`;
 }
 
 type EvidenceGroup = {
@@ -249,6 +260,7 @@ type EvidenceGroup = {
 function buildEvidenceGroups(
   inventory: ProjectInventory | null,
   selection: WorkspaceSelectionContext,
+  t: Translate,
 ): EvidenceGroup[] {
   const dataSeries = selection.dataSeries;
   const artifact = selection.artifact;
@@ -258,61 +270,61 @@ function buildEvidenceGroups(
 
   return [
     {
-      title: "Project",
-      summary: inventory?.dataStateLabel ?? "Project inventory is still loading.",
+      title: t("inspector.project"),
+      summary: inventory?.dataStateLabel ?? t("inspector.projectInventoryLoading"),
       level: projectEvidenceLevel(inventory),
       rows: [
-        ["Data state", inventory?.dataStateLabel ?? "Not loaded"],
-        ["Modality", inventory?.modality ?? "Not loaded"],
+        [t("inspector.dataState"), inventory?.dataStateLabel ?? t("inspector.notLoaded")],
+        [t("inspector.modality"), inventory?.modality ?? t("inspector.notLoaded")],
       ],
     },
     {
-      title: "Subject",
-      summary: dataSeries?.subject ?? selection.image.subjectId ?? "No subject selected.",
+      title: t("inspector.subject"),
+      summary: dataSeries?.subject ?? selection.image.subjectId ?? t("inspector.noSubject"),
       level: dataSeries?.evidenceLevel ?? imageEvidence,
       rows: [
-        ["Data table subject", dataSeries?.subject ?? "No data table row selected"],
-        ["Image subject", selection.image.subjectId ?? "No image subject selected"],
+        [t("inspector.dataTableSubject"), dataSeries?.subject ?? t("inspector.noDataRow")],
+        [t("inspector.imageSubject"), selection.image.subjectId ?? t("inspector.noImageSubject")],
       ],
     },
     {
-      title: "Series",
-      summary: dataSeries?.series ?? selection.image.series ?? "No series selected.",
+      title: t("inspector.series"),
+      summary: dataSeries?.series ?? selection.image.series ?? t("inspector.noSeries"),
       level: dataSeries?.evidenceLevel ?? imageEvidence,
       rows: [
-        ["Data table series", dataSeries?.series ?? "No data table row selected"],
-        ["Status", dataSeries?.status ?? "No table status selected"],
-        ["Image series", selection.image.series ?? "No image series selected"],
+        [t("inspector.dataTableSeries"), dataSeries?.series ?? t("inspector.noDataRow")],
+        [t("inspector.status"), dataSeries?.status ?? t("inspector.noTableStatus")],
+        [t("inspector.imageSeries"), selection.image.series ?? t("inspector.noSeries")],
       ],
     },
     {
-      title: "Plan node",
-      summary: planNode ? planNode.name : "No plan node selected.",
+      title: t("inspector.planNode"),
+      summary: planNode ? planNode.name : t("inspector.noPlanNode"),
       level: planNode ? "planned" : "backend_required",
       rows: [
-        ["Node ID", planNode?.id ?? "Not selected"],
-        ["Risk", planNode?.risk ?? "Not selected"],
-        ["Backend", planNode?.backend ?? "Not selected"],
+        [t("inspector.nodeId"), planNode?.id ?? t("inspector.notSelected")],
+        [t("inspector.risk"), planNode?.risk ?? t("inspector.notSelected")],
+        [t("inspector.backend"), planNode?.backend ?? t("inspector.notSelected")],
       ],
     },
     {
-      title: "Run",
-      summary: run.id ? formatRunSelection(selection) : "No run selected.",
+      title: t("inspector.run"),
+      summary: run.id ? formatRunSelection(selection, t) : t("inspector.noRun"),
       level: run.id ? "created" : "backend_required",
       rows: [
-        ["Run ID", run.id ?? "Not selected"],
-        ["Status", run.status ?? "No status selected"],
-        ["Pipeline", run.pipeline ?? "No pipeline selected"],
+        [t("inspector.runId"), run.id ?? t("inspector.notSelected")],
+        [t("inspector.status"), run.status ?? t("inspector.noStatus")],
+        [t("inspector.pipeline"), run.pipeline ?? t("inspector.noPipeline")],
       ],
     },
     {
-      title: "Artifact",
-      summary: artifact ? artifact.name : "No artifact selected.",
+      title: t("inspector.artifact"),
+      summary: artifact ? artifact.name : t("inspector.noArtifact"),
       level: artifact?.evidenceLevel ?? "backend_required",
       rows: [
-        ["Path", artifact?.path ?? "No artifact path selected"],
-        ["Stage", artifact?.stage ?? "Not selected"],
-        ["Run", artifact?.runId ?? "No producing run selected"],
+        [t("inspector.path"), artifact?.path ?? t("inspector.noArtifactPath")],
+        [t("inspector.stage"), artifact?.stage ?? t("inspector.notSelected")],
+        [t("inspector.run"), artifact?.runId ?? t("inspector.noProducingRun")],
       ],
     },
   ];

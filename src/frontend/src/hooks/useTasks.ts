@@ -6,10 +6,11 @@ import { useAsyncResource } from "./useAsyncResource";
 
 export function useTasks() {
   const resource = useAsyncResource<TaskLogEntry[]>(getTasks, fallbackTasks, []);
+  const setData = resource.setData;
 
   const upsertTask = useCallback(
     (task: TaskLogEntry) => {
-      resource.setData((current) => {
+      setData((current) => {
         const exists = current.some((item) => item.id === task.id);
         if (exists) {
           return current.map((item) => (item.id === task.id ? { ...item, ...task } : item));
@@ -17,12 +18,12 @@ export function useTasks() {
         return [task, ...current];
       });
     },
-    [resource.setData],
+    [setData],
   );
 
   const updateTaskFromStream = useCallback(
     (message: TaskStreamMessage) => {
-      resource.setData((current) =>
+      setData((current) =>
         current.map((task) =>
           task.id === message.task_id
             ? {
@@ -36,7 +37,7 @@ export function useTasks() {
         ),
       );
     },
-    [resource.setData],
+    [setData],
   );
 
   return { ...resource, upsertTask, updateTaskFromStream };

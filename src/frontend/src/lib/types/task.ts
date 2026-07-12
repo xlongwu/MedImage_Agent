@@ -1,4 +1,10 @@
-export type TaskStatus = "running" | "completed" | "failed" | "pending" | "disconnected";
+export type TaskStatus =
+  | "running"
+  | "completed"
+  | "partial"
+  | "failed"
+  | "pending"
+  | "disconnected";
 
 export interface TaskLogEntry {
   id: string;

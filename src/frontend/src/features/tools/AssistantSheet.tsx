@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { ChatMessage } from "../../lib/types/assistant";
 import type { WorkspaceSelectionContext } from "../../lib/workspaceSelection";
 import { Sheet } from "../../components/ui";
+import { useI18n } from "../../i18n/useI18n";
 import { AssistantPanel } from "./AssistantPanel";
 import styles from "./AssistantSheet.module.css";
 
@@ -22,47 +23,9 @@ export interface AssistantSheetProps {
 }
 
 type PromptSuggestion = {
-  kind: "Explanation" | "Summary" | "Draft";
+  kind: string;
   text: string;
 };
-
-const defaultSuggestedPrompts: PromptSuggestion[] = [
-  { kind: "Explanation", text: "Explain the current workspace state" },
-  { kind: "Summary", text: "Summarize the selected run evidence" },
-  { kind: "Draft", text: "Draft the next safe review step" },
-];
-
-const workspacePromptMap: Record<string, PromptSuggestion[]> = {
-  QC: [
-    { kind: "Explanation", text: "Explain which QC evidence is still pending" },
-    { kind: "Summary", text: "Summarize the QC review gaps for this project" },
-    { kind: "Draft", text: "Draft a non-executing QC review checklist" },
-  ],
-  Results: [
-    { kind: "Explanation", text: "Explain the artifact provenance boundary" },
-    { kind: "Summary", text: "Summarize which result records need backend evidence" },
-    { kind: "Draft", text: "Draft a handoff note for planned and created artifacts" },
-  ],
-  "Settings / Environment": [
-    { kind: "Explanation", text: "Explain the current environment readiness boundaries" },
-    { kind: "Summary", text: "Summarize safety gates that remain backend-owned" },
-    { kind: "Draft", text: "Draft a safe environment review checklist" },
-  ],
-  Runs: [
-    { kind: "Explanation", text: "Explain the selected run diagnostics" },
-    { kind: "Summary", text: "Summarize run evidence without suggesting execution" },
-    { kind: "Draft", text: "Draft the next reviewed run follow-up" },
-  ],
-  Plan: [
-    { kind: "Explanation", text: "Explain the plan evidence and locked gates" },
-    { kind: "Summary", text: "Summarize nodes that need review evidence" },
-    { kind: "Draft", text: "Draft plan review questions for the maintainer" },
-  ],
-};
-
-function getSuggestedPrompts(activePageLabel: string): PromptSuggestion[] {
-  return workspacePromptMap[activePageLabel] ?? defaultSuggestedPrompts;
-}
 
 export function AssistantSheet({
   activePageLabel,
@@ -78,61 +41,71 @@ export function AssistantSheet({
   projectName,
   selectionContext,
 }: AssistantSheetProps) {
-  const suggestedPrompts = getSuggestedPrompts(activePageLabel);
+  const { t } = useI18n();
+  const suggestedPrompts = getSuggestedPrompts(activePageLabel, t);
   const selectedObjectText = [
     selectionContext.dataSeries
-      ? `data series ${selectionContext.dataSeries.subject} / ${selectionContext.dataSeries.series}`
+      ? t("assistant.selection.dataSeries", {
+          subject: selectionContext.dataSeries.subject,
+          series: selectionContext.dataSeries.series,
+        })
       : "",
-    selectionContext.image.subjectId ? `subject ${selectionContext.image.subjectId}` : "",
-    selectionContext.image.series ? `series ${selectionContext.image.series}` : "",
-    selectionContext.planNode ? `node ${selectionContext.planNode.name}` : "",
-    selectionContext.artifact ? `artifact ${selectionContext.artifact.name}` : "",
+    selectionContext.image.subjectId
+      ? t("assistant.selection.subject", { subject: selectionContext.image.subjectId })
+      : "",
+    selectionContext.image.series
+      ? t("assistant.selection.series", { series: selectionContext.image.series })
+      : "",
+    selectionContext.planNode
+      ? t("assistant.selection.node", { node: selectionContext.planNode.name })
+      : "",
+    selectionContext.artifact
+      ? t("assistant.selection.artifact", { artifact: selectionContext.artifact.name })
+      : "",
   ]
     .filter(Boolean)
     .join(" / ");
 
   return (
     <Sheet
-      closeLabel="Close assistant"
-      description="Context-aware guidance. Execution still requires explicit plan, approval, or workspace action."
+      closeLabel={t("assistant.close")}
+      description={t("assistant.description")}
       onOpenChange={onOpenChange}
       open={open}
-      title="Assistant"
+      title={t("nav.assistant")}
     >
       <div className={styles.sheetBody}>
-        <section className={styles.contextPanel} aria-label="Assistant context">
+        <section className={styles.contextPanel} aria-label={t("assistant.context")}>
           <div>
-            <span>Project</span>
-            <strong>{projectName || "No project selected"}</strong>
+            <span>{t("assistant.project")}</span>
+            <strong>{projectName || t("assistant.noProject")}</strong>
           </div>
           <div>
-            <span>Workspace</span>
+            <span>{t("assistant.workspace")}</span>
             <strong>{activePageLabel}</strong>
           </div>
           <div>
-            <span>Run</span>
-            <strong>{formatRun(selectionContext)}</strong>
+            <span>{t("assistant.run")}</span>
+            <strong>{formatRun(selectionContext, t)}</strong>
           </div>
           <div>
-            <span>Selection</span>
-            <strong>{selectedObjectText || "No object selected"}</strong>
+            <span>{t("assistant.selection")}</span>
+            <strong>{selectedObjectText || t("assistant.noSelection")}</strong>
           </div>
           <div>
-            <span>Action mode</span>
-            <strong>Explain / summarize / draft</strong>
+            <span>{t("assistant.actionMode")}</span>
+            <strong>{t("assistant.actionModeValue")}</strong>
           </div>
           <div>
-            <span>Provider</span>
-            <strong>
-              Mock provider: no external API used; real LLM disabled until API key is configured
-            </strong>
+            <span>{t("assistant.provider")}</span>
+            <strong>{t("assistant.providerValue")}</strong>
           </div>
         </section>
 
-        <section className={styles.suggestionPanel} aria-label="Assistant suggestions">
+        <section className={styles.suggestionPanel} aria-label={t("assistant.suggestions")}>
           <div className={styles.panelHeader}>
-            <h3>Suggested prompts</h3>
-            <p>Prompt helpers only. They do not execute actions.</p>
+            <h3>{t("assistant.suggestedPrompts")}</h3>
+            <p>{t("assistant.promptBoundary")}</p>
           </div>
           <div className={styles.promptGrid}>
             {suggestedPrompts.map((prompt) => (
@@ -150,13 +123,8 @@ export function AssistantSheet({
         </section>
 
         <div className={styles.actionBoundary}>
-          <strong>Execution boundary</strong>
-          <p>
-            Assistant responses can explain, summarize, or draft plans. Running pipelines, approving
-            tasks, and changing external-tool settings remain in their reviewed workspaces. Mock
-            provider mode uses the local safe default and no external API. A real LLM provider stays
-            disabled until an API key is configured.
-          </p>
+          <strong>{t("assistant.executionBoundary")}</strong>
+          <p>{t("assistant.executionDescription")}</p>
         </div>
 
         <AssistantPanel
@@ -173,7 +141,68 @@ export function AssistantSheet({
   );
 }
 
-function formatRun(selectionContext: WorkspaceSelectionContext): string {
-  if (!selectionContext.run.id) return "No run selected";
+function formatRun(
+  selectionContext: WorkspaceSelectionContext,
+  t: ReturnType<typeof useI18n>["t"],
+): string {
+  if (!selectionContext.run.id) return t("assistant.noRun");
   return selectionContext.run.name ?? selectionContext.run.id;
+}
+
+function getSuggestedPrompts(
+  activePageLabel: string,
+  t: ReturnType<typeof useI18n>["t"],
+): PromptSuggestion[] {
+  const kinds = {
+    explanation: t("assistant.kind.explanation"),
+    summary: t("assistant.kind.summary"),
+    draft: t("assistant.kind.draft"),
+  };
+  const promptSets = {
+    default: [
+      { kind: kinds.explanation, text: t("assistant.prompt.defaultExplain") },
+      { kind: kinds.summary, text: t("assistant.prompt.defaultSummary") },
+      { kind: kinds.draft, text: t("assistant.prompt.defaultDraft") },
+    ],
+    qc: [
+      { kind: kinds.explanation, text: t("assistant.prompt.qcExplain") },
+      { kind: kinds.summary, text: t("assistant.prompt.qcSummary") },
+      { kind: kinds.draft, text: t("assistant.prompt.qcDraft") },
+    ],
+    results: [
+      { kind: kinds.explanation, text: t("assistant.prompt.resultsExplain") },
+      { kind: kinds.summary, text: t("assistant.prompt.resultsSummary") },
+      { kind: kinds.draft, text: t("assistant.prompt.resultsDraft") },
+    ],
+    settings: [
+      { kind: kinds.explanation, text: t("assistant.prompt.settingsExplain") },
+      { kind: kinds.summary, text: t("assistant.prompt.settingsSummary") },
+      { kind: kinds.draft, text: t("assistant.prompt.settingsDraft") },
+    ],
+    runs: [
+      { kind: kinds.explanation, text: t("assistant.prompt.runsExplain") },
+      { kind: kinds.summary, text: t("assistant.prompt.runsSummary") },
+      { kind: kinds.draft, text: t("assistant.prompt.runsDraft") },
+    ],
+    plan: [
+      { kind: kinds.explanation, text: t("assistant.prompt.planExplain") },
+      { kind: kinds.summary, text: t("assistant.prompt.planSummary") },
+      { kind: kinds.draft, text: t("assistant.prompt.planDraft") },
+    ],
+  };
+
+  if (activePageLabel === t("nav.qc") || activePageLabel === "QC") return promptSets.qc;
+  if (activePageLabel === t("nav.results") || activePageLabel === "Results") {
+    return promptSets.results;
+  }
+  if (
+    activePageLabel === t("nav.settings") ||
+    activePageLabel === "Settings / Environment" ||
+    activePageLabel === "Settings"
+  ) {
+    return promptSets.settings;
+  }
+  if (activePageLabel === t("nav.runs") || activePageLabel === "Runs") return promptSets.runs;
+  if (activePageLabel === t("nav.plan") || activePageLabel === "Plan") return promptSets.plan;
+  return promptSets.default;
 }

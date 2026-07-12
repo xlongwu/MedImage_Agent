@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { getRsfmriCoregistrationQc, runRsfmriCoregistrationQc } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { getRsfmriCoregistrationQc, runRsfmriCoregistrationQc } from "../lib/api/rsfmri";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -9,15 +10,16 @@ type Props = {
 };
 
 export function RsfmriCoregistrationQcPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
+  const operation = t("technical.coreg.operation");
+  const name = t("technical.coreg.name");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loaded, setLoaded] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("IDLE");
   const [error, setError] = useState("");
 
   async function handleRun() {
-    const confirmed = window.confirm(
-      "Confirm to run SPM Coregistration + Registration QC? This only processes synthetic BIDS data and will not modify rawdata.",
-    );
+    const confirmed = window.confirm(t("technical.syntheticConfirm", { operation }));
 
     if (!confirmed) return;
 
@@ -58,9 +60,9 @@ export function RsfmriCoregistrationQcPanel({ baseUrl }: Props) {
     <div>
       <div className="row">
         <button className="dangerButton" onClick={handleRun}>
-          Approve and Run Coregistration + Registration QC
+          {t("technical.approveRun", { operation })}
         </button>
-        <button onClick={handleLoad}>Load Registration QC Results</button>
+        <button onClick={handleLoad}>{t("technical.loadResults", { name })}</button>
         <StatusBadge status={status} />
       </div>
 
@@ -68,23 +70,23 @@ export function RsfmriCoregistrationQcPanel({ baseUrl }: Props) {
 
       <div className="metricGrid">
         <div className="metricCard">
-          <span>Subjects</span>
+          <span>{t("technical.subjects")}</span>
           <strong>{String(summary?.subjects_total ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>PASS</span>
+          <span>{t("technical.pass")}</span>
           <strong>{String(summary?.subjects_pass ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>WARNING</span>
+          <span>{t("technical.warning")}</span>
           <strong>{String(summary?.subjects_warning ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>FAIL</span>
+          <span>{t("technical.fail")}</span>
           <strong>{String(summary?.subjects_fail ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>Mean Center Distance</span>
+          <span>{t("technical.coreg.metric")}</span>
           <strong>
             {summary?.mean_center_distance_mm == null
               ? "-"
@@ -93,27 +95,27 @@ export function RsfmriCoregistrationQcPanel({ baseUrl }: Props) {
         </div>
       </div>
 
-      <h3>Run Summary</h3>
-      <JsonBlock value={result} emptyText="Not yet run" />
+      <h3>{t("technical.runSummary")}</h3>
+      <JsonBlock value={result} emptyText={t("technical.notRun")} />
 
-      <h3>Registration QC Summary</h3>
+      <h3>{t("technical.namedSummary", { name })}</h3>
       <JsonBlock
         value={loaded?.registration_qc_summary}
-        emptyText="No registration QC summary available"
+        emptyText={t("technical.noNamedSummary", { name })}
       />
 
-      <h3>Subject Registration QC</h3>
+      <h3>{t("technical.namedSubject", { name })}</h3>
       <JsonBlock
         value={loaded?.subject_registration_qc}
-        emptyText="No subject registration QC available"
+        emptyText={t("technical.noNamedSubject", { name })}
       />
 
-      <h3>Registration QC Report</h3>
+      <h3>{t("technical.namedReport", { name })}</h3>
       <TextViewer
         text={
           typeof loaded?.registration_qc_report === "string" ? loaded.registration_qc_report : null
         }
-        emptyText="No registration QC report available"
+        emptyText={t("technical.noNamedReport", { name })}
       />
     </div>
   );

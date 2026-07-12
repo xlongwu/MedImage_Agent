@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { getExternalSmokeStatus, runExternalSmoke } from "../lib/api/legacy";
+import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "../i18n/useI18n";
+import { getExternalSmokeStatus, runExternalSmoke } from "../lib/api/external";
 import { JsonBlock } from "./JsonBlock";
 import { TextViewer } from "./TextViewer";
 
@@ -18,6 +19,7 @@ const DPABI_FUNCTIONS = [
 ];
 
 export default function ExternalSmokePanel({ baseUrl }: Props) {
+  const { t } = useI18n();
   const [target, setTarget] = useState("all");
   const [mode, setMode] = useState("manual_package");
   const [configPath, setConfigPath] = useState("examples/project_config.yaml");
@@ -29,11 +31,7 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    void refresh();
-  }, [baseUrl]);
-
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setError("");
     try {
       const payload = await getExternalSmokeStatus(baseUrl);
@@ -41,7 +39,12 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }
+  }, [baseUrl]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Load backend-owned smoke status when the endpoint changes.
+    void refresh();
+  }, [refresh]);
 
   async function run() {
     setBusy(true);
@@ -73,7 +76,7 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
       {error ? <div className="errorBox">{error}</div> : null}
       <div className="formGrid">
         <label>
-          Target
+          {t("settings.smoke.target")}
           <select value={target} onChange={(event) => setTarget(event.target.value)}>
             <option value="all">SPM + DPABI</option>
             <option value="spm">SPM</option>
@@ -81,19 +84,19 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
           </select>
         </label>
         <label>
-          Mode
+          {t("settings.smoke.mode")}
           <select value={mode} onChange={(event) => setMode(event.target.value)}>
-            <option value="manual_package">Manual package</option>
-            <option value="preflight">Preflight</option>
-            <option value="approved_smoke">Approved smoke</option>
+            <option value="manual_package">{t("settings.smoke.manualPackage")}</option>
+            <option value="preflight">{t("settings.smoke.preflight")}</option>
+            <option value="approved_smoke">{t("settings.smoke.approvedSmoke")}</option>
           </select>
         </label>
         <label>
-          Config path
+          {t("settings.smoke.configPath")}
           <input value={configPath} onChange={(event) => setConfigPath(event.target.value)} />
         </label>
         <label>
-          DPABI function
+          {t("settings.smoke.dpabiFunction")}
           <select value={dpabiFunction} onChange={(event) => setDpabiFunction(event.target.value)}>
             {DPABI_FUNCTIONS.map((item) => (
               <option key={item} value={item}>
@@ -103,7 +106,7 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
           </select>
         </label>
         <label>
-          Approved by
+          {t("settings.smoke.approvedBy")}
           <input value={approvedBy} onChange={(event) => setApprovedBy(event.target.value)} />
         </label>
       </div>
@@ -114,25 +117,25 @@ export default function ExternalSmokePanel({ baseUrl }: Props) {
             checked={approved}
             onChange={(event) => setApproved(event.target.checked)}
           />
-          Approve MATLAB smoke
+          {t("settings.smoke.approveMatlab")}
         </label>
         <button onClick={run} disabled={busy}>
-          {busy ? "Running..." : "Run external smoke"}
+          {busy ? t("settings.smoke.running") : t("settings.smoke.run")}
         </button>
         <button onClick={refresh} disabled={busy}>
-          Refresh status
+          {t("settings.smoke.refresh")}
         </button>
       </div>
-      <h3>Latest status</h3>
-      <JsonBlock value={status} emptyText="No external smoke status" />
-      <h3>Last run result</h3>
-      <JsonBlock value={result} emptyText="No run in this session" />
-      <h3>Checklist</h3>
-      <TextViewer text={checklistText || "No checklist generated"} />
-      <h3>Commands</h3>
-      <TextViewer text={commandsText || "No commands generated"} />
-      <h3>Diagnostic report</h3>
-      <TextViewer text={reportText || "No diagnostic report generated"} />
+      <h3>{t("settings.smoke.latest")}</h3>
+      <JsonBlock value={status} emptyText={t("settings.smoke.noStatus")} />
+      <h3>{t("settings.smoke.lastResult")}</h3>
+      <JsonBlock value={result} emptyText={t("settings.smoke.noRun")} />
+      <h3>{t("settings.smoke.checklist")}</h3>
+      <TextViewer text={checklistText || t("settings.smoke.noChecklist")} />
+      <h3>{t("settings.smoke.commands")}</h3>
+      <TextViewer text={commandsText || t("settings.smoke.noCommands")} />
+      <h3>{t("settings.smoke.report")}</h3>
+      <TextViewer text={reportText || t("settings.smoke.noReport")} />
     </div>
   );
 }

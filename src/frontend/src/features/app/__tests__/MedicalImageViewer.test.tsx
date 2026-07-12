@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import type { ImagePreview, ImageSources, ImageValidationReport } from "../../../lib/types/image";
 import type { ProjectDetail } from "../../../lib/types/project";
 import { MedicalImageViewer } from "../MedicalImageViewer";
@@ -62,34 +63,65 @@ const validation: ImageValidationReport = {
 function renderViewer(
   preview: ImagePreview | null,
   dataState: "converted_bids" | "raw_dicom" = "converted_bids",
-  overrides: { loading?: boolean; onSliceChange?: (sliceIndex: number) => void } = {},
+  overrides: {
+    loading?: boolean;
+    onSliceChange?: (sliceIndex: number) => void;
+    validation?: ImageValidationReport;
+    locale?: "en" | "zh-CN";
+  } = {},
 ) {
   const onSliceChange = overrides.onSliceChange ?? vi.fn();
 
   render(
-    <MedicalImageViewer
-      dataState={dataState}
-      imageSources={imageSources}
-      loading={overrides.loading ?? false}
-      onPlaneChange={vi.fn()}
-      onSequenceChange={vi.fn()}
-      onSliceChange={onSliceChange}
-      onSubjectChange={vi.fn()}
-      plane="axial"
-      preview={preview}
-      project={project}
-      sequence="BOLD"
-      sequenceOptions={["BOLD"]}
-      sourceFile={imageSources.manifest?.[0] ?? null}
-      subjectId="sub-01"
-      validation={validation}
-    />,
+    <I18nProvider locale={overrides.locale ?? "en"}>
+      <MedicalImageViewer
+        dataState={dataState}
+        imageSources={imageSources}
+        loading={overrides.loading ?? false}
+        onPlaneChange={vi.fn()}
+        onSequenceChange={vi.fn()}
+        onSliceChange={onSliceChange}
+        onSubjectChange={vi.fn()}
+        plane="axial"
+        preview={preview}
+        project={project}
+        sequence="BOLD"
+        sequenceOptions={["BOLD"]}
+        sourceFile={imageSources.manifest?.[0] ?? null}
+        subjectId="sub-01"
+        validation={overrides.validation ?? validation}
+      />
+    </I18nProvider>,
   );
 
   return { onSliceChange };
 }
 
 describe("MedicalImageViewer", () => {
+  it("does not crash when optional validation details are absent", () => {
+    renderViewer(
+      {
+        project_id: "project-1",
+        subject_id: "sub-01",
+        sequence: "BOLD",
+        preview_url: "/api/projects/project-1/preview.png",
+        message: "Preview ready",
+        source: "nifti",
+        slice_count: 32,
+        slice_index: 8,
+      },
+      "converted_bids",
+      {
+        validation: {
+          ...validation,
+          issues: undefined as unknown as ImageValidationReport["issues"],
+        },
+      },
+    );
+
+    expect(screen.getByText(/Validation pass/)).toBeInTheDocument();
+  });
+
   it("shows a Raw DICOM empty state with conversion guidance instead of an image canvas", () => {
     renderViewer(
       {
@@ -285,5 +317,29 @@ describe("MedicalImageViewer", () => {
 
     await user.keyboard("{Escape}");
     expect(viewer).not.toHaveFocus();
+  });
+
+  it("renders the verified preview workflow in Chinese", () => {
+    renderViewer(
+      {
+        project_id: "project-1",
+        subject_id: "sub-01",
+        sequence: "BOLD",
+        preview_url: "/api/projects/project-1/preview.png",
+        message: "Preview ready",
+        source: "nifti",
+        source_path: "sub-01/func/bold.nii.gz",
+        dimensions: [64, 64, 32, 180],
+        slice_count: 32,
+        slice_index: 4,
+      },
+      "converted_bids",
+      { locale: "zh-CN" },
+    );
+
+    expect(screen.getByRole("tablist", { name: "解剖平面" })).toBeInTheDocument();
+    expect(screen.getByLabelText("查看器状态")).toHaveTextContent("层面");
+    expect(screen.getByLabelText("影像元数据与验证")).toHaveTextContent("检查器");
+    expect(screen.getByRole("toolbar", { name: "查看器画布工具" })).toBeInTheDocument();
   });
 });

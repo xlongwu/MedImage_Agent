@@ -43,6 +43,10 @@ def test_electron_main_contract():
     assert 'HEALTH_PATH = "/api/health"' in main
     assert "MEDIMAGE_DESKTOP_SMOKE" in main
     assert "MEDIMAGE_DESKTOP_SMOKE_RESULT" in main
+    assert "verifyFrontendRenderer" in main
+    assert "reactRootChildCount" in main
+    assert "mainLandmarkPresent" in main
+    assert "rendererConsoleErrors" in main
     assert "MEDIMAGE_DESKTOP_USER_DATA" in main
     assert "MEDIMAGE_DESKTOP_WORKSPACE" in main
     assert "findRepositoryRoot" in main
@@ -61,6 +65,7 @@ def test_electron_main_contract():
     assert "contextIsolation: true" in main
     assert "nodeIntegration: false" in main
     assert "sandbox: true" in main
+    assert "--no-sandbox" not in main
     assert "setWindowOpenHandler" in main
     assert "resolveDcm2niixPath" in main
     assert "MEDIMAGE_DCM2NIIX_PATH" in main
@@ -164,6 +169,14 @@ def test_frontend_runtime_config_contract():
     assert "Remove-Item Env:VITE_ENABLE_DICOM_EXECUTE_UI" in build_frontend
 
 
+def test_backend_build_checks_native_scientific_dependencies():
+    build_backend = read("desktop/packaging/build_backend.ps1")
+
+    assert "scipy.ndimage" in build_backend
+    assert "scipy.signal" in build_backend
+    assert "Scientific packaging dependency check failed" in build_backend
+
+
 def test_desktop_dist_wrapper_uses_workspace_caches():
     wrapper = read("desktop/electron/build-dist.cjs")
     build_desktop = read("desktop/packaging/build_desktop.ps1")
@@ -188,6 +201,10 @@ def test_desktop_dist_wrapper_uses_workspace_caches():
     assert "manual-nsis" in wrapper
     assert "manual-binaries" in wrapper
     assert "--config.electronDist" in wrapper
+    assert "ensureBackendPayload" in wrapper
+    assert "Backend sidecar payload is required" in wrapper
+    assert "medimage-backend.exe" in wrapper
+    assert "medimage-backend.bin" in wrapper
     assert "ElectronRuntimeZip" in build_desktop
     assert "ElectronRuntimeZip" in build_all
     assert "NsisArchive" in build_desktop
@@ -206,6 +223,8 @@ def test_desktop_dist_wrapper_uses_workspace_caches():
     assert "LASTEXITCODE" in build_desktop
     assert "Copy-Item" in build_desktop
     assert "backend_payload" in build_desktop
+    assert "build_frontend.ps1" in build_desktop
+    assert "-ExecutionPolicy Bypass -File $FrontendBuildScript" in build_desktop
 
 
 def test_desktop_docs_record_safety_boundaries():

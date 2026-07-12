@@ -10,10 +10,9 @@ import {
   generatePlanFromGoal,
   listProjectReviewedPlans,
   saveReviewedPlan,
-} from "../../lib/api/legacy";
+} from "../../lib/api/pipeline";
 
-vi.mock("../../lib/api/legacy", () => ({
-  DEFAULT_API_BASE: "http://localhost",
+vi.mock("../../lib/api/pipeline", () => ({
   checkApprovalGate: vi.fn(),
   executeReviewedDryRun: vi.fn(),
   executeReviewedPlan: vi.fn(),
@@ -24,6 +23,8 @@ vi.mock("../../lib/api/legacy", () => ({
   saveReviewedPlan: vi.fn(),
   validatePlan: vi.fn(),
 }));
+
+vi.mock("../../lib/api/client", () => ({ DEFAULT_API_BASE: "http://localhost" }));
 
 const project: ProjectDetail = {
   id: "project-1",
@@ -257,9 +258,7 @@ describe("PlanReviewConsole", () => {
 
     await screen.findByText("Native Preprocessing Safety Acknowledgement");
     await user.click(screen.getByRole("button", { name: "Approve all required nodes" }));
-    await user.click(
-      screen.getByLabelText(/I acknowledge native full preprocessing will run/i),
-    );
+    await user.click(screen.getByLabelText(/I acknowledge native full preprocessing will run/i));
     await user.click(screen.getByLabelText(/external tools will not be executed/i));
     await user.click(screen.getByLabelText(/rawdata must remain read-only/i));
     await user.click(screen.getByLabelText(/native preprocessing risks/i));

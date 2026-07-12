@@ -1,28 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import type { PresetPlanDraft } from "./types";
 import { useDatasetSummary } from "./hooks/useDatasetSummary";
-import { useImagePreview } from "./hooks/useImagePreview";
-import { useImageSources } from "./hooks/useImageSources";
-import { useImageValidation } from "./hooks/useImageValidation";
 import { useModelStatus } from "./hooks/useModelStatus";
-import { useProject, useProjects } from "./hooks/useProjects";
+import { useProject } from "./hooks/useProjects";
 import { useProjectOverview } from "./hooks/useProjectOverview";
 import { useTaskStream } from "./hooks/useTaskStream";
 import { useAppState } from "./hooks/useAppState";
-import { buildProjectInventory, deriveDefaultWorkflowRoute } from "./lib/projectWorkflow";
-import type { ProjectInventory, WorkflowTab } from "./lib/projectWorkflow";
+import { buildProjectInventory } from "./lib/projectWorkflow";
 import type { ChatMessage } from "./lib/types/assistant";
-import type {
-  ImagePlane,
-  ImagePreview,
-  ImageSources,
-  ImageValidationReport,
-} from "./lib/types/image";
-import type { ModelStatus } from "./lib/types/model";
 import type { ExecutionMode } from "./lib/types/pipeline";
-import type { ProjectDetail } from "./lib/types/project";
-import type { TaskEvent, TaskLogEntry, TaskStreamMessage } from "./lib/types/task";
+import type { TaskEvent, TaskStreamMessage } from "./lib/types/task";
 import type {
   ArtifactSelection,
   DataSeriesSelection,
@@ -35,35 +22,23 @@ import { useTaskController } from "./features/tasks/useTaskController";
 import type { ProjectController } from "./features/projects/useProjectController";
 import type { TaskController } from "./features/tasks/useTaskController";
 import { AppShellView } from "./features/app/AppShellView";
-
-export { deriveProjectWorkflowState } from "./lib/projectWorkflow";
+import { useWorkspaceNavigation } from "./features/navigation/useWorkspaceNavigation";
+import { I18nProvider } from "./i18n/I18nProvider";
+import { useImageWorkspaceController } from "./features/app/useImageWorkspaceController";
 
 export default function App() {
   const appState = useAppState();
   const app = useAppController();
+  const navigation = useWorkspaceNavigation();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const projectController = useProjectController(
-    selectedProjectId,
-    setSelectedProjectId,
-  ) as ProjectController;
-  const taskController = useTaskController(
-    selectedTaskId,
-    setSelectedTaskId,
-    setActiveTaskId,
-  ) as TaskController;
-
-  const [executionMode, setExecutionMode] = useState<ExecutionMode>("simulated");
-  const [externalSmokeApprovedRun, setExternalSmokeApprovedRun] = useState(false);
-  const [externalSmokeApprovedBy, setExternalSmokeApprovedBy] = useState("");
+  const executionMode: ExecutionMode = "simulated";
+  const externalSmokeApprovedRun = false;
+  const externalSmokeApprovedBy = "";
   const [taskApprovalName, setTaskApprovalName] = useState("");
   const [auditPackage, setAuditPackage] = useState<{ report_path: string } | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
-  const [sequence, setSequence] = useState("T1");
-  const [plane, setPlane] = useState<ImagePlane>("axial");
-  const [sliceIndex, setSliceIndex] = useState<number | null>(null);
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [selectedDataSeries, setSelectedDataSeries] = useState<DataSeriesSelection | null>(null);
   const [selectedPlanNode, setSelectedPlanNode] = useState<PlanNodeSelection | null>(null);
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactSelection | null>(null);
@@ -72,13 +47,36 @@ export default function App() {
   const [assistantError, setAssistantError] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(fallbackChat);
 
-  // Track the last automatic workspace choice so backend signals can refine
-  // first-entry routing without overriding a user's manual tab selection.
-  const autoNavigationRef = useRef<{
-    projectId: string | null;
-    reason: string;
-    tab: WorkflowTab;
-  } | null>(null);
+  const updateSelectedProject = useCallback(
+    (projectId: string | null) => {
+      setSelectedProjectId(projectId);
+      setSelectedDataSeries(null);
+      setSelectedPlanNode(null);
+      setSelectedArtifact(null);
+      setSelectedTaskId(null);
+      if (navigation.location.kind === "project") {
+        if (projectId) navigation.openProject(projectId);
+        else navigation.openProjects();
+      }
+    },
+    [navigation],
+  );
+  const openSelectedProject = useCallback(
+    (projectId: string) => {
+      updateSelectedProject(projectId);
+      navigation.openProject(projectId);
+    },
+    [navigation, updateSelectedProject],
+  );
+  const projectController = useProjectController(
+    selectedProjectId,
+    updateSelectedProject,
+  ) as ProjectController;
+  const taskController = useTaskController(
+    selectedTaskId,
+    setSelectedTaskId,
+    setActiveTaskId,
+  ) as TaskController;
 
   const project = useProject(selectedProjectId);
   const activeProjectId = selectedProjectId && !project.fromFallback ? project.data.id : null;
@@ -109,100 +107,7 @@ export default function App() {
 
   const dataset = useDatasetSummary(activeProjectId);
   const model = useModelStatus(activeProjectId);
-  const imageSources = useImageSources(activeProjectId);
-  const imageValidation = useImageValidation(activeProjectId);
-  const imagePreview = useImagePreview(
-    activeProjectId,
-    sequence,
-    selectedSubjectId,
-    sliceIndex,
-    plane,
-  );
-  const sequenceOptions = useMemo(
-    () => Array.from(new Set([...project.data.sequences, ...imageSources.data.sequences])),
-    [imageSources.data.sequences, project.data.sequences],
-  );
-
-  const selectedImageSource = useMemo(() => {
-    const manifest = imageSources.data.manifest ?? [];
-    return (
-      manifest.find(
-        (item) => item.subject_id === selectedSubjectId && item.sequence === sequence,
-      ) ??
-      manifest.find((item) => item.subject_id === selectedSubjectId) ??
-      null
-    );
-  }, [imageSources.data.manifest, selectedSubjectId, sequence]);
-
-  useEffect(() => {
-    if (!projectInventory) return;
-
-    const route = deriveDefaultWorkflowRoute({
-      diagnostics: projectDiagnostics,
-      hasPreprocessingRun: taskController.hasPreprocessingRun,
-      inventory: projectInventory,
-      tasks: taskController.tasks,
-    });
-    const previous = autoNavigationRef.current;
-    const projectChanged = selectedProjectId !== previous?.projectId;
-    const userStayedOnAutomaticTab = previous ? app.activeWorkflow === previous.tab : false;
-    const higherPrioritySignal =
-      route.reason === "active_or_failed_run" || route.reason === "qc_attention";
-
-    if (
-      projectChanged ||
-      (userStayedOnAutomaticTab && higherPrioritySignal && route.tab !== previous?.tab)
-    ) {
-      autoNavigationRef.current = {
-        projectId: selectedProjectId,
-        reason: route.reason,
-        tab: route.tab,
-      };
-      app.setActiveWorkflow(route.tab);
-    }
-  }, [
-    app,
-    app.activeWorkflow,
-    projectDiagnostics,
-    projectInventory,
-    selectedProjectId,
-    taskController.hasPreprocessingRun,
-    taskController.tasks,
-  ]);
-
-  useEffect(() => {
-    if (!projectController.projects.data.length) return;
-    const exists = selectedProjectId
-      ? projectController.projects.data.some((item) => item.id === selectedProjectId)
-      : false;
-    if (!selectedProjectId || !exists) setSelectedProjectId(projectController.projects.data[0].id);
-  }, [projectController.projects.data, selectedProjectId]);
-
-  useEffect(() => {
-    if (project.data.sequences.length && !project.data.sequences.includes(sequence))
-      setSequence(project.data.sequences[0]);
-  }, [project.data.sequences, sequence]);
-
-  useEffect(() => {
-    const subjects = imageSources.data.subjects;
-    if (!subjects.length) return;
-    if (!selectedSubjectId || !subjects.some((item) => item.subject_id === selectedSubjectId))
-      setSelectedSubjectId(subjects[0].subject_id);
-  }, [imageSources.data.subjects, selectedSubjectId]);
-
-  useEffect(() => {
-    setSliceIndex(null);
-  }, [project.data.id, selectedSubjectId, sequence, plane]);
-
-  useEffect(() => {
-    setSelectedSubjectId(null);
-    setSelectedDataSeries(null);
-    setSelectedPlanNode(null);
-    setSelectedArtifact(null);
-    setSelectedTaskId(null);
-    setSequence("");
-    setSliceIndex(null);
-  }, [project.data.id]);
+  const image = useImageWorkspaceController(activeProjectId, project.data);
 
   useEffect(() => {
     taskController.setAuditPackage?.(null);
@@ -308,10 +213,11 @@ export default function App() {
       artifact: selectedArtifact,
       dataSeries: selectedDataSeries,
       image: {
-        plane,
-        series: sequence || null,
-        source: selectedImageSource?.relative_path ?? selectedImageSource?.file_path ?? null,
-        subjectId: selectedSubjectId,
+        plane: image.plane,
+        series: image.sequence || null,
+        source:
+          image.selectedImageSource?.relative_path ?? image.selectedImageSource?.file_path ?? null,
+        subjectId: image.selectedSubjectId,
       },
       planNode: selectedPlanNode,
       run: {
@@ -322,15 +228,15 @@ export default function App() {
       },
     }),
     [
-      plane,
+      image.plane,
+      image.selectedImageSource?.file_path,
+      image.selectedImageSource?.relative_path,
+      image.selectedSubjectId,
+      image.sequence,
       selectedArtifact,
       selectedDataSeries,
-      selectedImageSource?.file_path,
-      selectedImageSource?.relative_path,
       selectedPlanNode,
-      selectedSubjectId,
       selectedTaskId,
-      sequence,
       taskController.selectedTask?.pipeline,
       taskController.selectedTask?.run_name,
       taskController.selectedTask?.status,
@@ -338,70 +244,56 @@ export default function App() {
   );
 
   return (
-    <AppShellView
-      baseUrl={app.baseUrl}
-      drawerOpen={app.drawerOpen}
-      health={app.health}
-      selectedProjectId={selectedProjectId}
-      onSelectProject={setSelectedProjectId}
-      project={project}
-      projectInventory={projectInventory}
-      projectController={projectController}
-      taskController={taskController}
-      taskStream={taskStream}
-      app={app}
-      appState={appState}
-      image={{
-        sequence,
-        setSequence,
-        plane,
-        setPlane,
-        sliceIndex,
-        setSliceIndex,
-        selectedSubjectId,
-        setSelectedSubjectId,
-        sequenceOptions,
-        selectedImageSource,
-        imageSources,
-        imageValidation,
-        imagePreview,
-      }}
-      assistant={{
-        input: assistantInput,
-        setInput: setAssistantInput,
-        loading: assistantLoading,
-        error: assistantError,
-        messages: chatMessages,
-        setMessages: setChatMessages,
-      }}
-      approval={{
-        taskApprovalName,
-        setTaskApprovalName,
-        auditPackage,
-        setAuditPackage,
-        auditLoading,
-        setAuditLoading,
-      }}
-      executionMode={executionMode}
-      externalSmokeApprovedRun={externalSmokeApprovedRun}
-      setExternalSmokeApprovedRun={setExternalSmokeApprovedRun}
-      externalSmokeApprovedBy={externalSmokeApprovedBy}
-      setExternalSmokeApprovedBy={setExternalSmokeApprovedBy}
-      model={model.data}
-      dataset={dataset.data}
-      setExecutionMode={setExecutionMode}
-      onToggleDrawer={() => app.setDrawerOpen(!app.drawerOpen)}
-      handleApproveSelectedTask={handleApproveSelectedTask}
-      handleGenerateAuditPackage={handleGenerateAuditPackage}
-      handleReconnectTaskStream={handleReconnectTaskStream}
-      handleAssistantSubmit={handleAssistantSubmit}
-      onNewChat={() => setChatMessages(fallbackChat)}
-      selectedTaskId={selectedTaskId}
-      setSelectedTaskId={setSelectedTaskId}
-      selectionContext={selectionContext}
-      onSelectedArtifactChange={setSelectedArtifact}
-      onSelectedDataSeriesChange={setSelectedDataSeries}
-      onSelectedPlanNodeChange={setSelectedPlanNode}
-    />
+    <I18nProvider locale={appState.localePreference}>
+      <AppShellView
+        baseUrl={app.baseUrl}
+        drawerOpen={app.drawerOpen}
+        health={app.health}
+        selectedProjectId={selectedProjectId}
+        onSelectProject={openSelectedProject}
+        navigation={navigation}
+        project={project}
+        projectInventory={projectInventory}
+        projectController={projectController}
+        taskController={taskController}
+        taskStream={taskStream}
+        app={app}
+        appState={appState}
+        image={image}
+        assistant={{
+          input: assistantInput,
+          setInput: setAssistantInput,
+          loading: assistantLoading,
+          error: assistantError,
+          messages: chatMessages,
+          setMessages: setChatMessages,
+        }}
+        approval={{
+          taskApprovalName,
+          setTaskApprovalName,
+          auditPackage,
+          setAuditPackage,
+          auditLoading,
+          setAuditLoading,
+        }}
+        executionMode={executionMode}
+        externalSmokeApprovedRun={externalSmokeApprovedRun}
+        externalSmokeApprovedBy={externalSmokeApprovedBy}
+        model={model.data}
+        dataset={dataset.data}
+        onToggleDrawer={() => app.setDrawerOpen(!app.drawerOpen)}
+        handleApproveSelectedTask={handleApproveSelectedTask}
+        handleGenerateAuditPackage={handleGenerateAuditPackage}
+        handleReconnectTaskStream={handleReconnectTaskStream}
+        handleAssistantSubmit={handleAssistantSubmit}
+        onNewChat={() => setChatMessages(fallbackChat)}
+        selectedTaskId={selectedTaskId}
+        setSelectedTaskId={setSelectedTaskId}
+        selectionContext={selectionContext}
+        onSelectedArtifactChange={setSelectedArtifact}
+        onSelectedDataSeriesChange={setSelectedDataSeries}
+        onSelectedPlanNodeChange={setSelectedPlanNode}
+      />
+    </I18nProvider>
   );
 }

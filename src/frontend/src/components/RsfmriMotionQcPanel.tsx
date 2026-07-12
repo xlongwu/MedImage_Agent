@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { getRsfmriSpmRealignMotionQc, runRsfmriSpmRealignMotionQc } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { getRsfmriSpmRealignMotionQc, runRsfmriSpmRealignMotionQc } from "../lib/api/rsfmri";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -9,15 +10,14 @@ type Props = {
 };
 
 export function RsfmriMotionQcPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loaded, setLoaded] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("IDLE");
   const [error, setError] = useState("");
 
   async function handleRun() {
-    const confirmed = window.confirm(
-      "Confirm to run SPM realignment + motion QC? This only processes synthetic BIDS data and will not modify rawdata.",
-    );
+    const confirmed = window.confirm(t("technical.motion.confirm"));
 
     if (!confirmed) return;
 
@@ -58,9 +58,9 @@ export function RsfmriMotionQcPanel({ baseUrl }: Props) {
     <div>
       <div className="row">
         <button className="dangerButton" onClick={handleRun}>
-          Approve and Run SPM Realign + Motion QC
+          {t("technical.motion.run")}
         </button>
-        <button onClick={handleLoad}>Load Motion QC Results</button>
+        <button onClick={handleLoad}>{t("technical.motion.load")}</button>
         <StatusBadge status={status} />
       </div>
 
@@ -68,42 +68,42 @@ export function RsfmriMotionQcPanel({ baseUrl }: Props) {
 
       <div className="metricGrid">
         <div className="metricCard">
-          <span>Subjects</span>
+          <span>{t("technical.subjects")}</span>
           <strong>{String(summary?.subjects_total ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>PASS</span>
+          <span>{t("technical.pass")}</span>
           <strong>{String(summary?.subjects_pass ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>WARNING</span>
+          <span>{t("technical.warning")}</span>
           <strong>{String(summary?.subjects_warning ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>FAIL</span>
+          <span>{t("technical.fail")}</span>
           <strong>{String(summary?.subjects_fail ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>Group Mean FD</span>
+          <span>{t("technical.motion.meanFd")}</span>
           <strong>
             {summary?.group_mean_fd == null ? "-" : Number(summary.group_mean_fd).toFixed(4)}
           </strong>
         </div>
       </div>
 
-      <h3>Run Summary</h3>
-      <JsonBlock value={result} emptyText="Not yet run" />
+      <h3>{t("technical.runSummary")}</h3>
+      <JsonBlock value={result} emptyText={t("technical.notRun")} />
 
-      <h3>Motion QC Summary</h3>
-      <JsonBlock value={loaded?.motion_qc_summary} emptyText="No motion QC summary available" />
+      <h3>{t("technical.motion.summary")}</h3>
+      <JsonBlock value={loaded?.motion_qc_summary} emptyText={t("technical.motion.noSummary")} />
 
-      <h3>Subject Motion QC</h3>
-      <JsonBlock value={loaded?.subject_motion_qc} emptyText="No subject motion QC available" />
+      <h3>{t("technical.motion.subject")}</h3>
+      <JsonBlock value={loaded?.subject_motion_qc} emptyText={t("technical.motion.noSubject")} />
 
-      <h3>Motion QC Report</h3>
+      <h3>{t("technical.motion.report")}</h3>
       <TextViewer
         text={typeof loaded?.motion_qc_report === "string" ? loaded.motion_qc_report : null}
-        emptyText="No motion QC report available"
+        emptyText={t("technical.motion.noReport")}
       />
     </div>
   );

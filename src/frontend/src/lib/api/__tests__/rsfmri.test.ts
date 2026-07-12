@@ -38,12 +38,16 @@ describe("rs-fMRI report package API", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "http://api/api/rsfmri/report-exports/latest",
-      expect.objectContaining({ headers: expect.objectContaining({ "Content-Type": "application/json" }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "http://api/api/rsfmri/report-exports",
-      expect.objectContaining({ headers: expect.objectContaining({ "Content-Type": "application/json" }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
@@ -66,12 +70,16 @@ describe("rs-fMRI report package API", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "http://api/api/rsfmri/report-validations/latest",
-      expect.objectContaining({ headers: expect.objectContaining({ "Content-Type": "application/json" }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "http://api/api/rsfmri/report-validations",
-      expect.objectContaining({ headers: expect.objectContaining({ "Content-Type": "application/json" }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ "Content-Type": "application/json" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,

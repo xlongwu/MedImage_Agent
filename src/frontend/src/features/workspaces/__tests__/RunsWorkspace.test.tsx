@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import { RunsWorkspace } from "../RunsWorkspace";
 import type { TaskDiagnostics, TaskEvent, TaskLogEntry, TaskStatus } from "../../../lib/types/task";
 
@@ -52,7 +53,10 @@ function event(overrides: Partial<TaskEvent> = {}): TaskEvent {
   };
 }
 
-function renderWorkspace(overrides: Partial<ComponentProps<typeof RunsWorkspace>> = {}) {
+function renderWorkspace(
+  overrides: Partial<ComponentProps<typeof RunsWorkspace>> = {},
+  locale: "en" | "zh-CN" = "en",
+) {
   const selectedTask = task();
   const props: ComponentProps<typeof RunsWorkspace> = {
     auditLoading: false,
@@ -95,7 +99,11 @@ function renderWorkspace(overrides: Partial<ComponentProps<typeof RunsWorkspace>
     ],
   };
 
-  render(<RunsWorkspace {...props} {...overrides} />);
+  render(
+    <I18nProvider locale={locale}>
+      <RunsWorkspace {...props} {...overrides} />
+    </I18nProvider>,
+  );
   return { props };
 }
 
@@ -284,5 +292,19 @@ describe("RunsWorkspace", () => {
     expect(screen.getByText("Select a project before reviewing runs")).toBeInTheDocument();
     expect(screen.getByText("Run list unavailable")).toBeInTheDocument();
     expect(screen.getByText("Select a run to inspect")).toBeInTheDocument();
+  });
+
+  it("renders run history and details in Chinese", async () => {
+    const user = userEvent.setup();
+    renderWorkspace({}, "zh-CN");
+
+    expect(screen.getByRole("heading", { name: "运行记录" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "执行运行" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "项目运行历史" })).toBeInTheDocument();
+    expect(screen.getByLabelText("运行历史概览")).toHaveTextContent("已加载任务记录");
+
+    await user.click(screen.getByRole("radio", { name: "日志" }));
+
+    expect(screen.getByLabelText("运行日志")).toHaveTextContent("Running motion correction");
   });
 });

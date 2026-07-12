@@ -4,7 +4,9 @@ import {
   getLatestRsfmriReportValidation,
   listRsfmriReportValidations,
   runRsfmriReportValidation,
-} from "../lib/api/legacy";
+} from "../lib/api/rsfmri";
+import { useI18n } from "../i18n/useI18n";
+import { localizeReportEvidenceDetail } from "../i18n/reportEvidence";
 import { deriveReportValidationEvidence } from "../lib/reportEvidence";
 import { EvidenceBadge } from "./domain/EvidenceBadge";
 import { JsonBlock } from "./JsonBlock";
@@ -15,12 +17,14 @@ import { Badge, Button, Card } from "./ui";
 type Props = { baseUrl: string };
 type RequestStatus = "IDLE" | "RUNNING" | "LOADING" | "REQUEST_COMPLETE" | "ERROR";
 
-function requestLabel(status: RequestStatus): string {
-  if (status === "RUNNING") return "Validation requested";
-  if (status === "LOADING") return "Loading metadata";
-  if (status === "REQUEST_COMPLETE") return "Request complete";
-  if (status === "ERROR") return "Request failed";
-  return "On demand";
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function requestLabel(status: RequestStatus, t: Translate): string {
+  if (status === "RUNNING") return t("report.validation.requested");
+  if (status === "LOADING") return t("report.request.loading");
+  if (status === "REQUEST_COMPLETE") return t("report.request.complete");
+  if (status === "ERROR") return t("report.request.failed");
+  return t("report.request.onDemand");
 }
 
 function requestTone(status: RequestStatus): "neutral" | "info" | "danger" {
@@ -32,6 +36,7 @@ function requestTone(status: RequestStatus): "neutral" | "info" | "danger" {
 }
 
 export function RsfmriReportValidatorPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [latest, setLatest] = useState<Record<string, unknown> | null>(null);
   const [vlist, setVlist] = useState<Record<string, unknown> | null>(null);
@@ -89,57 +94,57 @@ export function RsfmriReportValidatorPanel({ baseUrl }: Props) {
     <Card className={styles.panel} tone="muted">
       <div className={styles.header}>
         <div className={styles.headerText}>
-          <h2>Report package validation</h2>
-          <p>Validation is shown only when backend validation evidence is complete.</p>
+          <h2>{t("report.validation.title")}</h2>
+          <p>{t("report.validation.description")}</p>
         </div>
         <div className={styles.evidenceGroup}>
           <EvidenceBadge level={evidence.level} />
-          <Badge tone={requestTone(status)}>{requestLabel(status)}</Badge>
+          <Badge tone={requestTone(status)}>{requestLabel(status, t)}</Badge>
         </div>
       </div>
-      <p className={styles.evidenceDetail}>{evidence.detail}</p>
+      <p className={styles.evidenceDetail}>{localizeReportEvidenceDetail(evidence.detail, t)}</p>
 
       <div className={styles.toolbar}>
         <Button onClick={handleRun} disabled={status === "RUNNING"} variant="primary">
-          Validate Latest Package
+          {t("report.validation.validate")}
         </Button>
         <Button onClick={loadLatest} disabled={status === "LOADING"} variant="secondary">
-          Load Latest Validation
+          {t("report.validation.loadLatest")}
         </Button>
         <Button onClick={loadList} disabled={status === "LOADING"} variant="secondary">
-          List Validations
+          {t("report.validation.list")}
         </Button>
       </div>
 
       {error ? (
         <div className={styles.errorLine} role="alert">
-          <strong>Validation error</strong>
+          <strong>{t("report.validation.error")}</strong>
           <span>{error}</span>
         </div>
       ) : null}
 
       <div className={styles.metricGrid}>
-        <Metric label="Status" value={vr?.validation_status} />
-        <Metric label="Checksum Mismatches" value={st?.checksum_mismatch_total} />
-        <Metric label="Missing Files" value={st?.missing_files_total} />
-        <Metric label="ZIP Test OK" value={st?.zip_test_ok} />
-        <Metric label="Safety Violations" value={st?.safety_violations_total} />
+        <Metric label={t("technical.release.status")} value={vr?.validation_status} />
+        <Metric label={t("report.validation.checksum")} value={st?.checksum_mismatch_total} />
+        <Metric label={t("report.validation.missing")} value={st?.missing_files_total} />
+        <Metric label={t("report.validation.zipOk")} value={st?.zip_test_ok} />
+        <Metric label={t("report.validation.safety")} value={st?.safety_violations_total} />
       </div>
 
-      <EvidenceSection title="Validation Result">
-        <JsonBlock value={vr} emptyText="No result" />
+      <EvidenceSection title={t("report.validation.result")}>
+        <JsonBlock value={vr} emptyText={t("technical.release.noResult")} />
       </EvidenceSection>
-      <EvidenceSection title="Validation Checks">
-        <JsonBlock value={vr?.checks} emptyText="No checks" />
+      <EvidenceSection title={t("report.validation.checks")}>
+        <JsonBlock value={vr?.checks} emptyText={t("technical.release.noChecks")} />
       </EvidenceSection>
-      <EvidenceSection title="Validation Report">
+      <EvidenceSection title={t("report.validation.report")}>
         <TextViewer
           text={typeof latest?.validation_report === "string" ? latest.validation_report : null}
-          emptyText="No report"
+          emptyText={t("technical.noReport")}
         />
       </EvidenceSection>
-      <EvidenceSection title="Validation List">
-        <JsonBlock value={vlist} emptyText="No list" />
+      <EvidenceSection title={t("report.validation.listTitle")}>
+        <JsonBlock value={vlist} emptyText={t("report.validation.noList")} />
       </EvidenceSection>
     </Card>
   );

@@ -1,6 +1,10 @@
 import { useState } from "react";
-import { runProjectDicomConversionExecute } from "../lib/api/legacy";
-import { registerProjectDicomConversionResult } from "../lib/api/dicom";
+import { useI18n } from "../i18n/useI18n";
+import type { MessageKey } from "../i18n/messages/en";
+import {
+  registerProjectDicomConversionResult,
+  runProjectDicomConversionExecute,
+} from "../lib/api/dicom";
 import { useDicomConversionWorkflow } from "../hooks/useDicomConversionWorkflow";
 import type {
   DicomConversionExecutionUiState,
@@ -17,44 +21,70 @@ type Props = {
   conversionRunId: string;
   readiness: DicomConversionReleaseReadinessReport | null;
   onPrepared?: (response: DicomConversionPrepareResponse) => void;
+  onConversionRegistered?: () => void | Promise<void>;
 };
 
-const CONFIRMATIONS: { key: string; label: string }[] = [
-  { key: "confirm_research_use_only", label: "I understand this is for research use only." },
-  { key: "confirm_no_clinical_use", label: "I understand this is not for clinical use." },
-  { key: "confirm_rawdata_readonly", label: "I confirm rawdata must remain read-only." },
-  { key: "confirm_rollback_available", label: "I confirm rollback is available." },
-  { key: "confirm_disk_space_checked", label: "I confirm disk space was checked." },
-  { key: "confirm_public_execution_risk", label: "I confirm public DICOM conversion risks." },
-  {
-    key: "confirm_spm_disabled",
-    label: "I understand SPM/DPABI/MATLAB preprocessing is not part of this action.",
-  },
-  { key: "confirm_dicom_only", label: "I understand this only runs DICOM-to-NIfTI conversion." },
+type MappingExecutionResult = {
+  subject_id?: string;
+  modality?: string;
+  status?: string;
+  error?: string;
+  output_file?: string;
+};
+
+const CONFIRMATIONS: { key: string }[] = [
+  { key: "confirm_research_use_only" },
+  { key: "confirm_no_clinical_use" },
+  { key: "confirm_rawdata_readonly" },
+  { key: "confirm_rollback_available" },
+  { key: "confirm_disk_space_checked" },
+  { key: "confirm_public_execution_risk" },
+  { key: "confirm_spm_disabled" },
+  { key: "confirm_dicom_only" },
 ];
 
 // 实现dcm2nii任务方案.md §16.4 — Prepare-flow confirmation labels.
 // These mirror the backend DicomConversionPrepareConfirmations schema.
 const PREPARE_CONFIRMATIONS: {
   key: keyof import("../types").DicomConversionPrepareConfirmations;
-  label: string;
 }[] = [
-  { key: "mappings_reviewed", label: "I have reviewed the conversion mappings." },
-  { key: "rawdata_readonly", label: "I confirm rawdata must remain read-only." },
-  { key: "research_use_only", label: "I understand this is for research use only." },
-  { key: "no_clinical_use", label: "I understand this is not for clinical use." },
-  { key: "external_converter", label: "I acknowledge dcm2niix is an external converter." },
-  { key: "rollback_policy", label: "I acknowledge the rollback policy." },
-  { key: "risk_acknowledgement", label: "I acknowledge the conversion risks." },
-  { key: "approval_audit", label: "I acknowledge the approval and audit package." },
-  { key: "public_endpoint", label: "I acknowledge the gated local conversion endpoint." },
-  { key: "frontend_execute", label: "I acknowledge frontend execution requires approval." },
-  {
-    key: "spm_dpabi_matlab_disabled",
-    label: "I understand SPM/DPABI/MATLAB preprocessing is not part of this action.",
-  },
-  { key: "confirm_execution", label: "I confirm execution of the conversion." },
+  { key: "mappings_reviewed" },
+  { key: "rawdata_readonly" },
+  { key: "research_use_only" },
+  { key: "no_clinical_use" },
+  { key: "external_converter" },
+  { key: "rollback_policy" },
+  { key: "risk_acknowledgement" },
+  { key: "approval_audit" },
+  { key: "public_endpoint" },
+  { key: "frontend_execute" },
+  { key: "spm_dpabi_matlab_disabled" },
+  { key: "confirm_execution" },
 ];
+
+const CONFIRMATION_MESSAGE_KEYS: Record<string, MessageKey> = {
+  confirm_research_use_only: "technical.DicomConversionExecute.confirm.confirm_research_use_only",
+  confirm_no_clinical_use: "technical.DicomConversionExecute.confirm.confirm_no_clinical_use",
+  confirm_rawdata_readonly: "technical.DicomConversionExecute.confirm.confirm_rawdata_readonly",
+  confirm_rollback_available: "technical.DicomConversionExecute.confirm.confirm_rollback_available",
+  confirm_disk_space_checked: "technical.DicomConversionExecute.confirm.confirm_disk_space_checked",
+  confirm_public_execution_risk:
+    "technical.DicomConversionExecute.confirm.confirm_public_execution_risk",
+  confirm_spm_disabled: "technical.DicomConversionExecute.confirm.confirm_spm_disabled",
+  confirm_dicom_only: "technical.DicomConversionExecute.confirm.confirm_dicom_only",
+  mappings_reviewed: "technical.DicomConversionExecute.confirm.mappings_reviewed",
+  rawdata_readonly: "technical.DicomConversionExecute.confirm.rawdata_readonly",
+  research_use_only: "technical.DicomConversionExecute.confirm.research_use_only",
+  no_clinical_use: "technical.DicomConversionExecute.confirm.no_clinical_use",
+  external_converter: "technical.DicomConversionExecute.confirm.external_converter",
+  rollback_policy: "technical.DicomConversionExecute.confirm.rollback_policy",
+  risk_acknowledgement: "technical.DicomConversionExecute.confirm.risk_acknowledgement",
+  approval_audit: "technical.DicomConversionExecute.confirm.approval_audit",
+  public_endpoint: "technical.DicomConversionExecute.confirm.public_endpoint",
+  frontend_execute: "technical.DicomConversionExecute.confirm.frontend_execute",
+  spm_dpabi_matlab_disabled: "technical.DicomConversionExecute.confirm.spm_dpabi_matlab_disabled",
+  confirm_execution: "technical.DicomConversionExecute.confirm.confirm_execution",
+};
 
 const pill: React.CSSProperties = {
   display: "inline-flex",
@@ -78,7 +108,9 @@ export default function DicomConversionExecutePanel({
   conversionRunId,
   readiness,
   onPrepared,
+  onConversionRegistered,
 }: Props) {
+  const { t } = useI18n();
   const featureEnabled = import.meta.env.VITE_ENABLE_DICOM_EXECUTE_UI === "1";
 
   const [uiState, setUiState] = useState<DicomConversionExecutionUiState>(
@@ -176,6 +208,7 @@ export default function DicomConversionExecutePanel({
             provenance_path: resp.execution_provenance_path ?? resp.provenance_path,
             checksum_verified: resp.checksum_verified,
           });
+          await onConversionRegistered?.();
         } catch {
           // Registration failure is non-fatal; the conversion itself succeeded.
         }
@@ -204,27 +237,30 @@ export default function DicomConversionExecutePanel({
       uiState !== "blocked")
   ) {
     const missing: string[] = [];
-    if (!featureEnabled)
-      missing.push("Frontend feature flag VITE_ENABLE_DICOM_EXECUTE_UI is not set.");
+    if (!featureEnabled) missing.push(t("technical.DicomConversionExecute.missing.featureFlag"));
     const preparedExecutionReady = workflow.executionReady;
     if (!readinessReady && !preparedExecutionReady) {
-      missing.push("Release readiness is not ready_for_human_release_review.");
+      missing.push(t("technical.DicomConversionExecute.missing.releaseReadiness"));
     }
     if (!gatesFull && !preparedExecutionReady) {
-      missing.push(`Safety gates: ${readiness?.gates_met ?? 0}/${readiness?.gates_total ?? 32}.`);
+      missing.push(
+        t("technical.DicomConversionExecute.missing.safetyGates", {
+          met: readiness?.gates_met ?? 0,
+          total: readiness?.gates_total ?? 32,
+        }),
+      );
     }
 
     return (
       <section className={styles.style001}>
-        <h3 className={styles.style002}>DICOM Conversion Execution</h3>
+        <h3 className={styles.style002}>{t("technical.DicomConversionExecute.001")}</h3>
         <div className={styles.style003}>
-          <strong>DICOM conversion execution UI is disabled in this build.</strong> Conversion
-          execution requires maintainer release approval, runtime flags, release readiness, and
-          operator confirmations.
+          <strong>{t("technical.DicomConversionExecute.002")}</strong>{" "}
+          {t("technical.DicomConversionExecute.disabled.requirements")}
         </div>
         {missing.length > 0 && (
           <div className={styles.style004}>
-            <h4 className={styles.style005}>Blocking conditions</h4>
+            <h4 className={styles.style005}>{t("technical.DicomConversionExecute.003")}</h4>
             {missing.map((m, i) => (
               <div key={i} className={styles.style006}>
                 {m}
@@ -246,7 +282,7 @@ export default function DicomConversionExecutePanel({
               fontSize: 13,
             }}
           >
-            Approve and request conversion
+            {t("technical.DicomConversionExecute.action.approveRequest")}
           </button>
         )}
 
@@ -257,12 +293,10 @@ export default function DicomConversionExecutePanel({
         {featureEnabled && (
           <div style={{ marginTop: 12, padding: 10, border: "1px solid #e0e0e0", borderRadius: 4 }}>
             <h4 style={{ margin: "0 0 6px 0", fontSize: 12, fontWeight: 700 }}>
-              Prepare conversion (unified workflow)
+              {t("technical.DicomConversionExecute.prepare.title")}
             </h4>
             <div style={{ fontSize: 11, color: "#555", marginBottom: 8 }}>
-              Runs all system validations, persists the approval package, and reserves a conversion
-              run directory in a single call. Review the operator confirmations below before
-              preparing.
+              {t("technical.DicomConversionExecute.prepare.description")}
             </div>
             {PREPARE_CONFIRMATIONS.map((c) => (
               <label
@@ -281,28 +315,36 @@ export default function DicomConversionExecutePanel({
                   checked={workflow.confirmations[c.key]}
                   onChange={() => workflow.toggleConfirmation(c.key)}
                 />
-                {c.label}
+                {t(CONFIRMATION_MESSAGE_KEYS[c.key])}
               </label>
             ))}
             {workflow.missingConfirmations.length > 0 && (
               <div style={{ fontSize: 10, color: "#b53b3b", marginTop: 4 }}>
-                Missing: {workflow.missingConfirmations.join(", ")}
+                {t("technical.DicomConversionExecute.label.missing")}:{" "}
+                {workflow.missingConfirmations.join(", ")}
               </div>
             )}
             {workflow.blockingIssues.length > 0 && (
               <div style={{ fontSize: 10, color: "#b53b3b", marginTop: 4 }}>
-                Blocking: {workflow.blockingIssues.join("; ")}
+                {t("technical.DicomConversionExecute.label.blocking")}:{" "}
+                {workflow.blockingIssues.join("; ")}
               </div>
             )}
             {workflow.error && (
               <div style={{ fontSize: 10, color: "#b53b3b", marginTop: 4 }}>
-                Error: {workflow.error}
+                {t("technical.DicomConversionExecute.label.error")}: {workflow.error}
               </div>
             )}
             {workflow.prepareResponse && (
               <div style={{ fontSize: 10, color: "#176b3b", marginTop: 4 }}>
-                Status: {workflow.status} | next: {workflow.nextAction}
-                {workflow.conversionRunId && <> | run: {workflow.conversionRunId}</>}
+                {t("technical.DicomConversionExecute.label.status")}: {workflow.status} |{" "}
+                {t("technical.DicomConversionExecute.label.next")}: {workflow.nextAction}
+                {workflow.conversionRunId && (
+                  <>
+                    {" "}
+                    | {t("technical.DicomConversionExecute.label.run")}: {workflow.conversionRunId}
+                  </>
+                )}
               </div>
             )}
             <button
@@ -320,7 +362,9 @@ export default function DicomConversionExecutePanel({
                 fontSize: 11,
               }}
             >
-              {workflow.submitting ? "Preparing..." : "Prepare conversion"}
+              {workflow.submitting
+                ? t("technical.DicomConversionExecute.action.preparing")
+                : t("technical.DicomConversionExecute.action.prepare")}
             </button>
           </div>
         )}
@@ -333,9 +377,9 @@ export default function DicomConversionExecutePanel({
     const safety = response?.safety_flags as DicomConversionPublicExecutionSafetyFlags | undefined;
     return (
       <section className={styles.style007}>
-        <h3 className={styles.style008}>Conversion blocked</h3>
+        <h3 className={styles.style008}>{t("technical.DicomConversionExecute.004")}</h3>
         <div className={styles.style009}>
-          The backend blocked this conversion request. Review the blocking issues below.
+          {t("technical.DicomConversionExecute.blocked.description")}
         </div>
         {(response?.blocking_issues ?? []).map((b, i) => (
           <div key={i} className={styles.style010}>
@@ -377,7 +421,7 @@ export default function DicomConversionExecutePanel({
             fontSize: 11,
           }}
         >
-          Back to readiness
+          {t("technical.DicomConversionExecute.action.backToReadiness")}
         </button>
       </section>
     );
@@ -387,7 +431,7 @@ export default function DicomConversionExecutePanel({
   if (uiState === "failed") {
     return (
       <section className={styles.style012}>
-        <h3 className={styles.style013}>Conversion failed</h3>
+        <h3 className={styles.style013}>{t("technical.DicomConversionExecute.005")}</h3>
         {error && <div className={styles.style014}>{error}</div>}
         {(response?.errors ?? []).map((e, i) => (
           <div key={i} className={styles.style015}>
@@ -405,12 +449,12 @@ export default function DicomConversionExecutePanel({
         )}
         {response?.rollback_result_path && (
           <div className={styles.style018}>
-            <strong className={styles.style019}>Rollback result:</strong>{" "}
+            <strong className={styles.style019}>{t("technical.DicomConversionExecute.006")}</strong>{" "}
             <span style={mono}>{response.rollback_result_path}</span>
           </div>
         )}
         <div className={styles.style020}>
-          Rawdata remains unchanged. Review the rollback evidence above before retrying.
+          {t("technical.DicomConversionExecute.failed.rawdataUnchanged")}
         </div>
         <button
           onClick={() => {
@@ -430,7 +474,7 @@ export default function DicomConversionExecutePanel({
             fontSize: 11,
           }}
         >
-          Back to readiness
+          {t("technical.DicomConversionExecute.action.backToReadiness")}
         </button>
       </section>
     );
@@ -440,10 +484,9 @@ export default function DicomConversionExecutePanel({
   if (uiState === "submitting") {
     return (
       <section className={styles.style021}>
-        <h3 className={styles.style022}>Converting DICOM to NIfTI...</h3>
+        <h3 className={styles.style022}>{t("technical.DicomConversionExecute.007")}</h3>
         <div className={styles.style023}>
-          The backend is executing dcm2niix. This may take several minutes for large datasets. Do
-          not close this page.
+          {t("technical.DicomConversionExecute.submitting.description")}
         </div>
         <div className={styles.style024}>
           <div className={styles.style025}>
@@ -451,7 +494,8 @@ export default function DicomConversionExecutePanel({
           </div>
         </div>
         <div className={styles.style027}>
-          Status: {response?.status ?? "requesting execution..."}
+          {t("technical.DicomConversionExecute.label.status")}:{" "}
+          {response?.status ?? t("technical.DicomConversionExecute.submitting.requesting")}
         </div>
       </section>
     );
@@ -459,33 +503,63 @@ export default function DicomConversionExecutePanel({
 
   // ── Succeeded / Partial response ──
   if ((uiState === "succeeded" || uiState === "partial") && response) {
+    const mappingResults =
+      (
+        response as DicomConversionPublicExecutionResponse & {
+          mapping_results?: MappingExecutionResult[];
+        }
+      ).mapping_results ?? [];
     return (
       <section className={styles.style028}>
         <h3 className={styles.style029}>
-          {uiState === "partial" ? "Conversion partially completed" : "Conversion complete"}
+          {uiState === "partial"
+            ? t("technical.DicomConversionExecute.result.partialTitle")
+            : t("technical.DicomConversionExecute.result.completeTitle")}
         </h3>
         <div className={styles.style030}>
-          <KV label="status" value={response.status} />
-          {response.execution_id && <KV label="execution ID" value={response.execution_id} />}
-          {response.started_at && <KV label="started" value={response.started_at} />}
-          {response.finished_at && <KV label="finished" value={response.finished_at} />}
-          {response.checksum_verified !== undefined && (
-            <KV label="checksum verified" value={String(response.checksum_verified)} />
+          <KV label={t("technical.DicomConversionExecute.label.status")} value={response.status} />
+          {response.execution_id && (
+            <KV
+              label={t("technical.DicomConversionExecute.label.executionId")}
+              value={response.execution_id}
+            />
           )}
-          {response.output_root && <KV label="output root" value={response.output_root} />}
+          {response.started_at && (
+            <KV
+              label={t("technical.DicomConversionExecute.label.started")}
+              value={response.started_at}
+            />
+          )}
+          {response.finished_at && (
+            <KV
+              label={t("technical.DicomConversionExecute.label.finished")}
+              value={response.finished_at}
+            />
+          )}
+          {response.checksum_verified !== undefined && (
+            <KV
+              label={t("technical.DicomConversionExecute.label.checksumVerified")}
+              value={String(response.checksum_verified)}
+            />
+          )}
+          {response.output_root && (
+            <KV
+              label={t("technical.DicomConversionExecute.label.outputRoot")}
+              value={response.output_root}
+            />
+          )}
         </div>
 
         {uiState === "partial" && (
           <div className={styles.style031} style={{ background: "#fff3e0", color: "#8d6300" }}>
-            Some mappings completed successfully while others failed. Rawdata remains unchanged.
-            Review errors below and retry failed mappings.
+            {t("technical.DicomConversionExecute.result.partialDescription")}
           </div>
         )}
 
-        {(response as any).mapping_results && (response as any).mapping_results.length > 0 && (
+        {mappingResults.length > 0 && (
           <div className={styles.style004}>
-            <h4 className={styles.style005}>Mapping Results</h4>
-            {(response as any).mapping_results.map((mr: any, i: number) => (
+            <h4 className={styles.style005}>{t("technical.DicomConversionExecute.008")}</h4>
+            {mappingResults.map((mr, i) => (
               <div
                 key={i}
                 className={styles.style006}
@@ -507,30 +581,56 @@ export default function DicomConversionExecutePanel({
         )}
 
         {response.output_manifest_path && (
-          <PathRow label="Output manifest" path={response.output_manifest_path} />
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.outputManifest")}
+            path={response.output_manifest_path}
+          />
         )}
         {response.execution_provenance_path && (
-          <PathRow label="Execution provenance" path={response.execution_provenance_path} />
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.executionProvenance")}
+            path={response.execution_provenance_path}
+          />
         )}
         {response.audit_execution_start_path && (
-          <PathRow label="Audit start" path={response.audit_execution_start_path} />
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.auditStart")}
+            path={response.audit_execution_start_path}
+          />
         )}
         {response.audit_execution_final_path && (
-          <PathRow label="Audit final" path={response.audit_execution_final_path} />
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.auditFinal")}
+            path={response.audit_execution_final_path}
+          />
         )}
         {response.checksum_comparison_path && (
-          <PathRow label="Checksum comparison" path={response.checksum_comparison_path} />
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.checksumComparison")}
+            path={response.checksum_comparison_path}
+          />
         )}
         {response.rollback_plan_path && (
-          <PathRow label="Rollback plan" path={response.rollback_plan_path} />
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.rollbackPlan")}
+            path={response.rollback_plan_path}
+          />
         )}
         {response.manifest_path && (
-          <PathRow label="Conversion manifest" path={response.manifest_path} />
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.conversionManifest")}
+            path={response.manifest_path}
+          />
         )}
-        {response.provenance_path && <PathRow label="Provenance" path={response.provenance_path} />}
+        {response.provenance_path && (
+          <PathRow
+            label={t("technical.DicomConversionExecute.path.provenance")}
+            path={response.provenance_path}
+          />
+        )}
 
         <div className={styles.style031}>
-          Rawdata checksum verified — rawdata is unchanged. SPM/DPABI/MATLAB were not executed.
+          {t("technical.DicomConversionExecute.result.safetySummary")}
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <button
@@ -550,7 +650,7 @@ export default function DicomConversionExecutePanel({
               fontSize: 11,
             }}
           >
-            Back to readiness
+            {t("technical.DicomConversionExecute.action.backToReadiness")}
           </button>
         </div>
       </section>
@@ -561,14 +661,17 @@ export default function DicomConversionExecutePanel({
   return (
     <section className={styles.style032}>
       <h3 className={styles.style033}>
-        <span role="img" aria-label="warning" className={styles.style034}>
+        <span
+          role="img"
+          aria-label={t("technical.DicomConversionExecute.label.warning")}
+          className={styles.style034}
+        >
           &#9888;
         </span>
-        Approve &amp; Execute DICOM Conversion
+        {t("technical.DicomConversionExecute.confirm.title")}
       </h3>
       <div className={styles.style035}>
-        You are about to execute DICOM-to-NIfTI conversion using dcm2niix. This is a one-way
-        operation. Confirm each statement below before proceeding.
+        {t("technical.DicomConversionExecute.confirm.description")}
       </div>
 
       {CONFIRMATIONS.map((c) => (
@@ -578,7 +681,7 @@ export default function DicomConversionExecutePanel({
             checked={confirmChecks[c.key] ?? false}
             onChange={() => toggleConfirm(c.key)}
           />
-          {c.label}
+          {t(CONFIRMATION_MESSAGE_KEYS[c.key])}
         </label>
       ))}
 
@@ -599,7 +702,7 @@ export default function DicomConversionExecutePanel({
             fontSize: 12,
           }}
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           onClick={handleExecute}
@@ -615,14 +718,14 @@ export default function DicomConversionExecutePanel({
             fontSize: 12,
           }}
         >
-          {submitting ? "Submitting..." : "Approve and request conversion"}
+          {submitting
+            ? t("technical.DicomConversionExecute.action.submitting")
+            : t("technical.DicomConversionExecute.action.approveRequest")}
         </button>
       </div>
 
       <div className={styles.style038}>
-        MedImage Agent is for research use only. It is not for clinical use or medical
-        decision-making. Rawdata remains read-only. SPM/DPABI/MATLAB are not executed. Full
-        preprocessing is not triggered.
+        {t("technical.DicomConversionExecute.confirm.researchDisclaimer")}
       </div>
     </section>
   );

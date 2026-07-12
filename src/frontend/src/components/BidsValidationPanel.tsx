@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectBidsValidation } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { getProjectBidsValidation } from "../lib/api/dicom";
 import type { BidsValidationIssue, BidsRepairSuggestion, BidsValidationResponse } from "../types";
 import {
   ActionList,
@@ -13,13 +15,6 @@ type Props = {
   baseUrl?: string;
   projectId: string | null;
   projectState?: string;
-};
-
-const statusBadge: Record<string, React.CSSProperties> = {
-  pass: { background: "#e8f5e9", color: "#176b3b", borderColor: "rgba(33, 150, 83, 0.24)" },
-  warning: { background: "#fff7ed", color: "#9a5a15", borderColor: "rgba(242, 153, 74, 0.28)" },
-  fail: { background: "#ffebee", color: "#b53b3b", borderColor: "rgba(235, 87, 87, 0.26)" },
-  unknown: { background: "#eef1f6", color: "#667085", borderColor: "rgba(137, 150, 171, 0.28)" },
 };
 
 const severityPill: Record<string, React.CSSProperties> = {
@@ -79,6 +74,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function BidsValidationPanel({ baseUrl, projectId, projectState }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<BidsValidationResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,8 +83,10 @@ export default function BidsValidationPanel({ baseUrl, projectId, projectState }
 
   useEffect(() => {
     if (!projectId) {
+      /* eslint-disable react-hooks/set-state-in-effect -- Project changes reset the guarded validation request state. */
       setData(null);
       setError("");
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     const requestId = requestRef.current + 1;
@@ -112,21 +110,21 @@ export default function BidsValidationPanel({ baseUrl, projectId, projectState }
   if (!projectId)
     return (
       <section style={sectionStyle}>
-        <h3 style={h3Style}>BIDS Validation</h3>
-        <div className="empty">Select a project.</div>
+        <h3 style={h3Style}>{t("data.bids.title")}</h3>
+        <div className="empty">{t("data.bids.selectProject")}</div>
       </section>
     );
   if (loading)
     return (
       <section style={sectionStyle}>
-        <h3 style={h3Style}>BIDS Validation</h3>
-        <div className="empty">Validating BIDS structure...</div>
+        <h3 style={h3Style}>{t("data.bids.title")}</h3>
+        <div className="empty">{t("data.bids.validating")}</div>
       </section>
     );
   if (error)
     return (
       <section style={sectionStyle}>
-        <h3 style={h3Style}>BIDS Validation</h3>
+        <h3 style={h3Style}>{t("data.bids.title")}</h3>
         <div className="errorBox">{error}</div>
       </section>
     );
@@ -147,28 +145,19 @@ export default function BidsValidationPanel({ baseUrl, projectId, projectState }
         }}
       >
         <div>
-          <h3 style={h3Style}>BIDS Validation</h3>
-          <span style={{ color: "#667085", fontSize: 12 }}>
-            Read-only structural checks and repair suggestions.
-          </span>
+          <h3 style={h3Style}>{t("data.bids.title")}</h3>
+          <span style={{ color: "#667085", fontSize: 12 }}>{t("data.bids.description")}</span>
         </div>
         <StatusPill status={rawDicomExpected ? "warning" : data.status}>
-          {rawDicomExpected ? "Expected before conversion" : data.status.toUpperCase()}
+          {rawDicomExpected ? t("data.bids.expected") : data.status.toUpperCase()}
         </StatusPill>
       </div>
 
-      <SafetyBanner tone="info">
-        All suggestions are non-destructive. Rawdata will not be modified. Auto-apply is not
-        available in this version.
-      </SafetyBanner>
+      <SafetyBanner tone="info">{t("data.bids.safety")}</SafetyBanner>
 
       {rawDicomExpected && (
         <SafetyBanner tone="warning">
-          <strong>
-            BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion.
-          </strong>{" "}
-          This project currently looks like raw DICOM rather than converted BIDS/NIfTI. Run{" "}
-          <strong>Conversion Dry-Run</strong> to review the BIDS mapping plan.
+          <strong>{t("data.bids.rawExpectedTitle")}</strong> {t("data.bids.rawExpectedDescription")}
         </SafetyBanner>
       )}
 
@@ -180,24 +169,24 @@ export default function BidsValidationPanel({ baseUrl, projectId, projectState }
           marginBottom: 12,
         }}
       >
-        <MetricTile label="BIDS roots" value={data.roots.length} />
+        <MetricTile label={t("data.bids.roots")} value={data.roots.length} />
         <MetricTile
-          label="Converted subjects"
+          label={t("data.bids.convertedSubjects")}
           value={data.subject_count}
           tone={data.subject_count > 0 ? "green" : "neutral"}
         />
-        <MetricTile label="Sessions" value={data.session_count} />
+        <MetricTile label={t("data.bids.sessions")} value={data.session_count} />
         <MetricTile
-          label="NIfTI files"
+          label={t("data.bids.niftiFiles")}
           value={data.nifti_file_count}
           tone={data.nifti_file_count > 0 ? "green" : "neutral"}
         />
-        <MetricTile label="JSON sidecars" value={data.sidecar_json_count} />
-        <MetricTile label="TSV files" value={data.tsv_file_count} />
+        <MetricTile label={t("data.bids.jsonSidecars")} value={data.sidecar_json_count} />
+        <MetricTile label={t("data.bids.tsvFiles")} value={data.tsv_file_count} />
       </div>
 
       {metadataOnlyNiftiInventory && (
-        <SafetyBanner tone="info">NIfTI inventory: metadata only</SafetyBanner>
+        <SafetyBanner tone="info">{t("data.bids.metadataOnly")}</SafetyBanner>
       )}
 
       {data.errors.length > 0 && (
@@ -205,12 +194,12 @@ export default function BidsValidationPanel({ baseUrl, projectId, projectState }
           {data.errors.join("\n")}
         </div>
       )}
-      {data.warnings.length > 0 && <WarnList items={data.warnings} />}
+      {data.warnings.length > 0 && <WarnList items={data.warnings} t={t} />}
 
       {data.issues.length > 0 && (
         <CollapsibleDetails
-          title="BIDS validation details"
-          summary={`${data.issues.length} issue(s)`}
+          title={t("data.bids.details")}
+          summary={t("data.bids.issueCount", { count: data.issues.length })}
         >
           <div style={{ display: "grid", gap: 6 }}>
             {data.issues.map((issue, i) => (
@@ -222,12 +211,12 @@ export default function BidsValidationPanel({ baseUrl, projectId, projectState }
 
       {data.repair_suggestions.length > 0 && (
         <CollapsibleDetails
-          title="Repair suggestions"
-          summary={`${data.repair_suggestions.length} suggestion(s)`}
+          title={t("data.bids.repairs")}
+          summary={t("data.bids.suggestionCount", { count: data.repair_suggestions.length })}
         >
           <div style={{ display: "grid", gap: 6 }}>
             {data.repair_suggestions.map((sug, i) => (
-              <RepairRow key={`repair-${i}`} suggestion={sug} />
+              <RepairRow key={`repair-${i}`} suggestion={sug} t={t} />
             ))}
           </div>
         </CollapsibleDetails>
@@ -235,7 +224,7 @@ export default function BidsValidationPanel({ baseUrl, projectId, projectState }
 
       {data.next_actions.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <h4 style={subH}>Next Actions</h4>
+          <h4 style={subH}>{t("data.bids.nextActions")}</h4>
           <ActionList actions={data.next_actions} rawDicom={rawDicomExpected} />
         </div>
       )}
@@ -280,7 +269,9 @@ function IssueRow({ issue }: { issue: BidsValidationIssue }) {
   );
 }
 
-function RepairRow({ suggestion }: { suggestion: BidsRepairSuggestion }) {
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function RepairRow({ suggestion, t }: { suggestion: BidsRepairSuggestion; t: Translate }) {
   return (
     <div
       style={{
@@ -306,15 +297,23 @@ function RepairRow({ suggestion }: { suggestion: BidsRepairSuggestion }) {
               borderColor: "rgba(242, 153, 74, 0.28)",
             }}
           >
-            review required
+            {t("data.bids.reviewRequired")}
           </span>
         )}
       </div>
       <div style={{ fontSize: 12, color: "#344054", lineHeight: 1.5 }}>
         {suggestion.description}
       </div>
-      {suggestion.source_path && <div style={mono}>source: {suggestion.source_path}</div>}
-      {suggestion.suggested_path && <div style={mono}>suggested: {suggestion.suggested_path}</div>}
+      {suggestion.source_path && (
+        <div style={mono}>
+          {t("data.bids.source")}: {suggestion.source_path}
+        </div>
+      )}
+      {suggestion.suggested_path && (
+        <div style={mono}>
+          {t("data.bids.suggested")}: {suggestion.suggested_path}
+        </div>
+      )}
       {suggestion.command_preview && (
         <pre
           style={{
@@ -333,28 +332,7 @@ function RepairRow({ suggestion }: { suggestion: BidsRepairSuggestion }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div
-      style={{
-        padding: "8px 10px",
-        border: "1px solid rgba(137, 150, 171, 0.24)",
-        borderRadius: 6,
-        background: "#fff",
-        display: "grid",
-        gap: 2,
-        color: "#667085",
-        fontSize: 11,
-        fontWeight: 850,
-      }}
-    >
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function WarnList({ items }: { items: string[] }) {
+function WarnList({ items, t }: { items: string[]; t: Translate }) {
   return (
     <div
       style={{
@@ -370,7 +348,7 @@ function WarnList({ items }: { items: string[] }) {
       {items.slice(0, 5).map((w, i) => (
         <div key={i}>{w}</div>
       ))}
-      {items.length > 5 && <div>+{items.length - 5} more</div>}
+      {items.length > 5 && <div>{t("data.more", { count: items.length - 5 })}</div>}
     </div>
   );
 }

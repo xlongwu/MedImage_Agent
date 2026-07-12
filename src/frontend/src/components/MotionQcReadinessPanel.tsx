@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectMotionQcReadiness } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { getProjectMotionQcReadiness } from "../lib/api/preprocessing";
 import type { MotionQcInputCandidate, MotionQcReadinessResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };
@@ -27,6 +29,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<MotionQcReadinessResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,6 +38,7 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
 
   useEffect(() => {
     if (!projectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear stale readiness when project selection is removed.
       setData(null);
       return;
     }
@@ -57,21 +61,21 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
   if (!projectId)
     return (
       <Sec>
-        <H3>Motion QC Readiness</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.MotionQcReadiness.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sec>
     );
   if (loading)
     return (
       <Sec>
-        <H3>Motion QC Readiness</H3>
-        <div className="empty">Inspecting...</div>
+        <H3>{t("technical.MotionQcReadiness.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.003")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>Motion QC Readiness</H3>
+        <H3>{t("technical.MotionQcReadiness.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -89,8 +93,8 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
         }}
       >
         <div>
-          <H3>Motion QC Readiness</H3>
-          <Sub>Inspect BOLD files and motion parameters without realignment.</Sub>
+          <H3>{t("technical.MotionQcReadiness.001")}</H3>
+          <Sub>{t("technical.MotionQcReadiness.002")}</Sub>
         </div>
         <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
       </div>
@@ -105,7 +109,7 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
           marginBottom: 12,
         }}
       >
-        Read-only planning. No realignment is executed. No rawdata is modified.
+        {t("technical.MotionQcReadiness.003")}
       </div>
 
       <div
@@ -141,7 +145,9 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
 
       {data.candidates.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>BOLD Candidates</h4>
+          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+            {t("technical.BoldReferenceReadiness.010")}
+          </h4>
           <div style={{ display: "grid", gap: 6 }}>
             {data.candidates.map((c, i) => (
               <CandidateRow key={i} candidate={c} />
@@ -159,7 +165,9 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
 
       {data.next_actions.length > 0 && (
         <div>
-          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
+          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+            {t("technical.BoldReferenceReadiness.011")}
+          </h4>
           <div style={{ display: "grid", gap: 5 }}>
             {data.next_actions.map((a, i) => (
               <div

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProjectCreateResponse } from "../../types";
 import { Button, Sheet } from "../../components/ui";
+import { useI18n } from "../../i18n/useI18n";
 import styles from "./ProjectCreateSheet.module.css";
 
 type InspectionFocus = "raw_dicom" | "bids_or_derivatives";
@@ -17,12 +18,6 @@ export interface ProjectCreateSheetProps {
   open: boolean;
 }
 
-const steps = [
-  { title: "Basics", description: "Name" },
-  { title: "Source", description: "Inspect" },
-  { title: "Confirm", description: "Review" },
-];
-
 export function ProjectCreateSheet({
   error,
   loading,
@@ -31,6 +26,12 @@ export function ProjectCreateSheet({
   onSelectDirectory,
   open,
 }: ProjectCreateSheetProps) {
+  const { t } = useI18n();
+  const steps = [
+    { title: t("projects.create.step.basics"), description: t("projects.create.step.name") },
+    { title: t("projects.create.step.source"), description: t("projects.create.step.inspect") },
+    { title: t("projects.create.step.confirm"), description: t("projects.create.step.review") },
+  ];
   const [stepIndex, setStepIndex] = useState(0);
   const [projectName, setProjectName] = useState("");
   const [inspectionFocus, setInspectionFocus] = useState<InspectionFocus>("raw_dicom");
@@ -38,6 +39,7 @@ export function ProjectCreateSheet({
   const [localError, setLocalError] = useState("");
   const [selecting, setSelecting] = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- A controlled Sheet close is the reset boundary for this multi-step form. */
   useEffect(() => {
     if (!open) {
       setStepIndex(0);
@@ -48,10 +50,11 @@ export function ProjectCreateSheet({
       setSelecting(false);
     }
   }, [open]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const displayName = useMemo(
-    () => projectName.trim() || directoryBasename(selectedPath) || "New research project",
-    [projectName, selectedPath],
+    () => projectName.trim() || directoryBasename(selectedPath) || t("projects.create.defaultName"),
+    [projectName, selectedPath, t],
   );
   const visibleError = localError || error;
   const canContinueFromSource = Boolean(selectedPath.trim());
@@ -74,7 +77,7 @@ export function ProjectCreateSheet({
   const handleNext = () => {
     setLocalError("");
     if (stepIndex === 1 && !canContinueFromSource) {
-      setLocalError("Select a local data directory before review.");
+      setLocalError(t("projects.create.reviewDirectoryError"));
       return;
     }
     setStepIndex((current) => Math.min(current + 1, steps.length - 1));
@@ -82,7 +85,7 @@ export function ProjectCreateSheet({
 
   const handleCreate = async () => {
     if (!selectedPath.trim()) {
-      setLocalError("Select a local data directory before creating a project.");
+      setLocalError(t("projects.create.createDirectoryError"));
       setStepIndex(1);
       return;
     }
@@ -94,7 +97,7 @@ export function ProjectCreateSheet({
 
   return (
     <Sheet
-      description="Create a research project by referencing an existing local data directory. Source files remain read-only."
+      description={t("projects.create.description")}
       footer={
         <div className={styles.footer}>
           <Button
@@ -102,7 +105,7 @@ export function ProjectCreateSheet({
             onClick={() => onOpenChange(false)}
             variant="ghost"
           >
-            Cancel
+            {t("projects.create.cancel")}
           </Button>
           <div className={styles.footerGroup}>
             {stepIndex > 0 ? (
@@ -111,16 +114,16 @@ export function ProjectCreateSheet({
                 onClick={() => setStepIndex((current) => Math.max(current - 1, 0))}
                 variant="secondary"
               >
-                Back
+                {t("projects.create.back")}
               </Button>
             ) : null}
             {stepIndex < steps.length - 1 ? (
               <Button disabled={loading || selecting} onClick={handleNext} variant="primary">
-                Continue
+                {t("projects.create.continue")}
               </Button>
             ) : (
               <Button disabled={loading || selecting} onClick={handleCreate} variant="primary">
-                {loading ? "Creating..." : "Create project"}
+                {loading ? t("projects.create.creating") : t("projects.create.submit")}
               </Button>
             )}
           </div>
@@ -128,9 +131,9 @@ export function ProjectCreateSheet({
       }
       onOpenChange={onOpenChange}
       open={open}
-      title="Create research project"
+      title={t("projects.create.title")}
     >
-      <div className={styles.steps} aria-label="Project creation steps">
+      <div className={styles.steps} aria-label={t("projects.create.steps")}>
         {steps.map((step, index) => (
           <div
             key={step.title}
@@ -147,31 +150,25 @@ export function ProjectCreateSheet({
         {stepIndex === 0 ? (
           <>
             <div className={styles.field}>
-              <label htmlFor="project-create-name">Project name</label>
+              <label htmlFor="project-create-name">{t("projects.create.projectName")}</label>
               <input
                 id="project-create-name"
                 value={projectName}
                 onChange={(event) => setProjectName(event.target.value)}
-                placeholder="Derived from selected folder if left blank"
+                placeholder={t("projects.create.namePlaceholder")}
               />
             </div>
-            <p className={styles.hint}>
-              The project listing will point to your selected source directory. Rawdata and source
-              research files are not modified by this import flow.
-            </p>
+            <p className={styles.hint}>{t("projects.create.nameHint")}</p>
             <div className={styles.noteBox}>
-              <strong>Naming source</strong>
-              <span>
-                Leave the name blank to derive it from the selected folder. Duplicate names are
-                checked by the backend; if creation fails, this sheet stays open for review.
-              </span>
+              <strong>{t("projects.create.namingSource")}</strong>
+              <span>{t("projects.create.namingDescription")}</span>
             </div>
           </>
         ) : null}
 
         {stepIndex === 1 ? (
           <>
-            <div className={styles.sectionLabel}>Inspection focus</div>
+            <div className={styles.sectionLabel}>{t("projects.create.inspectionFocus")}</div>
             <div className={styles.sourceGrid}>
               <button
                 type="button"
@@ -179,8 +176,8 @@ export function ProjectCreateSheet({
                 aria-pressed={inspectionFocus === "raw_dicom"}
                 onClick={() => setInspectionFocus("raw_dicom")}
               >
-                <strong>Raw DICOM</strong>
-                <span>Expect series detection, conversion readiness, and safety review.</span>
+                <strong>{t("projects.create.rawDicom")}</strong>
+                <span>{t("projects.create.rawDicomDescription")}</span>
               </button>
               <button
                 type="button"
@@ -188,19 +185,18 @@ export function ProjectCreateSheet({
                 aria-pressed={inspectionFocus === "bids_or_derivatives"}
                 onClick={() => setInspectionFocus("bids_or_derivatives")}
               >
-                <strong>BIDS or derivatives</strong>
-                <span>Expect BIDS/NIfTI inventory checks before workflow routing.</span>
+                <strong>{t("projects.create.bids")}</strong>
+                <span>{t("projects.create.bidsDescription")}</span>
               </button>
             </div>
-            <p className={styles.hint}>
-              This choice only guides the review copy. The backend inspection remains authoritative
-              and determines the actual project data state.
-            </p>
+            <p className={styles.hint}>{t("projects.create.inspectionHint")}</p>
             <div className={styles.pathBox}>
               <Button disabled={selecting || loading} onClick={handleSelectDirectory}>
-                {selecting ? "Selecting..." : "Select directory"}
+                {selecting ? t("projects.create.selecting") : t("projects.create.selectDirectory")}
               </Button>
-              <span className={styles.pathValue}>{selectedPath || "No directory selected"}</span>
+              <span className={styles.pathValue}>
+                {selectedPath || t("projects.create.noDirectory")}
+              </span>
             </div>
           </>
         ) : null}
@@ -208,38 +204,39 @@ export function ProjectCreateSheet({
         {stepIndex === 2 ? (
           <dl className={styles.confirmList}>
             <div>
-              <dt>Name</dt>
+              <dt>{t("projects.create.step.name")}</dt>
               <dd>{displayName}</dd>
             </div>
             <div>
-              <dt>Inspection focus</dt>
-              <dd>{inspectionFocus === "raw_dicom" ? "Raw DICOM" : "BIDS or derivatives"}</dd>
+              <dt>{t("projects.create.inspectionFocus")}</dt>
+              <dd>
+                {inspectionFocus === "raw_dicom"
+                  ? t("projects.create.rawDicom")
+                  : t("projects.create.bids")}
+              </dd>
             </div>
             <div>
-              <dt>Directory</dt>
+              <dt>{t("projects.create.directory")}</dt>
               <dd>{selectedPath}</dd>
             </div>
             <div>
-              <dt>Copy mode</dt>
-              <dd>Reference existing files</dd>
+              <dt>{t("projects.create.copyMode")}</dt>
+              <dd>{t("projects.create.referenceFiles")}</dd>
             </div>
             <div>
-              <dt>Inspection</dt>
-              <dd>Required; backend determines project data state</dd>
+              <dt>{t("projects.create.inspection")}</dt>
+              <dd>{t("projects.create.inspectionAuthority")}</dd>
             </div>
             <div>
-              <dt>Safety</dt>
-              <dd>
-                Source data is referenced read-only; no conversion or preprocessing is executed
-              </dd>
+              <dt>{t("projects.create.safety")}</dt>
+              <dd>{t("projects.create.safetyDescription")}</dd>
             </div>
           </dl>
         ) : null}
 
         {visibleError ? (
           <div className={styles.error} role="alert">
-            Project was not created. Review the selected directory and name, then retry.{" "}
-            {visibleError}
+            {t("projects.create.failure")} {visibleError}
           </div>
         ) : null}
       </div>

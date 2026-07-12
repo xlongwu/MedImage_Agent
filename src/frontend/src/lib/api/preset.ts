@@ -1,37 +1,4 @@
-import type {
-  AgentExecuteRequest,
-  AgentPlanRequest,
-  AgentRun,
-  BidsValidationResponse,
-  ConversionDryRunRequest,
-  ConversionDryRunResponse,
-  BoldReferenceReadinessResponse,
-  DataReadinessResponse,
-  MotionMetricsDraftResponse,
-  MotionQcReadinessResponse,
-  SpmRealignDryRunResponse,
-  SpmRealignWrapperSkeletonResponse,
-  NiftiQcSnapshotResponse,
-  NiftiThumbnailResponse,
-  QcDashboardReportResponse,
-  QcDashboardFingerprintResponse,
-  RsfmriQcPlanningReportResponse,
-  PipelinePreset,
-  PipelinePresetInstantiateResponse,
-  DatasetEvaluationReport,
-  ExecuteReviewedResponse,
-  ProjectCreateRequest,
-  ProjectCreateResponse,
-  ProjectRunArtifactsResponse,
-  ProjectRunDetailResponse,
-  ProjectRunEventsResponse,
-  ProjectRunLogsResponse,
-  ReviewedPlanRecord,
-  RunArtifactPreviewResponse,
-  RunLinkRecord,
-  RunInspection,
-  ProjectRunStateTimelineResponse,
-} from "../../types";
+import type { PipelinePreset, PipelinePresetInstantiateResponse } from "../../types";
 import { requestJson } from "./legacyCore";
 
 export async function getPipelinePreset(baseUrl: string, presetId: string) {

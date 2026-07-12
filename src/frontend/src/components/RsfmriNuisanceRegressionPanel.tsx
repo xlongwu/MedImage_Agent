@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { getRsfmriNuisanceRegression, runRsfmriNuisanceRegression } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { getRsfmriNuisanceRegression, runRsfmriNuisanceRegression } from "../lib/api/rsfmri";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
@@ -7,15 +8,16 @@ import { TextViewer } from "./TextViewer";
 type Props = { baseUrl: string };
 
 export function RsfmriNuisanceRegressionPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
+  const operation = t("technical.nuisance.operation");
+  const name = t("technical.nuisance.name");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loaded, setLoaded] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("IDLE");
   const [error, setError] = useState("");
 
   async function handleRun() {
-    const confirmed = window.confirm(
-      "Confirm to run Python Nuisance Regression? This only processes synthetic derivatives and will not modify rawdata or execute DPABI.",
-    );
+    const confirmed = window.confirm(t("technical.pythonConfirm", { operation }));
     if (!confirmed) return;
     setStatus("RUNNING");
     setError("");
@@ -52,63 +54,63 @@ export function RsfmriNuisanceRegressionPanel({ baseUrl }: Props) {
     <div>
       <div className="row">
         <button className="dangerButton" onClick={handleRun}>
-          Approve and Run Python Nuisance Regression
+          {t("technical.approveRun", { operation })}
         </button>
-        <button onClick={handleLoad}>Load Nuisance Regression Results</button>
+        <button onClick={handleLoad}>{t("technical.loadResults", { name })}</button>
         <StatusBadge status={status} />
       </div>
       {error ? <div className="errorBox">{error}</div> : null}
       <div className="metricGrid">
         <div className="metricCard">
-          <span>Subjects</span>
+          <span>{t("technical.subjects")}</span>
           <strong>{String(s?.subjects_total ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>PASS</span>
+          <span>{t("technical.pass")}</span>
           <strong>{String(s?.subjects_pass ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>WARNING</span>
+          <span>{t("technical.warning")}</span>
           <strong>{String(s?.subjects_warning ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>FAIL</span>
+          <span>{t("technical.fail")}</span>
           <strong>{String(s?.subjects_fail ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>Mean Variance Ratio</span>
+          <span>{t("technical.varianceRatio")}</span>
           <strong>
             {s?.mean_variance_ratio == null ? "-" : Number(s.mean_variance_ratio).toFixed(4)}
           </strong>
         </div>
       </div>
-      <h3>Run Summary</h3>
-      <JsonBlock value={result} emptyText="Not yet run" />
-      <h3>Nuisance Regression QC Summary</h3>
+      <h3>{t("technical.runSummary")}</h3>
+      <JsonBlock value={result} emptyText={t("technical.notRun")} />
+      <h3>{t("technical.namedSummary", { name })}</h3>
       <JsonBlock
         value={loaded?.nuisance_regression_qc_summary}
-        emptyText="No nuisance regression QC summary available"
+        emptyText={t("technical.noNamedSummary", { name })}
       />
-      <h3>Subject Nuisance Regression QC</h3>
+      <h3>{t("technical.namedSubject", { name })}</h3>
       <JsonBlock
         value={loaded?.subject_nuisance_regression_qc}
-        emptyText="No subject nuisance regression QC available"
+        emptyText={t("technical.noNamedSubject", { name })}
       />
-      <h3>Subject Confound QC</h3>
-      <JsonBlock value={loaded?.subject_confound_qc} emptyText="No subject confound QC available" />
-      <h3>DPABI Backend Contract</h3>
+      <h3>{t("technical.confoundQc")}</h3>
+      <JsonBlock value={loaded?.subject_confound_qc} emptyText={t("technical.noConfoundQc")} />
+      <h3>{t("technical.dpabiBackendContract")}</h3>
       <JsonBlock
         value={loaded?.dpabi_backend_contract}
-        emptyText="No DPABI backend contract available"
+        emptyText={t("technical.noDpabiBackendContract")}
       />
-      <h3>Nuisance Regression QC Report</h3>
+      <h3>{t("technical.namedReport", { name })}</h3>
       <TextViewer
         text={
           typeof loaded?.nuisance_regression_qc_report === "string"
             ? loaded.nuisance_regression_qc_report
             : null
         }
-        emptyText="No nuisance regression QC report available"
+        emptyText={t("technical.noNamedReport", { name })}
       />
     </div>
   );

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { getDesktopConfig, getDesktopHealth, saveDesktopConfig } from "../lib/api/legacy";
+import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "../i18n/useI18n";
+import { getDesktopConfig, getDesktopHealth, saveDesktopConfig } from "../lib/api/desktop";
 import { JsonBlock } from "./JsonBlock";
 
 type Props = {
@@ -47,17 +48,14 @@ const EMPTY_SETTINGS: Settings = {
 };
 
 export default function DesktopSettingsPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
   const [settings, setSettings] = useState<Settings>(EMPTY_SETTINGS);
   const [health, setHealth] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const desktopRuntime = window.MEDIMAGE_DESKTOP_RUNTIME || window.medimageDesktop?.runtime || null;
 
-  useEffect(() => {
-    void refresh();
-  }, [baseUrl]);
-
-  async function refresh() {
+  const refresh = useCallback(async () => {
     setError("");
     try {
       const [configPayload, healthPayload] = await Promise.all([
@@ -69,7 +67,12 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }
+  }, [baseUrl]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Load the controlled desktop configuration when the endpoint changes.
+    void refresh();
+  }, [refresh]);
 
   async function save() {
     setSaving(true);
@@ -93,85 +96,89 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
       {error ? <div className="errorBox">{error}</div> : null}
       <div className="formGrid">
         <label>
-          Project directory
+          {t("settings.desktop.projectDirectory")}
           <input
             value={settings.project_dir}
             onChange={(event) => update("project_dir", event.target.value)}
           />
         </label>
         <label>
-          Python path
+          {t("settings.desktop.pythonPath")}
           <input
             value={settings.python_path}
             onChange={(event) => update("python_path", event.target.value)}
           />
         </label>
         <label>
-          MATLAB command
+          {t("settings.desktop.matlabCommand")}
           <input
             value={settings.matlab_command}
             onChange={(event) => update("matlab_command", event.target.value)}
           />
         </label>
         <label>
-          SPM directory
+          {t("settings.desktop.spmDirectory")}
           <input
             value={settings.spm_dir}
             onChange={(event) => update("spm_dir", event.target.value)}
           />
         </label>
         <label>
-          DPABI directory
+          {t("settings.desktop.dpabiDirectory")}
           <input
             value={settings.dpabi_dir}
             onChange={(event) => update("dpabi_dir", event.target.value)}
           />
         </label>
         <label>
-          GPU mode
+          {t("settings.desktop.gpuMode")}
           <select
             value={settings.gpu_mode}
             onChange={(event) => update("gpu_mode", event.target.value)}
           >
-            <option value="prefer">Prefer GPU</option>
-            <option value="require">Require GPU</option>
-            <option value="off">CPU only</option>
+            <option value="prefer">{t("settings.desktop.preferGpu")}</option>
+            <option value="require">{t("settings.desktop.requireGpu")}</option>
+            <option value="off">{t("settings.desktop.cpuOnly")}</option>
           </select>
         </label>
         <label>
-          LLM base URL
+          {t("settings.desktop.llmUrl")}
           <input
             value={settings.llm.base_url}
             onChange={(event) => update("llm", { ...settings.llm, base_url: event.target.value })}
           />
         </label>
         <label>
-          LLM model
+          {t("settings.desktop.llmModel")}
           <input
             value={settings.llm.model}
             onChange={(event) => update("llm", { ...settings.llm, model: event.target.value })}
           />
         </label>
         <label>
-          LLM API key
+          {t("settings.desktop.llmKey")}
           <input
             type="password"
-            placeholder={settings.llm.api_key_set ? "Configured" : "Not configured"}
+            placeholder={
+              settings.llm.api_key_set
+                ? t("settings.desktop.configured")
+                : t("settings.desktop.notConfigured")
+            }
             value={settings.llm.api_key || ""}
             onChange={(event) => update("llm", { ...settings.llm, api_key: event.target.value })}
           />
         </label>
         <label>
-          GUI provider (mock only)
+          {t("settings.desktop.guiProvider")}
           <select
             value={settings.gui_agent.provider}
             onChange={(event) =>
               update("gui_agent", { ...settings.gui_agent, provider: event.target.value })
             }
           >
-            <option value="mock">Mock (safe default)</option>
+            <option value="mock">{t("settings.desktop.mockDefault")}</option>
             <option value="pywinauto" disabled>
-              pywinauto (blocked)
+              {t("settings.desktop.pywinautoBlocked")}
             </option>
           </select>
         </label>
@@ -183,7 +190,7 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
             checked={settings.llm.enabled}
             onChange={(event) => update("llm", { ...settings.llm, enabled: event.target.checked })}
           />
-          Enable LLM planner
+          {t("settings.desktop.enableLlm")}
         </label>
         <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
@@ -193,17 +200,17 @@ export default function DesktopSettingsPanel({ baseUrl }: Props) {
               update("gui_agent", { ...settings.gui_agent, approved: event.target.checked })
             }
           />
-          Enable GUI Agent (mock-only, record_observation)
+          {t("settings.desktop.enableGui")}
         </label>
         <button onClick={save} disabled={saving}>
-          {saving ? "Saving..." : "Save settings"}
+          {saving ? t("settings.desktop.saving") : t("settings.desktop.save")}
         </button>
-        <button onClick={refresh}>Refresh checks</button>
+        <button onClick={refresh}>{t("settings.desktop.refresh")}</button>
       </div>
-      <h3>Desktop runtime</h3>
-      <JsonBlock value={desktopRuntime} emptyText="Browser mode" />
-      <h3>Health checks</h3>
-      <JsonBlock value={health} emptyText="No desktop health checks yet" />
+      <h3>{t("settings.desktop.runtime")}</h3>
+      <JsonBlock value={desktopRuntime} emptyText={t("settings.desktop.browserMode")} />
+      <h3>{t("settings.desktop.healthChecks")}</h3>
+      <JsonBlock value={health} emptyText={t("settings.desktop.noHealth")} />
     </div>
   );
 }

@@ -1,16 +1,18 @@
 import { useState } from "react";
-import { getRsfmriReho, runRsfmriReho } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { getRsfmriReho, runRsfmriReho } from "../lib/api/rsfmri";
 import { JsonBlock } from "./JsonBlock";
 import { StatusBadge } from "./StatusBadge";
 import { TextViewer } from "./TextViewer";
 type Props = { baseUrl: string };
 export function RsfmriRehoPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [loaded, setLoaded] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("IDLE");
   const [error, setError] = useState("");
   async function handleRun() {
-    if (!window.confirm("Run Python ReHo? Synthetic derivatives only, no DPABI/GPU.")) return;
+    if (!window.confirm(t("technical.reho.confirm"))) return;
     setStatus("RUNNING");
     setError("");
     try {
@@ -42,50 +44,53 @@ export function RsfmriRehoPanel({ baseUrl }: Props) {
     <div>
       <div className="row">
         <button className="dangerButton" onClick={handleRun}>
-          Approve and Run Python ReHo
+          {t("technical.reho.run")}
         </button>
-        <button onClick={handleLoad}>Load ReHo Results</button>
+        <button onClick={handleLoad}>{t("technical.reho.load")}</button>
         <StatusBadge status={status} />
       </div>
       {error ? <div className="errorBox">{error}</div> : null}
       <div className="metricGrid">
         <div className="metricCard">
-          <span>Subjects</span>
+          <span>{t("technical.subjects")}</span>
           <strong>{String(s?.subjects_total ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>PASS</span>
+          <span>{t("technical.pass")}</span>
           <strong>{String(s?.subjects_pass ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>WARNING</span>
+          <span>{t("technical.warning")}</span>
           <strong>{String(s?.subjects_warning ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>FAIL</span>
+          <span>{t("technical.fail")}</span>
           <strong>{String(s?.subjects_fail ?? "-")}</strong>
         </div>
         <div className="metricCard">
-          <span>Mean ReHo</span>
+          <span>{t("technical.reho.mean")}</span>
           <strong>{s?.mean_reho_mean == null ? "-" : Number(s.mean_reho_mean).toFixed(4)}</strong>
         </div>
       </div>
-      <h3>Run Summary</h3>
-      <JsonBlock value={result} emptyText="Not yet run" />
-      <h3>ReHo QC Summary</h3>
-      <JsonBlock value={loaded?.reho_qc_summary} emptyText="No summary" />
-      <h3>Subject QC</h3>
-      <JsonBlock value={loaded?.subject_reho_qc} emptyText="No subject QC" />
-      <h3>Subject Results</h3>
-      <JsonBlock value={loaded?.subject_reho_results} emptyText="No results" />
-      <h3>GPU Contract</h3>
-      <JsonBlock value={loaded?.gpu_candidate_contract} emptyText="No GPU contract" />
-      <h3>DPABI Contract</h3>
-      <JsonBlock value={loaded?.dpabi_backend_contract} emptyText="No DPABI contract" />
-      <h3>Report</h3>
+      <h3>{t("technical.runSummary")}</h3>
+      <JsonBlock value={result} emptyText={t("technical.notRun")} />
+      <h3>{t("technical.reho.summary")}</h3>
+      <JsonBlock value={loaded?.reho_qc_summary} emptyText={t("technical.noSummary")} />
+      <h3>{t("technical.subjectQc")}</h3>
+      <JsonBlock value={loaded?.subject_reho_qc} emptyText={t("technical.noSubjectQc")} />
+      <h3>{t("technical.subjectResults")}</h3>
+      <JsonBlock value={loaded?.subject_reho_results} emptyText={t("technical.noResults")} />
+      <h3>{t("technical.gpuContract")}</h3>
+      <JsonBlock value={loaded?.gpu_candidate_contract} emptyText={t("technical.noGpuContract")} />
+      <h3>{t("technical.dpabiContract")}</h3>
+      <JsonBlock
+        value={loaded?.dpabi_backend_contract}
+        emptyText={t("technical.noDpabiContract")}
+      />
+      <h3>{t("technical.report")}</h3>
       <TextViewer
         text={typeof loaded?.reho_qc_report === "string" ? loaded.reho_qc_report : null}
-        emptyText="No report"
+        emptyText={t("technical.noReport")}
       />
     </div>
   );

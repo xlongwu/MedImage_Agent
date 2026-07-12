@@ -125,7 +125,17 @@ describe("design system stylesheets", () => {
     expect(tokens).toContain("--control-height-md");
     expect(tokens).toContain("--control-height-lg");
     expect(tokens).toContain("--motion-duration-fast");
+    expect(tokens).toContain("--shell-topbar-height: 48px");
+    expect(tokens).toContain("--shell-lifecycle-height: 48px");
+    expect(tokens).toContain("--shell-min-desktop-width: 1024px");
     expect(tokens).toMatch(/\[data-theme="dark"\]\s*{[\s\S]*--color-bg-app/);
+  });
+
+  it("keeps generic button styling out of the global compatibility layer", () => {
+    const globals = readStyle("globals.css");
+
+    expect(globals).not.toMatch(/button:hover\s*{/);
+    expect(globals).not.toContain("translateY(-1px)");
   });
 
   it("keeps theme text and background tokens above WCAG AA contrast", () => {
@@ -201,10 +211,9 @@ describe("design system stylesheets", () => {
     const motion = readStyle("motion.css");
     const legacyStyles = readSource("styles.css");
     const topBarModule = readSource("features/dashboard/TopBar.module.css");
-    const appShellViewModule = readSource("features/app/AppShellView.module.css");
+    const appShellModule = readSource("layouts/AppShell/AppShell.module.css");
     const contextInspectorModule = readSource("features/tools/ContextInspector.module.css");
     const topBarBlock = readCssBlock(topBarModule, ".topbar");
-    const sideRailBlock = readCssBlock(appShellViewModule, ".sideRail");
     const retiredGlobalSelectors = [
       ".topbar",
       ".side-rail",
@@ -255,7 +264,8 @@ describe("design system stylesheets", () => {
     expect(motion).toContain(':where(button, [role="button"]):hover');
     expect(topBarBlock).toContain("position: relative");
     expect(topBarBlock).not.toContain("position: sticky");
-    expect(sideRailBlock).toContain("--shell-topbar-height");
+    expect(appShellModule).toContain(".lifecycleSlot");
+    expect(appShellModule).not.toContain("shell-sidebar-width");
     expect(contextInspectorModule).toContain("--shell-topbar-height");
     expect(contextInspectorModule).not.toContain("--topbar-height");
     for (const selector of retiredGlobalSelectors) {

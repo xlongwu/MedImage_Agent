@@ -18,6 +18,7 @@ import {
 import { WorkspaceHeader } from "../dashboard/DashboardChrome";
 import styles from "./RunsWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
+import { useI18n } from "../../i18n/useI18n";
 
 export interface RunsWorkspaceProps {
   auditLoading: boolean;
@@ -45,6 +46,7 @@ export interface RunsWorkspaceProps {
 
 type RunStatusFilter = "all" | "active" | "failed" | "completed";
 type RunDetailTab = "events" | "logs" | "diagnostics" | "artifacts" | "audit";
+type Translate = ReturnType<typeof useI18n>["t"];
 
 const RUN_LIST_RENDER_LIMIT = 50;
 const RUN_LOG_RENDER_LIMIT = 12;
@@ -74,6 +76,7 @@ export function RunsWorkspace({
   taskApprovalName,
   tasks,
 }: RunsWorkspaceProps) {
+  const { t } = useI18n();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<RunStatusFilter>("all");
   const [detailTab, setDetailTab] = useState<RunDetailTab>("events");
@@ -96,7 +99,8 @@ export function RunsWorkspace({
           statusFilter === "all" ||
           (statusFilter === "active" && (task.status === "running" || task.status === "pending")) ||
           (statusFilter === "failed" && task.status === "failed") ||
-          (statusFilter === "completed" && task.status === "completed");
+          (statusFilter === "completed" &&
+            (task.status === "completed" || task.status === "partial"));
 
         return matchesQuery && matchesStatus;
       }),
@@ -107,56 +111,54 @@ export function RunsWorkspace({
   const hasActiveRun = tasks.some((task) => task.status === "running" || task.status === "pending");
   const streamLabel = hasActiveRun
     ? streamConnected
-      ? "Run stream connected"
-      : "Run stream disconnected"
-    : "No active run stream";
+      ? t("runs.stream.connected")
+      : t("runs.stream.disconnected")
+    : t("runs.stream.none");
   const emptyRunListMessage = runListEmptyMessage({
     error,
     filtered: isFiltered,
     loading,
     projectId,
     taskCount: tasks.length,
+    t,
   });
 
   return (
     <div className={layoutStyles.stack}>
       <WorkspaceHeader
-        title="Runs"
-        subtitle="Review persisted execution runs. Review packages that have not created an execution record remain in their source workspace."
-        status={hasProject ? "Run history" : "Select project"}
+        title={t("runs.title")}
+        subtitle={t("runs.subtitle")}
+        status={hasProject ? t("runs.header.history") : t("runs.header.selectProject")}
       />
 
       {!hasProject ? (
         <EmptyState
-          title="Select a project before reviewing runs"
-          description="Run records and diagnostics are project-scoped. Choose a project before opening execution history."
+          title={t("runs.noProject.title")}
+          description={t("runs.noProject.description")}
         />
       ) : (
         <RunsOverview tasks={tasks} />
       )}
 
-      <section className={styles.runLayout} aria-label="Run list and diagnostics">
+      <section className={styles.runLayout} aria-label={t("runs.layoutAria")}>
         <Card className={styles.runListCard} tone="muted">
           <div className={styles.sectionHeader}>
             <div>
-              <h3>Execution runs</h3>
-              <p>
-                Review / audit packages without an execution record stay in their source workspace;
-                this page lists backend task runs only.
-              </p>
+              <h3>{t("runs.execution.title")}</h3>
+              <p>{t("runs.execution.description")}</p>
             </div>
             <div className={styles.headerActions}>
               <span
                 className={`${styles.streamChip} ${
                   streamConnected && hasActiveRun ? styles.online : ""
                 } ${!hasActiveRun ? styles.idle : ""}`}
-                aria-label="Run stream status"
+                aria-label={t("runs.stream.status")}
               >
                 {streamLabel}
               </span>
               {error ? (
                 <Button size="sm" variant="secondary" onClick={onRetryTasks}>
-                  Retry
+                  {t("common.retry")}
                 </Button>
               ) : null}
             </div>
@@ -165,50 +167,50 @@ export function RunsWorkspace({
           {hasProject ? (
             <div className={styles.runControls}>
               <label className={styles.searchField}>
-                <span>Search runs</span>
+                <span>{t("runs.search")}</span>
                 <input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Run name, ID, pipeline, owner"
+                  placeholder={t("runs.searchPlaceholder")}
                 />
               </label>
               <SegmentedControl
-                aria-label="Filter runs by status"
+                aria-label={t("runs.filterAria")}
                 value={statusFilter}
                 onChange={(value) => setStatusFilter(value as RunStatusFilter)}
                 options={[
-                  { label: "All", value: "all" },
-                  { label: "Active", value: "active" },
-                  { label: "Failed", value: "failed" },
-                  { label: "Completed", value: "completed" },
+                  { label: t("runs.filter.all"), value: "all" },
+                  { label: t("runs.filter.active"), value: "active" },
+                  { label: t("runs.filter.failed"), value: "failed" },
+                  { label: t("runs.filter.completed"), value: "completed" },
                 ]}
               />
             </div>
           ) : null}
 
           {loading && tasks.length ? (
-            <div className={styles.loadingLine}>Refreshing runs...</div>
+            <div className={styles.loadingLine}>{t("runs.refreshing")}</div>
           ) : null}
           {error ? (
             <div className={styles.errorLine}>
-              {tasks.length ? "Run refresh failed; showing last loaded rows. " : ""}
+              {tasks.length ? t("runs.refreshFailedStale") : ""}
               {error}
             </div>
           ) : null}
 
           {hasProject ? (
-            <Table caption="Project run history">
+            <Table caption={t("runs.table.caption")}>
               <thead>
                 <tr>
-                  <th>Run</th>
-                  <th>Project</th>
-                  <th>Pipeline</th>
-                  <th>Status</th>
-                  <th>Progress</th>
-                  <th>Started</th>
-                  <th>Duration</th>
-                  <th>Triggered by</th>
-                  <th>Action</th>
+                  <th>{t("runs.table.run")}</th>
+                  <th>{t("runs.table.project")}</th>
+                  <th>{t("runs.table.pipeline")}</th>
+                  <th>{t("runs.table.status")}</th>
+                  <th>{t("runs.table.progress")}</th>
+                  <th>{t("runs.table.started")}</th>
+                  <th>{t("runs.table.duration")}</th>
+                  <th>{t("runs.table.triggeredBy")}</th>
+                  <th>{t("runs.table.action")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,14 +228,14 @@ export function RunsWorkspace({
                       <td>{task.pipeline}</td>
                       <td>
                         <Badge tone={statusTone(task.status)} size="sm">
-                          {task.status}
+                          {statusLabel(task.status, t)}
                         </Badge>
                       </td>
                       <td>
                         <RunProgress value={task.progress} />
                       </td>
                       <td>{task.started_at}</td>
-                      <td>{task.duration || "In progress"}</td>
+                      <td>{task.duration || t("runs.inProgress")}</td>
                       <td>{task.owner}</td>
                       <td>
                         <Button
@@ -241,7 +243,7 @@ export function RunsWorkspace({
                           variant={task.id === selectedTaskId ? "primary" : "secondary"}
                           onClick={() => onSelectTask(task.id)}
                         >
-                          Open
+                          {t("common.open")}
                         </Button>
                       </td>
                     </tr>
@@ -253,14 +255,16 @@ export function RunsWorkspace({
             </Table>
           ) : (
             <EmptyState
-              title="Run list unavailable"
-              description="Select a project before loading task history."
+              title={t("runs.listUnavailable.title")}
+              description={t("runs.listUnavailable.description")}
             />
           )}
           {filteredTasks.length > visibleTasks.length ? (
             <div className={styles.trimNote}>
-              Showing the first {visibleTasks.length} of {filteredTasks.length} matching runs.
-              Narrow the search to inspect older records.
+              {t("runs.trimmed", {
+                visible: visibleTasks.length,
+                total: filteredTasks.length,
+              })}
             </div>
           ) : null}
         </Card>
@@ -268,11 +272,8 @@ export function RunsWorkspace({
         <Card className={styles.detailCard}>
           <div className={styles.sectionHeader}>
             <div>
-              <h3>Run detail</h3>
-              <p>
-                Status summary, run timeline, diagnostics, artifacts, and audit evidence stay tied
-                to one selected run.
-              </p>
+              <h3>{t("runs.detail.title")}</h3>
+              <p>{t("runs.detail.description")}</p>
             </div>
           </div>
           {selectedTask ? (
@@ -296,8 +297,8 @@ export function RunsWorkspace({
             />
           ) : (
             <EmptyState
-              title="Select a run to inspect"
-              description="Choose a real execution run to review persisted events, diagnostics, approval state, and audit package evidence."
+              title={t("runs.selectRun.title")}
+              description={t("runs.selectRun.description")}
             />
           )}
         </Card>
@@ -343,15 +344,16 @@ function RunDetailPanel({
   streamConnected,
   task,
 }: RunDetailPanelProps) {
-  const latestEvents = events.length ? events : eventsFromLogs(task);
-  const timeline = buildRunTimeline(task, latestEvents);
-  const artifactEntries = flattenArtifactEntries(diagnostics.artifacts);
+  const { t } = useI18n();
+  const latestEvents = events.length ? events : eventsFromLogs(task, t);
+  const timeline = buildRunTimeline(task, latestEvents, t);
+  const artifactEntries = flattenArtifactEntries(diagnostics.artifacts, t);
   const logMessages = useMemo(
     () => [...task.logs, ...diagnostics.logs],
     [diagnostics.logs, task.logs],
   );
   const visibleLogMessages = logMessages.slice(-RUN_LOG_RENDER_LIMIT);
-  const nodeInspector = buildNodeInspector(task, diagnostics, latestEvents);
+  const nodeInspector = buildNodeInspector(task, diagnostics, latestEvents, t);
   const retryAllowed = diagnosticsRetryAllowed(diagnostics);
   const [failureActionStatus, setFailureActionStatus] = useState("");
   const [showFailureExplanation, setShowFailureExplanation] = useState(false);
@@ -363,41 +365,39 @@ function RunDetailPanel({
   const taskHasActiveStream = task.status === "running" || task.status === "pending";
   const detailStreamLabel = taskHasActiveStream
     ? streamConnected
-      ? "Stream live"
-      : "Run stream disconnected"
-    : "No active stream";
+      ? t("runs.detail.streamLive")
+      : t("runs.detail.streamDisconnected")
+    : t("runs.detail.noStream");
 
   async function handleCopyDiagnostics() {
     const payload = buildDiagnosticsCopyPayload(task, diagnostics, latestEvents);
     try {
       if (!navigator.clipboard?.writeText) {
-        throw new Error("Clipboard API unavailable");
+        throw new Error(t("runs.diagnostics.clipboardApiUnavailable"));
       }
       await navigator.clipboard.writeText(payload);
-      setFailureActionStatus("Diagnostics copied");
+      setFailureActionStatus(t("runs.diagnostics.copied"));
     } catch {
-      setFailureActionStatus("Clipboard unavailable");
+      setFailureActionStatus(t("runs.diagnostics.clipboardUnavailable"));
     }
   }
 
   function handleRetryAllowedStep() {
     setFailureActionStatus(
-      retryAllowed
-        ? "Retry handoff requires the reviewed backend retry workflow."
-        : "Retry is disabled until backend diagnostics mark a step as retry eligible.",
+      retryAllowed ? t("runs.diagnostics.retryHandoff") : t("runs.diagnostics.retryDisabled"),
     );
   }
 
   return (
-    <section className={styles.detailPanel} aria-label="Selected run detail">
+    <section className={styles.detailPanel} aria-label={t("runs.detail.aria")}>
       <div className={styles.detailSummary}>
         <div className={styles.detailTitleBlock}>
-          <span className={styles.kicker}>Run detail</span>
+          <span className={styles.kicker}>{t("runs.detail.title")}</span>
           <strong>{task.run_name}</strong>
           <small>{task.id}</small>
         </div>
         <div className={styles.detailActions}>
-          <Badge tone={statusTone(task.status)}>{statusLabel(task.status)}</Badge>
+          <Badge tone={statusTone(task.status)}>{statusLabel(task.status, t)}</Badge>
           <span
             className={`${styles.streamChip} ${
               streamConnected && taskHasActiveStream ? styles.online : ""
@@ -407,37 +407,40 @@ function RunDetailPanel({
           </span>
           {error ? (
             <Button size="sm" variant="secondary" onClick={onRetry}>
-              Reload Events
+              {t("runs.detail.reloadEvents")}
             </Button>
           ) : null}
           {!streamConnected && task.status === "running" ? (
             <Button size="sm" variant="secondary" onClick={onReconnect}>
-              Reconnect
+              {t("runs.detail.reconnect")}
             </Button>
           ) : null}
           <Button size="sm" variant="secondary" onClick={onGenerateAudit} disabled={auditLoading}>
-            {auditLoading ? "Requesting" : "Request Audit Package"}
+            {auditLoading ? t("runs.detail.requesting") : t("runs.detail.requestAudit")}
           </Button>
         </div>
       </div>
 
-      <div className={styles.detailFacts} aria-label="Run facts">
-        <RunFact label="Pipeline" value={task.pipeline} />
-        <RunFact label="Status" value={statusLabel(task.status)} />
-        <RunFact label="Progress" value={`${clampProgress(task.progress)}%`} />
-        <RunFact label="Started" value={task.started_at} />
-        <RunFact label="Duration" value={task.duration || "In progress"} />
-        <RunFact label="Triggered by" value={task.owner} />
-        <RunFact label="Execution" value={task.execution_mode || "Not reported"} />
-        <RunFact label="Result" value={formatResultFact(task)} />
+      <div className={styles.detailFacts} aria-label={t("runs.facts")}>
+        <RunFact label={t("runs.table.pipeline")} value={task.pipeline} />
+        <RunFact label={t("runs.table.status")} value={statusLabel(task.status, t)} />
+        <RunFact label={t("runs.table.progress")} value={`${clampProgress(task.progress)}%`} />
+        <RunFact label={t("runs.table.started")} value={task.started_at} />
+        <RunFact label={t("runs.table.duration")} value={task.duration || t("runs.inProgress")} />
+        <RunFact label={t("runs.table.triggeredBy")} value={task.owner} />
+        <RunFact
+          label={t("runs.fact.execution")}
+          value={task.execution_mode || t("runs.notReported")}
+        />
+        <RunFact label={t("runs.fact.result")} value={formatResultFact(task, t)} />
       </div>
 
       <div className={styles.timelinePanel}>
         <div className={styles.panelHeader}>
-          <span>Pipeline timeline</span>
-          <small>{timeline.length} recorded checkpoints</small>
+          <span>{t("runs.timeline")}</span>
+          <small>{t("runs.timeline.checkpoints", { count: timeline.length })}</small>
         </div>
-        <ol className={styles.timeline} aria-label="Pipeline timeline">
+        <ol className={styles.timeline} aria-label={t("runs.timeline")}>
           {timeline.map((item, index) => (
             <li key={`${item.label}-${item.message}-${index}`} data-status={item.status}>
               <span>{item.label}</span>
@@ -448,36 +451,36 @@ function RunDetailPanel({
         </ol>
       </div>
 
-      <div className={styles.nodeInspector} aria-label="Selected node inspector">
+      <div className={styles.nodeInspector} aria-label={t("runs.node.aria")}>
         <div className={styles.panelHeader}>
-          <span>Node inspector</span>
+          <span>{t("runs.node.title")}</span>
           <small>{nodeInspector.source}</small>
         </div>
         <div className={styles.nodeGrid}>
-          <RunFact label="Node" value={nodeInspector.node} />
-          <RunFact label="State" value={nodeInspector.state} />
-          <RunFact label="Evidence" value={nodeInspector.evidence} />
-          <RunFact label="Retry" value={nodeInspector.retry} />
+          <RunFact label={t("runs.node.node")} value={nodeInspector.node} />
+          <RunFact label={t("runs.node.state")} value={nodeInspector.state} />
+          <RunFact label={t("runs.node.evidence")} value={nodeInspector.evidence} />
+          <RunFact label={t("runs.node.retry")} value={nodeInspector.retry} />
         </div>
       </div>
 
       <SegmentedControl
-        aria-label="Run detail sections"
+        aria-label={t("runs.sections")}
         value={activeTab}
         onChange={(value) => onTabChange(value as RunDetailTab)}
         options={[
-          { label: "Events", value: "events" },
-          { label: "Logs", value: "logs" },
-          { label: "Diagnostics", value: "diagnostics" },
-          { label: "Artifacts", value: "artifacts" },
-          { label: "Audit", value: "audit" },
+          { label: t("runs.tab.events"), value: "events" },
+          { label: t("runs.tab.logs"), value: "logs" },
+          { label: t("runs.tab.diagnostics"), value: "diagnostics" },
+          { label: t("runs.tab.artifacts"), value: "artifacts" },
+          { label: t("runs.tab.audit"), value: "audit" },
         ]}
       />
 
       <div className={styles.tabPanel}>
         {activeTab === "events" ? (
-          <section aria-label="Run events">
-            {loading ? <div className={styles.loadingLine}>Loading persisted events...</div> : null}
+          <section aria-label={t("runs.events.aria")}>
+            {loading ? <div className={styles.loadingLine}>{t("runs.events.loading")}</div> : null}
             {error ? <div className={styles.errorLine}>{error}</div> : null}
             <div className={styles.eventList}>
               {latestEvents.map((event) => (
@@ -495,13 +498,15 @@ function RunDetailPanel({
         ) : null}
 
         {activeTab === "logs" ? (
-          <section aria-label="Run logs">
+          <section aria-label={t("runs.logs.aria")}>
             {logMessages.length ? (
               <>
                 {logMessages.length > visibleLogMessages.length ? (
                   <div className={styles.trimNote} role="status">
-                    Showing latest {visibleLogMessages.length} of {logMessages.length} log lines.
-                    Open persisted diagnostics or narrow the run context for older records.
+                    {t("runs.logs.trimmed", {
+                      visible: visibleLogMessages.length,
+                      total: logMessages.length,
+                    })}
                   </div>
                 ) : null}
                 <div className={styles.logList}>
@@ -512,29 +517,25 @@ function RunDetailPanel({
               </>
             ) : (
               <EmptyState
-                title="No run logs recorded"
-                description="Logs will appear here after the runtime records task output."
+                title={t("runs.logs.emptyTitle")}
+                description={t("runs.logs.emptyDescription")}
               />
             )}
           </section>
         ) : null}
 
         {activeTab === "diagnostics" ? (
-          <section aria-label="Run diagnostics">
+          <section aria-label={t("runs.diagnostics.aria")}>
             {task.status === "failed" ? (
               <div className={styles.failureBanner} role="alert">
-                Failed run. Review the persisted events and diagnostic records before retrying any
-                allowed workflow step.
+                {t("runs.diagnostics.failedBanner")}
               </div>
             ) : null}
             {task.status === "failed" ? (
-              <div className={styles.failureActions} aria-label="Failed node actions">
+              <div className={styles.failureActions} aria-label={t("runs.diagnostics.actions")}>
                 <div>
-                  <strong>Failed node response</strong>
-                  <p>
-                    These actions organize diagnostics only. Retrying remains disabled unless the
-                    backend marks a reviewed step as eligible.
-                  </p>
+                  <strong>{t("runs.diagnostics.failedResponse")}</strong>
+                  <p>{t("runs.diagnostics.actionsDescription")}</p>
                 </div>
                 <div className={styles.failureButtonRow}>
                   <Button
@@ -542,10 +543,10 @@ function RunDetailPanel({
                     variant="secondary"
                     onClick={() => setShowFailureExplanation((value) => !value)}
                   >
-                    Explain Error
+                    {t("runs.diagnostics.explain")}
                   </Button>
                   <Button size="sm" variant="secondary" onClick={handleCopyDiagnostics}>
-                    Copy Diagnostics
+                    {t("runs.diagnostics.copy")}
                   </Button>
                   <Button
                     size="sm"
@@ -553,11 +554,14 @@ function RunDetailPanel({
                     disabled={!retryAllowed}
                     onClick={handleRetryAllowedStep}
                   >
-                    Retry Allowed Step
+                    {t("runs.diagnostics.retryAllowed")}
                   </Button>
                 </div>
                 {showFailureExplanation ? (
-                  <div className={styles.failureExplanation} aria-label="Failure explanation">
+                  <div
+                    className={styles.failureExplanation}
+                    aria-label={t("runs.diagnostics.explanation")}
+                  >
                     <span>{nodeInspector.node}</span>
                     <p>{nodeInspector.evidence}</p>
                   </div>
@@ -571,7 +575,7 @@ function RunDetailPanel({
                   <DiagnosticItem
                     key={`error-${index}`}
                     tone="danger"
-                    label="Error"
+                    label={t("runs.diagnostics.error")}
                     message={message}
                   />
                 ))}
@@ -579,7 +583,7 @@ function RunDetailPanel({
                   <DiagnosticItem
                     key={`warning-${index}`}
                     tone="warning"
-                    label="Warning"
+                    label={t("runs.diagnostics.warning")}
                     message={message}
                   />
                 ))}
@@ -587,8 +591,8 @@ function RunDetailPanel({
                   <DiagnosticItem
                     key={`diagnosis-${index}`}
                     tone={diagnosticTone(item.severity)}
-                    label={String(item.code || item.severity || "diagnostic")}
-                    message={String(item.message || "Diagnostic record available.")}
+                    label={String(item.code || item.severity || t("runs.diagnostics.defaultLabel"))}
+                    message={String(item.message || t("runs.diagnostics.defaultMessage"))}
                   />
                 ))}
                 {diagnostics.external_tool_results
@@ -598,26 +602,30 @@ function RunDetailPanel({
                       key={`tool-${index}`}
                       tone={String(result.returncode ?? "0") === "0" ? "info" : "warning"}
                       label={String(
-                        result.command || result.function || `External tool ${index + 1}`,
+                        result.command ||
+                          result.function ||
+                          t("runs.diagnostics.externalTool", { index: index + 1 }),
                       )}
-                      message={`returncode ${String(result.returncode ?? "n/a")}`}
+                      message={t("runs.diagnostics.returnCode", {
+                        code: String(result.returncode ?? "n/a"),
+                      })}
                     />
                   ))}
               </div>
             ) : (
               <EmptyState
-                title="No diagnostics recorded"
-                description="The selected run has no persisted diagnostic records yet."
+                title={t("runs.diagnostics.emptyTitle")}
+                description={t("runs.diagnostics.emptyDescription")}
               />
             )}
           </section>
         ) : null}
 
         {activeTab === "artifacts" ? (
-          <section aria-label="Run artifacts">
+          <section aria-label={t("runs.artifacts.aria")}>
             {task.result_path ? (
               <div className={styles.artifactPath}>
-                <span>Reported result path</span>
+                <span>{t("runs.artifacts.resultPath")}</span>
                 <strong>{task.result_path}</strong>
               </div>
             ) : null}
@@ -632,47 +640,47 @@ function RunDetailPanel({
               </div>
             ) : !task.result_path ? (
               <EmptyState
-                title="No artifacts registered"
-                description="Artifacts appear here only after the runtime reports persisted outputs."
+                title={t("runs.artifacts.emptyTitle")}
+                description={t("runs.artifacts.emptyDescription")}
               />
             ) : null}
           </section>
         ) : null}
 
         {activeTab === "audit" ? (
-          <section className={styles.auditPanel} aria-label="Run audit">
+          <section className={styles.auditPanel} aria-label={t("runs.audit.aria")}>
             {task.execution_mode === "external_smoke" && !diagnostics.approval ? (
               <div className={styles.approvalBox}>
                 <div>
-                  <span>Approval required</span>
-                  <strong>External smoke runs require manual review</strong>
+                  <span>{t("runs.audit.approvalRequired")}</span>
+                  <strong>{t("runs.audit.externalReview")}</strong>
                 </div>
                 <label>
-                  <span>Approved by</span>
+                  <span>{t("runs.audit.approvedBy")}</span>
                   <input
                     value={approvalName}
                     onChange={(event) => onApprovalNameChange(event.target.value)}
-                    placeholder="Research lead name"
+                    placeholder={t("runs.audit.approverPlaceholder")}
                   />
                 </label>
                 <Button size="sm" variant="primary" onClick={onApprove}>
-                  Submit Approval to Backend
+                  {t("runs.audit.submitApproval")}
                 </Button>
               </div>
             ) : (
               <div className={styles.auditRecord}>
-                <span>Approval</span>
+                <span>{t("runs.audit.approval")}</span>
                 <strong>
                   {diagnostics.approval
                     ? `${diagnostics.approval.approved_by} at ${diagnostics.approval.approved_at}`
-                    : "No approval record required or available"}
+                    : t("runs.audit.noApproval")}
                 </strong>
               </div>
             )}
             {auditPackage ? (
               <div className={styles.auditPackage}>
                 <div>
-                  <span>Audit package</span>
+                  <span>{t("runs.audit.package")}</span>
                   <strong>{auditPackage.generated_at}</strong>
                 </div>
                 <p>{auditPackage.report_path}</p>
@@ -680,8 +688,8 @@ function RunDetailPanel({
               </div>
             ) : (
               <EmptyState
-                title="Audit package not generated"
-                description="Request backend audit package generation from the selected run when evidence export is needed."
+                title={t("runs.audit.emptyTitle")}
+                description={t("runs.audit.emptyDescription")}
                 action={
                   <Button
                     size="sm"
@@ -689,7 +697,7 @@ function RunDetailPanel({
                     onClick={onGenerateAudit}
                     disabled={auditLoading}
                   >
-                    {auditLoading ? "Requesting" : "Request Audit Package"}
+                    {auditLoading ? t("runs.detail.requesting") : t("runs.detail.requestAudit")}
                   </Button>
                 }
               />
@@ -702,41 +710,40 @@ function RunDetailPanel({
 }
 
 function RunsOverview({ tasks }: { tasks: TaskLogEntry[] }) {
+  const { t } = useI18n();
   const running = tasks.filter((task) => task.status === "running").length;
   const failed = tasks.filter((task) => task.status === "failed").length;
   const completed = tasks.filter((task) => task.status === "completed").length;
   const pending = tasks.filter((task) => task.status === "pending").length;
 
   return (
-    <section className={styles.summaryGrid} aria-label="Run history overview">
+    <section className={styles.summaryGrid} aria-label={t("runs.overview.aria")}>
       <Card tone="muted">
         <div className={styles.summaryItem}>
-          <span>Total</span>
+          <span>{t("runs.overview.total")}</span>
           <strong>{tasks.length}</strong>
-          <small>Loaded task records</small>
+          <small>{t("runs.overview.loaded")}</small>
         </div>
       </Card>
       <Card>
         <div className={styles.summaryItem}>
-          <span>Active</span>
+          <span>{t("runs.overview.active")}</span>
           <strong>{running + pending}</strong>
-          <small>
-            {running} running / {pending} pending
-          </small>
+          <small>{t("runs.overview.activeDetail", { running, pending })}</small>
         </div>
       </Card>
       <Card>
         <div className={styles.summaryItem}>
-          <span>Failed</span>
+          <span>{t("runs.overview.failed")}</span>
           <strong>{failed}</strong>
-          <small>Needs diagnostics review</small>
+          <small>{t("runs.overview.failedDetail")}</small>
         </div>
       </Card>
       <Card>
         <div className={styles.summaryItem}>
-          <span>Completed</span>
+          <span>{t("runs.overview.completed")}</span>
           <strong>{completed}</strong>
-          <small>Available for audit review</small>
+          <small>{t("runs.overview.completedDetail")}</small>
         </div>
       </Card>
     </section>
@@ -749,27 +756,30 @@ function runListEmptyMessage({
   loading,
   projectId,
   taskCount,
+  t,
 }: {
   error: string;
   filtered: boolean;
   loading: boolean;
   projectId: string | null;
   taskCount: number;
+  t: Translate;
 }): string {
-  if (!projectId) return "Select a project before loading run history.";
-  if (loading && taskCount === 0) return "Loading run records...";
-  if (error && taskCount === 0) return "Run history unavailable. Retry to reload backend records.";
+  if (!projectId) return t("runs.empty.selectProject");
+  if (loading && taskCount === 0) return t("runs.empty.loading");
+  if (error && taskCount === 0) return t("runs.empty.unavailable");
   if (filtered) {
-    return "No runs match the current search and status filters. Active or failed runs will also appear in the bottom activity bar.";
+    return t("runs.empty.filtered");
   }
-  return "No execution runs recorded for this project yet. Dry-run review packages stay in Data & Conversion until an approved execution creates run history.";
+  return t("runs.empty.none");
 }
 
 function RunProgress({ value }: { value: number }) {
+  const { t } = useI18n();
   const progress = clampProgress(value);
 
   return (
-    <div className={styles.progressCell} aria-label={`Progress ${progress}%`}>
+    <div className={styles.progressCell} aria-label={t("runs.progressAria", { progress })}>
       <span className={styles.progressTrack}>
         <span className={styles.progressFill} style={{ width: `${progress}%` }} />
       </span>
@@ -787,11 +797,11 @@ function RunFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatResultFact(task: TaskLogEntry): string {
+function formatResultFact(task: TaskLogEntry, t: Translate): string {
   if (task.result_path) return task.result_path;
-  if (task.status === "running" || task.status === "pending") return "Pending backend report";
-  if (task.status === "failed") return "No completed result";
-  return "No result path reported";
+  if (task.status === "running" || task.status === "pending") return t("runs.result.pending");
+  if (task.status === "failed") return t("runs.result.failed");
+  return t("runs.result.none");
 }
 
 function DiagnosticItem({
@@ -811,8 +821,8 @@ function DiagnosticItem({
   );
 }
 
-function eventsFromLogs(task: TaskLogEntry): TaskEvent[] {
-  const logs = task.logs.length ? task.logs : ["No run events recorded."];
+function eventsFromLogs(task: TaskLogEntry, t: Translate): TaskEvent[] {
+  const logs = task.logs.length ? task.logs : [t("runs.events.none")];
   return logs.map((message, index) => ({
     id: index,
     task_id: task.id,
@@ -826,9 +836,12 @@ function eventsFromLogs(task: TaskLogEntry): TaskEvent[] {
   }));
 }
 
-function buildRunTimeline(task: TaskLogEntry, events: TaskEvent[]) {
+function buildRunTimeline(task: TaskLogEntry, events: TaskEvent[], t: Translate) {
   const checkpoints = events.slice(-5).map((event, index) => ({
-    label: index === events.slice(-5).length - 1 ? "Latest" : `Step ${index + 1}`,
+    label:
+      index === events.slice(-5).length - 1
+        ? t("runs.timeline.latest")
+        : t("runs.timeline.step", { index: index + 1 }),
     message: event.message,
     status: event.status,
     time: event.timestamp,
@@ -840,33 +853,38 @@ function buildRunTimeline(task: TaskLogEntry, events: TaskEvent[]) {
 
   return [
     {
-      label: "Latest",
-      message: task.logs[task.logs.length - 1] ?? "No run events recorded.",
+      label: t("runs.timeline.latest"),
+      message: task.logs[task.logs.length - 1] ?? t("runs.events.none"),
       status: task.status,
       time: task.started_at,
     },
   ];
 }
 
-function flattenArtifactEntries(artifacts: Record<string, unknown>) {
+function flattenArtifactEntries(artifacts: Record<string, unknown>, t: Translate) {
   return Object.entries(artifacts)
     .slice(0, 12)
     .map(([label, value]) => ({
       label,
-      value: formatArtifactValue(value),
+      value: formatArtifactValue(value, t),
     }));
 }
 
-function formatArtifactValue(value: unknown): string {
-  if (value === null || value === undefined) return "Unavailable";
+function formatArtifactValue(value: unknown, t: Translate): string {
+  if (value === null || value === undefined) return t("common.unavailable");
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return `${value.length} entries`;
+  if (Array.isArray(value)) return t("runs.artifact.entries", { count: value.length });
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 
-function buildNodeInspector(task: TaskLogEntry, diagnostics: TaskDiagnostics, events: TaskEvent[]) {
+function buildNodeInspector(
+  task: TaskLogEntry,
+  diagnostics: TaskDiagnostics,
+  events: TaskEvent[],
+  t: Translate,
+) {
   const diagnostic = pickPrimaryDiagnostic(diagnostics);
   const node =
     firstStringValue(diagnostic, ["node_id", "node", "node_name", "stage", "step_id", "code"]) ||
@@ -876,17 +894,17 @@ function buildNodeInspector(task: TaskLogEntry, diagnostics: TaskDiagnostics, ev
     firstStringValue(diagnostic, ["message", "error", "detail", "recommendation"]) ||
     events[events.length - 1]?.message ||
     task.logs[task.logs.length - 1] ||
-    "No node-level evidence recorded.";
+    t("runs.node.noEvidence");
   const retry = diagnosticsRetryAllowed(diagnostics)
-    ? "Backend marked retry eligible"
-    : "Backend retry eligibility not recorded";
+    ? t("runs.node.retryEligible")
+    : t("runs.node.retryUnknown");
 
   return {
     evidence,
     node,
     retry,
-    source: diagnostic ? "diagnostic record" : "run event fallback",
-    state: statusLabel(task.status),
+    source: diagnostic ? t("runs.node.diagnosticSource") : t("runs.node.eventSource"),
+    state: statusLabel(task.status, t),
   };
 }
 
@@ -947,12 +965,13 @@ function diagnosticTone(severity: unknown): "danger" | "info" | "neutral" | "war
   return "neutral";
 }
 
-function statusLabel(status: TaskStatus): string {
-  if (status === "completed") return "Completed";
-  if (status === "failed") return "Failed";
-  if (status === "running") return "Running";
-  if (status === "pending") return "Pending";
-  return "Disconnected";
+function statusLabel(status: TaskStatus, t: Translate): string {
+  if (status === "completed") return t("runs.status.completed");
+  if (status === "partial") return t("runs.status.partial");
+  if (status === "failed") return t("runs.status.failed");
+  if (status === "running") return t("runs.status.running");
+  if (status === "pending") return t("runs.status.pending");
+  return t("runs.status.disconnected");
 }
 
 function clampProgress(value: number): number {
@@ -961,6 +980,7 @@ function clampProgress(value: number): number {
 
 function statusTone(status: TaskStatus): "neutral" | "info" | "success" | "warning" | "danger" {
   if (status === "completed") return "success";
+  if (status === "partial") return "warning";
   if (status === "failed") return "danger";
   if (status === "running") return "info";
   if (status === "pending" || status === "disconnected") return "warning";

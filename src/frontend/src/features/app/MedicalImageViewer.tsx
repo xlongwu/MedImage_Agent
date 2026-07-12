@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 
+import { useI18n } from "../../i18n/useI18n";
 import type {
   ImagePlane,
   ImagePreview,
@@ -9,7 +10,7 @@ import type {
 } from "../../lib/types/image";
 import type { ProjectDetail } from "../../lib/types/project";
 import type { ProjectDataState } from "../../lib/projectWorkflow";
-import { hasRealImagePreview } from "./viewerVisibility";
+import { hasRealImagePreview } from "./imagePreviewEvidence";
 import styles from "./MedicalImageViewer.module.css";
 
 export interface MedicalImageViewerProps {
@@ -47,24 +48,30 @@ export function MedicalImageViewer({
   onSubjectChange,
   onSliceChange,
 }: MedicalImageViewerProps) {
+  const { t } = useI18n();
   const rawSliceCount = preview?.slice_count ?? 0;
   const sliceCount = rawSliceCount > 0 ? rawSliceCount : 0;
   const maxSliceIndex = Math.max(sliceCount - 1, 0);
   const currentSlice = Math.min(Math.max(preview?.slice_index ?? 0, 0), maxSliceIndex);
   const activePlane = plane;
   const planeOptions: Array<{ axis: string; value: ImagePlane; label: string }> = [
-    { axis: "S", value: "sagittal", label: "Sagittal" },
-    { axis: "A", value: "axial", label: "Axial" },
-    { axis: "C", value: "coronal", label: "Coronal" },
+    { axis: "S", value: "sagittal", label: t("viewer.plane.sagittal") },
+    { axis: "A", value: "axial", label: t("viewer.plane.axial") },
+    { axis: "C", value: "coronal", label: t("viewer.plane.coronal") },
   ];
-  const planeLabel = planeOptions.find((item) => item.value === activePlane)?.label ?? "Axial";
+  const planeLabel =
+    planeOptions.find((item) => item.value === activePlane)?.label ?? t("viewer.plane.axial");
   const dimensions = sourceFile?.dimensions?.length
     ? sourceFile.dimensions
     : (preview?.dimensions ?? []);
   const spacing = sourceFile?.voxel_spacing ?? [];
   const sourceSummary =
-    sourceFile?.relative_path ?? preview?.source_path ?? preview?.message ?? "No preview source";
-  const visibleValidationIssues = validation.issues.slice(0, 3);
+    sourceFile?.relative_path ??
+    preview?.source_path ??
+    preview?.message ??
+    t("viewer.noPreviewSource");
+  const validationStatus = validation.status ?? "unavailable";
+  const visibleValidationIssues = (validation.issues ?? []).slice(0, 3);
 
   // Viewer display conditions per design spec:
   // - Raw DICOM / Empty / unknown: do NOT show pseudo NIfTI viewer; show Empty State
@@ -72,13 +79,21 @@ export function MedicalImageViewer({
   const hasRealPreview = hasRealImagePreview(preview);
   const shouldShowViewer = hasRealPreview;
   const canNavigateSlices = sliceCount > 1 && !loading;
-  const sliceStatus = sliceCount ? `slice ${currentSlice + 1} of ${sliceCount}` : "slice unknown";
+  const sliceStatus = sliceCount
+    ? t("viewer.sliceOf", { current: currentSlice + 1, total: sliceCount })
+    : t("viewer.sliceUnknown");
   const viewerStatusText = loading
-    ? "Loading image preview"
-    : `${project.name}, subject ${subjectId ?? "unknown"}, sequence ${sequence}, ${planeLabel} plane, ${sliceStatus}.`;
+    ? t("viewer.loadingStatus")
+    : t("viewer.statusDescription", {
+        project: project.name,
+        subject: subjectId ?? t("viewer.unknownSubject"),
+        sequence,
+        plane: planeLabel,
+        slice: sliceStatus,
+      });
   const keyboardHelp = canNavigateSlices
-    ? "Use Left and Right arrow keys or Page Up and Page Down to move between slices. Home and End jump to the first or last slice. Escape leaves the image viewer."
-    : "Image preview is focusable for inspection. Slice navigation is unavailable for this preview.";
+    ? t("viewer.keyboardNavigation")
+    : t("viewer.keyboardInspection");
 
   const requestSliceChange = (nextSlice: number) => {
     if (!canNavigateSlices) {
@@ -133,27 +148,27 @@ export function MedicalImageViewer({
     const isRawDicom = dataState === "raw_dicom";
     const isConvertedContext = dataState === "converted_bids" || dataState === "mixed";
     const emptyTitle = isRawDicom
-      ? "No image preview is available"
+      ? t("viewer.empty.noPreview")
       : isEmpty
-        ? "No imaging dataset loaded"
-        : "No image preview is available";
+        ? t("viewer.empty.noDataset")
+        : t("viewer.empty.noPreview");
     const emptyMessage = isRawDicom
-      ? "This project currently contains raw DICOM candidates, but no validated preview source has been registered. Complete DICOM conversion to enable NIfTI preview."
+      ? t("viewer.empty.rawDicom")
       : isEmpty
-        ? "Import a DICOM, BIDS, or NIfTI dataset to begin viewing imaging data."
+        ? t("viewer.empty.dataset")
         : isConvertedContext
-          ? "Converted inventory exists, but the backend has not returned a verified preview URL for this subject and sequence."
-          : "Imaging preview will become available once data conversion is complete.";
+          ? t("viewer.empty.converted")
+          : t("viewer.empty.conversionPending");
     const emptyCta = isRawDicom
-      ? "Open Data & Conversion"
+      ? t("viewer.empty.openConversion")
       : isEmpty
-        ? "Import dataset"
-        : "Review preview source details";
+        ? t("viewer.empty.importDataset")
+        : t("viewer.empty.reviewDetails");
 
     return (
       <section
         className={`${styles.viewerCard} ${styles.emptyState}`}
-        aria-label="Image viewer empty state"
+        aria-label={t("viewer.empty.aria")}
       >
         <div className={styles.emptyContent}>
           <div className={styles.emptyGlyph} aria-hidden="true">
@@ -194,21 +209,18 @@ export function MedicalImageViewer({
           <p>{emptyMessage}</p>
           <div className={styles.emptyMeta}>
             <span>
-              Project state: <b>{dataState ?? "unknown"}</b>
+              {t("viewer.empty.projectState")}: <b>{dataState ?? t("viewer.unknown")}</b>
             </span>
             {isRawDicom ? (
-              <span className={styles.emptyWarning}>
-                Raw DICOM preview is intentionally disabled to avoid misreading placeholder imagery
-                as real patient data.
-              </span>
+              <span className={styles.emptyWarning}>{t("viewer.empty.rawWarning")}</span>
             ) : null}
           </div>
           <div className={styles.emptyActions}>
-            <span className={styles.emptyNextAction}>Next: {emptyCta}</span>
+            <span className={styles.emptyNextAction}>
+              {t("viewer.empty.next", { action: emptyCta })}
+            </span>
             <span className={styles.emptyHint}>
-              {isRawDicom
-                ? "Use the Data & Conversion workspace below"
-                : "Use the project workspace below"}
+              {isRawDicom ? t("viewer.empty.conversionHint") : t("viewer.empty.projectHint")}
             </span>
           </div>
         </div>
@@ -221,13 +233,13 @@ export function MedicalImageViewer({
       <div className={styles.toolbar}>
         <div className={`${styles.toolbarGroup} ${styles.toolbarSelectors}`}>
           <label className={styles.field}>
-            <span className={styles.fieldLabel}>Subject</span>
+            <span className={styles.fieldLabel}>{t("viewer.subject")}</span>
             <select
               className={`${styles.scanSelect} ${styles.subjectSelect}`}
               value={subjectId || ""}
               onChange={(event) => onSubjectChange(event.target.value)}
               disabled={!imageSources.subjects.length}
-              aria-label="Subject"
+              aria-label={t("viewer.subject")}
             >
               {imageSources.subjects.length ? (
                 imageSources.subjects.map((item) => (
@@ -236,17 +248,17 @@ export function MedicalImageViewer({
                   </option>
                 ))
               ) : (
-                <option value="">No sources</option>
+                <option value="">{t("viewer.noSources")}</option>
               )}
             </select>
           </label>
           <label className={styles.field}>
-            <span className={styles.fieldLabel}>Sequence</span>
+            <span className={styles.fieldLabel}>{t("viewer.sequence")}</span>
             <select
               className={styles.scanSelect}
               value={sequence}
               onChange={(event) => onSequenceChange(event.target.value)}
-              aria-label="Sequence"
+              aria-label={t("viewer.sequence")}
             >
               {(sequenceOptions.length ? sequenceOptions : project.sequences).map((item) => (
                 <option key={item} value={item}>
@@ -256,7 +268,11 @@ export function MedicalImageViewer({
             </select>
           </label>
         </div>
-        <div className={styles.planeSegmented} role="tablist" aria-label="Anatomical plane">
+        <div
+          className={styles.planeSegmented}
+          role="tablist"
+          aria-label={t("viewer.anatomicalPlane")}
+        >
           {planeOptions.map((item) => (
             <button
               key={item.value}
@@ -267,7 +283,7 @@ export function MedicalImageViewer({
                 activePlane === item.value ? styles.activePlane : ""
               }`}
               onClick={() => onPlaneChange(item.value)}
-              title={`${item.label} plane`}
+              title={t("viewer.planeTitle", { plane: item.label })}
             >
               {item.label}
             </button>
@@ -277,8 +293,8 @@ export function MedicalImageViewer({
           <button
             type="button"
             className={styles.iconButton}
-            aria-label="Fullscreen"
-            title="Fullscreen"
+            aria-label={t("viewer.fullscreen")}
+            title={t("viewer.fullscreen")}
           >
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
               <path
@@ -294,7 +310,7 @@ export function MedicalImageViewer({
         role="group"
         tabIndex={0}
         aria-busy={loading}
-        aria-label={`Medical image viewer: ${viewerStatusText}`}
+        aria-label={t("viewer.aria", { status: viewerStatusText })}
         aria-describedby="medical-image-viewer-status medical-image-viewer-keyboard-help"
         onKeyDown={handleViewerKeyDown}
       >
@@ -302,7 +318,12 @@ export function MedicalImageViewer({
           <img
             className={styles.previewImage}
             src={preview.preview_url}
-            alt={`${project.name} ${subjectId ?? "selected subject"} ${sequence} ${planeLabel} medical image preview`}
+            alt={t("viewer.imageAlt", {
+              project: project.name,
+              subject: subjectId ?? t("viewer.selectedSubject"),
+              sequence,
+              plane: planeLabel,
+            })}
             loading="lazy"
             decoding="async"
           />
@@ -310,7 +331,7 @@ export function MedicalImageViewer({
         {loading ? (
           <div className={styles.loadingOverlay} role="status" aria-live="polite">
             <span className={styles.loadingOrbit} aria-hidden="true" />
-            <span>Loading image preview</span>
+            <span>{t("viewer.loadingStatus")}</span>
           </div>
         ) : null}
         <div className={styles.sliceRule}>
@@ -325,27 +346,30 @@ export function MedicalImageViewer({
           {keyboardHelp}
         </p>
       </div>
-      <div className={styles.statusBar} aria-label="Viewer status">
+      <div className={styles.statusBar} aria-label={t("viewer.status")}>
         <span className={styles.statusItem}>
-          Slice <b>{loading ? "..." : sliceCount ? `${currentSlice + 1} / ${sliceCount}` : "-"}</b>
+          {t("viewer.slice")}{" "}
+          <b>{loading ? "..." : sliceCount ? `${currentSlice + 1} / ${sliceCount}` : "-"}</b>
         </span>
         <span className={styles.statusItem}>
-          Plane <b>{planeLabel}</b>
+          {t("viewer.plane")} <b>{planeLabel}</b>
         </span>
         <span className={styles.statusItem}>
-          Source <b>{sourceSummary}</b>
+          {t("viewer.source")} <b>{sourceSummary}</b>
         </span>
         <span className={styles.statusItem}>
-          Dims <b>{dimensions.length ? dimensions.join(" x ") : "unknown"}</b>
+          {t("viewer.dimensionsShort")}{" "}
+          <b>{dimensions.length ? dimensions.join(" x ") : t("viewer.unknown")}</b>
         </span>
         <span className={styles.statusItem}>
-          Spacing <b>{spacing.length ? spacing.slice(0, 3).join(" x ") : "pending"}</b>
+          {t("viewer.spacing")}{" "}
+          <b>{spacing.length ? spacing.slice(0, 3).join(" x ") : t("viewer.pending")}</b>
         </span>
       </div>
-      <div className={styles.dock} role="toolbar" aria-label="Viewer canvas tools">
+      <div className={styles.dock} role="toolbar" aria-label={t("viewer.canvasTools")}>
         {[
           {
-            label: "Window / Level",
+            label: t("viewer.tool.windowLevel"),
             icon: (
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
@@ -354,7 +378,7 @@ export function MedicalImageViewer({
             ),
           },
           {
-            label: "Pan",
+            label: t("viewer.tool.pan"),
             icon: (
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <path
@@ -365,7 +389,7 @@ export function MedicalImageViewer({
             ),
           },
           {
-            label: "Zoom",
+            label: t("viewer.tool.zoom"),
             icon: (
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
@@ -385,7 +409,7 @@ export function MedicalImageViewer({
             ),
           },
           {
-            label: "Crosshair",
+            label: t("viewer.tool.crosshair"),
             icon: (
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <path
@@ -399,7 +423,7 @@ export function MedicalImageViewer({
             ),
           },
           {
-            label: "Grid",
+            label: t("viewer.tool.grid"),
             icon: (
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <path
@@ -412,7 +436,7 @@ export function MedicalImageViewer({
             ),
           },
           {
-            label: "Measure",
+            label: t("viewer.tool.measure"),
             icon: (
               <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
                 <path
@@ -438,38 +462,45 @@ export function MedicalImageViewer({
           </button>
         ))}
       </div>
-      <aside className={styles.inspector} aria-label="Image metadata and validation">
+      <aside className={styles.inspector} aria-label={t("viewer.inspector.aria")}>
         <header className={styles.inspectorHeader}>
-          <h4>Inspector</h4>
-          <span className={styles.validationPill} data-status={validation.status}>
-            Validation {validation.status}
+          <h4>{t("viewer.inspector.title")}</h4>
+          <span className={styles.validationPill} data-status={validationStatus}>
+            {t("viewer.inspector.validation", { status: validationStatus })}
           </span>
         </header>
         <dl className={styles.inspectorMeta}>
           <div>
-            <dt>Preview</dt>
+            <dt>{t("viewer.inspector.preview")}</dt>
             <dd>
               {preview?.source === "nifti"
-                ? `${planeLabel} NIfTI, slice ${(preview.slice_index ?? 0) + 1} / ${preview.slice_count ?? "?"}`
-                : preview?.message || "No preview source registered"}
+                ? t("viewer.inspector.nifti", {
+                    plane: planeLabel,
+                    current: (preview.slice_index ?? 0) + 1,
+                    total: preview.slice_count ?? "?",
+                  })
+                : preview?.message || t("viewer.inspector.noSource")}
             </dd>
           </div>
           <div>
-            <dt>Dimensions</dt>
-            <dd>{dimensions.length ? dimensions.join(" x ") : "unknown"}</dd>
+            <dt>{t("viewer.inspector.dimensions")}</dt>
+            <dd>{dimensions.length ? dimensions.join(" x ") : t("viewer.unknown")}</dd>
           </div>
           <div>
-            <dt>Voxel spacing</dt>
-            <dd>{spacing.length ? spacing.slice(0, 3).join(" x ") : "pending"}</dd>
+            <dt>{t("viewer.inspector.voxelSpacing")}</dt>
+            <dd>{spacing.length ? spacing.slice(0, 3).join(" x ") : t("viewer.pending")}</dd>
           </div>
           <div>
-            <dt>Source</dt>
+            <dt>{t("viewer.source")}</dt>
             <dd>{sourceSummary}</dd>
           </div>
         </dl>
         {visibleValidationIssues.length ? (
-          <div className={styles.inspectorIssues} aria-label="Validation issues">
-            <h5>Issues</h5>
+          <div
+            className={styles.inspectorIssues}
+            aria-label={t("viewer.inspector.validationIssues")}
+          >
+            <h5>{t("viewer.inspector.issues")}</h5>
             <ul>
               {visibleValidationIssues.map((issue) => (
                 <li
@@ -484,11 +515,11 @@ export function MedicalImageViewer({
             </ul>
           </div>
         ) : (
-          <p className={styles.inspectorEmpty}>No checklist issues detected.</p>
+          <p className={styles.inspectorEmpty}>{t("viewer.inspector.noIssues")}</p>
         )}
         {sliceCount > 1 ? (
           <div className={styles.inspectorSlice}>
-            <label htmlFor="viewer-slice-slider">Slice</label>
+            <label htmlFor="viewer-slice-slider">{t("viewer.slice")}</label>
             <input
               id="viewer-slice-slider"
               className={styles.sliceSlider}
@@ -497,7 +528,7 @@ export function MedicalImageViewer({
               max={sliceCount - 1}
               value={currentSlice}
               onChange={(event) => onSliceChange(Number(event.target.value))}
-              aria-label="Slice index"
+              aria-label={t("viewer.sliceIndex")}
             />
             <span className={styles.sliceReadout}>
               {currentSlice + 1} / {sliceCount}

@@ -11,7 +11,9 @@ import { useTaskStream } from "../../hooks/useTaskStream";
 import { useTasks } from "../../hooks/useTasks";
 import { useTaskEvents } from "../../hooks/useTaskEvents";
 import { useTaskDiagnostics } from "../../hooks/useTaskDiagnostics";
-import { approveTask, generateTaskAuditPackage, getTask } from "../../lib/api";
+import { approveTask, generateTaskAuditPackage } from "../../lib/api";
+
+const noopTaskSelection = () => {};
 
 export interface TaskController {
   tasks: TaskLogEntry[];
@@ -49,22 +51,29 @@ export function useTaskController(
   setSelectedTaskId: ((id: string | null) => void) | undefined = undefined,
   setActiveTaskId: ((id: string | null) => void) | undefined = undefined,
 ): TaskController {
-  const noop = () => {};
-  const setSelectedTaskIdSafe = setSelectedTaskId ?? noop;
-  const setActiveTaskIdSafe = setActiveTaskId ?? noop;
+  const setSelectedTaskIdSafe = setSelectedTaskId ?? noopTaskSelection;
+  const setActiveTaskIdSafe = setActiveTaskId ?? noopTaskSelection;
   const tasks = useTasks();
   const taskEvents = useTaskEvents(selectedTaskId);
   const taskDiagnostics = useTaskDiagnostics(selectedTaskId);
   const updateTaskFromStream = tasks.updateTaskFromStream;
+  const setTaskEventsData = taskEvents.setData;
+  const reloadTaskEvents = taskEvents.reload;
+  const reloadTaskDiagnostics = taskDiagnostics.reload;
 
   const [approvalName, setApprovalName] = useState("");
-  const [auditPackage, setAuditPackage] = useState<TaskAuditPackage | null>(null);
+  const [auditState, setAuditState] = useState<{
+    taskId: string;
+    package: TaskAuditPackage;
+  } | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
-
-  // Reset audit package when the selected task changes.
-  useEffect(() => {
-    setAuditPackage(null);
-  }, [selectedTaskId]);
+  const auditPackage = auditState?.taskId === selectedTaskId ? auditState.package : null;
+  const setAuditPackage = useCallback(
+    (pkg: TaskAuditPackage | null) => {
+      setAuditState(pkg && selectedTaskId ? { taskId: selectedTaskId, package: pkg } : null);
+    },
+    [selectedTaskId],
+  );
 
   const handleTaskMessage = useCallback(
     (message: TaskStreamMessage) => {
@@ -81,7 +90,7 @@ export function useTaskController(
           source: "websocket",
           metadata: {},
         };
-        taskEvents.setData((current) => [...current, event]);
+        setTaskEventsData((current) => [...current, event]);
       }
       // notice is owned by the app controller; callers handle it.
       if (
@@ -89,16 +98,16 @@ export function useTaskController(
         selectedTaskId === message.task_id
       ) {
         window.setTimeout(() => {
-          taskEvents.reload();
-          taskDiagnostics.reload();
+          reloadTaskEvents();
+          reloadTaskDiagnostics();
         }, 250);
       }
     },
     [
       selectedTaskId,
-      taskDiagnostics.reload,
-      taskEvents.reload,
-      taskEvents.setData,
+      reloadTaskDiagnostics,
+      reloadTaskEvents,
+      setTaskEventsData,
       updateTaskFromStream,
     ],
   );
@@ -109,9 +118,9 @@ export function useTaskController(
   useEffect(() => {
     const nextTaskId = selectedTaskId;
     if (!nextTaskId) return;
-    setActiveTaskId(null);
-    window.setTimeout(() => setActiveTaskId(nextTaskId), 0);
-    // We intentionally only depend on selectedTaskId here; setActiveTaskId is
+    setActiveTaskIdSafe(null);
+    window.setTimeout(() => setActiveTaskIdSafe(nextTaskId), 0);
+    // We intentionally only depend on selectedTaskId here; setActiveTaskIdSafe is
     // passed in from the parent so we don't list it as a dep.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTaskId]);
@@ -151,7 +160,7 @@ export function useTaskController(
       return;
     }
     try {
-      const response = await approveTask(selectedTaskId, {
+      await approveTask(selectedTaskId, {
         approved: true,
         approved_by: approvalName.trim(),
         safety_flags: {
@@ -161,13 +170,20 @@ export function useTaskController(
         },
       });
       await tasks.reload();
-      await taskEvents.reload();
-      await taskDiagnostics.reload();
-      setActiveTaskId(selectedTaskId);
+      await reloadTaskEvents();
+      await reloadTaskDiagnostics();
+      setActiveTaskIdSafe(selectedTaskId);
     } catch {
       // Errors are surfaced via reload; the parent can read taskError if needed.
     }
-  }, [selectedTaskId, approvalName, tasks, taskEvents, taskDiagnostics, setActiveTaskId]);
+  }, [
+    selectedTaskId,
+    approvalName,
+    tasks,
+    reloadTaskEvents,
+    reloadTaskDiagnostics,
+    setActiveTaskIdSafe,
+  ]);
 
   const handleGenerateAuditPackage = useCallback(async () => {
     if (!selectedTaskId) return;
@@ -180,14 +196,14 @@ export function useTaskController(
     } finally {
       setAuditLoading(false);
     }
-  }, [selectedTaskId]);
+  }, [selectedTaskId, setAuditPackage]);
 
   const handleReconnectTaskStream = useCallback(() => {
     const nextTaskId = selectedTaskId;
     if (!nextTaskId) return;
-    setActiveTaskId(null);
-    window.setTimeout(() => setActiveTaskId(nextTaskId), 0);
-  }, [selectedTaskId, setActiveTaskId]);
+    setActiveTaskIdSafe(null);
+    window.setTimeout(() => setActiveTaskIdSafe(nextTaskId), 0);
+  }, [selectedTaskId, setActiveTaskIdSafe]);
 
   return {
     tasks: tasks.data,
@@ -196,7 +212,7 @@ export function useTaskController(
     reloadTasks: tasks.reload,
     updateTaskFromStream,
     selectedTaskId,
-    setSelectedTaskId,
+    setSelectedTaskId: setSelectedTaskIdSafe,
     selectedTask,
     taskCounts,
     hasPreprocessingRun,
@@ -204,9 +220,9 @@ export function useTaskController(
     taskEvents: taskEvents.data,
     taskEventsLoading: taskEvents.loading,
     taskEventsError: taskEvents.error,
-    reloadTaskEvents: taskEvents.reload,
+    reloadTaskEvents,
     taskDiagnosticsData: taskDiagnostics.data,
-    reloadTaskDiagnostics: taskDiagnostics.reload,
+    reloadTaskDiagnostics,
     taskStreamConnected: taskStream.connected,
     taskStreamError: taskStream.error,
     approvalName,
@@ -217,7 +233,7 @@ export function useTaskController(
     handleGenerateAuditPackage,
     handleReconnectTaskStream,
     setAuditPackage,
-    taskEventsSetData: taskEvents.setData,
+    taskEventsSetData: setTaskEventsData,
   };
 }
 

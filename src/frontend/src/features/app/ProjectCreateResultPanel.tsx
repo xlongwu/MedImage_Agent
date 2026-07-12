@@ -1,6 +1,9 @@
 import { useState } from "react";
 import type { ProjectCreateResponse } from "../../types";
-import { ActionList, cleanupNextActions } from "../../components/dashboardUi";
+import { ActionList } from "../../components/dashboardUi";
+import { cleanupNextActions } from "../../components/dashboardUiModel";
+import { formatNumber } from "../../i18n/format";
+import { useI18n } from "../../i18n/useI18n";
 
 export interface ProjectCreateResultPanelProps {
   result: ProjectCreateResponse | null;
@@ -15,6 +18,7 @@ export function ProjectCreateResultPanel({
   error,
   onDismiss,
 }: ProjectCreateResultPanelProps) {
+  const { locale, t } = useI18n();
   const [showTechDetails, setShowTechDetails] = useState(false);
 
   if (!result && !loading && !error) {
@@ -39,17 +43,21 @@ export function ProjectCreateResultPanel({
         <div>
           <div className="card-title">
             {loading
-              ? "Creating project..."
+              ? t("projects.createResult.creating")
               : error
-                ? "Project creation failed"
-                : `Project created: ${result?.project_name}`}
+                ? t("projects.createResult.failed")
+                : t("projects.createResult.created", { name: result?.project_name ?? "" })}
           </div>
           <span>
-            {loading ? "Inspecting the selected BIDS/rawdata directory" : `Status: ${status}`}
+            {loading
+              ? t("projects.createResult.inspecting")
+              : t("projects.createResult.statusValue", { status })}
           </span>
         </div>
         <div className="detail-actions">
-          {!loading ? <button onClick={onDismiss}>Dismiss</button> : null}
+          {!loading ? (
+            <button onClick={onDismiss}>{t("projects.createResult.dismiss")}</button>
+          ) : null}
         </div>
       </div>
 
@@ -59,31 +67,31 @@ export function ProjectCreateResultPanel({
         <>
           <div className="detail-grid">
             <div>
-              <span>Status</span>
+              <span>{t("projects.createResult.status")}</span>
               <strong>{status}</strong>
             </div>
             <div>
-              <span>Converted subjects</span>
+              <span>{t("projects.createResult.convertedSubjects")}</span>
               <strong>{diagnosticNumber(diagnostics, "image_subject_count")}</strong>
             </div>
             <div>
-              <span>Raw DICOM candidates</span>
+              <span>{t("projects.createResult.rawCandidates")}</span>
               <strong>{rawDicomCandidates}</strong>
             </div>
             <div>
-              <span>DICOM files</span>
-              <strong>{dicomFileCount.toLocaleString()}</strong>
+              <span>{t("projects.createResult.dicomFiles")}</span>
+              <strong>{formatNumber(locale, dicomFileCount)}</strong>
             </div>
             <div>
-              <span>Complete</span>
+              <span>{t("projects.createResult.complete")}</span>
               <strong>{diagnosticNumber(diagnostics, "subjects_complete")}</strong>
             </div>
             <div>
-              <span>Warning</span>
+              <span>{t("projects.createResult.warning")}</span>
               <strong>{diagnosticNumber(diagnostics, "subjects_warning")}</strong>
             </div>
             <div>
-              <span>Incomplete</span>
+              <span>{t("projects.createResult.incomplete")}</span>
               <strong>{diagnosticNumber(diagnostics, "subjects_incomplete")}</strong>
             </div>
           </div>
@@ -95,7 +103,7 @@ export function ProjectCreateResultPanel({
                 checked={showTechDetails}
                 onChange={(e) => setShowTechDetails(e.target.checked)}
               />
-              Show technical details
+              {t("projects.createResult.showTechnical")}
             </label>
           </div>
 
@@ -103,21 +111,21 @@ export function ProjectCreateResultPanel({
             <>
               <div className="event-list">
                 <div className="event-row">
-                  <span>Project directory</span>
+                  <span>{t("projects.createResult.projectDirectory")}</span>
                   <p>{result.project_dir}</p>
                 </div>
                 <div className="event-row">
-                  <span>Rawdata directory</span>
+                  <span>{t("projects.createResult.rawdataDirectory")}</span>
                   <p>{result.rawdata_dir}</p>
                 </div>
                 <div className="event-row">
-                  <span>Dataset index</span>
-                  <p>{result.dataset_index_path || "Not generated"}</p>
+                  <span>{t("projects.createResult.datasetIndex")}</span>
+                  <p>{result.dataset_index_path || t("projects.createResult.notGenerated")}</p>
                 </div>
               </div>
 
               <div className="tool-result-list">
-                <div className="panel-kicker">Next actions</div>
+                <div className="panel-kicker">{t("projects.createResult.nextActions")}</div>
                 <ActionList actions={nextActions} rawDicom={hasRawDicom} />
               </div>
             </>
@@ -127,7 +135,7 @@ export function ProjectCreateResultPanel({
             <div className="diagnostic-list">
               {result.warnings.map((warning, index) => (
                 <div className="diagnostic-item warning" key={`${warning}-${index}`}>
-                  <span>Warning</span>
+                  <span>{t("projects.createResult.warning")}</span>
                   <p>{warning}</p>
                 </div>
               ))}

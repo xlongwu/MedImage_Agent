@@ -11,6 +11,49 @@
   font-weight: var(--font-weight-medium);
   line-height: 1;
   white-space: nowrap;
+  transition:
+    color var(--motion-duration-fast) var(--ease-standard),
+    background var(--motion-duration-fast) var(--ease-standard),
+    border-color var(--motion-duration-fast) var(--ease-standard),
+    opacity var(--motion-duration-fast) var(--ease-standard),
+    transform var(--motion-duration-fast) var(--ease-standard);
+}
+
+.progress {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(120px, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.progressLabel,
+.progressText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progressText {
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  text-align: right;
+}
+
+.progressTrack {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-divider);
+}
+
+.progressValue {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+  transition: width var(--motion-duration-standard) var(--ease-standard);
 }
 
 .button:hover:not(:disabled) {

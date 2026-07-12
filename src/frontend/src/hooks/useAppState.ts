@@ -1,12 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 export type ThemePreference = "light" | "dark";
+export type LocalePreference = "en" | "zh-CN";
 
 const THEME_STORAGE_KEY = "medimage.themePreference";
 const FALLBACK_THEME: ThemePreference = "light";
+const LOCALE_STORAGE_KEY = "medimage.localePreference";
+const FALLBACK_LOCALE: LocalePreference = "en";
 
 function isThemePreference(value: string | null): value is ThemePreference {
   return value === "light" || value === "dark";
+}
+
+function isLocalePreference(value: string | null): value is LocalePreference {
+  return value === "en" || value === "zh-CN";
+}
+
+function readStoredLocalePreference(): LocalePreference {
+  if (typeof window === "undefined") return FALLBACK_LOCALE;
+  try {
+    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    return isLocalePreference(stored) ? stored : FALLBACK_LOCALE;
+  } catch {
+    return FALLBACK_LOCALE;
+  }
 }
 
 function readStoredThemePreference(): ThemePreference {
@@ -40,21 +57,39 @@ function applyThemePreference(themePreference: ThemePreference): void {
 export function useAppState() {
   const [themePreference, setThemePreferenceState] =
     useState<ThemePreference>(readStoredThemePreference);
+  const [localePreference, setLocalePreferenceState] = useState<LocalePreference>(
+    readStoredLocalePreference,
+  );
 
   useEffect(() => {
     applyThemePreference(themePreference);
     persistThemePreference(themePreference);
   }, [themePreference]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, localePreference);
+    } catch {
+      // Locale remains active for this session when storage is unavailable.
+    }
+    document.documentElement.lang = localePreference;
+  }, [localePreference]);
+
   const setThemePreference = useCallback((nextThemePreference: ThemePreference) => {
     setThemePreferenceState(nextThemePreference);
+  }, []);
+
+  const setLocalePreference = useCallback((nextLocalePreference: LocalePreference) => {
+    setLocalePreferenceState(nextLocalePreference);
   }, []);
 
   return useMemo(
     () => ({
       setThemePreference,
       themePreference,
+      localePreference,
+      setLocalePreference,
     }),
-    [setThemePreference, themePreference],
+    [localePreference, setLocalePreference, setThemePreference, themePreference],
   );
 }

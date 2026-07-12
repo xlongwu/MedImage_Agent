@@ -29,6 +29,9 @@ import {
 import type { BadgeProps } from "../../components/ui";
 import type { ProjectInventory } from "../../lib/projectWorkflow";
 import styles from "./PreprocessingWorkspace.module.css";
+import { useI18n } from "../../i18n/useI18n";
+import type { I18nContextValue } from "../../i18n/context";
+import type { MessageKey } from "../../i18n/messages/en";
 
 type Profile = NonNullable<PreprocessingPipelineExecuteRequest["pipeline_profile"]>;
 type ConfirmationKey = keyof NonNullable<PreprocessingPipelineExecuteRequest["confirmations"]>;
@@ -45,208 +48,208 @@ type Props = {
 };
 
 const PROFILE_OPTIONS = [
-  { label: "Minimal FC", value: "fc_minimal" },
-  { label: "DPARSFA-like", value: "dparsfa_like" },
-  { label: "Custom", value: "custom" },
-];
+  { labelKey: "preprocessing.flow.profileMinimal", value: "fc_minimal" },
+  { labelKey: "preprocessing.flow.profileDparsfa", value: "dparsfa_like" },
+  { labelKey: "preprocessing.flow.profileCustom", value: "custom" },
+] satisfies Array<{ labelKey: MessageKey; value: Profile }>;
 
 const CONFIRMATIONS: Array<{
   key: ConfirmationKey;
-  label: string;
-  detail: string;
+  labelKey: MessageKey;
+  detailKey: MessageKey;
 }> = [
   {
     key: "confirm_rawdata_readonly",
-    label: "Rawdata stays read-only",
-    detail: "Only project workspace derivatives may be written.",
+    labelKey: "preprocessing.flow.confirmRawLabel",
+    detailKey: "preprocessing.flow.confirmRawDetail",
   },
   {
     key: "confirm_reviewed_execution",
-    label: "Reviewed execution request",
-    detail: "The request uses the backend reviewed orchestrator.",
+    labelKey: "preprocessing.flow.confirmReviewedLabel",
+    detailKey: "preprocessing.flow.confirmReviewedDetail",
   },
   {
     key: "confirm_external_tools_if_needed",
-    label: "External-tool gates acknowledged",
-    detail: "SPM/MATLAB stages remain blocked without backend approval and env gates.",
+    labelKey: "preprocessing.flow.confirmExternalLabel",
+    detailKey: "preprocessing.flow.confirmExternalDetail",
   },
   {
     key: "confirm_research_use_only",
-    label: "Research use only",
-    detail: "No clinical diagnosis, treatment, or decision-support claim.",
+    labelKey: "preprocessing.flow.confirmResearchLabel",
+    detailKey: "preprocessing.flow.confirmResearchDetail",
   },
   {
     key: "confirm_no_clinical_use",
-    label: "No clinical use",
-    detail: "Outputs require scientific review before interpretation.",
+    labelKey: "preprocessing.flow.confirmClinicalLabel",
+    detailKey: "preprocessing.flow.confirmClinicalDetail",
   },
 ];
 
 const NATIVE_CONFIRMATIONS: Array<{
   key: NativeConfirmationKey;
-  label: string;
-  detail: string;
+  labelKey: MessageKey;
+  detailKey: MessageKey;
 }> = [
   {
     key: "confirm_reviewed_native_execution",
-    label: "Reviewed native execution",
-    detail: "The full native runner receives a reviewed request, not free-form commands.",
+    labelKey: "preprocessing.flow.nativeReviewedLabel",
+    detailKey: "preprocessing.flow.nativeReviewedDetail",
   },
   {
     key: "confirm_rawdata_readonly",
-    label: "Native rawdata read-only",
-    detail: "Native preprocessing writes only derivatives under the project workspace.",
+    labelKey: "preprocessing.flow.nativeRawLabel",
+    detailKey: "preprocessing.flow.nativeRawDetail",
   },
   {
     key: "confirm_no_external_tools",
-    label: "No external tools",
-    detail: "MATLAB, SPM, DPABI, shell converters, and third-party tools remain disabled.",
+    labelKey: "preprocessing.flow.nativeExternalLabel",
+    detailKey: "preprocessing.flow.nativeExternalDetail",
   },
   {
     key: "confirm_research_use_only",
-    label: "Native research use only",
-    detail: "Outputs are research artifacts and are not clinical evidence.",
+    labelKey: "preprocessing.flow.nativeResearchLabel",
+    detailKey: "preprocessing.flow.nativeResearchDetail",
   },
   {
     key: "confirm_no_clinical_use",
-    label: "Native no clinical use",
-    detail: "No diagnosis, treatment, or decision-support claim is made.",
+    labelKey: "preprocessing.flow.nativeClinicalLabel",
+    detailKey: "preprocessing.flow.nativeClinicalDetail",
   },
 ];
 
 const STAGE_ROWS: Array<{
   stageId: string;
-  label: string;
+  labelKey: MessageKey;
   backend: string;
   fcMinimal: boolean;
   dparsfaLike: boolean;
-  note: string;
+  noteKey: MessageKey;
   state: "computed" | "external" | "optional" | "report" | "gate";
 }> = [
   {
     stageId: "input_validation",
-    label: "Input inventory",
+    labelKey: "preprocessing.flow.stageInputInventory",
     backend: "registry",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Requires registered converted BIDS/NIfTI input.",
+    noteKey: "preprocessing.flow.noteRegisteredInput",
     state: "gate",
   },
   {
     stageId: "dummy_scan_removal",
-    label: "Dummy scan removal",
+    labelKey: "preprocessing.flow.stageDummyRemoval",
     backend: "auto",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Skipped unless requested by reviewed parameters.",
+    noteKey: "preprocessing.flow.noteDummyRemoval",
     state: "optional",
   },
   {
     stageId: "realignment",
-    label: "Realignment",
+    labelKey: "preprocessing.flow.stageRealignment",
     backend: "Native Python",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Native default uses the current simplified motion-correction kernel.",
+    noteKey: "preprocessing.flow.noteRealignment",
     state: "computed",
   },
   {
     stageId: "t1_coregistration",
-    label: "T1 coregistration",
+    labelKey: "preprocessing.flow.stageT1Coregistration",
     backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional affine coregistration; external SPM remains explicit and gated.",
+    noteKey: "preprocessing.flow.noteCoregistration",
     state: "optional",
   },
   {
     stageId: "segmentation",
-    label: "Segmentation",
+    labelKey: "preprocessing.flow.stageSegmentation",
     backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional intensity-based segmentation for WM/CSF nuisance masks.",
+    noteKey: "preprocessing.flow.noteSegmentation",
     state: "optional",
   },
   {
     stageId: "normalization",
-    label: "Normalization",
+    labelKey: "preprocessing.flow.stageNormalization",
     backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional affine normalization; nonlinear SPM-equivalence is not claimed.",
+    noteKey: "preprocessing.flow.noteNormalization",
     state: "optional",
   },
   {
     stageId: "spatial_smoothing",
-    label: "Smoothing",
+    labelKey: "preprocessing.flow.stageSmoothing",
     backend: "Native Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional native smoothing; external SPM smoothing stays opt-in.",
+    noteKey: "preprocessing.flow.noteSmoothing",
     state: "optional",
   },
   {
     stageId: "nuisance_regression",
-    label: "Nuisance regression",
+    labelKey: "preprocessing.flow.stageNuisance",
     backend: "Python",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Consumes realigned BOLD and motion parameters.",
+    noteKey: "preprocessing.flow.noteNuisance",
     state: "computed",
   },
   {
     stageId: "temporal_filtering",
-    label: "Temporal filtering",
+    labelKey: "preprocessing.flow.stageFiltering",
     backend: "Python",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Requires TR from sidecar or explicit reviewed value.",
+    noteKey: "preprocessing.flow.noteFiltering",
     state: "computed",
   },
   {
     stageId: "alff_falff",
-    label: "ALFF / fALFF",
+    labelKey: "preprocessing.flow.stageAlff",
     backend: "Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional derived maps; computed status is not validation.",
+    noteKey: "preprocessing.flow.noteAlff",
     state: "optional",
   },
   {
     stageId: "reho",
-    label: "ReHo",
+    labelKey: "preprocessing.flow.stageReho",
     backend: "Python",
     fcMinimal: false,
     dparsfaLike: true,
-    note: "Optional derived map with CPU golden validation.",
+    noteKey: "preprocessing.flow.noteReho",
     state: "optional",
   },
   {
     stageId: "functional_connectivity",
-    label: "Functional connectivity",
+    labelKey: "preprocessing.flow.stageFc",
     backend: "Python",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Formal FC requires a real atlas artifact or reviewed atlas path.",
+    noteKey: "preprocessing.flow.noteFc",
     state: "computed",
   },
   {
     stageId: "subject_qc",
-    label: "Subject QC",
+    labelKey: "preprocessing.flow.stageSubjectQc",
     backend: "registry",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Summarizes computed artifacts without inventing pass/fail state.",
+    noteKey: "preprocessing.flow.noteSubjectQc",
     state: "report",
   },
   {
     stageId: "group_summary",
-    label: "Pipeline report",
+    labelKey: "preprocessing.flow.stageReport",
     backend: "report",
     fcMinimal: true,
     dparsfaLike: true,
-    note: "Exports report and validation records when backend evidence exists.",
+    noteKey: "preprocessing.flow.noteReport",
     state: "report",
   },
 ];
@@ -275,7 +278,9 @@ export function PreprocessingReviewedFlow({
   preprocessingRunId,
   projectId,
 }: Props) {
+  const { t } = useI18n();
   const [profile, setProfile] = useState<Profile>("fc_minimal");
+  const [templatePath, setTemplatePath] = useState("");
   const [atlasPath, setAtlasPath] = useState("");
   const [labelsPath, setLabelsPath] = useState("");
   const [fallbackTr, setFallbackTr] = useState("");
@@ -286,8 +291,9 @@ export function PreprocessingReviewedFlow({
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<PreprocessingPipelineExecuteResponse | null>(null);
   const [error, setError] = useState("");
-  const [nativeConfirmations, setNativeConfirmations] =
-    useState<Record<NativeConfirmationKey, boolean>>(defaultNativeConfirmations);
+  const [nativeConfirmations, setNativeConfirmations] = useState<
+    Record<NativeConfirmationKey, boolean>
+  >(defaultNativeConfirmations);
   const [nativeAction, setNativeAction] = useState<NativeAction>("");
   const [nativeResult, setNativeResult] = useState<NativeFullPreprocResponse | null>(null);
   const [nativeValidation, setNativeValidation] = useState<Record<string, unknown> | null>(null);
@@ -384,6 +390,7 @@ export function PreprocessingReviewedFlow({
           labelsPath,
           preprocessingRunId: nativeRunId,
           profile,
+          templatePath,
         }),
       );
       setNativeResult(response);
@@ -412,6 +419,7 @@ export function PreprocessingReviewedFlow({
           labelsPath,
           preprocessingRunId: nativeRunId,
           profile,
+          templatePath,
         }),
       );
       setNativeResult(response);
@@ -427,7 +435,9 @@ export function PreprocessingReviewedFlow({
     setNativeAction("validation");
     setNativeError("");
     try {
-      setNativeValidation(await getNativeFullPreprocessingValidation(baseUrl, projectId, nativeRunId));
+      setNativeValidation(
+        await getNativeFullPreprocessingValidation(baseUrl, projectId, nativeRunId),
+      );
     } catch (err) {
       setNativeError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -449,56 +459,67 @@ export function PreprocessingReviewedFlow({
   };
 
   return (
-    <section className={styles.reviewedFlow} aria-label="Reviewed preprocessing flow">
+    <section className={styles.reviewedFlow} aria-label={t("preprocessing.flow.reviewed")}>
       <ConversionHandoffCard inventory={inventory} onOpenDataConversion={onOpenDataConversion} />
 
       <Card className={styles.pipelineBuilderCard} tone="muted">
         <div className={styles.sectionHeader}>
           <div>
-            <h3>Pipeline builder</h3>
-            <p>Profile, backend policy, atlas, nuisance, and filtering settings for review.</p>
+            <h3>{t("preprocessing.flow.pipelineBuilder")}</h3>
+            <p>{t("preprocessing.flow.pipelineBuilderDescription")}</p>
           </div>
-          <Badge tone="info">Reviewed</Badge>
+          <Badge tone="info">{t("preprocessing.flow.reviewedBadge")}</Badge>
         </div>
         <SegmentedControl
-          aria-label="Preprocessing pipeline profile"
-          options={PROFILE_OPTIONS}
+          aria-label={t("preprocessing.flow.pipelineProfile")}
+          options={PROFILE_OPTIONS.map((option) => ({
+            label: t(option.labelKey),
+            value: option.value,
+          }))}
           value={profile}
           onChange={(value) => setProfile(value as Profile)}
         />
         <div className={styles.builderGrid}>
           <label className={styles.fieldShell}>
-            <span>Atlas path</span>
+            <span>{t("preprocessing.flow.templatePath")}</span>
+            <input
+              value={templatePath}
+              onChange={(event) => setTemplatePath(event.target.value)}
+              placeholder={t("preprocessing.flow.templatePlaceholder")}
+            />
+          </label>
+          <label className={styles.fieldShell}>
+            <span>{t("preprocessing.flow.atlasPath")}</span>
             <input
               value={atlasPath}
               onChange={(event) => setAtlasPath(event.target.value)}
-              placeholder="registered atlas artifact or reviewed local path"
+              placeholder={t("preprocessing.flow.atlasPlaceholder")}
             />
           </label>
           <label className={styles.fieldShell}>
-            <span>Labels path</span>
+            <span>{t("preprocessing.flow.labelsPath")}</span>
             <input
               value={labelsPath}
               onChange={(event) => setLabelsPath(event.target.value)}
-              placeholder="TSV or JSON labels"
+              placeholder={t("preprocessing.flow.labelsPlaceholder")}
             />
           </label>
           <label className={styles.fieldShell}>
-            <span>Fallback TR</span>
+            <span>{t("preprocessing.flow.fallbackTr")}</span>
             <input
               inputMode="decimal"
               value={fallbackTr}
               onChange={(event) => setFallbackTr(event.target.value)}
-              placeholder="blank unless explicitly reviewed"
+              placeholder={t("preprocessing.flow.fallbackTrPlaceholder")}
             />
           </label>
           <label className={styles.fieldShell}>
-            <span>Preview limit</span>
+            <span>{t("preprocessing.flow.previewLimit")}</span>
             <input
               inputMode="numeric"
               value={previewLimit}
               onChange={(event) => setPreviewLimit(event.target.value)}
-              placeholder="blank for full discovered scope"
+              placeholder={t("preprocessing.flow.previewLimitPlaceholder")}
             />
           </label>
         </div>
@@ -508,28 +529,28 @@ export function PreprocessingReviewedFlow({
             checked={includeGlobalSignal}
             onChange={(event) => setIncludeGlobalSignal(event.target.checked)}
           />
-          <span>Include global signal regressor</span>
+          <span>{t("preprocessing.flow.globalSignal")}</span>
         </label>
-        <Table caption="Reviewed preprocessing stages">
+        <Table caption={t("preprocessing.flow.reviewedStages")}>
           <thead>
             <tr>
-              <th>Stage</th>
-              <th>Backend</th>
-              <th>State</th>
-              <th>Review note</th>
+              <th>{t("preprocessing.flow.stage")}</th>
+              <th>{t("preprocessing.flow.backend")}</th>
+              <th>{t("preprocessing.flow.state")}</th>
+              <th>{t("preprocessing.flow.reviewNote")}</th>
             </tr>
           </thead>
           <tbody>
             {visibleStages.map((stage) => (
               <tr key={stage.stageId}>
-                <td>{stage.label}</td>
+                <td>{t(stage.labelKey)}</td>
                 <td>{stage.backend}</td>
                 <td>
                   <Badge tone={stageStateTone(stage.state)} size="sm">
-                    {stageStateLabel(stage.state)}
+                    {stageStateLabel(stage.state, t)}
                   </Badge>
                 </td>
-                <td>{stage.note}</td>
+                <td>{t(stage.noteKey)}</td>
               </tr>
             ))}
           </tbody>
@@ -539,28 +560,33 @@ export function PreprocessingReviewedFlow({
       <Card className={styles.executionGateCard}>
         <div className={styles.sectionHeader}>
           <div>
-            <h3>Reviewed execution gate</h3>
-            <p>All confirmations are explicit before the backend orchestrator can be called.</p>
+            <h3>{t("preprocessing.flow.executionGate")}</h3>
+            <p>{t("preprocessing.flow.executionGateDescription")}</p>
           </div>
-          <Badge tone={canSubmit ? "success" : "warning"}>{canSubmit ? "Ready" : "Blocked"}</Badge>
+          <Badge tone={canSubmit ? "success" : "warning"}>
+            {canSubmit ? t("preprocessing.ready") : t("common.blocked")}
+          </Badge>
         </div>
-        <div className={styles.gateSummary} aria-label="Reviewed gate readiness">
+        <div className={styles.gateSummary} aria-label={t("preprocessing.flow.gateReadiness")}>
           <div>
-            <span>Project</span>
-            <strong>{projectId ? "Selected" : "Missing"}</strong>
+            <span>{t("preprocessing.flow.project")}</span>
+            <strong>{projectId ? t("preprocessing.selected") : t("preprocessing.missing")}</strong>
           </div>
           <div>
-            <span>Preprocessing run</span>
+            <span>{t("preprocessing.flow.preprocessingRun")}</span>
             <strong>
-              {preprocessingRunId ?? (hasPreprocessingRun ? "ID unavailable" : "Required")}
+              {preprocessingRunId ??
+                (hasPreprocessingRun
+                  ? t("preprocessing.flow.idUnavailable")
+                  : t("preprocessing.required"))}
             </strong>
           </div>
           <div>
-            <span>Profile</span>
-            <strong>{profileLabel(profile)}</strong>
+            <span>{t("preprocessing.flow.profile")}</span>
+            <strong>{profileLabel(profile, t)}</strong>
           </div>
         </div>
-        <div className={styles.confirmationList} aria-label="Reviewed execution confirmations">
+        <div className={styles.confirmationList} aria-label={t("preprocessing.flow.confirmations")}>
           {CONFIRMATIONS.map((item) => (
             <label className={styles.confirmationItem} key={item.key}>
               <input
@@ -574,20 +600,20 @@ export function PreprocessingReviewedFlow({
                 }
               />
               <span>
-                <strong>{item.label}</strong>
-                <small>{item.detail}</small>
+                <strong>{t(item.labelKey)}</strong>
+                <small>{t(item.detailKey)}</small>
               </span>
             </label>
           ))}
         </div>
         <div className={styles.reviewedActions}>
           <Button variant="primary" onClick={executeReviewedFlow} disabled={!canSubmit}>
-            {submitting ? "Submitting..." : "Submit reviewed execution"}
+            {submitting ? t("preprocessing.flow.submitting") : t("preprocessing.flow.submit")}
           </Button>
           <span>
             {preprocessingRunId
-              ? "Backend status, artifacts, and report generation remain authoritative."
-              : "Create or restore a preprocessing run before execution can be submitted."}
+              ? t("preprocessing.flow.backendAuthoritative")
+              : t("preprocessing.flow.createRunFirst")}
           </span>
         </div>
         {error ? <div className={styles.inlineError}>{error}</div> : null}
@@ -636,33 +662,36 @@ function ConversionHandoffCard({
   inventory: ProjectInventory;
   onOpenDataConversion: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Card className={styles.handoffCard}>
       <div className={styles.sectionHeader}>
         <div>
-          <h3>DICOM conversion handoff</h3>
-          <p>Converted BIDS/NIfTI evidence is the preprocessing input boundary.</p>
+          <h3>{t("preprocessing.flow.handoff")}</h3>
+          <p>{t("preprocessing.flow.handoffDescription")}</p>
         </div>
         <Badge tone={inventory.hasConvertedData ? "success" : "warning"}>
-          {inventory.hasConvertedData ? "Registered" : "Required"}
+          {inventory.hasConvertedData
+            ? t("preprocessing.statusRegistered")
+            : t("preprocessing.required")}
         </Badge>
       </div>
-      <div className={styles.handoffMetrics} aria-label="DICOM conversion handoff">
+      <div className={styles.handoffMetrics} aria-label={t("preprocessing.flow.handoff")}>
         <div>
-          <span>Subjects</span>
+          <span>{t("preprocessing.flow.subjects")}</span>
           <strong>{inventory.convertedSubjects}</strong>
         </div>
         <div>
-          <span>NIfTI files</span>
+          <span>{t("preprocessing.flow.niftiFiles")}</span>
           <strong>{inventory.niftiFileCount.toLocaleString()}</strong>
         </div>
         <div>
-          <span>State</span>
+          <span>{t("preprocessing.flow.state")}</span>
           <strong>{inventory.dataStateLabel}</strong>
         </div>
       </div>
       <Button variant="secondary" onClick={onOpenDataConversion}>
-        Review conversion input
+        {t("preprocessing.flow.reviewConversion")}
       </Button>
     </Card>
   );
@@ -703,34 +732,42 @@ function NativeFullWorkflowCard({
   runId: string;
   validation: Record<string, unknown> | null;
 }) {
+  const { t } = useI18n();
   const status = result?.status ?? "not_started";
 
   return (
-    <Card className={styles.dashboardCard} aria-label="Native full preprocessing workflow">
+    <Card className={styles.dashboardCard} aria-label={t("preprocessing.flow.nativeWorkflow")}>
       <div className={styles.sectionHeader}>
         <div>
-          <h3>Native full preprocessing</h3>
-          <p>Dry-run, execute, validation, and report calls use the native API boundary.</p>
+          <h3>{t("preprocessing.flow.nativeTitle")}</h3>
+          <p>{t("preprocessing.flow.nativeDescription")}</p>
         </div>
         <Badge tone={statusTone(status)}>{status}</Badge>
       </div>
 
-      <div className={styles.gateSummary} aria-label="Native full run summary">
+      <div className={styles.gateSummary} aria-label={t("preprocessing.flow.nativeSummary")}>
         <div>
-          <span>Run</span>
-          <strong>{runId || "Required"}</strong>
+          <span>{t("preprocessing.flow.run")}</span>
+          <strong>{runId || t("preprocessing.required")}</strong>
         </div>
         <div>
-          <span>Artifacts</span>
-          <strong>{result ? result.artifact_count : "Awaiting run"}</strong>
+          <span>{t("preprocessing.flow.artifacts")}</span>
+          <strong>{result ? result.artifact_count : t("preprocessing.flow.awaitingRun")}</strong>
         </div>
         <div>
-          <span>Gate</span>
-          <strong>{allConfirmationsChecked ? "Ready" : "Confirmations required"}</strong>
+          <span>{t("preprocessing.flow.gate")}</span>
+          <strong>
+            {allConfirmationsChecked
+              ? t("preprocessing.ready")
+              : t("preprocessing.flow.confirmationsRequired")}
+          </strong>
         </div>
       </div>
 
-      <div className={styles.confirmationList} aria-label="Native full safety confirmations">
+      <div
+        className={styles.confirmationList}
+        aria-label={t("preprocessing.flow.nativeConfirmations")}
+      >
         {NATIVE_CONFIRMATIONS.map((item) => (
           <label className={styles.confirmationItem} key={item.key}>
             <input
@@ -739,8 +776,8 @@ function NativeFullWorkflowCard({
               onChange={() => onConfirmationToggle(item.key)}
             />
             <span>
-              <strong>{item.label}</strong>
-              <small>{item.detail}</small>
+              <strong>{t(item.labelKey)}</strong>
+              <small>{t(item.detailKey)}</small>
             </span>
           </label>
         ))}
@@ -748,27 +785,35 @@ function NativeFullWorkflowCard({
 
       <div className={styles.reviewedActions}>
         <Button variant="secondary" onClick={onDryRun} disabled={!canDryRun}>
-          {pendingAction === "dry-run" ? "Planning..." : "Run native dry-run"}
+          {pendingAction === "dry-run"
+            ? t("preprocessing.flow.planning")
+            : t("preprocessing.flow.runNativeDryRun")}
         </Button>
         <Button variant="primary" onClick={onExecute} disabled={!canExecute}>
-          {pendingAction === "execute" ? "Executing..." : "Execute native full preprocessing"}
+          {pendingAction === "execute"
+            ? t("preprocessing.flow.executing")
+            : t("preprocessing.flow.executeNative")}
         </Button>
         <Button variant="secondary" onClick={onRefreshValidation} disabled={!canRefresh}>
-          {pendingAction === "validation" ? "Refreshing..." : "Refresh native validation"}
+          {pendingAction === "validation"
+            ? t("preprocessing.flow.refreshing")
+            : t("preprocessing.flow.refreshValidation")}
         </Button>
         <Button variant="secondary" onClick={onRefreshReport} disabled={!canRefresh}>
-          {pendingAction === "report" ? "Refreshing..." : "Refresh native report"}
+          {pendingAction === "report"
+            ? t("preprocessing.flow.refreshing")
+            : t("preprocessing.flow.refreshReport")}
         </Button>
       </div>
       {error ? <div className={styles.inlineError}>{error}</div> : null}
 
-      <Table caption="Native full preprocessing stage results">
+      <Table caption={t("preprocessing.flow.nativeResults")}>
         <thead>
           <tr>
-            <th>Stage</th>
-            <th>Status</th>
-            <th>Artifacts</th>
-            <th>Issue</th>
+            <th>{t("preprocessing.flow.stage")}</th>
+            <th>{t("preprocessing.flow.status")}</th>
+            <th>{t("preprocessing.flow.artifacts")}</th>
+            <th>{t("preprocessing.flow.issue")}</th>
           </tr>
         </thead>
         <tbody>
@@ -786,32 +831,34 @@ function NativeFullWorkflowCard({
               </tr>
             ))
           ) : (
-            <TableEmpty colSpan={4}>
-              Native dry-run and execution stage rows appear after the backend returns a manifest.
-            </TableEmpty>
+            <TableEmpty colSpan={4}>{t("preprocessing.flow.nativeRowsEmpty")}</TableEmpty>
           )}
         </tbody>
       </Table>
 
-      <div className={styles.reportRail} aria-label="Native validation and report outputs">
+      <div className={styles.reportRail} aria-label={t("preprocessing.flow.nativeOutputs")}>
         <div>
-          <span>Validation</span>
+          <span>{t("preprocessing.flow.validation")}</span>
           <strong>
             {formatUnknown(validation?.validation_report_path) ||
               result?.validation_report_path ||
-              "Not generated"}
+              t("preprocessing.flow.notGenerated")}
           </strong>
         </div>
         <div>
-          <span>Report</span>
+          <span>{t("preprocessing.flow.report")}</span>
           <strong>
-            {formatUnknown(report?.final_report_path) || result?.final_report_path || "Not generated"}
+            {formatUnknown(report?.final_report_path) ||
+              result?.final_report_path ||
+              t("preprocessing.flow.notGenerated")}
           </strong>
         </div>
         <div>
-          <span>Blocked</span>
+          <span>{t("preprocessing.flow.blocked")}</span>
           <strong>
-            {Array.isArray(result?.blocked_stages) ? result?.blocked_stages.length : "Awaiting run"}
+            {Array.isArray(result?.blocked_stages)
+              ? result?.blocked_stages.length
+              : t("preprocessing.flow.awaitingRun")}
           </strong>
         </div>
       </div>
@@ -820,44 +867,61 @@ function NativeFullWorkflowCard({
 }
 
 function PipelineDashboard({ result }: { result: PreprocessingPipelineExecuteResponse | null }) {
+  const { t } = useI18n();
   if (!result) {
     return (
       <Card className={styles.dashboardCard}>
         <EmptyState
-          title="No reviewed execution submitted"
-          description="Dashboard rows appear only after the backend reviewed orchestrator returns persisted stage status."
+          title={t("preprocessing.flow.noExecution")}
+          description={t("preprocessing.flow.noExecutionDescription")}
         />
       </Card>
     );
   }
 
   return (
-    <Card className={styles.dashboardCard} aria-label="Pipeline run dashboard">
+    <Card className={styles.dashboardCard} aria-label={t("preprocessing.flow.dashboard")}>
       <div className={styles.sectionHeader}>
         <div>
-          <h3>Pipeline run dashboard</h3>
-          <p>Stage status, warnings, blocking issues, and report paths returned by the backend.</p>
+          <h3>{t("preprocessing.flow.dashboard")}</h3>
+          <p>{t("preprocessing.flow.dashboardDescription")}</p>
         </div>
         <Badge tone={statusTone(result.status)}>{result.status}</Badge>
       </div>
-      <div className={styles.statusStrip} aria-label="Reviewed execution summary">
-        <SummaryMetric label="Completed" value={result.completed_stages.length} tone="success" />
-        <SummaryMetric label="Blocked" value={result.blocked_stages.length} tone="warning" />
-        <SummaryMetric label="Failed" value={result.failed_stages.length} tone="danger" />
+      <div className={styles.statusStrip} aria-label={t("preprocessing.flow.executionSummary")}>
         <SummaryMetric
-          label="Metadata-only"
+          label={t("preprocessing.flow.completed")}
+          value={result.completed_stages.length}
+          tone="success"
+        />
+        <SummaryMetric
+          label={t("preprocessing.flow.blocked")}
+          value={result.blocked_stages.length}
+          tone="warning"
+        />
+        <SummaryMetric
+          label={t("preprocessing.flow.failed")}
+          value={result.failed_stages.length}
+          tone="danger"
+        />
+        <SummaryMetric
+          label={t("preprocessing.flow.metadataOnly")}
           value={result.metadata_only_stages.length}
           tone="info"
         />
-        <SummaryMetric label="Preview-only" value={result.preview_only_stages.length} tone="info" />
+        <SummaryMetric
+          label={t("preprocessing.flow.previewOnly")}
+          value={result.preview_only_stages.length}
+          tone="info"
+        />
       </div>
-      <Table caption="Reviewed execution stage timeline">
+      <Table caption={t("preprocessing.flow.timeline")}>
         <thead>
           <tr>
-            <th>Stage</th>
-            <th>Status</th>
-            <th>Artifacts</th>
-            <th>Issue</th>
+            <th>{t("preprocessing.flow.stage")}</th>
+            <th>{t("preprocessing.flow.status")}</th>
+            <th>{t("preprocessing.flow.artifacts")}</th>
+            <th>{t("preprocessing.flow.issue")}</th>
           </tr>
         </thead>
         <tbody>
@@ -875,22 +939,22 @@ function PipelineDashboard({ result }: { result: PreprocessingPipelineExecuteRes
               </tr>
             ))
           ) : (
-            <TableEmpty colSpan={4}>No stage rows were returned by the backend.</TableEmpty>
+            <TableEmpty colSpan={4}>{t("preprocessing.flow.noStageRows")}</TableEmpty>
           )}
         </tbody>
       </Table>
-      <div className={styles.reportRail} aria-label="Report and validation outputs">
+      <div className={styles.reportRail} aria-label={t("preprocessing.flow.reportOutputs")}>
         <div>
-          <span>Report</span>
-          <strong>{result.report_path || "Not generated"}</strong>
+          <span>{t("preprocessing.flow.report")}</span>
+          <strong>{result.report_path || t("preprocessing.flow.notGenerated")}</strong>
         </div>
         <div>
-          <span>Validation</span>
-          <strong>{result.validation_status || "Not run"}</strong>
+          <span>{t("preprocessing.flow.validation")}</span>
+          <strong>{result.validation_status || t("preprocessing.flow.notRun")}</strong>
         </div>
         <div>
-          <span>Registry</span>
-          <strong>{result.artifact_registry_path || "Unavailable"}</strong>
+          <span>{t("preprocessing.flow.registry")}</span>
+          <strong>{result.artifact_registry_path || t("common.unavailable")}</strong>
         </div>
       </div>
     </Card>
@@ -916,6 +980,7 @@ function FcResultsPanel({
   projectId: string | null;
   result: PreprocessingPipelineExecuteResponse | null;
 }) {
+  const { t } = useI18n();
   const nativeArtifacts = nativeFcResult?.output_artifacts ?? [];
   const nativeFcArtifacts = nativeArtifacts.filter((artifact) =>
     ["fc_matrix", "fisher_z_matrix", "roi_timeseries", "roi_labels"].includes(
@@ -923,13 +988,12 @@ function FcResultsPanel({
     ),
   );
   const status =
-    fcResult?.status ?? nativeFcResult?.status ?? (result || nativeResult ? "not_started" : "waiting");
+    fcResult?.status ??
+    nativeFcResult?.status ??
+    (result || nativeResult ? "not_started" : "waiting");
   const artifactCount = fcResult?.output_artifact_ids.length || nativeFcArtifacts.length || 0;
   const pipelineMatrixShape = extractMatrixShape(fcResult?.result);
-  const matrixShape =
-    pipelineMatrixShape !== "Awaiting backend evidence"
-      ? pipelineMatrixShape
-      : extractNativeMatrixShape(nativeFcResult);
+  const matrixShape = pipelineMatrixShape || extractNativeMatrixShape(nativeFcResult);
   const roiCount =
     extractNumber(fcResult?.result, ["roi_count"]) ??
     extractNumber(nativeFcResult?.result, ["roi_count"]);
@@ -943,56 +1007,62 @@ function FcResultsPanel({
     atlasPath.trim() ||
     extractString(fcResult?.result, ["atlas_file", "atlas_path", "atlas"]) ||
     extractString(nativeFcResult?.result, ["atlas_file", "atlas_path", "atlas"]) ||
-    "Awaiting atlas evidence";
+    t("preprocessing.flow.awaitingAtlas");
   const previewOnly =
     status === "preview_only" || result?.preview_only_stages.includes("functional_connectivity");
   const nativeIssue = nativeFcResult ? firstNativeIssue(nativeFcResult) : "";
 
   return (
-    <Card className={styles.fcCard} aria-label="FC results panel">
+    <Card className={styles.fcCard} aria-label={t("preprocessing.flow.fcPanel")}>
       <div className={styles.sectionHeader}>
         <div>
-          <h3>FC results</h3>
-          <p>Matrix, Fisher-z, ROI time series, labels, and provenance stay artifact-backed.</p>
+          <h3>{t("preprocessing.flow.fcResults")}</h3>
+          <p>{t("preprocessing.flow.fcDescription")}</p>
         </div>
         <Badge tone={statusTone(status)}>{previewOnly ? "preview_only" : status}</Badge>
       </div>
       <div className={styles.fcMetrics}>
         <div>
-          <span>Atlas</span>
-          <strong>{previewOnly ? "Synthetic preview" : atlasName}</strong>
+          <span>{t("preprocessing.flow.atlas")}</span>
+          <strong>{previewOnly ? t("preprocessing.flow.syntheticPreview") : atlasName}</strong>
         </div>
         <div>
-          <span>ROI count</span>
-          <strong>{roiCount ?? "Awaiting backend evidence"}</strong>
+          <span>{t("preprocessing.flow.roiCount")}</span>
+          <strong>{roiCount ?? t("preprocessing.flow.awaitingEvidence")}</strong>
         </div>
         <div>
-          <span>Matrix shape</span>
-          <strong>{matrixShape}</strong>
+          <span>{t("preprocessing.flow.matrixShape")}</span>
+          <strong>{matrixShape || t("preprocessing.flow.awaitingEvidence")}</strong>
         </div>
         <div>
-          <span>QC</span>
+          <span>{t("preprocessing.flow.qc")}</span>
           <strong>
-            {qcStatus || (status === "succeeded" ? "Backend computed" : "Review required")}
+            {qcStatus ||
+              (status === "succeeded"
+                ? t("preprocessing.flow.backendComputed")
+                : t("preprocessing.flow.reviewRequired"))}
           </strong>
         </div>
       </div>
-      <div className={styles.fcArtifactSummary} aria-label="FC artifact summary">
+      <div className={styles.fcArtifactSummary} aria-label={t("preprocessing.flow.fcSummary")}>
         <div>
-          <span>Atlas source</span>
-          <strong>{atlasSource || (previewOnly ? "synthetic_x_chunk" : "provided atlas")}</strong>
+          <span>{t("preprocessing.flow.atlasSource")}</span>
+          <strong>
+            {atlasSource ||
+              (previewOnly ? "synthetic_x_chunk" : t("preprocessing.flow.providedAtlas"))}
+          </strong>
         </div>
         <div>
-          <span>Registered artifacts</span>
+          <span>{t("preprocessing.flow.registeredArtifacts")}</span>
           <strong>{artifactCount}</strong>
         </div>
       </div>
-      <Table caption="FC artifact handoff">
+      <Table caption={t("preprocessing.flow.fcHandoff")}>
         <thead>
           <tr>
-            <th>Artifact</th>
-            <th>Availability</th>
-            <th>Links</th>
+            <th>{t("preprocessing.flow.artifact")}</th>
+            <th>{t("preprocessing.flow.availability")}</th>
+            <th>{t("preprocessing.flow.links")}</th>
           </tr>
         </thead>
         <tbody>
@@ -1002,7 +1072,7 @@ function FcResultsPanel({
                 <td>{artifactId}</td>
                 <td>
                   <Badge tone="info" size="sm">
-                    backend artifact
+                    {t("preprocessing.flow.backendArtifact")}
                   </Badge>
                 </td>
                 <td>
@@ -1018,7 +1088,7 @@ function FcResultsPanel({
                         target="_blank"
                         rel="noreferrer"
                       >
-                        Metadata
+                        {t("preprocessing.flow.metadata")}
                       </a>
                       {" | "}
                       <a
@@ -1026,11 +1096,11 @@ function FcResultsPanel({
                         target="_blank"
                         rel="noreferrer"
                       >
-                        File
+                        {t("preprocessing.flow.file")}
                       </a>
                     </>
                   ) : (
-                    "Awaiting run"
+                    t("preprocessing.flow.awaitingRun")
                   )}
                 </td>
               </tr>
@@ -1038,13 +1108,19 @@ function FcResultsPanel({
           ) : nativeFcArtifacts.length ? (
             nativeFcArtifacts.map((artifact, index) => (
               <tr key={`${String(artifact.artifact_type || "artifact")}-${index}`}>
-                <td>{String(artifact.artifact_type || artifact.artifact_id || "native artifact")}</td>
+                <td>
+                  {String(
+                    artifact.artifact_type ||
+                      artifact.artifact_id ||
+                      t("preprocessing.flow.nativeArtifact"),
+                  )}
+                </td>
                 <td>
                   <Badge tone="info" size="sm">
-                    native artifact
+                    {t("preprocessing.flow.nativeArtifact")}
                   </Badge>
                 </td>
-                <td>{formatUnknown(artifact.path) || "Path unavailable"}</td>
+                <td>{formatUnknown(artifact.path) || t("preprocessing.flow.pathUnavailable")}</td>
               </tr>
             ))
           ) : nativeIssue && nativeIssue !== "-" ? (
@@ -1058,10 +1134,7 @@ function FcResultsPanel({
               <td>{nativeIssue}</td>
             </tr>
           ) : (
-            <TableEmpty colSpan={3}>
-              FC downloads appear only after the backend registers matrix, Fisher-z, ROI timeseries,
-              labels, and provenance artifacts.
-            </TableEmpty>
+            <TableEmpty colSpan={3}>{t("preprocessing.flow.fcEmpty")}</TableEmpty>
           )}
         </tbody>
       </Table>
@@ -1172,6 +1245,7 @@ function buildNativeRequest({
   labelsPath,
   preprocessingRunId,
   profile,
+  templatePath,
 }: {
   atlasPath: string;
   confirmations?: Record<NativeConfirmationKey, boolean>;
@@ -1180,10 +1254,12 @@ function buildNativeRequest({
   labelsPath: string;
   preprocessingRunId: string;
   profile: Profile;
+  templatePath: string;
 }): NativeFullPreprocRequest {
   const tr = parseOptionalNumber(fallbackTr);
   return {
     run_id: preprocessingRunId,
+    template: templatePath.trim() || undefined,
     atlas: atlasPath.trim() || undefined,
     atlas_labels: labelsPath.trim() || undefined,
     tr,
@@ -1260,18 +1336,21 @@ function formatUnknown(value: unknown): string {
   return typeof value === "string" && value.trim() ? value : "";
 }
 
-function profileLabel(profile: Profile): string {
+function profileLabel(profile: Profile, t: I18nContextValue["t"]): string {
   const match = PROFILE_OPTIONS.find((item) => item.value === profile);
-  return match?.label ?? profile;
+  return match ? t(match.labelKey) : profile;
 }
 
-function stageStateLabel(state: (typeof STAGE_ROWS)[number]["state"]): string {
+function stageStateLabel(
+  state: (typeof STAGE_ROWS)[number]["state"],
+  t: I18nContextValue["t"],
+): string {
   const labels = {
-    computed: "computed path",
-    external: "gated",
-    optional: "optional",
-    report: "report",
-    gate: "gate",
+    computed: t("preprocessing.flow.stateComputed"),
+    external: t("preprocessing.flow.stateGated"),
+    optional: t("preprocessing.flow.stateOptional"),
+    report: t("preprocessing.flow.stateReport"),
+    gate: t("preprocessing.flow.stateGate"),
   };
   return labels[state];
 }
@@ -1322,7 +1401,7 @@ function extractNumber(value: unknown, keys: string[]): number | null {
 }
 
 function extractMatrixShape(value: unknown): string {
-  if (!value || typeof value !== "object") return "Awaiting backend evidence";
+  if (!value || typeof value !== "object") return "";
   const record = value as Record<string, unknown>;
   for (const key of ["matrix_shape", "shape", "fc_matrix_shape"]) {
     const item = record[key];
@@ -1335,19 +1414,19 @@ function extractMatrixShape(value: unknown): string {
   }
   for (const item of Object.values(record)) {
     const nested = extractMatrixShape(item);
-    if (nested !== "Awaiting backend evidence") return nested;
+    if (nested) return nested;
   }
-  return "Awaiting backend evidence";
+  return "";
 }
 
 function extractNativeMatrixShape(stage?: NativeFullStageApiResult): string {
   const resultShape = extractMatrixShape(stage?.result);
-  if (resultShape !== "Awaiting backend evidence") return resultShape;
+  if (resultShape) return resultShape;
   for (const artifact of stage?.output_artifacts ?? []) {
     const artifactShape = extractMatrixShape(artifact);
-    if (artifactShape !== "Awaiting backend evidence") return artifactShape;
+    if (artifactShape) return artifactShape;
   }
-  return "Awaiting backend evidence";
+  return "";
 }
 
 function artifactMetadataHref(

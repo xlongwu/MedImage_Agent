@@ -1,6 +1,8 @@
 import { memo, useCallback, useState } from "react";
 
-import { Button, IconButton, Tooltip } from "../../components/ui";
+import { Button, Icon, IconButton, Tooltip } from "../../components/ui";
+import type { LocalePreference } from "../../hooks/useAppState";
+import { useI18n } from "../../i18n/useI18n";
 import styles from "./TopBar.module.css";
 
 export const TopBar = memo(function TopBar({
@@ -11,6 +13,13 @@ export const TopBar = memo(function TopBar({
   activePageLabel,
   onOpenAssistant,
   onOpenInspector,
+  onBackToProjects,
+  onOpenRuns,
+  onOpenSettings,
+  locale,
+  onLocaleChange,
+  version,
+  versionFromBackend,
 }: {
   health: boolean | null;
   apiError: string;
@@ -19,7 +28,15 @@ export const TopBar = memo(function TopBar({
   activePageLabel: string;
   onOpenAssistant: () => void;
   onOpenInspector: () => void;
+  onBackToProjects: () => void;
+  onOpenRuns: () => void;
+  onOpenSettings: () => void;
+  locale: LocalePreference;
+  onLocaleChange: (locale: LocalePreference) => void;
+  version: string;
+  versionFromBackend: boolean;
 }) {
+  const { t } = useI18n();
   const [copyStatus, setCopyStatus] = useState("");
   const healthDotClass =
     health === true
@@ -28,35 +45,53 @@ export const TopBar = memo(function TopBar({
         ? `${styles.healthDot} ${styles.healthOffline}`
         : `${styles.healthDot} ${styles.healthChecking}`;
   const healthLabel =
-    health === true ? "Backend connected" : health === false ? "Backend offline" : "Connecting...";
+    health === true
+      ? t("health.connected")
+      : health === false
+        ? t("health.offline")
+        : t("health.connecting");
   const handleCopyDiagnostics = useCallback(async () => {
     const diagnostics = [
-      `Health: ${healthLabel}`,
-      `Project: ${projectName || "Select project"}`,
-      `Workspace: ${activePageLabel}`,
-      `Error: ${apiError || "none"}`,
+      `${t("topbar.healthLabel")}: ${healthLabel}`,
+      `${t("topbar.projectLabel")}: ${projectName || t("projects.switcher.select")}`,
+      `${t("topbar.workspaceLabel")}: ${activePageLabel}`,
+      `${t("topbar.errorLabel")}: ${apiError || t("topbar.none")}`,
     ].join("\n");
     try {
       if (!navigator.clipboard?.writeText) {
-        throw new Error("Clipboard unavailable");
+        throw new Error(t("health.clipboardUnavailable"));
       }
       await navigator.clipboard.writeText(diagnostics);
-      setCopyStatus("Diagnostics copied");
+      setCopyStatus(t("health.diagnosticsCopied"));
     } catch {
-      setCopyStatus("Clipboard unavailable");
+      setCopyStatus(t("health.clipboardUnavailable"));
     }
-  }, [activePageLabel, apiError, healthLabel, projectName]);
+  }, [activePageLabel, apiError, healthLabel, projectName, t]);
 
   return (
     <>
       <header className={styles.topbar}>
         <div className={styles.caption}>
           <span className={styles.spark}>M</span>
-          <strong>MedImage Agent</strong>
+          <strong>{t("app.name")}</strong>
+          <span
+            className={styles.version}
+            title={versionFromBackend ? t("topbar.backendVersion") : t("common.offline")}
+          >
+            v{version}
+            {versionFromBackend ? "" : ` · ${t("topbar.offlineSuffix")}`}
+          </span>
         </div>
-        <div className={styles.context} aria-label="Current workspace context">
-          <span>Project</span>
-          <strong>{projectName || "Select project"}</strong>
+        <div className={styles.context} aria-label={t("topbar.context")}>
+          <button
+            aria-label={t("nav.backToProjects")}
+            className={styles.backButton}
+            onClick={onBackToProjects}
+            type="button"
+          >
+            <Icon height={15} name="arrow-left" width={15} />
+          </button>
+          <strong>{projectName || t("nav.projects")}</strong>
           <i aria-hidden="true" />
           <small>{activePageLabel}</small>
         </div>
@@ -72,18 +107,37 @@ export const TopBar = memo(function TopBar({
             <span className={styles.healthLabel}>{healthLabel}</span>
           </button>
           <Button
-            aria-label="Open assistant"
+            aria-label={t("nav.assistant")}
             className={styles.assistantButton}
             leadingIcon={<SparkIcon />}
             onClick={onOpenAssistant}
-            title="Open assistant (Ctrl+J)"
-            variant="secondary"
+            title={`${t("nav.assistant")} (Ctrl+J)`}
+            variant="ghost"
           >
-            Assistant
+            {t("nav.assistant")}
           </Button>
-          <Tooltip label="Open inspector">
-            <IconButton label="Open inspector" onClick={onOpenInspector} variant="secondary">
-              <InspectorIcon />
+          <Tooltip label={t("nav.runs")}>
+            <IconButton label={t("nav.runs")} onClick={onOpenRuns} variant="ghost">
+              <Icon height={16} name="runs" width={16} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip label={t("nav.inspector")}>
+            <IconButton label={t("nav.inspector")} onClick={onOpenInspector} variant="ghost">
+              <Icon height={16} name="inspector" width={16} />
+            </IconButton>
+          </Tooltip>
+          <button
+            aria-label={locale === "en" ? t("topbar.switchChinese") : t("topbar.switchEnglish")}
+            className={styles.localeButton}
+            onClick={() => onLocaleChange(locale === "en" ? "zh-CN" : "en")}
+            type="button"
+          >
+            <Icon height={15} name="language" width={15} />
+            <span>{locale === "en" ? "中文" : "EN"}</span>
+          </button>
+          <Tooltip label={t("nav.settings")}>
+            <IconButton label={t("nav.settings")} onClick={onOpenSettings} variant="ghost">
+              <Icon height={16} name="settings" width={16} />
             </IconButton>
           </Tooltip>
         </div>
@@ -97,10 +151,10 @@ export const TopBar = memo(function TopBar({
           </div>
           <div className={styles.bannerActions}>
             <Button onClick={onRetry} size="sm" variant="secondary">
-              Retry
+              {t("common.retry")}
             </Button>
             <Button onClick={handleCopyDiagnostics} size="sm" variant="secondary">
-              Copy diagnostics
+              {t("health.copyDiagnostics")}
             </Button>
           </div>
         </div>
@@ -125,29 +179,6 @@ function SparkIcon() {
         strokeLinejoin="round"
         strokeWidth="1.6"
         d="M8 2.5l1.1 3.2L12.5 7 9.1 8.3 8 11.5 6.9 8.3 3.5 7l3.4-1.3L8 2.5z"
-      />
-    </svg>
-  );
-}
-
-function InspectorIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-      <path
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-        d="M3 3.5h10M3 8h10M3 12.5h6"
-      />
-      <path
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-        d="M11.5 11l1.5 1.5 2-2"
       />
     </svg>
   );

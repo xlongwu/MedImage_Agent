@@ -395,8 +395,10 @@ export function deriveProjectWorkflowState(
       Boolean(projectMetadata.preprocessing_input_registry_path)) &&
     (niftiCount > 0 ||
       explicitConvertedSubjects > 0 ||
-      maxNumericSignal(preprocessingInputInventory.bold_count, preprocessingInputInventory.t1w_count) >
-        0);
+      maxNumericSignal(
+        preprocessingInputInventory.bold_count,
+        preprocessingInputInventory.t1w_count,
+      ) > 0);
   const hasRealConvertedData =
     niftiCount > 0 ||
     hasRealBidsRoots ||

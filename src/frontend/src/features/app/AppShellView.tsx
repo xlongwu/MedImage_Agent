@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import type { ExecutionMode } from "../../lib/types/pipeline";
 import type { ChatMessage } from "../../lib/types/assistant";
 import type {
@@ -8,7 +8,6 @@ import type {
   ImageValidationReport,
 } from "../../lib/types/image";
 import type { ProjectDetail } from "../../lib/types/project";
-import type { PresetPlanDraft } from "../../types";
 import type { NativeFullPreprocResponse } from "../../types";
 import type { ModelStatus } from "../../lib/types/model";
 import type { DatasetSummary } from "../../lib/types/dataset";
@@ -16,9 +15,10 @@ import type { AppController } from "../app/useAppController";
 import type { ProjectController } from "../projects/useProjectController";
 import type { TaskController } from "../tasks/useTaskController";
 import type { ThemePreference } from "../../hooks/useAppState";
+import type { LocalePreference } from "../../hooks/useAppState";
 import { getLatestNativeFullPreprocessingRun } from "../../lib/api/preprocessing";
 import { hasNativePreprocessingRunEvidence } from "../../lib/projectWorkflow";
-import type { ProjectInventory, WorkflowTab } from "../../lib/projectWorkflow";
+import type { ProjectInventory } from "../../lib/projectWorkflow";
 import type {
   ArtifactSelection,
   DataSeriesSelection,
@@ -26,27 +26,39 @@ import type {
   WorkspaceSelectionContext,
 } from "../../lib/workspaceSelection";
 import { TopBar, WorkspaceSuspenseFallback } from "../dashboard/DashboardChrome";
-import { ProjectOverviewHeader } from "../projects/ProjectOverviewHeader";
 import { ProjectCreateSheet } from "../projects/ProjectCreateSheet";
 import { ProjectsPage } from "../projects/ProjectsPage";
-import { ProjectSwitcher } from "../dashboard/ProjectSwitcher";
 import { DataConversionWorkspace } from "../workspaces/DataConversionWorkspace";
 import { PlanWorkspace } from "../workspaces/PlanWorkspace";
 import { PreprocessingWorkspace } from "../workspaces/PreprocessingWorkspace";
 import { RunsWorkspace } from "../workspaces/RunsWorkspace";
-import { QCReportsWorkspace } from "../workspaces/QCReportsWorkspace";
-import { ResultsWorkspace } from "../workspaces/ResultsWorkspace";
-import { SettingsEnvironmentWorkspace } from "../workspaces/SettingsEnvironmentWorkspace";
+import { OverviewWorkspace } from "../workspaces/OverviewWorkspace";
 import { ProjectCreateResultPanel } from "./ProjectCreateResultPanel";
 import { RunActivityBar } from "../tasks/RunActivityBar";
 import { MedicalImageViewer } from "./MedicalImageViewer";
-import { ProjectLifecycleSidebar } from "./ProjectLifecycleSidebar";
 import { AssistantSheet } from "../tools/AssistantSheet";
 import { ContextInspector } from "../tools/ContextInspector";
 import { AppShell } from "../../layouts/AppShell";
 import { ProjectShell } from "../../layouts/ProjectShell";
-import { shouldRenderProjectImageViewer } from "./viewerVisibility";
+import { LifecycleRail } from "../navigation/LifecycleRail";
+import { buildLifecycleItems, isPrimaryWorkspace } from "../navigation/workspaceModel";
+import type { AppLocation, ProjectWorkspace } from "../navigation/workspaceModel";
+import { useI18n } from "../../i18n/useI18n";
 import styles from "./AppShellView.module.css";
+
+const QCReportsWorkspace = lazy(() =>
+  import("../workspaces/QCReportsWorkspace").then((module) => ({
+    default: module.QCReportsWorkspace,
+  })),
+);
+const ResultsWorkspace = lazy(() =>
+  import("../workspaces/ResultsWorkspace").then((module) => ({ default: module.ResultsWorkspace })),
+);
+const SettingsEnvironmentWorkspace = lazy(() =>
+  import("../workspaces/SettingsEnvironmentWorkspace").then((module) => ({
+    default: module.SettingsEnvironmentWorkspace,
+  })),
+);
 
 export type AppShellViewProps = {
   baseUrl: string;
@@ -54,7 +66,7 @@ export type AppShellViewProps = {
   health: boolean | null;
   selectedProjectId: string | null;
   onSelectProject: (id: string) => void;
-  project: { data: ProjectDetail };
+  project: { data: ProjectDetail; reload: () => Promise<ProjectDetail | null> };
   projectInventory: ProjectInventory | null;
   projectController: Pick<
     ProjectController,
@@ -93,8 +105,8 @@ export type AppShellViewProps = {
     | "notice"
     | "setNotice"
     | "apiError"
-    | "activeWorkflow"
-    | "setActiveWorkflow"
+    | "version"
+    | "versionFromBackend"
     | "checkHealth"
     | "handleScrollToPanel"
     | "setDrawerOpen"
@@ -107,6 +119,14 @@ export type AppShellViewProps = {
   appState: {
     themePreference: ThemePreference;
     setThemePreference: (themePreference: ThemePreference) => void;
+    localePreference: LocalePreference;
+    setLocalePreference: (localePreference: LocalePreference) => void;
+  };
+  navigation: {
+    location: AppLocation;
+    openProject: (projectId: string) => void;
+    openProjects: () => void;
+    openWorkspace: (projectId: string, workspace: ProjectWorkspace) => void;
   };
   image: {
     sequence: string;
@@ -141,12 +161,9 @@ export type AppShellViewProps = {
   };
   executionMode: ExecutionMode;
   externalSmokeApprovedRun: boolean;
-  setExternalSmokeApprovedRun: (approved: boolean) => void;
   externalSmokeApprovedBy: string;
-  setExternalSmokeApprovedBy: (by: string) => void;
   model: ModelStatus | null;
   dataset: DatasetSummary | null;
-  setExecutionMode: (mode: ExecutionMode) => void;
   onToggleDrawer: () => void;
   handleApproveSelectedTask: () => Promise<void>;
   handleGenerateAuditPackage: () => Promise<void>;
@@ -174,17 +191,15 @@ export function AppShellView({
   taskStream,
   app,
   appState,
+  navigation,
   image,
   assistant,
   approval,
   executionMode,
   externalSmokeApprovedRun,
-  setExternalSmokeApprovedRun,
   externalSmokeApprovedBy,
-  setExternalSmokeApprovedBy,
   model,
   dataset,
-  setExecutionMode,
   onToggleDrawer,
   handleApproveSelectedTask,
   handleGenerateAuditPackage,
@@ -198,43 +213,56 @@ export function AppShellView({
   onSelectedDataSeriesChange,
   onSelectedPlanNodeChange,
 }: AppShellViewProps) {
+  const { t } = useI18n();
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
-  const [projectsPageOpen, setProjectsPageOpen] = useState(false);
-  const [latestNativePreprocessingRun, setLatestNativePreprocessingRun] =
-    useState<NativeFullPreprocResponse | null>(null);
+  const [nativeRunState, setNativeRunState] = useState<{
+    projectId: string;
+    run: NativeFullPreprocResponse | null;
+  }>({ projectId: "", run: null });
+  const latestNativePreprocessingRun =
+    nativeRunState.projectId === selectedProjectId ? nativeRunState.run : null;
   const selectedProject = selectedProjectId ? project : null;
   const projectDir =
     typeof selectedProject?.data.metadata?.project_dir === "string"
       ? selectedProject.data.metadata.project_dir
       : null;
-  const workflowLabels: Record<WorkflowTab, string> = {
-    data: "Data & Conversion",
-    plan: "Plan",
-    preprocessing: "Preprocessing",
-    runs: "Runs",
-    reports: "QC",
-    results: "Results",
-    environment: "Settings / Environment",
+  const workflowLabels: Record<ProjectWorkspace, string> = {
+    overview: t("nav.overview"),
+    data: t("nav.data"),
+    plan: t("nav.plan"),
+    preprocessing: t("nav.preprocessing"),
+    runs: t("nav.runs"),
+    qc: t("nav.qc"),
+    results: t("nav.results"),
+    settings: t("nav.settings"),
   };
-  const activePageLabel = projectsPageOpen
-    ? "Projects"
-    : (workflowLabels[app.activeWorkflow as WorkflowTab] ?? "Workspace");
-  const topBarProjectName = projectsPageOpen
-    ? "Project Library"
-    : (projectInventory?.projectName ?? project.data.name);
-  const showImageViewer = shouldRenderProjectImageViewer({
-    activeWorkflow: app.activeWorkflow as WorkflowTab,
-    inventory: projectInventory,
-  });
+  const activeWorkspace =
+    navigation.location.kind === "project" ? navigation.location.workspace : null;
+  const activePageLabel = activeWorkspace ? workflowLabels[activeWorkspace] : t("nav.projects");
+  const topBarProjectName =
+    navigation.location.kind === "projects"
+      ? t("projects.library")
+      : (projectInventory?.projectName ?? project.data.name);
+  const showImageViewer =
+    activeWorkspace === "results" && Boolean(projectInventory?.hasConvertedData);
   const hasPreprocessingRun =
     taskController.hasPreprocessingRun ||
     hasNativePreprocessingRunEvidence(latestNativePreprocessingRun);
   const latestPreprocessingRunId =
     taskController.latestPreprocessingRunId ||
     (hasNativePreprocessingRunEvidence(latestNativePreprocessingRun)
-      ? latestNativePreprocessingRun?.run_id ?? null
+      ? (latestNativePreprocessingRun?.run_id ?? null)
       : null);
+  const lifecycleItems = useMemo(
+    () =>
+      buildLifecycleItems({
+        activeWorkspace: activeWorkspace ?? "overview",
+        dataState: projectInventory?.dataState,
+        hasPreprocessingRun,
+      }),
+    [activeWorkspace, hasPreprocessingRun, projectInventory?.dataState],
+  );
   const hasSystemMessages = Boolean(
     app.notice ||
     projectController.projectCreateResult ||
@@ -256,19 +284,15 @@ export function AppShellView({
   }, []);
 
   useEffect(() => {
-    if (!selectedProjectId) {
-      setLatestNativePreprocessingRun(null);
-      return;
-    }
+    if (!selectedProjectId) return;
 
     let cancelled = false;
-    setLatestNativePreprocessingRun(null);
 
     const refreshLatestNativeRun = () => {
       void getLatestNativeFullPreprocessingRun(baseUrl, selectedProjectId)
         .then((response) => {
           if (!cancelled && response?.run_id) {
-            setLatestNativePreprocessingRun(response);
+            setNativeRunState({ projectId: selectedProjectId, run: response });
           }
         })
         .catch(() => {
@@ -295,7 +319,31 @@ export function AppShellView({
           activePageLabel={activePageLabel}
           onOpenAssistant={() => setAssistantOpen(true)}
           onOpenInspector={() => app.setDrawerOpen(true)}
+          onBackToProjects={navigation.openProjects}
+          onOpenRuns={() => {
+            if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
+          }}
+          onOpenSettings={() => {
+            if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "settings");
+          }}
+          locale={appState.localePreference}
+          onLocaleChange={appState.setLocalePreference}
+          version={app.version}
+          versionFromBackend={app.versionFromBackend}
         />
+      }
+      lifecycle={
+        navigation.location.kind === "project" ? (
+          <LifecycleRail
+            activeWorkspace={
+              activeWorkspace && isPrimaryWorkspace(activeWorkspace) ? activeWorkspace : null
+            }
+            items={lifecycleItems}
+            onNavigate={(workspace) => {
+              if (selectedProjectId) navigation.openWorkspace(selectedProjectId, workspace);
+            }}
+          />
+        ) : undefined
       }
       systemMessages={
         hasSystemMessages ? (
@@ -303,7 +351,7 @@ export function AppShellView({
             {app.notice ? (
               <div className={styles.toastLine}>
                 {app.notice}
-                <button onClick={() => app.setNotice("")}>Dismiss</button>
+                <button onClick={() => app.setNotice("")}>{t("common.dismiss")}</button>
               </div>
             ) : null}
             <ProjectCreateResultPanel
@@ -317,42 +365,12 @@ export function AppShellView({
             />
             {taskStream.error ? (
               <div className={styles.streamBanner}>
-                Task stream disconnected: {taskStream.error}
-                <button onClick={handleReconnectTaskStream}>Reconnect</button>
+                {t("shell.taskStreamDisconnected", { error: taskStream.error })}
+                <button onClick={handleReconnectTaskStream}>{t("shell.reconnect")}</button>
               </div>
             ) : null}
           </>
         ) : undefined
-      }
-      sidebar={
-        <aside className={styles.sideRail}>
-          <ProjectSwitcher
-            projects={projectController.projects.data}
-            selectedProjectId={selectedProjectId || project.data.id}
-            loading={projectController.projectsLoading}
-            error={projectController.projectsError}
-            deletingProjectId={null}
-            onSelect={(projectId) => {
-              onSelectProject(projectId);
-              setProjectsPageOpen(false);
-            }}
-            onCreateProject={() => setProjectCreateOpen(true)}
-            onOpenProjects={() => setProjectsPageOpen(true)}
-            onDelete={projectController.handleDeleteProject}
-          />
-          <ProjectLifecycleSidebar
-            activeTab={app.activeWorkflow as WorkflowTab}
-            dataState={projectInventory?.dataState}
-            hasPreprocessingRun={hasPreprocessingRun}
-            projectsPageOpen={projectsPageOpen}
-            onChange={app.setActiveWorkflow}
-            onOpenWorkspace={() => setProjectsPageOpen(false)}
-          />
-          <div className={styles.sideRailFooter}>
-            <span className={styles.researchOnlyTag}>Research Only</span>
-            <span className={styles.versionTag}>v0.6</span>
-          </div>
-        </aside>
       }
       mainClassName={styles.workflowMain}
       inspector={
@@ -370,8 +388,7 @@ export function AppShellView({
             externalSmokeApprovedBy={externalSmokeApprovedBy}
             selectionContext={selectionContext}
             onConfigure={() => {
-              setProjectsPageOpen(false);
-              app.setActiveWorkflow("environment");
+              if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "settings");
             }}
           />
         ) : null
@@ -383,12 +400,10 @@ export function AppShellView({
           selectedTaskId={selectedTaskId}
           onSelectTask={(taskId) => {
             setSelectedTaskId(taskId);
-            setProjectsPageOpen(false);
-            app.setActiveWorkflow("runs");
+            if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
           }}
           onOpenRuns={() => {
-            setProjectsPageOpen(false);
-            app.setActiveWorkflow("runs");
+            if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
           }}
         />
       }
@@ -417,12 +432,12 @@ export function AppShellView({
         open={projectCreateOpen}
       />
 
-      {projectsPageOpen ? (
+      {navigation.location.kind === "projects" ? (
         <ProjectsPage
           deletingProjectId={null}
           error={projectController.projectsError}
           loading={projectController.projectsLoading}
-          onClose={() => setProjectsPageOpen(false)}
+          onClose={() => undefined}
           onCreateProject={() => setProjectCreateOpen(true)}
           onDeleteProject={projectController.handleDeleteProject}
           onSelectProject={onSelectProject}
@@ -431,56 +446,30 @@ export function AppShellView({
         />
       ) : (
         <ProjectShell
-          overview={
-            <ProjectOverviewHeader
-              inventory={projectInventory}
-              hasPreprocessingRun={hasPreprocessingRun}
-              onPrimaryAction={() => {
-                app.setActiveWorkflow(
-                  projectInventory?.dataState === "converted_bids" ? "preprocessing" : "data",
-                );
-                window.setTimeout(() => app.handleScrollToPanel("workflow-workspace"), 0);
-              }}
-              onSecondaryAction={() => {
-                app.setActiveWorkflow(
-                  projectInventory?.dataState === "converted_bids" ? "reports" : "data",
-                );
-                window.setTimeout(() => app.handleScrollToPanel("workflow-workspace"), 0);
-              }}
-            />
-          }
-          viewer={
-            showImageViewer ? (
-              <MedicalImageViewer
-                project={project.data}
-                sequence={image.sequence}
-                plane={image.plane}
-                sequenceOptions={image.sequenceOptions}
-                imageSources={image.imageSources.data}
-                validation={image.imageValidation.data}
-                subjectId={image.selectedSubjectId}
-                preview={image.imagePreview.data}
-                sourceFile={image.selectedImageSource}
-                loading={image.imagePreview.loading}
-                dataState={projectInventory?.dataState}
-                onSequenceChange={image.setSequence}
-                onPlaneChange={image.setPlane}
-                onSubjectChange={image.setSelectedSubjectId}
-                onSliceChange={image.setSliceIndex}
-              />
-            ) : undefined
-          }
+          overview={null}
+          viewer={undefined}
           workspaceLabel={`${activePageLabel} workspace`}
         >
           <Suspense fallback={<WorkspaceSuspenseFallback label="Loading workspace..." />}>
-            {app.activeWorkflow === "data" ? (
+            {activeWorkspace === "overview" ? (
+              <OverviewWorkspace
+                inventory={projectInventory}
+                tasks={taskController.tasks}
+                onNavigate={(workspace) => {
+                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, workspace);
+                }}
+              />
+            ) : activeWorkspace === "data" ? (
               <DataConversionWorkspace
                 baseUrl={baseUrl}
                 projectId={selectedProjectId}
                 inventory={projectInventory}
                 onSelectedDataSeriesChange={onSelectedDataSeriesChange}
+                onConversionRegistered={async () => {
+                  await project.reload();
+                }}
               />
-            ) : app.activeWorkflow === "plan" ? (
+            ) : activeWorkspace === "plan" ? (
               <PlanWorkspace
                 baseUrl={baseUrl}
                 projectId={selectedProjectId}
@@ -491,10 +480,14 @@ export function AppShellView({
                 projectDir={projectDir}
                 initialPresetDraft={app.presetPlanDraft}
                 onSelectedNodeChange={onSelectedPlanNodeChange}
-                onOpenDataConversion={() => app.setActiveWorkflow("data")}
-                onOpenEnvironment={() => app.setActiveWorkflow("environment")}
+                onOpenDataConversion={() =>
+                  selectedProjectId && navigation.openWorkspace(selectedProjectId, "data")
+                }
+                onOpenEnvironment={() =>
+                  selectedProjectId && navigation.openWorkspace(selectedProjectId, "settings")
+                }
               />
-            ) : app.activeWorkflow === "preprocessing" ? (
+            ) : activeWorkspace === "preprocessing" ? (
               <PreprocessingWorkspace
                 baseUrl={baseUrl}
                 projectId={selectedProjectId}
@@ -502,10 +495,16 @@ export function AppShellView({
                 inventory={projectInventory}
                 hasPreprocessingRun={hasPreprocessingRun}
                 preprocessingRunId={latestPreprocessingRunId}
-                onOpenDataConversion={() => app.setActiveWorkflow("data")}
+                onOpenDataConversion={() =>
+                  selectedProjectId && navigation.openWorkspace(selectedProjectId, "data")
+                }
                 onOpenToolsDrawer={() => app.setDrawerOpen(true)}
+                onOpenRuns={(runId) => {
+                  setSelectedTaskId(runId ?? null);
+                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
+                }}
               />
-            ) : app.activeWorkflow === "runs" ? (
+            ) : activeWorkspace === "runs" ? (
               <RunsWorkspace
                 projectId={selectedProjectId}
                 tasks={taskController.tasks}
@@ -531,13 +530,34 @@ export function AppShellView({
                 onRetryEvents={taskController.reloadTaskEvents}
                 onReconnect={handleReconnectTaskStream}
               />
-            ) : app.activeWorkflow === "reports" ? (
+            ) : activeWorkspace === "qc" ? (
               <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
-            ) : app.activeWorkflow === "results" ? (
+            ) : activeWorkspace === "results" ? (
               <ResultsWorkspace
                 baseUrl={baseUrl}
                 projectId={selectedProjectId}
                 onSelectedArtifactChange={onSelectedArtifactChange}
+                viewer={
+                  showImageViewer ? (
+                    <MedicalImageViewer
+                      project={project.data}
+                      sequence={image.sequence}
+                      plane={image.plane}
+                      sequenceOptions={image.sequenceOptions}
+                      imageSources={image.imageSources.data}
+                      validation={image.imageValidation.data}
+                      subjectId={image.selectedSubjectId}
+                      preview={image.imagePreview.data}
+                      sourceFile={image.selectedImageSource}
+                      loading={image.imagePreview.loading}
+                      dataState={projectInventory?.dataState}
+                      onSequenceChange={image.setSequence}
+                      onPlaneChange={image.setPlane}
+                      onSubjectChange={image.setSelectedSubjectId}
+                      onSliceChange={image.setSliceIndex}
+                    />
+                  ) : undefined
+                }
               />
             ) : (
               <SettingsEnvironmentWorkspace
@@ -546,8 +566,10 @@ export function AppShellView({
                 rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
                 themePreference={appState.themePreference}
                 onThemePreferenceChange={appState.setThemePreference}
-                onReviewDraft={(draft: PresetPlanDraft) => {
-                  app.setActiveWorkflow("plan");
+                localePreference={appState.localePreference}
+                onLocalePreferenceChange={appState.setLocalePreference}
+                onReviewDraft={() => {
+                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "plan");
                   app.setNotice(
                     "Preset draft loaded into the Plan workspace. Review and save before dry-run.",
                   );

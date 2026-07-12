@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectInventory } from "../../../lib/projectWorkflow";
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import type { NativeFullPreprocResponse } from "../../../types";
 import {
   createPreprocessingRun,
@@ -137,6 +138,74 @@ function nativeResponse(
 }
 
 describe("PreprocessingWorkspace", () => {
+  it("renders the blocked preprocessing surface in simplified Chinese", () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <PreprocessingWorkspace
+          baseUrl="http://localhost"
+          projectId="project-1"
+          dataState="raw_dicom"
+          inventory={inventory({
+            dataState: "raw_dicom",
+            dataStateLabel: "Raw DICOM",
+            hasRawDicom: true,
+            hasConvertedData: false,
+            convertedSubjects: 0,
+            niftiFileCount: 0,
+          })}
+          hasPreprocessingRun={false}
+          onOpenDataConversion={vi.fn()}
+          onOpenToolsDrawer={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "预处理已阻塞" })).toBeInTheDocument();
+    expect(screen.getByLabelText("依赖链")).toHaveTextContent("转换复核");
+    expect(screen.getByRole("button", { name: "返回数据与转换" })).toBeInTheDocument();
+  });
+
+  it("renders preprocessing stages and configuration modes in simplified Chinese", () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <PreprocessingWorkspace
+          baseUrl="http://localhost"
+          projectId="project-1"
+          dataState="converted_bids"
+          inventory={inventory()}
+          hasPreprocessingRun={false}
+          onOpenDataConversion={vi.fn()}
+          onOpenToolsDrawer={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("list", { name: "预处理阶段" })).toHaveTextContent("数据准备");
+    expect(screen.getByRole("list", { name: "预处理阶段" })).toHaveTextContent("干扰回归");
+    expect(screen.getByLabelText("所选预处理阶段配置")).toHaveTextContent("基础");
+    expect(screen.getByLabelText("所选预处理阶段配置")).toHaveTextContent("输入数据集");
+    expect(screen.getByLabelText("所选预处理阶段配置")).toHaveTextContent("规划前必需");
+    expect(screen.queryByText("Input dataset")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("预处理配置模式")).toHaveTextContent("安全");
+    expect(screen.getByRole("heading", { name: "流程构建器" })).toBeInTheDocument();
+    expect(screen.getByLabelText("预处理流程配置方案")).toHaveTextContent("最小功能连接");
+    expect(screen.getByRole("table", { name: "已复核预处理阶段" })).toHaveTextContent("输入清单");
+    expect(screen.getByRole("table", { name: "已复核预处理阶段" })).toHaveTextContent(
+      "需要已登记的转换后 BIDS/NIfTI 输入",
+    );
+    expect(screen.getByRole("heading", { name: "受控执行门" })).toBeInTheDocument();
+    expect(screen.getByLabelText("受控执行确认项")).toHaveTextContent("rawdata 保持只读");
+    expect(screen.getByRole("heading", { name: "完整原生预处理" })).toBeInTheDocument();
+    expect(screen.getByLabelText("完整原生流程安全确认项")).toHaveTextContent("不使用外部工具");
+    expect(screen.getByRole("table", { name: "完整原生预处理阶段结果" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "DICOM 转换交接" })).toBeInTheDocument();
+    expect(screen.getByText("尚未提交受控执行")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "功能连接结果" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "功能连接产物交接" })).toHaveTextContent(
+      "后端登记矩阵",
+    );
+  });
+
   beforeEach(() => {
     executeReviewedMock.mockReset();
     createRunMock.mockReset();
@@ -226,6 +295,7 @@ describe("PreprocessingWorkspace", () => {
   });
 
   it("creates a preprocessing run from registered converted input and opens reviewed flow", async () => {
+    const onOpenRuns = vi.fn();
     createRunMock.mockResolvedValue({
       ok: true,
       status: "created",
@@ -257,6 +327,7 @@ describe("PreprocessingWorkspace", () => {
         hasPreprocessingRun={false}
         onOpenDataConversion={vi.fn()}
         onOpenToolsDrawer={vi.fn()}
+        onOpenRuns={onOpenRuns}
       />,
     );
 
@@ -275,6 +346,48 @@ describe("PreprocessingWorkspace", () => {
     );
     expect(await screen.findByText(/Run pp-created is ready/)).toBeInTheDocument();
     expect(screen.getByLabelText("Reviewed preprocessing flow")).toHaveTextContent("pp-created");
+    fireEvent.click(screen.getByRole("button", { name: "View logs in Runs" }));
+    expect(onOpenRuns).toHaveBeenCalledWith(null);
+  });
+
+  it("offers a fresh preprocessing run without overwriting prior run evidence", async () => {
+    createRunMock.mockResolvedValue({
+      ok: true,
+      status: "created",
+      project_id: "project-1",
+      preprocessing_run_id: "pp-fresh",
+      run_dir: "/tmp/project/preprocessing_runs/pp-fresh",
+      preprocessing_input_dir: "/tmp/project/converted_bids",
+      artifact_registry_path: "/tmp/project/preprocessing_runs/pp-fresh/registry.json",
+      input_inventory: {},
+      stage_count: 12,
+      python_stage_count: 6,
+      external_blocked_count: 4,
+      planned_stage_count: 6,
+      disabled_external_stage_count: 4,
+      warnings: [],
+      errors: [],
+      blocking_issues: [],
+      next_actions: [],
+      safety_flags: {},
+    });
+
+    render(
+      <PreprocessingWorkspace
+        baseUrl="http://localhost"
+        projectId="project-1"
+        dataState="converted_bids"
+        inventory={inventory()}
+        hasPreprocessingRun={true}
+        preprocessingRunId="pp-prior"
+        onOpenDataConversion={vi.fn()}
+        onOpenToolsDrawer={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Create new preprocessing run" }));
+    await waitFor(() => expect(createRunMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/Run pp-fresh is ready/)).toBeInTheDocument();
   });
 
   it("switches selected preprocessing stage and advanced parameters", () => {
@@ -536,6 +649,9 @@ describe("PreprocessingWorkspace", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Template path"), {
+      target: { value: "C:\\reviewed\\mni_template.nii.gz" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Run native dry-run" }));
 
     await waitFor(() => expect(nativeDryRunMock).toHaveBeenCalledTimes(1));
@@ -544,6 +660,7 @@ describe("PreprocessingWorkspace", () => {
       "project-1",
       expect.objectContaining({
         run_id: "pp-demo",
+        template: "C:\\reviewed\\mni_template.nii.gz",
         stage_overrides: expect.objectContaining({
           functional_connectivity: true,
           alff: false,
@@ -847,10 +964,14 @@ describe("PreprocessingWorkspace", () => {
     await waitFor(() => expect(nativeDryRunMock).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh native validation" }));
-    await waitFor(() => expect(nativeValidationMock).toHaveBeenCalledWith("http://localhost", "project-1", "pp-demo"));
+    await waitFor(() =>
+      expect(nativeValidationMock).toHaveBeenCalledWith("http://localhost", "project-1", "pp-demo"),
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh native report" }));
-    await waitFor(() => expect(nativeReportMock).toHaveBeenCalledWith("http://localhost", "project-1", "pp-demo"));
+    await waitFor(() =>
+      expect(nativeReportMock).toHaveBeenCalledWith("http://localhost", "project-1", "pp-demo"),
+    );
     expect(screen.getByLabelText("Native validation and report outputs")).toHaveTextContent(
       "/tmp/project/native/validation-refreshed.json",
     );

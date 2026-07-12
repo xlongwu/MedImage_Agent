@@ -7,6 +7,8 @@ import type {
 } from "../../types";
 import type { ProjectInventory } from "../../lib/projectWorkflow";
 import type { DataSeriesSelection } from "../../lib/workspaceSelection";
+import { useI18n } from "../../i18n/useI18n";
+import type { I18nContextValue } from "../../i18n/context";
 import styles from "./DicomSeriesTable.module.css";
 
 type FilterId = "all" | "dicom_series" | "mapped" | "warnings" | "manual";
@@ -28,12 +30,12 @@ type DicomRow = {
   warnings: string[];
 };
 
-const filters: Array<{ id: FilterId; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "dicom_series", label: "DICOM series" },
-  { id: "mapped", label: "Mapped" },
-  { id: "warnings", label: "Warnings" },
-  { id: "manual", label: "Manual review" },
+const filters: Array<{ id: FilterId; labelKey: Parameters<I18nContextValue["t"]>[0] }> = [
+  { id: "all", labelKey: "data.dicom.all" },
+  { id: "dicom_series", labelKey: "data.dicom.seriesFilter" },
+  { id: "mapped", labelKey: "data.dicom.mapped" },
+  { id: "warnings", labelKey: "data.dicom.warnings" },
+  { id: "manual", labelKey: "data.dicom.manualReview" },
 ];
 
 const VIRTUALIZATION_THRESHOLD = 40;
@@ -64,13 +66,14 @@ export function DicomSeriesTable({
   restoreMessage = "",
   restoreState = "idle",
 }: DicomSeriesTableProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterId>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [tableScrollTop, setTableScrollTop] = useState(0);
+  const [tableScrollState, setTableScrollState] = useState({ key: "", top: 0 });
   const tableViewportRef = useRef<HTMLDivElement>(null);
 
-  const rows = useMemo(() => buildDicomRows(inventory, dryRun), [dryRun, inventory]);
+  const rows = useMemo(() => buildDicomRows(inventory, dryRun, t), [dryRun, inventory, t]);
   const filteredRows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return rows.filter((row) => {
@@ -102,30 +105,26 @@ export function DicomSeriesTable({
     });
   }, [activeFilter, query, rows]);
 
-  useEffect(() => {
-    setSelectedIds((current) => {
-      const rowIds = new Set(rows.map((row) => row.id));
-      const next = new Set([...current].filter((id) => rowIds.has(id)));
-      return next.size === current.size ? current : next;
-    });
-  }, [rows]);
+  const activeSelectedIds = useMemo(() => {
+    const rowIds = new Set(rows.map((row) => row.id));
+    return new Set([...selectedIds].filter((id) => rowIds.has(id)));
+  }, [rows, selectedIds]);
 
   useEffect(() => {
     if (!selectedIds.size) return;
-    const rowIds = new Set(rows.map((row) => row.id));
-    if (![...selectedIds].some((id) => rowIds.has(id))) {
+    if (!activeSelectedIds.size) {
       onReviewSelectionChange?.(null);
     }
-  }, [onReviewSelectionChange, rows, selectedIds]);
+  }, [activeSelectedIds, onReviewSelectionChange, selectedIds.size]);
 
-  const selectedRows = rows.filter((row) => selectedIds.has(row.id));
+  const selectedRows = rows.filter((row) => activeSelectedIds.has(row.id));
   const sourceCount = dryRun?.source_summaries.length ?? (inventory.hasRawDicom ? 1 : 0);
   const mappingCount = dryRun?.mapping_preview.length ?? 0;
   const mappingCountLabel = dryRun
     ? String(mappingCount)
     : restoreState === "loading"
-      ? "Loading"
-      : "Refresh required";
+      ? t("data.dicom.loading")
+      : t("data.dicom.refreshRequired");
   const manualReviewRows = rows.filter((row) =>
     /manual|required|low/i.test(`${row.statusLabel} ${row.warnings.join(" ")}`),
   );
@@ -133,6 +132,8 @@ export function DicomSeriesTable({
   const warningMessages = [...(dryRun?.warnings ?? []), ...rowWarningMessages];
   const blockingMessages = dryRun?.blocking_issues ?? [];
   const usesVirtualization = filteredRows.length > VIRTUALIZATION_THRESHOLD;
+  const tableContentKey = `${activeFilter}\u0000${query}\u0000${dryRun?.checked_at ?? ""}`;
+  const tableScrollTop = tableScrollState.key === tableContentKey ? tableScrollState.top : 0;
   const virtualRange = useMemo(() => {
     if (!usesVirtualization) {
       return {
@@ -160,15 +161,14 @@ export function DicomSeriesTable({
     : 0;
 
   useEffect(() => {
-    setTableScrollTop(0);
     if (tableViewportRef.current) {
       tableViewportRef.current.scrollTop = 0;
     }
-  }, [activeFilter, dryRun, query]);
+  }, [tableContentKey]);
 
   const toggleRow = (row: DicomRow) => {
     setSelectedIds((current) => {
-      const next = new Set(current);
+      const next = new Set([...current].filter((id) => activeSelectedIds.has(id)));
       if (next.has(row.id)) {
         next.delete(row.id);
       } else {
@@ -177,8 +177,8 @@ export function DicomSeriesTable({
       return next;
     });
 
-    if (selectedIds.has(row.id)) {
-      const fallbackRow = rows.find((item) => item.id !== row.id && selectedIds.has(item.id));
+    if (activeSelectedIds.has(row.id)) {
+      const fallbackRow = rows.find((item) => item.id !== row.id && activeSelectedIds.has(item.id));
       onReviewSelectionChange?.(fallbackRow ? dicomRowSelection(fallbackRow) : null);
     } else {
       onReviewSelectionChange?.(dicomRowSelection(row));
@@ -189,11 +189,8 @@ export function DicomSeriesTable({
     <Card className={styles.panel} tone="muted">
       <div className={styles.header}>
         <div>
-          <h3>DICOM series browser</h3>
-          <p>
-            Review raw DICOM sources and dry-run mappings before any conversion write is requested.
-            Per-series file totals are shown only when the backend returns verified detail.
-          </p>
+          <h3>{t("data.dicom.title")}</h3>
+          <p>{t("data.dicom.description")}</p>
         </div>
         <Button
           disabled={!projectId || loading || !inventory.hasRawDicom}
@@ -201,35 +198,35 @@ export function DicomSeriesTable({
         >
           {loading
             ? restoreState === "loading"
-              ? "Loading preview..."
-              : "Generating..."
+              ? t("data.dicom.loadingPreview")
+              : t("data.dicom.generating")
             : dryRun
-              ? "Refresh dry-run"
+              ? t("data.dicom.refreshDryRun")
               : restoreState === "refresh_required" || restoreState === "error"
-                ? "Refresh dry-run preview"
-                : "Generate dry-run preview"}
+                ? t("data.dicom.refreshPreview")
+                : t("data.dicom.generatePreview")}
         </Button>
       </div>
 
-      <div className={styles.summaryStrip} aria-label="DICOM inventory summary">
+      <div className={styles.summaryStrip} aria-label={t("data.dicom.inventorySummary")}>
         <div className={styles.summaryItem}>
-          <span>Subject candidates</span>
+          <span>{t("data.dicom.subjectCandidates")}</span>
           <strong>{inventory.rawDicomCandidates}</strong>
         </div>
         <div className={styles.summaryItem}>
-          <span>Series</span>
+          <span>{t("data.dicom.series")}</span>
           <strong>{inventory.dicomSeriesCount}</strong>
         </div>
         <div className={styles.summaryItem}>
-          <span>Files</span>
+          <span>{t("data.dicom.files")}</span>
           <strong>{inventory.dicomFileCount.toLocaleString()}</strong>
         </div>
         <div className={styles.summaryItem}>
-          <span>Dry-run mappings</span>
+          <span>{t("data.dicom.dryRunMappings")}</span>
           <strong>{mappingCountLabel}</strong>
         </div>
         <div className={styles.summaryItem}>
-          <span>Manual review</span>
+          <span>{t("data.dicom.manualReview")}</span>
           <strong>{manualReviewRows.length}</strong>
         </div>
       </div>
@@ -237,15 +234,13 @@ export function DicomSeriesTable({
       {!dryRun ? (
         <div className={styles.statusMessage}>
           {restoreState === "loading"
-            ? "Checking for persisted dry-run mappings for the active project."
-            : restoreMessage ||
-              "Dry-run preview not loaded; refresh required. No mappings are being counted for this session until verified sources and suggested BIDS mappings are loaded."}
+            ? t("data.dicom.checkingMappings")
+            : restoreMessage || t("data.dicom.previewNotLoaded")}
         </div>
       ) : null}
       {error ? (
         <div className={`${styles.statusMessage} ${styles.error}`} role="alert">
-          Dry-run failed before any conversion write was requested. Review the backend response and
-          retry when the project source state is available: {error}
+          {t("data.dicom.failed", { error })}
         </div>
       ) : null}
       {dryRun ? (
@@ -259,16 +254,16 @@ export function DicomSeriesTable({
 
       <div className={styles.toolbar}>
         <div className={styles.search}>
-          <label htmlFor="dicom-series-search">Search DICOM sources</label>
+          <label htmlFor="dicom-series-search">{t("data.dicom.search")}</label>
           <input
             id="dicom-series-search"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Subject, series UID, modality, path"
+            placeholder={t("data.dicom.searchPlaceholder")}
             type="search"
             value={query}
           />
         </div>
-        <div className={styles.filters} aria-label="DICOM source filters">
+        <div className={styles.filters} aria-label={t("data.dicom.filters")}>
           {filters.map((filter) => (
             <button
               key={filter.id}
@@ -277,7 +272,7 @@ export function DicomSeriesTable({
               onClick={() => setActiveFilter(filter.id)}
               type="button"
             >
-              {filter.label}
+              {t(filter.labelKey)}
             </button>
           ))}
         </div>
@@ -286,19 +281,29 @@ export function DicomSeriesTable({
       <div className={styles.tableWrap}>
         {usesVirtualization ? (
           <div className={styles.virtualizationStatus} role="status">
-            Rendering rows {virtualRange.startIndex + 1}-{virtualRange.endIndex} of{" "}
-            {filteredRows.length}. Scroll the table to inspect the full DICOM source list.
+            {t("data.dicom.renderingRows", {
+              start: virtualRange.startIndex + 1,
+              end: virtualRange.endIndex,
+              total: filteredRows.length,
+            })}
           </div>
         ) : null}
         <Table
           aria-rowcount={filteredRows.length}
-          caption={`${sourceCount} source group(s), ${filteredRows.length} visible row(s)`}
+          caption={t("data.dicom.caption", {
+            sources: sourceCount,
+            rows: filteredRows.length,
+          })}
           viewportClassName={usesVirtualization ? styles.virtualizedViewport : undefined}
           viewportProps={
             usesVirtualization
               ? {
-                  "aria-label": "Virtualized DICOM series table",
-                  onScroll: (event) => setTableScrollTop(event.currentTarget.scrollTop),
+                  "aria-label": t("data.dicom.virtualTable"),
+                  onScroll: (event) =>
+                    setTableScrollState({
+                      key: tableContentKey,
+                      top: event.currentTarget.scrollTop,
+                    }),
                 }
               : undefined
           }
@@ -307,20 +312,20 @@ export function DicomSeriesTable({
           <thead>
             <tr>
               <th className={styles.checkboxCell} scope="col">
-                Select
+                {t("data.dicom.select")}
               </th>
-              <th scope="col">Subject</th>
-              <th scope="col">Series / source</th>
-              <th scope="col">Files</th>
-              <th scope="col">Modality</th>
-              <th scope="col">Acquisition</th>
-              <th scope="col">Status</th>
+              <th scope="col">{t("data.dicom.subject")}</th>
+              <th scope="col">{t("data.dicom.seriesSource")}</th>
+              <th scope="col">{t("data.dicom.files")}</th>
+              <th scope="col">{t("data.dicom.modality")}</th>
+              <th scope="col">{t("data.dicom.acquisition")}</th>
+              <th scope="col">{t("data.status")}</th>
             </tr>
           </thead>
           <tbody>
             {filteredRows.length === 0 ? (
               <TableEmpty colSpan={7}>
-                {emptyFilterMessage(activeFilter, dryRun, restoreState)}
+                {emptyFilterMessage(activeFilter, dryRun, restoreState, t)}
               </TableEmpty>
             ) : (
               <>
@@ -333,7 +338,7 @@ export function DicomSeriesTable({
                     ariaRowIndex={
                       usesVirtualization ? virtualRange.startIndex + index + 2 : undefined
                     }
-                    checked={selectedIds.has(row.id)}
+                    checked={activeSelectedIds.has(row.id)}
                     onToggle={toggleRow}
                     row={row}
                   />
@@ -348,12 +353,9 @@ export function DicomSeriesTable({
       </div>
 
       {selectedRows.length > 0 ? (
-        <div className={styles.selectionPanel} aria-label="Selected DICOM sources">
-          <strong>{selectedRows.length} selected for review</strong>
-          <p>
-            Selection is local to this browser session. It is review selection only: it is not
-            persisted, does not approve mappings, and does not execute conversion.
-          </p>
+        <div className={styles.selectionPanel} aria-label={t("data.dicom.selectedSources")}>
+          <strong>{t("data.dicom.selectedCount", { count: selectedRows.length })}</strong>
+          <p>{t("data.dicom.selectionSafety")}</p>
           <ul className={styles.selectionList}>
             {selectedRows.map((row) => (
               <li key={row.id}>{selectionLabel(row)}</li>
@@ -369,14 +371,15 @@ function emptyFilterMessage(
   activeFilter: FilterId,
   dryRun: ConversionDryRunResponse | null,
   restoreState: DryRunRestoreState,
+  t: I18nContextValue["t"],
 ): string {
   if (!dryRun && (restoreState === "refresh_required" || restoreState === "error")) {
-    return "Dry-run mappings are not loaded; refresh the preview before filtering restored mappings.";
+    return t("data.dicom.mappingsMissingFilter");
   }
   if (activeFilter === "dicom_series") {
-    return "No DICOM series rows match the current search. This filter matches DICOM source rows and dicom_series mapping previews.";
+    return t("data.dicom.noSeriesMatch");
   }
-  return "No DICOM sources match the current filters.";
+  return t("data.dicom.noSourcesMatch");
 }
 
 function selectionLabel(row: DicomRow): string {
@@ -395,34 +398,31 @@ function ReviewSummary({
   status: ConversionDryRunResponse["status"];
   warningMessages: string[];
 }) {
+  const { t } = useI18n();
   const hasIssues = status !== "ready" || warningMessages.length > 0 || blockingMessages.length > 0;
   const statusTone =
     blockingMessages.length > 0 ? "danger" : status === "warning" ? "warning" : "success";
 
   return (
-    <div className={styles.reviewSummary} aria-label="Dry-run review summary">
+    <div className={styles.reviewSummary} aria-label={t("data.dicom.reviewSummary")}>
       <div className={styles.reviewSummaryHeader}>
-        <strong>Dry-run review state</strong>
+        <strong>{t("data.dicom.reviewState")}</strong>
         <Badge tone={statusTone} size="sm">
           {status}
         </Badge>
       </div>
-      <p>
-        {hasIssues
-          ? "Review warnings and blockers before using any mapping as approval material."
-          : "Dry-run mappings are ready for human review. No conversion has been executed."}
-      </p>
+      <p>{hasIssues ? t("data.dicom.reviewIssues") : t("data.dicom.reviewReady")}</p>
       <dl className={styles.reviewFacts}>
         <div>
-          <dt>Warnings</dt>
+          <dt>{t("data.dicom.warnings")}</dt>
           <dd>{warningMessages.length}</dd>
         </div>
         <div>
-          <dt>Blocking issues</dt>
+          <dt>{t("data.dicom.blockingIssues")}</dt>
           <dd>{blockingMessages.length}</dd>
         </div>
         <div>
-          <dt>Manual review</dt>
+          <dt>{t("data.dicom.manualReview")}</dt>
           <dd>{manualReviewCount}</dd>
         </div>
       </dl>
@@ -448,11 +448,12 @@ function DicomSeriesRow({
   onToggle: (row: DicomRow) => void;
   row: DicomRow;
 }) {
+  const { t } = useI18n();
   return (
     <tr aria-rowindex={ariaRowIndex}>
       <td className={styles.checkboxCell}>
         <input
-          aria-label={`Select ${row.series}`}
+          aria-label={t("data.dicom.selectSeries", { series: row.series })}
           checked={checked}
           onChange={() => onToggle(row)}
           type="checkbox"
@@ -517,13 +518,14 @@ function VirtualSpacer({ height }: { height: number }) {
 function buildDicomRows(
   inventory: ProjectInventory,
   dryRun: ConversionDryRunResponse | null,
+  t: I18nContextValue["t"],
 ): DicomRow[] {
   if (dryRun?.mapping_preview.length) {
-    return dryRun.mapping_preview.map((mapping, index) => mappingToRow(mapping, index));
+    return dryRun.mapping_preview.map((mapping, index) => mappingToRow(mapping, index, t));
   }
 
   if (dryRun?.source_summaries.length) {
-    return dryRun.source_summaries.map((source) => sourceToRow(source));
+    return dryRun.source_summaries.map((source) => sourceToRow(source, t));
   }
 
   if (!inventory.hasRawDicom) {
@@ -532,27 +534,28 @@ function buildDicomRows(
 
   return [
     {
-      acquisition: "Not inspected",
-      description: "Project inventory summary; generate dry-run for verified mapping rows.",
+      acquisition: t("data.dicom.notInspected"),
+      description: t("data.dicom.projectSummaryDescription"),
       fileCount: inventory.dicomFileCount.toLocaleString(),
       id: "project-summary",
       modality: inventory.modality,
       sourceKind: "project_summary",
-      statusLabel: "Summary",
+      statusLabel: t("data.dicom.summary"),
       statusTone: inventory.dicomSeriesCount > 0 ? "info" : "warning",
-      subject: `${inventory.rawDicomCandidates} candidates`,
-      subjectDetail: "Project-level diagnostics",
-      series: `${inventory.dicomSeriesCount} series`,
-      seriesDetail: "Source detection pending",
-      warnings:
-        inventory.dicomSeriesCount > 0
-          ? []
-          : ["No per-series metadata is currently available for this project."],
+      subject: t("data.dicom.candidates", { count: inventory.rawDicomCandidates }),
+      subjectDetail: t("data.dicom.projectDiagnostics"),
+      series: t("data.dicom.seriesCount", { count: inventory.dicomSeriesCount }),
+      seriesDetail: t("data.dicom.sourceDetectionPending"),
+      warnings: inventory.dicomSeriesCount > 0 ? [] : [t("data.dicom.noSeriesMetadata")],
     },
   ];
 }
 
-function mappingToRow(mapping: ConversionMappingPreview, index: number): DicomRow {
+function mappingToRow(
+  mapping: ConversionMappingPreview,
+  index: number,
+  t: I18nContextValue["t"],
+): DicomRow {
   const seriesId =
     mapping.source_series_uid ||
     basename(mapping.source_path ?? "") ||
@@ -566,45 +569,48 @@ function mappingToRow(mapping: ConversionMappingPreview, index: number): DicomRo
     needsManual && mapping.warnings.length === 0
       ? [
           mapping.confidence === "manual_required"
-            ? "Manual review required before this mapping can be used."
-            : "Low confidence mapping requires manual review.",
+            ? t("data.dicom.manualMapping")
+            : t("data.dicom.lowConfidence"),
         ]
       : mapping.warnings;
 
   return {
-    acquisition: mapping.session_id || "Session not assigned",
-    description: mapping.suggested_relative_path || mapping.source_path || "Mapping path pending",
-    fileCount: "per-series pending",
+    acquisition: mapping.session_id || t("data.dicom.sessionUnassigned"),
+    description:
+      mapping.suggested_relative_path || mapping.source_path || t("data.dicom.mappingPathPending"),
+    fileCount: t("data.dicom.perSeriesPending"),
     id: `mapping-${index}-${seriesId}`,
     modality: suffix || mapping.source_type,
     sourceKind: "mapping_preview",
     statusLabel: mapping.confidence.replace(/_/g, " "),
     statusTone: needsManual ? "warning" : mapping.confidence === "high" ? "success" : "info",
-    subject: mapping.subject_id || "Unassigned",
+    subject: mapping.subject_id || t("data.dicom.unassigned"),
     subjectDetail: mapping.source_type,
     series: seriesId,
-    seriesDetail: mapping.source_series_uid ? "Series UID" : "Source path",
+    seriesDetail: mapping.source_series_uid
+      ? t("data.dicom.seriesUid")
+      : t("data.dicom.sourcePath"),
     warnings: manualWarnings,
   };
 }
 
-function sourceToRow(source: ConversionSourceSummary): DicomRow {
+function sourceToRow(source: ConversionSourceSummary, t: I18nContextValue["t"]): DicomRow {
   const subjectList = source.subject_candidates.slice(0, 3).join(", ");
   return {
-    acquisition: "Dry-run source",
+    acquisition: t("data.dicom.dryRunSource"),
     description: source.root,
     fileCount: source.file_count.toLocaleString(),
     id: source.source_id,
     modality: source.source_type,
     sourceKind: "source_summary",
-    statusLabel: source.exists ? "Detected" : "Missing",
+    statusLabel: source.exists ? t("data.dicom.detected") : t("data.dicom.missing"),
     statusTone: source.exists ? (source.warnings.length ? "warning" : "success") : "danger",
-    subject: subjectList || "No subject candidates",
+    subject: subjectList || t("data.dicom.noSubjectCandidates"),
     subjectDetail:
       source.subject_candidates.length > 3
-        ? `+${source.subject_candidates.length - 3} more`
-        : `${source.subject_candidates.length} candidate(s)`,
-    series: `${source.series_count} series`,
+        ? t("data.dicom.moreCandidates", { count: source.subject_candidates.length - 3 })
+        : t("data.dicom.candidateCount", { count: source.subject_candidates.length }),
+    series: t("data.dicom.seriesCount", { count: source.series_count }),
     seriesDetail: source.source_id,
     warnings: source.warnings,
   };

@@ -1,20 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  DEFAULT_API_BASE,
-  getProjectNiftiQcSnapshot,
-  getProjectNiftiThumbnail,
-} from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { getProjectNiftiQcSnapshot, getProjectNiftiThumbnail } from "../lib/api/preprocessing";
 import type { NiftiQcSnapshotResponse } from "../types";
 import { ActionList, MetricTile, SafetyBanner, StatusPill } from "./dashboardUi";
 
 type Props = { baseUrl?: string; projectId: string | null };
 
-const statusBadge: Record<string, React.CSSProperties> = {
-  ready: { background: "#e8f5e9", color: "#176b3b", borderColor: "rgba(33,150,83,0.24)" },
-  warning: { background: "#fff7ed", color: "#9a5a15", borderColor: "rgba(242,153,74,0.28)" },
-  blocked: { background: "#ffebee", color: "#b53b3b", borderColor: "rgba(235,87,87,0.26)" },
-  unknown: { background: "#eef1f6", color: "#667085", borderColor: "rgba(137,150,171,0.28)" },
-};
 const pill: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -32,6 +24,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<NiftiQcSnapshotResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,6 +34,7 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
 
   useEffect(() => {
     if (!projectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear stale snapshot when project selection is removed.
       setData(null);
       return;
     }
@@ -63,29 +57,29 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
   if (!projectId)
     return (
       <Sec>
-        <H3>NIfTI QC Snapshot</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.NiftiQcSnapshot.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sec>
     );
   if (loading)
     return (
       <Sec>
-        <H3>NIfTI QC Snapshot</H3>
-        <div className="empty">Loading...</div>
+        <H3>{t("technical.NiftiQcSnapshot.001")}</H3>
+        <div className="empty">{t("technical.NiftiQcSnapshot.002")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>NIfTI QC Snapshot</H3>
+        <H3>{t("technical.NiftiQcSnapshot.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
   if (!data)
     return (
       <Sec>
-        <H3>NIfTI QC Snapshot</H3>
-        <div className="empty">No data.</div>
+        <H3>{t("technical.NiftiQcSnapshot.001")}</H3>
+        <div className="empty">{t("technical.NiftiQcSnapshot.003")}</div>
       </Sec>
     );
   const niftiNotApplicable = data.image_count === 0;
@@ -102,21 +96,19 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
         }}
       >
         <div>
-          <H3>NIfTI QC Snapshot</H3>
-          <Sub>Read-only metadata and intensity QC. No preprocessing is executed.</Sub>
+          <H3>{t("technical.NiftiQcSnapshot.001")}</H3>
+          <Sub>{t("technical.NiftiQcSnapshot.004")}</Sub>
         </div>
         <StatusPill status={niftiNotApplicable ? "not_applicable" : data.status}>
           {niftiNotApplicable ? "Not applicable" : data.status.toUpperCase()}
         </StatusPill>
       </div>
-      <SafetyBanner tone="warning">
-        Read-only QC snapshot. No preprocessing is executed. Rawdata is not modified.
-      </SafetyBanner>
+      <SafetyBanner tone="warning">{t("technical.NiftiQcSnapshot.005")}</SafetyBanner>
 
       {niftiNotApplicable ? (
         <SafetyBanner tone="info">
           NIfTI QC is not applicable until DICOM data is converted. Keep using{" "}
-          <strong>Generate conversion dry-run</strong> as the next safe step.
+          <strong>{t("technical.NiftiQcSnapshot.006")}</strong> {t("technical.NiftiQcSnapshot.007")}
         </SafetyBanner>
       ) : null}
 
@@ -225,7 +217,8 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
                     onClick={() =>
                       setExpanded((p) => {
                         const n = new Set(p);
-                        isExpanded ? n.delete(key) : n.add(key);
+                        if (isExpanded) n.delete(key);
+                        else n.add(key);
                         return n;
                       })
                     }
@@ -337,7 +330,9 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
       )}
       {data.next_actions.length > 0 && (
         <div>
-          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
+          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+            {t("technical.BoldReferenceReadiness.011")}
+          </h4>
           <ActionList actions={data.next_actions} rawDicom={niftiNotApplicable} />
         </div>
       )}
@@ -364,27 +359,6 @@ function Warn({ items }: { items: string[] }) {
     </div>
   );
 }
-function M({ label, value }: { label: string; value: number }) {
-  return (
-    <div
-      style={{
-        padding: "8px 10px",
-        border: "1px solid rgba(137,150,171,0.24)",
-        borderRadius: 6,
-        background: "#fff",
-        display: "grid",
-        gap: 2,
-        color: "#667085",
-        fontSize: 11,
-        fontWeight: 850,
-      }}
-    >
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 // ── Per-image thumbnail loader (lazy) ───────────────────────────────────────
 
 function ThumbnailLoader({
@@ -396,6 +370,7 @@ function ThumbnailLoader({
   projectId: string;
   imageId: string;
 }) {
+  const { t } = useI18n();
   const [thumbs, setThumbs] = useState<Array<Record<string, unknown>> | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -421,7 +396,9 @@ function ThumbnailLoader({
           </div>
         ))}
         {thumbs.length === 0 && (
-          <span style={{ fontSize: 10, color: "#9a5a15" }}>No thumbnails available.</span>
+          <span style={{ fontSize: 10, color: "#9a5a15" }}>
+            {t("technical.NiftiQcSnapshot.008")}
+          </span>
         )}
       </div>
     );
@@ -430,7 +407,7 @@ function ThumbnailLoader({
   if (loading)
     return (
       <button disabled style={{ fontSize: 11 }}>
-        Loading slices...
+        {t("technical.NiftiQcSnapshot.009")}
       </button>
     );
   if (err) return <div style={{ fontSize: 10, color: "#b53b3b" }}>{err}</div>;

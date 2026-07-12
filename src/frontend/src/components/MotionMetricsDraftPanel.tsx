@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, generateMotionMetricsDraft } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { generateMotionMetricsDraft } from "../lib/api/preprocessing";
 import type { MotionMetricsDraftResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };
@@ -22,6 +24,7 @@ const pill: React.CSSProperties = {
 };
 
 export default function MotionMetricsDraftPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<MotionMetricsDraftResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,14 +51,14 @@ export default function MotionMetricsDraftPanel({ baseUrl, projectId }: Props) {
   if (!projectId)
     return (
       <Sec>
-        <H3>Motion Metrics Draft</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.MotionMetricsDraft.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>Motion Metrics Draft</H3>
+        <H3>{t("technical.MotionMetricsDraft.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -72,8 +75,8 @@ export default function MotionMetricsDraftPanel({ baseUrl, projectId }: Props) {
         }}
       >
         <div>
-          <H3>Motion Metrics Draft</H3>
-          <Sub>QC summary from motion parameters / confounds.</Sub>
+          <H3>{t("technical.MotionMetricsDraft.001")}</H3>
+          <Sub>{t("technical.MotionMetricsDraft.002")}</Sub>
         </div>
         {data && (
           <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
@@ -90,7 +93,7 @@ export default function MotionMetricsDraftPanel({ baseUrl, projectId }: Props) {
           marginBottom: 12,
         }}
       >
-        QC summary only. No realignment is executed.
+        {t("technical.MotionMetricsDraft.003")}
       </div>
 
       <button
@@ -107,7 +110,7 @@ export default function MotionMetricsDraftPanel({ baseUrl, projectId }: Props) {
           fontWeight: 600,
         }}
       >
-        {loading ? "Generating..." : "Generate Motion Metrics Draft"}
+        {loading ? t("technical.MotionMetricsDraft.004") : t("technical.MotionMetricsDraft.005")}
       </button>
 
       {data && (
@@ -126,7 +129,9 @@ export default function MotionMetricsDraftPanel({ baseUrl, projectId }: Props) {
           </div>
           {data.summaries.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Summaries</h4>
+              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+                {t("technical.MotionMetricsDraft.006")}
+              </h4>
               <div style={{ display: "grid", gap: 6 }}>
                 {data.summaries.slice(0, 10).map((s, i) => (
                   <div

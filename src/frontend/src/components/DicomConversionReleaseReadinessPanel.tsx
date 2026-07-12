@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useI18n } from "../i18n/useI18n";
 import type { DicomConversionReleaseReadinessReport } from "../types";
 
 type Props = {
@@ -41,6 +41,7 @@ export default function DicomConversionReleaseReadinessPanel({
   error,
   onRefresh,
 }: Props) {
+  const { t } = useI18n();
   return (
     <section
       style={{
@@ -62,9 +63,11 @@ export default function DicomConversionReleaseReadinessPanel({
         }}
       >
         <div>
-          <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Release Readiness</h3>
+          <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>
+            {t("technical.DicomConversionReleaseReadiness.001")}
+          </h3>
           <span style={{ color: "#667085", fontSize: 12 }}>
-            Read-only evaluation — does not run conversion.
+            {t("technical.DicomConversionReleaseReadiness.002")}
           </span>
         </div>
         {readiness && (
@@ -96,13 +99,13 @@ export default function DicomConversionReleaseReadinessPanel({
           lineHeight: 1.5,
         }}
       >
-        <strong>This panel is read-only. It does not run conversion.</strong> Public DICOM
-        conversion remains disabled until final human release approval.
+        <strong>{t("technical.DicomConversionReleaseReadiness.003")}</strong>{" "}
+        {t("technical.DicomConversionReleaseReadiness.004")}
       </div>
 
       {loading && (
         <div className="empty" style={{ marginBottom: 12 }}>
-          Checking release readiness...
+          {t("technical.DicomConversionReleaseReadiness.005")}
         </div>
       )}
       {error && (
@@ -113,7 +116,7 @@ export default function DicomConversionReleaseReadinessPanel({
 
       {!readiness && !loading && !error && (
         <div className="empty" style={{ marginBottom: 12 }}>
-          Loading release readiness data...
+          {t("technical.DicomConversionReleaseReadiness.006")}
         </div>
       )}
 
@@ -121,7 +124,7 @@ export default function DicomConversionReleaseReadinessPanel({
         <>
           {/* A. Release readiness summary */}
           <div style={{ marginBottom: 12 }}>
-            <h4 style={subH}>Summary</h4>
+            <h4 style={subH}>{t("technical.DicomConversionReleaseReadiness.007")}</h4>
             <div
               style={{
                 display: "grid",
@@ -152,7 +155,7 @@ export default function DicomConversionReleaseReadinessPanel({
 
           {/* B. Disk-space check */}
           <div style={{ marginBottom: 12 }}>
-            <h4 style={subH}>Disk Space</h4>
+            <h4 style={subH}>{t("technical.DicomConversionReleaseReadiness.008")}</h4>
             <div style={{ fontSize: 11, color: "#667085", marginBottom: 4 }}>
               output root:{" "}
               <span style={{ fontFamily: "monospace" }}>
@@ -188,7 +191,7 @@ export default function DicomConversionReleaseReadinessPanel({
 
           {/* C. Runtime policy */}
           <div style={{ marginBottom: 12 }}>
-            <h4 style={subH}>Runtime Policy</h4>
+            <h4 style={subH}>{t("technical.DicomConversionReleaseReadiness.009")}</h4>
             <div
               style={{
                 display: "grid",
@@ -225,7 +228,7 @@ export default function DicomConversionReleaseReadinessPanel({
 
           {/* D. Safety invariants */}
           <div style={{ marginBottom: 12 }}>
-            <h4 style={subH}>Safety Invariants</h4>
+            <h4 style={subH}>{t("technical.DicomConversionReleaseReadiness.010")}</h4>
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               <Badge label="public endpoint absent" ok={!readiness.public_endpoint_enabled} />
               <Badge label="frontend execute absent" ok={!readiness.frontend_execute_enabled} />
@@ -250,7 +253,8 @@ export default function DicomConversionReleaseReadinessPanel({
               {readiness.blocking_issues.length > 0 && (
                 <>
                   <h4 style={{ ...subH, color: "#b53b3b" }}>
-                    Blockers ({readiness.blocking_issues.length})
+                    {t("technical.DicomConversionReleaseReadiness.011")} (
+                    {readiness.blocking_issues.length})
                   </h4>
                   {readiness.blocking_issues.map((b, i) => (
                     <div
@@ -273,7 +277,8 @@ export default function DicomConversionReleaseReadinessPanel({
               {readiness.warnings.length > 0 && (
                 <>
                   <h4 style={{ ...subH, color: "#9a5a15", marginTop: 8 }}>
-                    Warnings ({readiness.warnings.length})
+                    {t("technical.DicomConversionReleaseReadiness.012")} (
+                    {readiness.warnings.length})
                   </h4>
                   {readiness.warnings.map((w, i) => (
                     <div
@@ -314,7 +319,9 @@ export default function DicomConversionReleaseReadinessPanel({
             fontSize: 11,
           }}
         >
-          {loading ? "Checking..." : "Check release readiness"}
+          {loading
+            ? t("technical.DicomConversionReleaseReadiness.013")
+            : t("technical.DicomConversionReleaseReadiness.014")}
         </button>
       </div>
     </section>

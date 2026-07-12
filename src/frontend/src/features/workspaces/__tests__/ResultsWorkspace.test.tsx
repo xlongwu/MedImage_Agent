@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import { ResultsWorkspace } from "../ResultsWorkspace";
 
 vi.mock("../../../components/ArtifactBrowser", () => ({
@@ -34,34 +35,26 @@ function renderWorkspace(projectId: string | null = "project-1") {
 }
 
 describe("ResultsWorkspace", () => {
-  it("shows an artifact workflow overview without claiming loaded artifacts", () => {
+  it("renders project-scoped result gates in simplified Chinese", () => {
+    render(
+      <I18nProvider locale="zh-CN">
+        <ResultsWorkspace baseUrl="http://localhost" projectId={null} />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("检查结果前请选择项目")).toBeInTheDocument();
+    expect(screen.getByLabelText("产物与报告模块")).toHaveTextContent("结果模块正在等待项目上下文");
+    expect(screen.getByRole("button", { name: "打开报告模块" })).toBeDisabled();
+  });
+
+  it("shows the artifact browser beside an explicit empty viewer without claiming artifacts", () => {
     renderWorkspace();
 
-    expect(screen.getByRole("heading", { name: "Artifact evidence boundary" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent("Planned");
-    expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent("Planned only");
-    expect(screen.getByLabelText("Artifact evidence states")).toHaveTextContent(
-      "Backend evidence required",
-    );
-    expect(screen.getByRole("table", { name: "Artifact handoff index" })).toHaveTextContent(
-      "Artifact rows appear only after the Artifact Browser loads the backend index",
-    );
-    expect(screen.getByRole("table", { name: "Artifact state boundaries" })).toHaveTextContent(
-      "Planned output",
-    );
-    expect(screen.getByRole("table", { name: "Artifact state boundaries" })).toHaveTextContent(
-      "Missing provenance",
-    );
-    expect(screen.getByLabelText("Results artifact workflow")).toHaveTextContent(
-      "Preview supported artifact",
-    );
-    expect(screen.getByLabelText("Results artifact workflow")).toHaveTextContent(
-      "Check provenance",
-    );
-    expect(screen.getByRole("heading", { name: "Provenance checks" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Results module shortcuts")).toHaveTextContent(
-      "Package Validation",
-    );
+    expect(
+      screen.getByRole("region", { name: "Artifact browser and image viewer" }),
+    ).toHaveTextContent("Artifact browser project-1");
+    expect(screen.getByText("No preview selected")).toBeInTheDocument();
+    expect(screen.queryByText("FC Matrix (12x12)")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Migrated report modules")).toHaveTextContent("On demand");
     expect(
       within(screen.getByLabelText("Migrated report modules")).getByTitle(

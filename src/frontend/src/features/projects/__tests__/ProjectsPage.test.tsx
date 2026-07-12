@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ProjectsPage } from "../ProjectsPage";
 import type { ProjectSummary } from "../../../lib/types/project";
+import { I18nProvider } from "../../../i18n/I18nProvider";
 
 function project(
   id: string,
@@ -44,7 +45,11 @@ function renderPage(overrides: Partial<ComponentProps<typeof ProjectsPage>> = {}
     ...overrides,
   };
 
-  render(<ProjectsPage {...props} />);
+  render(
+    <I18nProvider locale="en">
+      <ProjectsPage {...props} />
+    </I18nProvider>,
+  );
   return props;
 }
 
@@ -53,15 +58,14 @@ describe("ProjectsPage", () => {
     const user = userEvent.setup();
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "Projects" })).toBeInTheDocument();
-    expect(screen.getByText("20")).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: /raw study/i })).toBeInTheDocument();
-    expect(screen.getByRole("cell", { name: /qc cohort/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Recent Projects" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /raw study/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /qc cohort/i })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Needs setup" }));
 
-    expect(screen.getByRole("cell", { name: /raw study/i })).toBeInTheDocument();
-    expect(screen.queryByRole("cell", { name: /qc cohort/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /raw study/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /qc cohort/i })).not.toBeInTheDocument();
 
     await user.clear(screen.getByRole("searchbox", { name: /search projects/i }));
     await user.type(screen.getByRole("searchbox", { name: /search projects/i }), "nothing");
@@ -72,9 +76,9 @@ describe("ProjectsPage", () => {
   it("selects a project and returns to the workspace", async () => {
     const user = userEvent.setup();
     const props = renderPage();
-    const row = screen.getByRole("row", { name: /qc cohort/i });
+    const row = screen.getByRole("heading", { name: /qc cohort/i }).closest("article");
 
-    await user.click(within(row).getByRole("button", { name: "Select" }));
+    await user.click(within(row as HTMLElement).getByRole("button", { name: "Select" }));
 
     expect(props.onSelectProject).toHaveBeenCalledWith("p2");
     expect(props.onClose).toHaveBeenCalledTimes(1);
@@ -83,12 +87,12 @@ describe("ProjectsPage", () => {
   it("requires confirmation before removing a project listing", async () => {
     const user = userEvent.setup();
     const props = renderPage();
-    const row = screen.getByRole("row", { name: /raw study/i });
+    const row = screen.getByRole("heading", { name: /raw study/i }).closest("article");
 
-    await user.click(within(row).getByRole("button", { name: "Remove" }));
+    await user.click(within(row as HTMLElement).getByRole("button", { name: "Remove" }));
 
     expect(screen.getByRole("dialog", { name: "Remove project" })).toHaveTextContent(
-      "preserves data on disk",
+      "Data on disk is preserved",
     );
     expect(props.onDeleteProject).not.toHaveBeenCalled();
 
@@ -119,7 +123,7 @@ describe("ProjectsPage", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByText(/raw study/i)).not.toBeInTheDocument();
 
-    const addProjectButtons = screen.getAllByRole("button", { name: "Add project" });
+    const addProjectButtons = screen.getAllByRole("button", { name: "New Project" });
     await user.click(addProjectButtons[addProjectButtons.length - 1]);
 
     expect(props.onCreateProject).toHaveBeenCalledTimes(1);
@@ -136,9 +140,8 @@ describe("ProjectsPage", () => {
     });
 
     expect(screen.getByRole("status")).toHaveTextContent("partial timeout");
-    expect(screen.getByRole("cell", { name: /verified study/i })).toBeInTheDocument();
-    expect(screen.getByText("Needs review")).toBeInTheDocument();
-    expect(screen.getByText(/not classified as a completed stage/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /verified study/i })).toBeInTheDocument();
+    expect(screen.getAllByText("Pipeline set")).toHaveLength(2);
     expect(screen.queryByText("Raw Study")).not.toBeInTheDocument();
     expect(screen.queryByText("QC Cohort")).not.toBeInTheDocument();
   });

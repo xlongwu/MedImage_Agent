@@ -1,73 +1,76 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import { ContextInspector } from "../ContextInspector";
 
-function renderInspector(isOpen = true) {
+function renderInspector(isOpen = true, locale: "en" | "zh-CN" = "en") {
   const onToggle = vi.fn();
   const onConfigure = vi.fn();
 
   render(
-    <ContextInspector
-      activePageLabel="QC"
-      dataset={{ subjects: 2, scans: 4, health_status: "review", total_size: "1 GB" } as never}
-      executionMode="simulated"
-      externalSmokeApprovedBy=""
-      externalSmokeApprovedRun={false}
-      inventory={
-        {
-          dataState: "converted_bids",
-          dataStateLabel: "Converted BIDS/NIfTI",
-          metadataOnlyNiftiInventory: false,
-          modality: "rs-fMRI",
-        } as never
-      }
-      isOpen={isOpen}
-      model={{ model_name: "Planner", version: "0.6" } as never}
-      onConfigure={onConfigure}
-      onToggle={onToggle}
-      project={{ id: "project-1", name: "Demo Project" } as never}
-      selectionContext={{
-        artifact: {
-          evidenceLevel: "preview_only",
-          name: "motion_qc.json",
-          path: "runs/run-001/sub-001/qc/motion_qc.json",
-          previewType: "json",
-          runId: "run-001",
-          stage: "qc",
-          subject: "sub-001",
-        },
-        dataSeries: {
-          evidenceLevel: "preview_only",
-          series: "series-001",
-          seriesDetail: "Series UID",
-          sourceKind: "mapping_preview",
-          status: "high",
-          subject: "sub-001",
-          subjectDetail: "dicom_series",
-          warnings: [],
-        },
-        image: {
-          plane: "axial",
-          series: "bold",
-          source: "sub-001/func/sub-001_task-rest_bold.nii.gz",
-          subjectId: "sub-001",
-        },
-        planNode: {
-          backend: "spm",
-          detail: "Prepare realignment through reviewed backend gates.",
-          id: "spm_realign",
-          name: "Motion correction",
-          risk: "High risk",
-        },
-        run: {
-          id: "task-1",
-          name: "Preprocessing run",
-          pipeline: "rs-fMRI preprocessing",
-          status: "failed",
-        },
-      }}
-    />,
+    <I18nProvider locale={locale}>
+      <ContextInspector
+        activePageLabel="QC"
+        dataset={{ subjects: 2, scans: 4, health_status: "review", total_size: "1 GB" } as never}
+        executionMode="simulated"
+        externalSmokeApprovedBy=""
+        externalSmokeApprovedRun={false}
+        inventory={
+          {
+            dataState: "converted_bids",
+            dataStateLabel: "Converted BIDS/NIfTI",
+            metadataOnlyNiftiInventory: false,
+            modality: "rs-fMRI",
+          } as never
+        }
+        isOpen={isOpen}
+        model={{ model_name: "Planner", version: "0.6" } as never}
+        onConfigure={onConfigure}
+        onToggle={onToggle}
+        project={{ id: "project-1", name: "Demo Project" } as never}
+        selectionContext={{
+          artifact: {
+            evidenceLevel: "preview_only",
+            name: "motion_qc.json",
+            path: "runs/run-001/sub-001/qc/motion_qc.json",
+            previewType: "json",
+            runId: "run-001",
+            stage: "qc",
+            subject: "sub-001",
+          },
+          dataSeries: {
+            evidenceLevel: "preview_only",
+            series: "series-001",
+            seriesDetail: "Series UID",
+            sourceKind: "mapping_preview",
+            status: "high",
+            subject: "sub-001",
+            subjectDetail: "dicom_series",
+            warnings: [],
+          },
+          image: {
+            plane: "axial",
+            series: "bold",
+            source: "sub-001/func/sub-001_task-rest_bold.nii.gz",
+            subjectId: "sub-001",
+          },
+          planNode: {
+            backend: "spm",
+            detail: "Prepare realignment through reviewed backend gates.",
+            id: "spm_realign",
+            name: "Motion correction",
+            risk: "High risk",
+          },
+          run: {
+            id: "task-1",
+            name: "Preprocessing run",
+            pipeline: "rs-fMRI preprocessing",
+            status: "failed",
+          },
+        }}
+      />
+    </I18nProvider>,
   );
 
   return { onConfigure, onToggle };
@@ -108,5 +111,17 @@ describe("ContextInspector", () => {
     renderInspector(false);
 
     expect(screen.queryByLabelText("Context inspector")).not.toBeInTheDocument();
+  });
+
+  it("renders read-only context and evidence labels in Chinese", () => {
+    renderInspector(true, "zh-CN");
+
+    expect(screen.getByLabelText("上下文检查器")).toBeInTheDocument();
+    expect(screen.getByText("项目上下文")).toBeInTheDocument();
+    expect(screen.getByText("工作区上下文")).toBeInTheDocument();
+    expect(screen.getByText("所选对象")).toBeInTheDocument();
+    expect(screen.getByText("证据下钻")).toBeInTheDocument();
+    expect(screen.getAllByText("仅预览").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "打开设置" })).toBeInTheDocument();
   });
 });

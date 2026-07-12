@@ -181,6 +181,37 @@ export function Skeleton({
   );
 }
 
+export type ProgressProps = HTMLAttributes<HTMLDivElement> & {
+  label: ReactNode;
+  value: number | null;
+};
+
+export function Progress({ className, label, value, ...props }: ProgressProps) {
+  const normalized = value == null ? null : Math.min(100, Math.max(0, value));
+
+  return (
+    <div
+      {...props}
+      aria-label={typeof label === "string" ? label : undefined}
+      aria-valuemax={100}
+      aria-valuemin={0}
+      aria-valuenow={normalized ?? undefined}
+      aria-valuetext={normalized == null ? "Unavailable" : `${normalized}%`}
+      className={cx(styles.progress, className)}
+      role="progressbar"
+    >
+      <span className={styles.progressLabel}>{label}</span>
+      <span className={styles.progressTrack}>
+        <span
+          className={styles.progressValue}
+          style={{ width: normalized == null ? "0%" : `${normalized}%` }}
+        />
+      </span>
+      <span className={styles.progressText}>{normalized == null ? "—" : `${normalized}%`}</span>
+    </div>
+  );
+}
+
 export type TooltipProps = HTMLAttributes<HTMLSpanElement> & {
   label: ReactNode;
   placement?: "top" | "bottom";

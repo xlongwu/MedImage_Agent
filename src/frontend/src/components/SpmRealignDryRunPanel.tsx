@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, runSpmRealignDryRun } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { runSpmRealignDryRun } from "../lib/api/preprocessing";
 import type { SpmRealignDryRunResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };
@@ -27,6 +29,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function SpmRealignDryRunPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<SpmRealignDryRunResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,14 +56,14 @@ export default function SpmRealignDryRunPanel({ baseUrl, projectId }: Props) {
   if (!projectId)
     return (
       <Sec>
-        <H3>SPM Realign Dry-Run</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.SpmRealignDryRun.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>SPM Realign Dry-Run</H3>
+        <H3>{t("technical.SpmRealignDryRun.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -77,8 +80,8 @@ export default function SpmRealignDryRunPanel({ baseUrl, projectId }: Props) {
         }}
       >
         <div>
-          <H3>SPM Realign Dry-Run</H3>
-          <Sub>Predict output paths and manifest without MATLAB execution.</Sub>
+          <H3>{t("technical.SpmRealignDryRun.001")}</H3>
+          <Sub>{t("technical.SpmRealignDryRun.002")}</Sub>
         </div>
         {data && (
           <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
@@ -113,7 +116,7 @@ export default function SpmRealignDryRunPanel({ baseUrl, projectId }: Props) {
           fontWeight: 600,
         }}
       >
-        {loading ? "Generating..." : "Generate Dry-Run Manifest"}
+        {loading ? t("technical.MotionMetricsDraft.004") : t("technical.SpmRealignDryRun.003")}
       </button>
 
       {data && (
@@ -182,7 +185,9 @@ export default function SpmRealignDryRunPanel({ baseUrl, projectId }: Props) {
 
           {data.inputs.length > 0 && (
             <div style={{ marginBottom: 12 }}>
-              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>BOLD Inputs</h4>
+              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+                {t("technical.SpmRealignDryRun.004")}
+              </h4>
               <div style={{ display: "grid", gap: 6 }}>
                 {data.inputs.map((inp, i) => {
                   const key = inp.subject_id ?? `inp-${i}`;
@@ -228,7 +233,8 @@ export default function SpmRealignDryRunPanel({ baseUrl, projectId }: Props) {
                         onClick={() =>
                           setExpanded((p) => {
                             const n = new Set(p);
-                            n.has(key) ? n.delete(key) : n.add(key);
+                            if (n.has(key)) n.delete(key);
+                            else n.add(key);
                             return n;
                           })
                         }
@@ -275,7 +281,9 @@ export default function SpmRealignDryRunPanel({ baseUrl, projectId }: Props) {
           {data.warnings.length > 0 && <Warn items={data.warnings} />}
           {data.next_actions.length > 0 && (
             <div>
-              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
+              <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+                {t("technical.BoldReferenceReadiness.011")}
+              </h4>
               <div style={{ display: "grid", gap: 5 }}>
                 {data.next_actions.map((a, i) => (
                   <div

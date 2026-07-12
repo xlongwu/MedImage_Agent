@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "../i18n/useI18n";
 import { DEFAULT_API_BASE } from "../lib/api/client";
 import {
   getPreprocessingPipelineReport,
@@ -46,35 +47,6 @@ type PipelineReport = {
   safety_flags: Record<string, boolean>;
 };
 
-const stageNames: Record<string, string> = {
-  slice_timing_realign: "Slice Timing + Realign",
-  coreg_norm: "Coregistration + Normalization",
-  smoothing: "Smoothing",
-  nuisance_regression: "Nuisance Regression",
-  temporal_filtering: "Temporal Filtering",
-  alff_reho: "ALFF/ReHo",
-  functional_connectivity: "Functional Connectivity",
-};
-
-const badge = (s: string) => {
-  const colors: Record<string, string> = {
-    ready_for_review: "#176b3b",
-    warning: "#9a5a15",
-    blocked: "#b53b3b",
-    not_started: "#667085",
-    loading: "#1976d2",
-  };
-  return {
-    background: colors[s] || "#667085",
-    color: "#fff",
-    padding: "2px 8px",
-    borderRadius: 999,
-    fontSize: 10,
-    fontWeight: 700,
-    display: "inline-block",
-  };
-};
-
 const flagChip = (k: string, v: boolean) => (
   <span
     key={k}
@@ -98,6 +70,7 @@ export default function AdvancedPreprocessingPipelinePanel({
   projectId,
   preprocessingRunId,
 }: Props) {
+  const { t } = useI18n();
   const [valResult, setValResult] = useState<PipelineValidation | null>(null);
   const [valLoading, setValLoading] = useState(false);
   const [valError, setValError] = useState("");
@@ -135,7 +108,7 @@ export default function AdvancedPreprocessingPipelinePanel({
         preprocessingRunId,
       );
       setRepResult(res as PipelineReport);
-    } catch (e) {
+    } catch {
       /* ignore */
     } finally {
       setRepLoading(false);
@@ -153,15 +126,13 @@ export default function AdvancedPreprocessingPipelinePanel({
           marginTop: 12,
         }}
       >
-        <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Preprocessing validation</h3>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>
+          {t("technical.AdvancedPreprocessingPipeline.001")}
+        </h3>
         <span style={{ color: "#667085", fontSize: 12 }}>
-          Create a preprocessing run after conversion or BIDS registration to inspect the full
-          pipeline.
+          {t("technical.AdvancedPreprocessingPipeline.002")}
         </span>
-        <SafetyBanner tone="info">
-          This placeholder is informational only. It does not create runs, execute preprocessing, or
-          modify rawdata.
-        </SafetyBanner>
+        <SafetyBanner tone="info">{t("technical.AdvancedPreprocessingPipeline.003")}</SafetyBanner>
         <div
           style={{
             display: "grid",
@@ -169,9 +140,23 @@ export default function AdvancedPreprocessingPipelinePanel({
             gap: 8,
           }}
         >
-          <MetricTile label="Pipeline validation" value="Not started" />
-          <MetricTile label="Preprocessing run" value={projectId ? "Required" : "Select project"} />
-          <MetricTile label="Execution" value="Disabled" tone="amber" />
+          <MetricTile
+            label={t("technical.AdvancedPreprocessingPipeline.004")}
+            value={t("technical.AdvancedPreprocessingPipeline.005")}
+          />
+          <MetricTile
+            label={t("technical.AdvancedPreprocessingPipeline.006")}
+            value={
+              projectId
+                ? t("technical.AdvancedPreprocessingPipeline.007")
+                : t("technical.AdvancedPreprocessingPipeline.008")
+            }
+          />
+          <MetricTile
+            label={t("technical.AdvancedPreprocessingPipeline.009")}
+            value={t("technical.AdvancedPreprocessingPipeline.010")}
+            tone="amber"
+          />
         </div>
       </section>
     );
@@ -187,9 +172,11 @@ export default function AdvancedPreprocessingPipelinePanel({
         marginTop: 12,
       }}
     >
-      <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Advanced Preprocessing Validation</h3>
+      <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>
+        {t("technical.AdvancedPreprocessingPipeline.011")}
+      </h3>
       <span style={{ color: "#667085", fontSize: 12 }}>
-        Check pipeline status, inspect stage summaries, and export reports.
+        {t("technical.AdvancedPreprocessingPipeline.012")}
       </span>
 
       <SafetyBanner tone="warning">
@@ -366,24 +353,5 @@ export default function AdvancedPreprocessingPipelinePanel({
         </div>
       )}
     </section>
-  );
-}
-
-function M({ label, value }: { label: string; value: number }) {
-  return (
-    <div
-      style={{
-        padding: "4px 6px",
-        border: "1px solid rgba(137,150,171,0.20)",
-        borderRadius: 3,
-        background: "#fff",
-        fontSize: 10,
-        fontWeight: 800,
-        color: "#667085",
-      }}
-    >
-      <span>{label}</span>
-      <strong style={{ color: "#333" }}>{value}</strong>
-    </div>
   );
 }

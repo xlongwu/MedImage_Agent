@@ -13,7 +13,17 @@ const apiMocks = vi.hoisted(() => ({
   verifyImportDiagnosticsPackage: vi.fn(),
 }));
 
-vi.mock("../../lib/api/legacy", () => apiMocks);
+vi.mock("../../lib/api/diagnostic", () => ({
+  createImportDiagnosticsPackage: apiMocks.createImportDiagnosticsPackage,
+  getDatasetImportHistory: apiMocks.getDatasetImportHistory,
+  getLatestImportDiagnosticsPackage: apiMocks.getLatestImportDiagnosticsPackage,
+  verifyImportDiagnosticsPackage: apiMocks.verifyImportDiagnosticsPackage,
+}));
+vi.mock("../../lib/api/dicom", () => ({ getDicomPreflight: apiMocks.getDicomPreflight }));
+vi.mock("../../lib/api/qc", () => ({
+  getImageManifestReport: apiMocks.getImageManifestReport,
+  getImageValidationReport: apiMocks.getImageValidationReport,
+}));
 
 describe("ImportDiagnosticsPanel", () => {
   beforeEach(() => {

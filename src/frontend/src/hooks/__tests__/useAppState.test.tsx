@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { useAppState } from "../useAppState";
 
 const THEME_STORAGE_KEY = "medimage.themePreference";
+const LOCALE_STORAGE_KEY = "medimage.localePreference";
 
 describe("useAppState", () => {
   beforeEach(() => {
@@ -43,5 +44,17 @@ describe("useAppState", () => {
       expect(document.documentElement.dataset.theme).toBe("dark");
     });
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
+  });
+
+  it("defaults to English and persists a Simplified Chinese selection", async () => {
+    const { result } = renderHook(() => useAppState());
+
+    expect(result.current.localePreference).toBe("en");
+    act(() => result.current.setLocalePreference("zh-CN"));
+
+    await waitFor(() => {
+      expect(document.documentElement.lang).toBe("zh-CN");
+    });
+    expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe("zh-CN");
   });
 });

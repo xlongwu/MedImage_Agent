@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, runConversionDryRun } from "../lib/api/legacy";
+import { useRef, useState } from "react";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { runConversionDryRun } from "../lib/api/dicom";
 import type {
   ConversionDryRunResponse,
   ConversionMappingPreview,
@@ -15,12 +17,6 @@ import {
 
 type Props = { baseUrl?: string; projectId: string | null };
 
-const statusBadge: Record<string, React.CSSProperties> = {
-  ready: { background: "#e8f5e9", color: "#176b3b", borderColor: "rgba(33, 150, 83, 0.24)" },
-  warning: { background: "#fff7ed", color: "#9a5a15", borderColor: "rgba(242, 153, 74, 0.28)" },
-  blocked: { background: "#ffebee", color: "#b53b3b", borderColor: "rgba(235, 87, 87, 0.26)" },
-  unknown: { background: "#eef1f6", color: "#667085", borderColor: "rgba(137, 150, 171, 0.28)" },
-};
 const confidenceColor: Record<string, string> = {
   high: "#176b3b",
   medium: "#9a5a15",
@@ -44,6 +40,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<ConversionDryRunResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,14 +66,14 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
   if (!projectId)
     return (
       <Sect>
-        <H3>Conversion Dry-Run</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("data.dryRun.title")}</H3>
+        <div className="empty">{t("data.bids.selectProject")}</div>
       </Sect>
     );
   if (error)
     return (
       <Sect>
-        <H3>Conversion Dry-Run</H3>
+        <H3>{t("data.dryRun.title")}</H3>
         <div className="errorBox">{error}</div>
       </Sect>
     );
@@ -93,15 +90,13 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
         }}
       >
         <div>
-          <H3>Conversion Dry-Run</H3>
-          <Sub>Plan DICOM / loose NIfTI → BIDS conversion without writing files.</Sub>
+          <H3>{t("data.dryRun.title")}</H3>
+          <Sub>{t("data.dryRun.description")}</Sub>
         </div>
         {data && <StatusPill status={data.status} />}
       </div>
 
-      <SafetyBanner tone="info">
-        Dry-run only. No files are written. No rawdata is modified. No external tools are executed.
-      </SafetyBanner>
+      <SafetyBanner tone="info">{t("data.dryRun.safety")}</SafetyBanner>
 
       <button
         onClick={handleGenerate}
@@ -117,24 +112,27 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
           fontWeight: 600,
         }}
       >
-        {loading ? "Generating..." : "Generate conversion dry-run"}
+        {loading ? t("data.dryRun.generating") : t("data.dryRun.generate")}
       </button>
 
       {loading && (
         <div className="empty" style={{ marginBottom: 12 }}>
-          Generating conversion plan...
+          {t("data.dryRun.generatingPlan")}
         </div>
       )}
       {!data && !loading && (
         <div className="empty" style={{ marginBottom: 12 }}>
-          Click the button above to generate a conversion dry-run plan.
+          {t("data.dryRun.empty")}
         </div>
       )}
 
       {data && (
         <>
           {data.safety_flags && (
-            <CollapsibleDetails title="Conversion safety details" summary="Read-only dry-run gates">
+            <CollapsibleDetails
+              title={t("data.dryRun.safetyDetails")}
+              summary={t("data.dryRun.safetySummary")}
+            >
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {Object.entries(data.safety_flags).map(([k, v]) => (
                   <span
@@ -168,14 +166,14 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
               marginBottom: 12,
             }}
           >
-            <MetricTile label="Sources" value={data.source_summaries.length} />
+            <MetricTile label={t("data.dryRun.sources")} value={data.source_summaries.length} />
             <MetricTile
-              label="Mappings"
+              label={t("data.dryRun.mappings")}
               value={data.mapping_preview.length}
               tone={data.mapping_preview.length > 0 ? "blue" : "neutral"}
             />
             <MetricTile
-              label="Output root"
+              label={t("data.dryRun.outputRoot")}
               value={data.output_root_preview || data.output_root_name}
               mono
             />
@@ -183,12 +181,12 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
 
           {data.source_summaries.length > 0 && (
             <CollapsibleDetails
-              title="DICOM and loose NIfTI sources"
-              summary={`${data.source_summaries.length} source(s)`}
+              title={t("data.dryRun.sourceTitle")}
+              summary={t("data.dryRun.sourceCount", { count: data.source_summaries.length })}
             >
               <div style={{ display: "grid", gap: 6 }}>
                 {data.source_summaries.map((s) => (
-                  <SourceRow key={s.source_id} source={s} />
+                  <SourceRow key={s.source_id} source={s} t={t} />
                 ))}
               </div>
             </CollapsibleDetails>
@@ -196,12 +194,12 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
 
           {data.mapping_preview.length > 0 && (
             <CollapsibleDetails
-              title="DICOM mapping preview"
-              summary={`${data.mapping_preview.length} mapping(s)`}
+              title={t("data.dryRun.mappingTitle")}
+              summary={t("data.dryRun.mappingCount", { count: data.mapping_preview.length })}
             >
               <div style={{ display: "grid", gap: 6 }}>
                 {data.mapping_preview.slice(0, 30).map((m, i) => (
-                  <MappingRow key={i} mapping={m} />
+                  <MappingRow key={i} mapping={m} t={t} />
                 ))}
               </div>
             </CollapsibleDetails>
@@ -209,7 +207,7 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
 
           {data.next_actions.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <h4 style={subH}>Next Actions</h4>
+              <h4 style={subH}>{t("data.bids.nextActions")}</h4>
               <ActionList actions={data.next_actions} rawDicom />
             </div>
           )}
@@ -219,7 +217,9 @@ export default function ConversionDryRunPanel({ baseUrl, projectId }: Props) {
   );
 }
 
-function SourceRow({ source }: { source: ConversionSourceSummary }) {
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function SourceRow({ source, t }: { source: ConversionSourceSummary; t: Translate }) {
   return (
     <div
       style={{
@@ -244,20 +244,23 @@ function SourceRow({ source }: { source: ConversionSourceSummary }) {
         </span>
         <strong style={{ fontSize: 12 }}>{source.source_id}</strong>
         <span style={{ fontSize: 11, color: source.exists ? "#176b3b" : "#b53b3b" }}>
-          {source.exists ? "exists" : "missing"}
+          {source.exists ? t("data.dryRun.exists") : t("data.dryRun.missing")}
         </span>
       </div>
       <div style={mono}>{source.root}</div>
       <div style={{ fontSize: 11, color: "#667085" }}>
-        {source.file_count} file(s), {source.series_count} series,{" "}
-        {source.subject_candidates.length} subject candidate(s)
+        {t("data.dryRun.sourceStats", {
+          files: source.file_count,
+          series: source.series_count,
+          subjects: source.subject_candidates.length,
+        })}
       </div>
       {source.warnings.length > 0 && <Warn items={source.warnings} />}
     </div>
   );
 }
 
-function MappingRow({ mapping }: { mapping: ConversionMappingPreview }) {
+function MappingRow({ mapping, t }: { mapping: ConversionMappingPreview; t: Translate }) {
   return (
     <div
       style={{
@@ -304,7 +307,9 @@ function MappingRow({ mapping }: { mapping: ConversionMappingPreview }) {
       </div>
       {mapping.suggested_relative_path && <div style={mono}>{mapping.suggested_relative_path}</div>}
       {mapping.source_path && (
-        <div style={{ ...mono, color: "#98a2b3" }}>source: {mapping.source_path}</div>
+        <div style={{ ...mono, color: "#98a2b3" }}>
+          {t("data.dryRun.source")}: {mapping.source_path}
+        </div>
       )}
       {mapping.warnings.length > 0 && <Warn items={mapping.warnings} />}
     </div>
@@ -337,27 +342,6 @@ function Warn({ items }: { items: string[] }) {
     </div>
   );
 }
-function M({ label, value }: { label: string; value: number | string }) {
-  return (
-    <div
-      style={{
-        padding: "8px 10px",
-        border: "1px solid rgba(137, 150, 171, 0.24)",
-        borderRadius: 6,
-        background: "#fff",
-        display: "grid",
-        gap: 2,
-        color: "#667085",
-        fontSize: 11,
-        fontWeight: 850,
-      }}
-    >
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 const Sect: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <section
     style={{

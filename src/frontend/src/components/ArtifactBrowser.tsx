@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
-import { getArtifacts, previewArtifact, refreshArtifacts } from "../lib/api/legacy";
+import { formatDate } from "../i18n/format";
+import { useI18n } from "../i18n/useI18n";
+import { getArtifacts, previewArtifact, refreshArtifacts } from "../lib/api/artifact";
 import { getLatestNativeFullPreprocessingRun } from "../lib/api/preprocessing";
 import type { EvidenceLevel } from "../lib/evidence";
 import type { ArtifactSelection } from "../lib/workspaceSelection";
@@ -120,7 +122,8 @@ function nativeArtifactToRecord(
   if (!path) return null;
 
   const extension = inferExtension(path);
-  const previewType = firstString(artifact.preview_type, metadata.preview_type) ?? previewTypeForExtension(extension);
+  const previewType =
+    firstString(artifact.preview_type, metadata.preview_type) ?? previewTypeForExtension(extension);
   const artifactId = firstString(artifact.artifact_id, metadata.artifact_id);
   const category =
     firstString(artifact.artifact_type, metadata.artifact_type, metadata.kind, stage.stage_id) ??
@@ -130,12 +133,19 @@ function nativeArtifactToRecord(
     artifact_id: artifactId,
     category,
     extension,
-    modified_time: firstString(artifact.modified_time, metadata.modified_time, metadata.created_at) ?? "",
+    modified_time:
+      firstString(artifact.modified_time, metadata.modified_time, metadata.created_at) ?? "",
     name:
-      firstString(artifact.name, metadata.name, metadata.filename, fileNameFromPath(path), artifactId) ??
-      `${stage.stage_id}-${index + 1}`,
+      firstString(
+        artifact.name,
+        metadata.name,
+        metadata.filename,
+        fileNameFromPath(path),
+        artifactId,
+      ) ?? `${stage.stage_id}-${index + 1}`,
     path,
-    preview_supported: coerceBoolean(artifact.preview_supported) ?? isPreviewableExtension(extension),
+    preview_supported:
+      coerceBoolean(artifact.preview_supported) ?? isPreviewableExtension(extension),
     preview_type: previewType,
     run_id_guess: run.run_id,
     size_bytes: firstNumber(artifact.size_bytes, metadata.size_bytes) ?? 0,
@@ -152,14 +162,15 @@ function latestTimestamp(artifacts: ArtifactRecord[]): string | null {
   return Number.isFinite(latest) ? new Date(latest).toISOString() : null;
 }
 
-function formatBytes(value: number) {
-  if (!Number.isFinite(value)) return "Unknown";
+function formatBytes(value: number, unknownLabel = "Unknown") {
+  if (!Number.isFinite(value)) return unknownLabel;
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }: Props) {
+  const { locale, t } = useI18n();
   const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
   const [preview, setPreview] = useState<PreviewPayload | null>(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -215,116 +226,107 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
     }
   }
 
-  const allArtifacts = useMemo(() => asArtifacts(payload), [payload]);
+  const allArtifacts = asArtifacts(payload);
 
-  const categories = useMemo(() => {
-    const set = new Set(allArtifacts.map((a) => a.category).filter(Boolean));
-    return Array.from(set).sort();
-  }, [allArtifacts]);
+  const categorySet = new Set(allArtifacts.map((artifact) => artifact.category).filter(Boolean));
+  const categories = Array.from(categorySet).sort();
 
-  const extensions = useMemo(() => {
-    const set = new Set(allArtifacts.map((a) => a.extension).filter(Boolean));
-    return Array.from(set).sort();
-  }, [allArtifacts]);
+  const extensionSet = new Set(allArtifacts.map((artifact) => artifact.extension).filter(Boolean));
+  const extensions = Array.from(extensionSet).sort();
 
-  const filteredArtifacts = useMemo(() => {
-    return allArtifacts.filter((a) => {
-      const query = search.trim().toLowerCase();
-      const matchesCategory = categoryFilter === "all" || a.category === categoryFilter;
-      const matchesExtension = extensionFilter === "all" || a.extension === extensionFilter;
-      const matchesSearch =
-        !query ||
-        [
-          a.name,
-          a.path,
-          a.category,
-          a.extension,
-          a.artifact_id ?? "",
-          a.run_id_guess ?? "",
-          a.stage_id ?? "",
-        ].some((value) => value.toLowerCase().includes(query));
-      return matchesCategory && matchesExtension && matchesSearch;
-    });
-  }, [allArtifacts, categoryFilter, extensionFilter, search]);
+  const query = search.trim().toLowerCase();
+  const filteredArtifacts = allArtifacts.filter((artifact) => {
+    const matchesCategory = categoryFilter === "all" || artifact.category === categoryFilter;
+    const matchesExtension = extensionFilter === "all" || artifact.extension === extensionFilter;
+    const matchesSearch =
+      !query ||
+      [
+        artifact.name,
+        artifact.path,
+        artifact.category,
+        artifact.extension,
+        artifact.artifact_id ?? "",
+        artifact.run_id_guess ?? "",
+        artifact.stage_id ?? "",
+      ].some((value) => value.toLowerCase().includes(query));
+    return matchesCategory && matchesExtension && matchesSearch;
+  });
 
   const indexMeta = payload?.index as ArtifactIndexMeta | undefined;
   const previewableTotal = allArtifacts.filter((artifact) => artifact.preview_supported).length;
   const generatedAt = indexMeta?.generated_at
-    ? new Date(String(indexMeta.generated_at)).toLocaleString()
-    : "Not loaded";
+    ? formatDate(locale, String(indexMeta.generated_at))
+    : t("results.browser.notLoaded");
   const visibleArtifacts = filteredArtifacts.slice(0, 100);
 
   return (
-    <section className={styles.browser} aria-label="Artifact browser">
+    <section className={styles.browser} aria-label={t("results.browser.title")}>
       <Card className={styles.hero} tone="muted">
         <div className={styles.heroCopy}>
           <div>
-            <h2>Artifact Browser</h2>
-            <p>
-              Browse backend-indexed artifacts by run, subject, type, and stage. Preview and
-              provenance stay tied to persisted artifact records.
-            </p>
+            <h2>{t("results.browser.title")}</h2>
+            <p>{t("results.browser.description")}</p>
           </div>
           {status === "ERROR" ? (
-            <Badge tone="danger">Index request failed</Badge>
+            <Badge tone="danger">{t("results.browser.requestFailed")}</Badge>
           ) : (
             <EvidenceBadge level={status === "LOADED" ? "metadata_only" : "backend_required"}>
               {status === "LOADING"
-                ? "Loading metadata"
+                ? t("results.browser.loadingMetadata")
                 : status === "LOADED"
-                  ? "Index metadata loaded"
-                  : "On demand"}
+                  ? t("results.browser.metadataLoaded")
+                  : t("results.browser.onDemand")}
             </EvidenceBadge>
           )}
         </div>
         <div className={styles.actionRow}>
           <Button onClick={handleLoad} disabled={status === "LOADING"} variant="primary">
-            {status === "LOADING" ? "Loading..." : "Load Artifacts"}
+            {status === "LOADING" ? t("results.browser.loading") : t("results.browser.load")}
           </Button>
           <Button onClick={handleRefresh} disabled={status === "LOADING"} variant="secondary">
-            {status === "LOADING" ? "Refreshing..." : "Refresh Index"}
+            {status === "LOADING" ? t("results.browser.refreshing") : t("results.browser.refresh")}
           </Button>
         </div>
         {error ? (
           <div className={styles.errorLine} role="alert">
-            <strong>Error</strong>
+            <strong>{t("results.browser.error")}</strong>
             <span>{error}</span>
           </div>
         ) : null}
       </Card>
 
-      <div className={styles.summaryGrid} aria-label="Artifact index summary">
+      <div className={styles.summaryGrid} aria-label={t("results.browser.summary")}>
         <SummaryTile
-          label="Artifacts"
+          label={t("results.browser.artifacts")}
           value={String(indexMeta?.artifacts_total ?? allArtifacts.length)}
         />
-        <SummaryTile label="Previewable" value={String(previewableTotal)} />
-        <SummaryTile label="Types" value={String(categories.length)} />
-        <SummaryTile label="Generated" value={generatedAt} />
+        <SummaryTile label={t("results.browser.previewable")} value={String(previewableTotal)} />
+        <SummaryTile label={t("results.browser.types")} value={String(categories.length)} />
+        <SummaryTile label={t("results.browser.generated")} value={generatedAt} />
       </div>
 
       <Card className={styles.browserCard}>
         <div className={styles.cardHeader}>
           <div>
-            <h3>Indexed artifacts</h3>
-            <p>
-              The table stays empty until the backend artifact index is loaded. Filters never imply
-              validation or computation success.
-            </p>
+            <h3>{t("results.browser.indexed")}</h3>
+            <p>{t("results.browser.indexedDescription")}</p>
           </div>
           <Badge tone="neutral">
-            Showing {filteredArtifacts.length} of {allArtifacts.length}
+            {t("results.browser.showing", {
+              visible: filteredArtifacts.length,
+              total: allArtifacts.length,
+            })}
           </Badge>
         </div>
 
-        <div className={styles.filterBar} aria-label="Artifact filters">
+        <div className={styles.filterBar} aria-label={t("results.browser.filters")}>
           <label>
-            <span>Type</span>
+            <span>{t("results.browser.type")}</span>
             <select
               value={categoryFilter}
               onChange={(event) => setCategoryFilter(event.target.value)}
             >
-              <option value="all">All types</option>
+              <option value="all">{t("results.browser.allTypes")}</option>
               {categories.map((category) => (
                 <option key={category} value={category}>
                   {category}
@@ -333,12 +335,12 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
             </select>
           </label>
           <label>
-            <span>Extension</span>
+            <span>{t("results.browser.extension")}</span>
             <select
               value={extensionFilter}
               onChange={(event) => setExtensionFilter(event.target.value)}
             >
-              <option value="all">All extensions</option>
+              <option value="all">{t("results.browser.allExtensions")}</option>
               {extensions.map((extension) => (
                 <option key={extension} value={extension}>
                   {extension}
@@ -347,27 +349,27 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
             </select>
           </label>
           <label className={styles.searchField}>
-            <span>Search</span>
+            <span>{t("results.browser.search")}</span>
             <input
               type="text"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Name, path, run, type"
+              placeholder={t("results.browser.searchPlaceholder")}
             />
           </label>
         </div>
 
-        <Table caption="Artifact index">
+        <Table caption={t("results.browser.index")}>
           <thead>
             <tr>
-              <th>Artifact</th>
-              <th>Run</th>
-              <th>Subject</th>
-              <th>Type</th>
-              <th>Stage</th>
-              <th>Size</th>
-              <th>Evidence</th>
-              <th>Preview</th>
+              <th>{t("results.browser.artifact")}</th>
+              <th>{t("results.browser.run")}</th>
+              <th>{t("results.browser.subject")}</th>
+              <th>{t("results.browser.type")}</th>
+              <th>{t("results.browser.stage")}</th>
+              <th>{t("results.browser.size")}</th>
+              <th>{t("results.browser.evidence")}</th>
+              <th>{t("results.browser.preview")}</th>
             </tr>
           </thead>
           <tbody>
@@ -378,15 +380,15 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
                     <strong className={styles.artifactName}>{artifact.name}</strong>
                     <small className={styles.artifactPath}>{artifact.path}</small>
                   </td>
-                  <td>{artifact.run_id_guess || "Unassigned"}</td>
-                  <td>{inferSubject(artifact.path)}</td>
+                  <td>{artifact.run_id_guess || t("results.browser.unassigned")}</td>
+                  <td>{inferSubject(artifact.path, t("results.browser.unassigned"))}</td>
                   <td>
                     <Badge tone="info" size="sm">
-                      {artifact.category || "uncategorized"}
+                      {artifact.category || t("results.browser.uncategorized")}
                     </Badge>
                   </td>
-                  <td>{inferStage(artifact)}</td>
-                  <td>{formatBytes(artifact.size_bytes)}</td>
+                  <td>{inferStage(artifact, t("results.browser.unknown"))}</td>
+                  <td>{formatBytes(artifact.size_bytes, t("results.browser.unknownSize"))}</td>
                   <td>
                     <EvidenceBadge level={artifactEvidenceLevel(artifact)} size="sm" />
                   </td>
@@ -397,11 +399,11 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
                         variant="secondary"
                         onClick={() => handlePreview(artifact.path)}
                       >
-                        Preview
+                        {t("results.browser.preview")}
                       </Button>
                     ) : (
                       <Badge tone="neutral" size="sm">
-                        Unsupported
+                        {t("results.browser.unsupported")}
                       </Badge>
                     )}
                   </td>
@@ -410,16 +412,17 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
             ) : (
               <TableEmpty colSpan={8}>
                 {allArtifacts.length
-                  ? "No artifacts match the current filters."
-                  : "Load the backend artifact index before browsing artifacts."}
+                  ? t("results.browser.noMatches")
+                  : t("results.browser.loadFirst")}
               </TableEmpty>
             )}
           </tbody>
         </Table>
         {filteredArtifacts.length > visibleArtifacts.length ? (
           <p className={styles.helperText}>
-            {filteredArtifacts.length - visibleArtifacts.length} additional artifacts are hidden.
-            Narrow the filters to inspect a smaller set.
+            {t("results.browser.hidden", {
+              count: filteredArtifacts.length - visibleArtifacts.length,
+            })}
           </p>
         ) : null}
       </Card>
@@ -428,25 +431,29 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
         <Card className={styles.provenanceCard} tone="muted">
           <div className={styles.cardHeader}>
             <div>
-              <h3>Provenance</h3>
-              <p>
-                Run, subject, type, and stage are displayed only from indexed artifact metadata.
-              </p>
+              <h3>{t("results.browser.provenance")}</h3>
+              <p>{t("results.browser.provenanceDescription")}</p>
             </div>
           </div>
-          <dl className={styles.provenanceList} aria-label="Artifact provenance fields">
-            <InfoRow label="Run" value="run_id_guess or backend path metadata" />
-            <InfoRow label="Subject" value="subject token parsed from persisted path" />
-            <InfoRow label="Type" value="artifact category and extension" />
-            <InfoRow label="Validation" value="handled by report validator, not this browser" />
+          <dl className={styles.provenanceList} aria-label={t("results.browser.provenanceFields")}>
+            <InfoRow label={t("results.browser.run")} value={t("results.browser.runSource")} />
+            <InfoRow
+              label={t("results.browser.subject")}
+              value={t("results.browser.subjectSource")}
+            />
+            <InfoRow label={t("results.browser.type")} value={t("results.browser.typeSource")} />
+            <InfoRow
+              label={t("results.browser.validation")}
+              value={t("results.browser.validationSource")}
+            />
           </dl>
         </Card>
 
         <Card className={styles.previewCard}>
           <div className={styles.cardHeader}>
             <div>
-              <h3>Preview</h3>
-              <p>Only backend-supported preview types open here.</p>
+              <h3>{t("results.browser.preview")}</h3>
+              <p>{t("results.browser.previewDescription")}</p>
             </div>
             {preview ? (
               <Button
@@ -457,7 +464,7 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
                   onSelectedArtifactChange?.(null);
                 }}
               >
-                Close
+                {t("results.browser.close")}
               </Button>
             ) : null}
           </div>
@@ -465,8 +472,8 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
             <PreviewPanel payload={preview} />
           ) : (
             <EmptyState
-              title="No artifact selected"
-              description="Choose Preview for a supported artifact to load text, JSON, metadata, or table-compatible preview output."
+              title={t("results.browser.noSelection")}
+              description={t("results.browser.noSelectionDescription")}
             />
           )}
         </Card>
@@ -512,10 +519,12 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 function PreviewPanel({ payload }: { payload: PreviewPayload }) {
+  const { t } = useI18n();
+
   if (payload.error) {
     return (
       <div className={styles.errorLine} role="alert">
-        <strong>Preview error</strong>
+        <strong>{t("results.browser.previewError")}</strong>
         <span>{String(payload.error)}</span>
       </div>
     );
@@ -528,10 +537,10 @@ function PreviewPanel({ payload }: { payload: PreviewPayload }) {
   return (
     <div className={styles.previewPanel}>
       {artifact ? (
-        <div className={styles.previewMeta} aria-label="Preview artifact metadata">
-          <InfoRow label="Artifact" value={artifact.name} />
-          <InfoRow label="Path" value={artifact.path} />
-          <InfoRow label="Preview type" value={previewType} />
+        <div className={styles.previewMeta} aria-label={t("results.browser.previewMetadata")}>
+          <InfoRow label={t("results.browser.artifact")} value={artifact.name} />
+          <InfoRow label={t("results.browser.path")} value={artifact.path} />
+          <InfoRow label={t("results.browser.previewType")} value={previewType} />
         </div>
       ) : null}
       <TextViewer
@@ -544,12 +553,12 @@ function PreviewPanel({ payload }: { payload: PreviewPayload }) {
   );
 }
 
-function inferSubject(path: string): string {
+function inferSubject(path: string, fallback = "Unassigned"): string {
   const match = path.match(/(?:^|[/\\])(sub-[A-Za-z0-9_-]+)/);
-  return match?.[1] ?? "Unassigned";
+  return match?.[1] ?? fallback;
 }
 
-function inferStage(artifact: ArtifactRecord): string {
+function inferStage(artifact: ArtifactRecord, fallback = "unknown"): string {
   if (artifact.stage_id) return artifact.stage_id;
 
   const normalizedPath = artifact.path.toLowerCase();
@@ -563,7 +572,7 @@ function inferStage(artifact: ArtifactRecord): string {
     "results",
   ];
   return (
-    knownStages.find((stage) => normalizedPath.includes(stage)) ?? artifact.category ?? "unknown"
+    knownStages.find((stage) => normalizedPath.includes(stage)) ?? artifact.category ?? fallback
   );
 }
 

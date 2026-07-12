@@ -11,10 +11,13 @@ import SpmRealignWrapperSkeletonPanel from "../../components/SpmRealignWrapperSk
 import RsfmriPresetPanel from "../../components/RsfmriPresetPanel";
 import { EvidenceBadge } from "../../components/domain/EvidenceBadge";
 import { Badge, Button, Card, SegmentedControl, Table } from "../../components/ui";
-import type { ThemePreference } from "../../hooks/useAppState";
+import type { LocalePreference, ThemePreference } from "../../hooks/useAppState";
+import { useI18n } from "../../i18n/useI18n";
 import type { PresetPlanDraft } from "../../types";
 import styles from "./SettingsEnvironmentWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
+
+type Translate = ReturnType<typeof useI18n>["t"];
 
 export interface SettingsEnvironmentWorkspaceProps {
   baseUrl: string;
@@ -23,6 +26,8 @@ export interface SettingsEnvironmentWorkspaceProps {
   rawdataDir?: string | null;
   themePreference: ThemePreference;
   onReviewDraft: (draft: PresetPlanDraft) => void;
+  localePreference: LocalePreference;
+  onLocalePreferenceChange: (localePreference: LocalePreference) => void;
 }
 
 export function SettingsEnvironmentWorkspace({
@@ -32,23 +37,30 @@ export function SettingsEnvironmentWorkspace({
   rawdataDir,
   themePreference,
   onReviewDraft,
+  localePreference,
+  onLocalePreferenceChange,
 }: SettingsEnvironmentWorkspaceProps) {
+  const { t } = useI18n();
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const settingsDomains = buildSettingsDomains(t);
+  const themeOptions = [
+    { label: t("settings.themeLight"), value: "light" },
+    { label: t("settings.themeDark"), value: "dark" },
+  ];
+  const generalIntegrationControls = buildGeneralIntegrationControls(t);
+  const safetyPolicyRows = buildSafetyPolicyRows(t);
 
   return (
     <div className={layoutStyles.stack}>
       <WorkspaceHeader
-        title="Settings / Environment"
-        subtitle="Environment, integrations, safety gates, diagnostics, and planning-only setup tools."
-        status="Planning only"
+        title={t("settings.title")}
+        subtitle={t("settings.subtitle")}
+        status={t("settings.planningOnly")}
       />
-      <div className="planning-note">
-        These tools produce readiness previews and review packages. They do not enable MATLAB/SPM
-        execution or DPABI execution.
-      </div>
+      <div className="planning-note">{t("settings.planningNote")}</div>
 
-      <nav className={styles.domainNav} aria-label="Settings domains">
-        {SETTINGS_DOMAINS.map((item) => (
+      <nav className={styles.domainNav} aria-label={t("settings.domains")}>
+        {settingsDomains.map((item) => (
           <a href={`#settings-${item.slug}`} key={item.domain}>
             <span>{item.domain}</span>
             <small>{item.navLabel}</small>
@@ -56,27 +68,25 @@ export function SettingsEnvironmentWorkspace({
         ))}
       </nav>
 
-      <section className={styles.settingsGrid} aria-label="Settings overview">
+      <section className={styles.settingsGrid} aria-label={t("settings.overview")}>
         <Card className={styles.mapCard} id="settings-general" tone="muted">
           <div className={styles.cardHeader}>
             <div>
-              <h3>Settings map</h3>
-              <p>
-                Project-safe setup and diagnostics surfaces are grouped here for environment review.
-              </p>
+              <h3>{t("settings.map")}</h3>
+              <p>{t("settings.mapDescription")}</p>
             </div>
-            <Badge tone="info">Migrated</Badge>
+            <Badge tone="info">{t("settings.migrated")}</Badge>
           </div>
-          <Table caption="Settings domains">
+          <Table caption={t("settings.domains")}>
             <thead>
               <tr>
-                <th>Domain</th>
-                <th>Scope</th>
-                <th>Execution stance</th>
+                <th>{t("settings.domain")}</th>
+                <th>{t("settings.scope")}</th>
+                <th>{t("settings.executionStance")}</th>
               </tr>
             </thead>
             <tbody>
-              {SETTINGS_DOMAINS.map((item) => (
+              {settingsDomains.map((item) => (
                 <tr key={item.domain}>
                   <td>{item.domain}</td>
                   <td>{item.scope}</td>
@@ -94,41 +104,51 @@ export function SettingsEnvironmentWorkspace({
         <Card className={styles.generalCard} id="settings-integrations">
           <div className={styles.cardHeader}>
             <div>
-              <h3>General and integrations</h3>
-              <p>
-                User-facing preferences and provider connections are cataloged here without enabling
-                hidden execution paths.
-              </p>
+              <h3>{t("settings.generalIntegrations")}</h3>
+              <p>{t("settings.generalDescription")}</p>
             </div>
-            <Badge tone="neutral">Config surface</Badge>
+            <Badge tone="neutral">{t("settings.configSurface")}</Badge>
           </div>
-          <div className={styles.preferenceStack} aria-label="General preferences">
+          <div className={styles.preferenceStack} aria-label={t("settings.generalPreferences")}>
             <div className={styles.preferenceRow}>
               <div>
-                <span className={styles.preferenceLabel}>Theme</span>
-                <p>
-                  Applies the local workspace theme token set. Backend safety gates and execution
-                  modes are unchanged.
-                </p>
+                <span className={styles.preferenceLabel}>{t("settings.language")}</span>
+                <p>{t("settings.languageDescription")}</p>
               </div>
               <SegmentedControl
-                aria-label="Theme preference"
-                options={THEME_OPTIONS}
+                aria-label={t("settings.language")}
+                options={[
+                  { label: t("settings.languageEnglish"), value: "en" },
+                  { label: t("settings.languageChinese"), value: "zh-CN" },
+                ]}
+                value={localePreference}
+                onChange={(value) => onLocalePreferenceChange(value as LocalePreference)}
+              />
+            </div>
+            <div className={styles.preferenceRow}>
+              <div>
+                <span className={styles.preferenceLabel}>{t("settings.theme")}</span>
+                <p>{t("settings.themeDescription")}</p>
+              </div>
+              <SegmentedControl
+                aria-label={t("settings.themePreference")}
+                options={themeOptions}
                 value={themePreference}
                 onChange={(value) => onThemePreferenceChange(value as ThemePreference)}
               />
             </div>
           </div>
-          <Table caption="General and integration controls">
+          <p className={styles.preferenceSafety}>{t("settings.safety")}</p>
+          <Table caption={t("settings.generalControls")}>
             <thead>
               <tr>
-                <th>Setting</th>
-                <th>Current surface</th>
-                <th>Authority</th>
+                <th>{t("settings.setting")}</th>
+                <th>{t("settings.currentSurface")}</th>
+                <th>{t("settings.authority")}</th>
               </tr>
             </thead>
             <tbody>
-              {GENERAL_INTEGRATION_CONTROLS.map((item) => (
+              {generalIntegrationControls.map((item) => (
                 <tr key={item.setting}>
                   <td>{item.setting}</td>
                   <td>{item.surface}</td>
@@ -146,50 +166,47 @@ export function SettingsEnvironmentWorkspace({
         <Card className={styles.safetyCard} id="settings-safety">
           <div className={styles.cardHeader}>
             <div>
-              <h3>Safety gates</h3>
-              <p>Settings can prepare checks, but backend approval remains authoritative.</p>
+              <h3>{t("settings.safetyGates")}</h3>
+              <p>{t("settings.safetyDescription")}</p>
             </div>
           </div>
           <dl className={styles.safetyList}>
             <div>
-              <dt>External execution</dt>
-              <dd>Disabled unless reviewed backend gates and environment flags allow it.</dd>
+              <dt>{t("settings.externalExecution")}</dt>
+              <dd>{t("settings.externalExecutionDescription")}</dd>
             </div>
             <div>
-              <dt>Raw data</dt>
-              <dd>Read-only policy remains outside UI toggle control.</dd>
+              <dt>{t("settings.rawData")}</dt>
+              <dd>{t("settings.rawDataDescription")}</dd>
             </div>
             <div>
-              <dt>Diagnostics</dt>
-              <dd>Loaded on demand to avoid accidental heavy checks during normal setup.</dd>
+              <dt>{t("settings.diagnostics")}</dt>
+              <dd>{t("settings.diagnosticsDescription")}</dd>
             </div>
           </dl>
           <Button variant="secondary" onClick={() => setShowDiagnostics((value) => !value)}>
-            {showDiagnostics ? "Hide diagnostics modules" : "Open diagnostics modules"}
+            {showDiagnostics ? t("settings.hideDiagnostics") : t("settings.openDiagnostics")}
           </Button>
         </Card>
 
         <Card className={styles.policyCard} id="settings-diagnostics">
           <div className={styles.cardHeader}>
             <div>
-              <h3>Safety policy matrix</h3>
-              <p>
-                Destructive or external behavior is represented as policy, not as a client-side
-                shortcut.
-              </p>
+              <h3>{t("settings.policyMatrix")}</h3>
+              <p>{t("settings.policyDescription")}</p>
             </div>
-            <Badge tone="warning">Backend owned</Badge>
+            <Badge tone="warning">{t("settings.backendOwned")}</Badge>
           </div>
-          <Table caption="Safety policy matrix">
+          <Table caption={t("settings.policyMatrix")}>
             <thead>
               <tr>
-                <th>Policy</th>
-                <th>UI stance</th>
-                <th>Gate</th>
+                <th>{t("settings.policy")}</th>
+                <th>{t("settings.uiStance")}</th>
+                <th>{t("settings.gate")}</th>
               </tr>
             </thead>
             <tbody>
-              {SAFETY_POLICY_ROWS.map((item) => (
+              {safetyPolicyRows.map((item) => (
                 <tr key={item.policy}>
                   <td>{item.policy}</td>
                   <td>{item.stance}</td>
@@ -208,17 +225,14 @@ export function SettingsEnvironmentWorkspace({
       <section
         className={styles.sectionStack}
         id="settings-environment"
-        aria-label="Environment setup modules"
+        aria-label={t("settings.environmentModules")}
       >
         <div className={styles.sectionHeader}>
           <div>
-            <h3>Environment setup</h3>
-            <p>
-              Lightweight readiness checks, SPM wrapper previews, and preset planning stay
-              non-executing.
-            </p>
+            <h3>{t("settings.environmentSetup")}</h3>
+            <p>{t("settings.environmentDescription")}</p>
           </div>
-          <EvidenceBadge level="metadata_only">Readiness only</EvidenceBadge>
+          <EvidenceBadge level="metadata_only">{t("settings.readinessOnly")}</EvidenceBadge>
         </div>
         <div className={layoutStyles.panelGrid}>
           <div id="environment-health-panel">
@@ -241,16 +255,16 @@ export function SettingsEnvironmentWorkspace({
       </section>
 
       {showDiagnostics ? (
-        <section className={styles.sectionStack} aria-label="System diagnostics modules">
+        <section
+          className={styles.sectionStack}
+          aria-label={t("settings.systemDiagnosticsModules")}
+        >
           <div className={styles.sectionHeader}>
             <div>
-              <h3>System diagnostics</h3>
-              <p>
-                Desktop settings, import diagnostics, external smoke readiness, and release checks
-                stay grouped here.
-              </p>
+              <h3>{t("settings.systemDiagnostics")}</h3>
+              <p>{t("settings.systemDiagnosticsDescription")}</p>
             </div>
-            <EvidenceBadge level="backend_required">On demand</EvidenceBadge>
+            <EvidenceBadge level="backend_required">{t("settings.onDemand")}</EvidenceBadge>
           </div>
           <div className={layoutStyles.panelGrid}>
             <div id="desktop-settings-panel">
@@ -278,121 +292,122 @@ export function SettingsEnvironmentWorkspace({
 
 type BadgeTone = "neutral" | "info" | "success" | "warning" | "danger";
 
-const SETTINGS_DOMAINS: Array<{
+function buildSettingsDomains(t: Translate): Array<{
   domain: string;
   navLabel: string;
   slug: string;
   scope: string;
   stance: string;
   tone: BadgeTone;
-}> = [
-  {
-    domain: "General",
-    navLabel: "Preferences",
-    slug: "general",
-    scope: "Desktop runtime, project directory, startup defaults",
-    stance: "Config only",
-    tone: "neutral",
-  },
-  {
-    domain: "Environment",
-    navLabel: "Readiness",
-    slug: "environment",
-    scope: "Python, MATLAB, SPM, DPABI, GPU readiness",
-    stance: "Readiness",
-    tone: "info",
-  },
-  {
-    domain: "Integrations",
-    navLabel: "Advisory",
-    slug: "integrations",
-    scope: "LLM planner and model provider settings",
-    stance: "Disabled by default",
-    tone: "warning",
-  },
-  {
-    domain: "Safety",
-    navLabel: "Backend gates",
-    slug: "safety",
-    scope: "Approval, rawdata policy, external smoke gates",
-    stance: "Backend gated",
-    tone: "warning",
-  },
-  {
-    domain: "Diagnostics",
-    navLabel: "On demand",
-    slug: "diagnostics",
-    scope: "Import handoff, desktop sidecar, release readiness",
-    stance: "On demand",
-    tone: "info",
-  },
-];
+}> {
+  return [
+    {
+      domain: t("settings.domain.general"),
+      navLabel: t("settings.domain.preferences"),
+      slug: "general",
+      scope: t("settings.domain.generalScope"),
+      stance: t("settings.domain.configOnly"),
+      tone: "neutral",
+    },
+    {
+      domain: t("settings.domain.environment"),
+      navLabel: t("settings.domain.readiness"),
+      slug: "environment",
+      scope: t("settings.domain.environmentScope"),
+      stance: t("settings.domain.readiness"),
+      tone: "info",
+    },
+    {
+      domain: t("settings.domain.integrations"),
+      navLabel: t("settings.domain.advisory"),
+      slug: "integrations",
+      scope: t("settings.domain.integrationsScope"),
+      stance: t("settings.domain.disabledDefault"),
+      tone: "warning",
+    },
+    {
+      domain: t("settings.domain.safety"),
+      navLabel: t("settings.domain.backendGates"),
+      slug: "safety",
+      scope: t("settings.domain.safetyScope"),
+      stance: t("settings.domain.backendGated"),
+      tone: "warning",
+    },
+    {
+      domain: t("settings.domain.diagnostics"),
+      navLabel: t("settings.domain.onDemand"),
+      slug: "diagnostics",
+      scope: t("settings.domain.diagnosticsScope"),
+      stance: t("settings.domain.onDemand"),
+      tone: "info",
+    },
+  ];
+}
 
-const THEME_OPTIONS = [
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
-];
-
-const GENERAL_INTEGRATION_CONTROLS: Array<{
+function buildGeneralIntegrationControls(t: Translate): Array<{
   authority: string;
   setting: string;
   surface: string;
   tone: BadgeTone;
-}> = [
-  {
-    setting: "Language / theme",
-    surface: "Desktop settings module",
-    authority: "Config only",
-    tone: "neutral",
-  },
-  {
-    setting: "Startup behavior",
-    surface: "Desktop sidecar configuration",
-    authority: "Config only",
-    tone: "neutral",
-  },
-  {
-    setting: "LLM provider",
-    surface: "Model status and planner settings",
-    authority: "Advisory only",
-    tone: "info",
-  },
-  {
-    setting: "External tools",
-    surface: "Smoke readiness and release checks",
-    authority: "Disabled by default",
-    tone: "warning",
-  },
-];
+}> {
+  return [
+    {
+      setting: t("settings.control.languageTheme"),
+      surface: t("settings.control.desktopModule"),
+      authority: t("settings.domain.configOnly"),
+      tone: "neutral",
+    },
+    {
+      setting: t("settings.control.startup"),
+      surface: t("settings.control.sidecar"),
+      authority: t("settings.domain.configOnly"),
+      tone: "neutral",
+    },
+    {
+      setting: t("settings.control.llmProvider"),
+      surface: t("settings.control.modelPlanner"),
+      authority: t("settings.control.advisoryOnly"),
+      tone: "info",
+    },
+    {
+      setting: t("settings.control.externalTools"),
+      surface: t("settings.control.smokeChecks"),
+      authority: t("settings.domain.disabledDefault"),
+      tone: "warning",
+    },
+  ];
+}
 
-const SAFETY_POLICY_ROWS: Array<{
+function buildSafetyPolicyRows(t: Translate): Array<{
   gate: string;
   policy: string;
   stance: string;
   tone: BadgeTone;
-}> = [
-  {
-    policy: "Rawdata read-only",
-    stance: "Expose policy status; do not offer write toggles",
-    gate: "Invariant",
-    tone: "danger",
-  },
-  {
-    policy: "Overwrite strategy",
-    stance: "Require reviewed backend plan before replacing outputs",
-    gate: "Approval",
-    tone: "warning",
-  },
-  {
-    policy: "Approver requirement",
-    stance: "Show required approval context without bypass actions",
-    gate: "Backend gated",
-    tone: "warning",
-  },
-  {
-    policy: "External execution",
-    stance: "Keep MATLAB, SPM, DPABI, GPU execution disabled until gated",
-    gate: "Environment flag",
-    tone: "info",
-  },
-];
+}> {
+  return [
+    {
+      policy: t("settings.policy.rawReadOnly"),
+      stance: t("settings.policy.rawStance"),
+      gate: t("settings.policy.invariant"),
+      tone: "danger",
+    },
+    {
+      policy: t("settings.policy.overwrite"),
+      stance: t("settings.policy.overwriteStance"),
+      gate: t("settings.policy.approval"),
+      tone: "warning",
+    },
+    {
+      policy: t("settings.policy.approver"),
+      stance: t("settings.policy.approverStance"),
+      gate: t("settings.domain.backendGated"),
+      tone: "warning",
+    },
+    {
+      policy: t("settings.externalExecution"),
+      stance: t("settings.policy.externalStance"),
+      gate: t("settings.policy.environmentFlag"),
+      tone: "info",
+    },
+  ];
+}

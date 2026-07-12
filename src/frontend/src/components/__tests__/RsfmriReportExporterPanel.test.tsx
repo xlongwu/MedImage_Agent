@@ -10,7 +10,7 @@ const apiMocks = vi.hoisted(() => ({
   runRsfmriReportExport: vi.fn(),
 }));
 
-vi.mock("../../lib/api/legacy", () => apiMocks);
+vi.mock("../../lib/api/rsfmri", () => apiMocks);
 
 beforeEach(() => {
   apiMocks.getLatestRsfmriReportExport.mockReset();

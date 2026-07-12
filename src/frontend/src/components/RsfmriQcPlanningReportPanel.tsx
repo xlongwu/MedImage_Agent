@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
-import { DEFAULT_API_BASE, generateRsfmriQcPlanningReport } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { generateRsfmriQcPlanningReport } from "../lib/api/rsfmri";
 import type { RsfmriQcPlanningReportResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };
@@ -27,6 +29,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<RsfmriQcPlanningReportResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,14 +56,14 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
   if (!projectId)
     return (
       <Sec>
-        <H3>QC Planning Report</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("qc.planning.title")}</H3>
+        <div className="empty">{t("settings.preset.selectProject")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>QC Planning Report</H3>
+        <H3>{t("qc.planning.title")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -77,8 +80,8 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
         }}
       >
         <div>
-          <H3>rs-fMRI QC Planning Report</H3>
-          <Sub>Generate a combined BOLD reference + motion QC planning artifact.</Sub>
+          <H3>{t("qc.planning.fullTitle")}</H3>
+          <Sub>{t("qc.planning.description")}</Sub>
         </div>
         {data && (
           <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
@@ -95,7 +98,7 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
           marginBottom: 12,
         }}
       >
-        Planning report only. No preprocessing is executed.
+        {t("qc.planning.boundary")}
       </div>
 
       <button
@@ -112,7 +115,7 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
           fontWeight: 600,
         }}
       >
-        {loading ? "Generating..." : "Generate QC Planning Report"}
+        {loading ? t("qc.planning.generating") : t("qc.planning.generate")}
       </button>
 
       {data && (
@@ -125,13 +128,13 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
               marginBottom: 12,
             }}
           >
-            <M label="BOLD ref" value={data.bold_reference_status} />
-            <M label="Motion QC" value={data.motion_qc_status} />
-            <M label="BOLD cand." value={data.bold_candidate_count} />
-            <M label="Motion cand." value={data.motion_candidate_count} />
-            <M label="Ready" value={data.ready_candidate_count} />
-            <M label="Warnings" value={data.warning_count} />
-            <M label="Blocked" value={data.blocked_count} />
+            <M label={t("qc.planning.boldRef")} value={data.bold_reference_status} />
+            <M label={t("qc.planning.motionQc")} value={data.motion_qc_status} />
+            <M label={t("qc.planning.boldCandidates")} value={data.bold_candidate_count} />
+            <M label={t("qc.planning.motionCandidates")} value={data.motion_candidate_count} />
+            <M label={t("qc.planning.ready")} value={data.ready_candidate_count} />
+            <M label={t("qc.planning.warnings")} value={data.warning_count} />
+            <M label={t("qc.planning.blocked")} value={data.blocked_count} />
           </div>
 
           {data.safety_flags && (
@@ -153,8 +156,12 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
           )}
 
           <div style={{ display: "grid", gap: 4, marginBottom: 12, fontSize: 11 }}>
-            <div style={mono}>JSON: {data.json_path}</div>
-            <div style={mono}>Markdown: {data.markdown_path}</div>
+            <div style={mono}>
+              {t("qc.planning.json")}: {data.json_path}
+            </div>
+            <div style={mono}>
+              {t("qc.planning.markdown")}: {data.markdown_path}
+            </div>
           </div>
 
           {data.artifacts.length > 0 && (
@@ -169,7 +176,7 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
                     borderColor: a.exists ? "rgba(33, 150, 83, 0.24)" : "rgba(235, 87, 87, 0.26)",
                   }}
                 >
-                  {a.kind}: {a.exists ? `${a.size_bytes ?? 0} B` : "missing"}
+                  {a.kind}: {a.exists ? `${a.size_bytes ?? 0} B` : t("qc.planning.missing")}
                 </span>
               ))}
             </div>
@@ -188,7 +195,7 @@ export default function RsfmriQcPlanningReportPanel({ baseUrl, projectId }: Prop
                 onClick={() => setShowMd(!showMd)}
                 style={{ marginBottom: 8, fontWeight: 600 }}
               >
-                {showMd ? "Hide" : "Show"} Markdown Preview
+                {showMd ? t("qc.planning.hidePreview") : t("qc.planning.showPreview")}
               </button>
               {showMd && (
                 <pre

@@ -4,6 +4,7 @@ export {
   Card,
   EmptyState,
   IconButton,
+  Progress,
   Skeleton,
   Tooltip,
   type BadgeProps,
@@ -11,6 +12,7 @@ export {
   type CardProps,
   type EmptyStateProps,
   type IconButtonProps,
+  type ProgressProps,
   type SkeletonProps,
   type TooltipProps,
 } from "./primitives";
@@ -21,3 +23,4 @@ export {
   type SegmentedControlProps,
 } from "./segmented-control";
 export { Table, TableEmpty, type TableProps } from "./table";
+export { Icon } from "./icons";

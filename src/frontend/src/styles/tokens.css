@@ -92,10 +92,18 @@
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Shell layout tokens */
-  --shell-topbar-height: 56px;
-  --shell-sidebar-width: 212px;
+  --shell-topbar-height: 48px;
+  --shell-lifecycle-height: 48px;
+  --shell-content-max-width: 1180px;
+  --shell-min-desktop-width: 1024px;
   --shell-gap: 16px;
-  --shell-padding: 18px;
+  --shell-padding: 0px;
+
+  /* Refactor acceptance widths: 1024 / 1280 / 1440 / 1920px. */
+  --breakpoint-desktop-min: 1024px;
+  --breakpoint-desktop-medium: 1280px;
+  --breakpoint-desktop-wide: 1440px;
+  --breakpoint-desktop-ultrawide: 1920px;
 
   font-family: var(--font-family-ui);
 }

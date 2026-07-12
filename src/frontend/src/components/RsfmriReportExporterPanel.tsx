@@ -4,7 +4,9 @@ import {
   getLatestRsfmriReportExport,
   listRsfmriReportExports,
   runRsfmriReportExport,
-} from "../lib/api/legacy";
+} from "../lib/api/rsfmri";
+import { useI18n } from "../i18n/useI18n";
+import { localizeReportEvidenceDetail } from "../i18n/reportEvidence";
 import { deriveReportExportEvidence } from "../lib/reportEvidence";
 import { EvidenceBadge } from "./domain/EvidenceBadge";
 import { JsonBlock } from "./JsonBlock";
@@ -15,12 +17,14 @@ import { Badge, Button, Card } from "./ui";
 type Props = { baseUrl: string };
 type RequestStatus = "IDLE" | "RUNNING" | "LOADING" | "REQUEST_COMPLETE" | "ERROR";
 
-function requestLabel(status: RequestStatus): string {
-  if (status === "RUNNING") return "Request running";
-  if (status === "LOADING") return "Loading metadata";
-  if (status === "REQUEST_COMPLETE") return "Request complete";
-  if (status === "ERROR") return "Request failed";
-  return "On demand";
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function requestLabel(status: RequestStatus, t: Translate): string {
+  if (status === "RUNNING") return t("report.request.running");
+  if (status === "LOADING") return t("report.request.loading");
+  if (status === "REQUEST_COMPLETE") return t("report.request.complete");
+  if (status === "ERROR") return t("report.request.failed");
+  return t("report.request.onDemand");
 }
 
 function requestTone(status: RequestStatus): "neutral" | "info" | "danger" {
@@ -32,6 +36,7 @@ function requestTone(status: RequestStatus): "neutral" | "info" | "danger" {
 }
 
 export function RsfmriReportExporterPanel({ baseUrl }: Props) {
+  const { t } = useI18n();
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [latest, setLatest] = useState<Record<string, unknown> | null>(null);
   const [list, setList] = useState<Record<string, unknown> | null>(null);
@@ -88,72 +93,78 @@ export function RsfmriReportExporterPanel({ baseUrl }: Props) {
     <Card className={styles.panel} tone="muted">
       <div className={styles.header}>
         <div className={styles.headerText}>
-          <h2>Report package export</h2>
-          <p>Backend requests are metadata until package evidence is present.</p>
+          <h2>{t("report.export.title")}</h2>
+          <p>{t("report.export.description")}</p>
         </div>
         <div className={styles.evidenceGroup}>
           <EvidenceBadge level={evidence.level} />
-          <Badge tone={requestTone(status)}>{requestLabel(status)}</Badge>
+          <Badge tone={requestTone(status)}>{requestLabel(status, t)}</Badge>
         </div>
       </div>
-      <p className={styles.evidenceDetail}>{evidence.detail}</p>
+      <p className={styles.evidenceDetail}>{localizeReportEvidenceDetail(evidence.detail, t)}</p>
 
       <div className={styles.toolbar}>
         <Button onClick={handleRun} disabled={status === "RUNNING"} variant="primary">
-          Generate Report Package
+          {t("report.export.generate")}
         </Button>
         <Button onClick={loadLatest} disabled={status === "LOADING"} variant="secondary">
-          Load Latest
+          {t("report.export.loadLatest")}
         </Button>
         <Button onClick={loadList} disabled={status === "LOADING"} variant="secondary">
-          List Exports
+          {t("report.export.list")}
         </Button>
       </div>
 
       {error ? (
         <div className={styles.errorLine} role="alert">
-          <strong>Export error</strong>
+          <strong>{t("report.export.error")}</strong>
           <span>{error}</span>
         </div>
       ) : null}
 
       <div className={styles.metricGrid}>
-        <Metric label="Export ID" value={latest?.export_id} />
-        <Metric label="Subjects" value={es?.exported_subjects_total} />
-        <Metric label="Files" value={es?.exported_files_total} />
-        <Metric label="ZIP Size" value={es?.zip_size_bytes ?? latest?.zip_size_bytes} />
-        <Metric label="Manifest Files" value={Array.isArray(m?.files) ? m.files.length : "-"} />
+        <Metric label={t("report.export.id")} value={latest?.export_id} />
+        <Metric label={t("technical.subjects")} value={es?.exported_subjects_total} />
+        <Metric label={t("report.export.files")} value={es?.exported_files_total} />
+        <Metric
+          label={t("report.export.zipSize")}
+          value={es?.zip_size_bytes ?? latest?.zip_size_bytes}
+        />
+        <Metric
+          label={t("report.export.manifestFiles")}
+          value={Array.isArray(m?.files) ? m.files.length : "-"}
+        />
       </div>
 
-      <EvidenceSection title="Run Summary">
-        <JsonBlock value={result} emptyText="Not yet run" />
+      <EvidenceSection title={t("technical.runSummary")}>
+        <JsonBlock value={result} emptyText={t("technical.notRun")} />
       </EvidenceSection>
-      <EvidenceSection title="Export Summary">
-        <JsonBlock value={latest?.export_summary} emptyText="No summary" />
+      <EvidenceSection title={t("report.export.summary")}>
+        <JsonBlock value={latest?.export_summary} emptyText={t("technical.noSummary")} />
       </EvidenceSection>
-      <EvidenceSection title="Manifest">
-        <JsonBlock value={latest?.manifest} emptyText="No manifest" />
+      <EvidenceSection title={t("report.export.manifest")}>
+        <JsonBlock value={latest?.manifest} emptyText={t("report.export.noManifest")} />
       </EvidenceSection>
-      <EvidenceSection title="Paths">
+      <EvidenceSection title={t("report.export.paths")}>
         <JsonBlock
           value={{ zip_path: latest?.zip_path, package_dir: latest?.package_dir }}
-          emptyText="No paths"
+          emptyText={t("report.export.noPaths")}
         />
       </EvidenceSection>
-      <EvidenceSection title="README">
+      <EvidenceSection title={t("report.export.readme")}>
         <TextViewer
           text={typeof latest?.readme_md === "string" ? latest.readme_md : null}
-          emptyText="No README"
+          emptyText={t("report.export.noReadme")}
         />
       </EvidenceSection>
-      <EvidenceSection title="Index">
+      <EvidenceSection title={t("report.export.index")}>
         <TextViewer
           text={typeof latest?.index_md === "string" ? latest.index_md : null}
-          emptyText="No index"
+          emptyText={t("report.export.noIndex")}
         />
       </EvidenceSection>
-      <EvidenceSection title="Export List">
-        <JsonBlock value={list} emptyText="No exports" />
+      <EvidenceSection title={t("report.export.listTitle")}>
+        <JsonBlock value={list} emptyText={t("report.export.noExports")} />
       </EvidenceSection>
     </Card>
   );

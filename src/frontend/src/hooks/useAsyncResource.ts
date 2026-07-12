@@ -42,6 +42,8 @@ export function useAsyncResource<T>(
     } finally {
       setLoading(false);
     }
+    // The dependency list is the public contract of this custom resource hook.
+    // eslint-disable-next-line react-hooks/use-memo, react-hooks/exhaustive-deps
   }, deps);
 
   useEffect(() => {

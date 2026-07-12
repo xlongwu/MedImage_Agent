@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { I18nProvider } from "../../i18n/I18nProvider";
 import { ArtifactBrowser } from "../ArtifactBrowser";
 
 const apiMocks = vi.hoisted(() => ({
@@ -14,7 +15,7 @@ const preprocessingMocks = vi.hoisted(() => ({
   getLatestNativeFullPreprocessingRun: vi.fn(),
 }));
 
-vi.mock("../../lib/api/legacy", () => apiMocks);
+vi.mock("../../lib/api/artifact", () => apiMocks);
 vi.mock("../../lib/api/preprocessing", () => preprocessingMocks);
 
 const artifactIndex = {
@@ -71,7 +72,7 @@ describe("ArtifactBrowser", () => {
     const user = userEvent.setup();
     apiMocks.getArtifacts.mockResolvedValue(artifactIndex);
 
-    const { onSelectedArtifactChange } = renderBrowser();
+    renderBrowser();
 
     expect(screen.getByRole("table", { name: "Artifact index" })).toHaveTextContent(
       "Load the backend artifact index",
@@ -226,5 +227,26 @@ describe("ArtifactBrowser", () => {
     expect(table).toHaveTextContent("sub-001");
     expect(table).toHaveTextContent("fc_matrix");
     expect(table).toHaveTextContent("functional_connectivity");
+  });
+
+  it("renders the artifact workflow in Chinese", async () => {
+    const user = userEvent.setup();
+    apiMocks.getArtifacts.mockResolvedValue(artifactIndex);
+
+    render(
+      <I18nProvider locale="zh-CN">
+        <ArtifactBrowser baseUrl="http://localhost" />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("heading", { name: "产物浏览器" })).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "产物索引" })).toHaveTextContent(
+      "浏览产物前请加载后端产物索引",
+    );
+
+    await user.click(screen.getByRole("button", { name: "加载产物" }));
+
+    expect(await screen.findByText("索引元数据已加载")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "产物索引" })).toHaveTextContent("不支持");
   });
 });

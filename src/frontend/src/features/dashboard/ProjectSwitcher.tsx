@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Button, Dialog } from "../../components/ui";
 import type { ProjectSummary } from "../../lib/types/project";
+import { useI18n } from "../../i18n/useI18n";
 import styles from "./ProjectSwitcher.module.css";
 
 export interface ProjectSwitcherProps {
@@ -26,6 +27,7 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
   onOpenProjects,
   onDelete,
 }: ProjectSwitcherProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -34,10 +36,10 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
   const selected = projects.find((p) => p.id === selectedProjectId);
   const popoverId = "project-switcher-popover";
   const metaLabel = loading
-    ? "Loading..."
+    ? t("projects.switcher.loading")
     : error
-      ? "Project list unavailable"
-      : `${projects.length} projects`;
+      ? t("projects.switcher.unavailable")
+      : t("projects.switcher.count", { count: projects.length });
 
   useEffect(() => {
     if (!open) return;
@@ -117,7 +119,7 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
         onClick={handleTriggerClick}
-        title={selected ? selected.name : "Select project"}
+        title={selected ? selected.name : t("projects.switcher.select")}
       >
         <span className={styles.glyph} aria-hidden="true">
           <svg viewBox="0 0 20 20" width="14" height="14">
@@ -131,7 +133,9 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
           </svg>
         </span>
         <span className={styles.label}>
-          <span className={styles.current}>{selected ? selected.name : "Select project"}</span>
+          <span className={styles.current}>
+            {selected ? selected.name : t("projects.switcher.select")}
+          </span>
           <small className={styles.meta}>{metaLabel}</small>
         </span>
         <svg className={styles.caret} viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
@@ -147,11 +151,20 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
       </button>
 
       {open ? (
-        <div className={styles.popover} id={popoverId} role="listbox" aria-label="Project switcher">
+        <div
+          className={styles.popover}
+          id={popoverId}
+          role="listbox"
+          aria-label={t("projects.switcher.aria")}
+        >
           <header className={styles.header}>
             <div className={styles.headerCopy}>
-              <span>Recent projects</span>
-              <small>{error ? "Unavailable" : `${projects.length} available`}</small>
+              <span>{t("projects.switcher.recent")}</span>
+              <small>
+                {error
+                  ? t("common.unavailable")
+                  : t("projects.switcher.available", { count: projects.length })}
+              </small>
             </div>
             <div className={styles.headerActions}>
               <button
@@ -160,7 +173,7 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
                 onClick={handleOpenProjects}
                 disabled={loading}
               >
-                <span>View all</span>
+                <span>{t("projects.switcher.viewAll")}</span>
               </button>
               <button
                 type="button"
@@ -177,7 +190,7 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
                     d="M8 3v10M3 8h10"
                   />
                 </svg>
-                <span>Add project</span>
+                <span>{t("projects.switcher.add")}</span>
               </button>
             </div>
           </header>
@@ -213,8 +226,8 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
                   <button
                     type="button"
                     className={styles.moreButton}
-                    aria-label={`More actions for ${item.name}`}
-                    title="More actions"
+                    aria-label={t("projects.switcher.moreActions", { name: item.name })}
+                    title={t("projects.switcher.moreActionsTitle")}
                     onClick={() => handleDeleteRequest(item.id, item.name)}
                     disabled={deletingProjectId === item.id}
                   >
@@ -230,9 +243,7 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
             </ul>
           ) : (
             <div className={styles.empty} role="status">
-              {error
-                ? "The project list could not be loaded. Check backend health or add a project."
-                : "No projects have been added yet."}
+              {error ? t("projects.switcher.errorEmpty") : t("projects.switcher.empty")}
             </div>
           )}
         </div>
@@ -240,25 +251,24 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
 
       <Dialog
         description={
-          confirmDelete ? (
-            <span>
-              Remove <strong>{confirmDelete.name}</strong> from recent projects? This only removes
-              the listing; the data on disk is preserved.
-            </span>
-          ) : null
+          confirmDelete
+            ? t("projects.switcher.removeDescription", { name: confirmDelete.name })
+            : null
         }
         footer={
           confirmDelete ? (
             <>
               <Button onClick={handleDeleteCancel} variant="secondary">
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 disabled={deletingProjectId === confirmDelete.id}
                 onClick={handleDeleteConfirm}
                 variant="danger"
               >
-                {deletingProjectId === confirmDelete.id ? "Removing..." : "Remove"}
+                {deletingProjectId === confirmDelete.id
+                  ? t("projects.switcher.removing")
+                  : t("common.remove")}
               </Button>
             </>
           ) : null
@@ -269,7 +279,7 @@ export const ProjectSwitcher = memo(function ProjectSwitcher({
           }
         }}
         open={Boolean(confirmDelete)}
-        title="Remove project"
+        title={t("projects.switcher.removeTitle")}
       />
     </div>
   );

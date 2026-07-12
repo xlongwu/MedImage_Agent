@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectDataReadiness } from "../lib/api/legacy";
+import { formatNumber } from "../i18n/format";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { getProjectDataReadiness } from "../lib/api/dicom";
 import type { DataReadinessCheck, DataReadinessResponse } from "../types";
 import {
   ActionList,
@@ -13,13 +16,6 @@ type Props = {
   baseUrl?: string;
   projectId: string | null;
   projectState?: string;
-};
-
-const statusBadge: Record<string, React.CSSProperties> = {
-  ready: { background: "#e8f5e9", color: "#176b3b", borderColor: "rgba(33, 150, 83, 0.24)" },
-  warning: { background: "#fff7ed", color: "#9a5a15", borderColor: "rgba(242, 153, 74, 0.28)" },
-  blocked: { background: "#ffebee", color: "#b53b3b", borderColor: "rgba(235, 87, 87, 0.26)" },
-  unknown: { background: "#eef1f6", color: "#667085", borderColor: "rgba(137, 150, 171, 0.28)" },
 };
 
 const checkStatusPill: Record<string, React.CSSProperties> = {
@@ -46,7 +42,17 @@ const mono: React.CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-function CheckRow({ check, hasDicom }: { check: DataReadinessCheck; hasDicom?: boolean }) {
+type Translate = ReturnType<typeof useI18n>["t"];
+
+function CheckRow({
+  check,
+  hasDicom,
+  t,
+}: {
+  check: DataReadinessCheck;
+  hasDicom?: boolean;
+  t: Translate;
+}) {
   const isImageValidationDowngrade =
     check.name === "image_validation" &&
     check.status === "warning" &&
@@ -95,8 +101,7 @@ function CheckRow({ check, hasDicom }: { check: DataReadinessCheck; hasDicom?: b
             fontSize: 11,
           }}
         >
-          NIfTI validation is deferred because this project contains raw DICOM data (FunRaw/T1Raw).
-          Run Conversion Dry-Run first to plan DICOM-to-NIfTI conversion.
+          {t("data.readiness.niftiDeferred")}
         </div>
       )}
 
@@ -112,8 +117,7 @@ function CheckRow({ check, hasDicom }: { check: DataReadinessCheck; hasDicom?: b
             fontSize: 11,
           }}
         >
-          Subject/sequence counts above refer to direct NIfTI image sources only. DICOM raw sources
-          were detected separately by DICOM preflight.
+          {t("data.readiness.sourceCounts")}
         </div>
       )}
 
@@ -146,6 +150,7 @@ function CheckRow({ check, hasDicom }: { check: DataReadinessCheck; hasDicom?: b
 }
 
 export default function DataReadinessPanel({ baseUrl, projectId, projectState }: Props) {
+  const { locale, t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<DataReadinessResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -154,8 +159,10 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
 
   useEffect(() => {
     if (!projectId) {
+      /* eslint-disable react-hooks/set-state-in-effect -- Project changes reset the guarded readiness request state. */
       setData(null);
       setError("");
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     const requestId = requestRef.current + 1;
@@ -186,8 +193,8 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
           background: "rgba(255, 255, 255, 0.88)",
         }}
       >
-        <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>Data Readiness</h3>
-        <div className="empty">Select a project to assess data readiness.</div>
+        <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{t("data.readiness.title")}</h3>
+        <div className="empty">{t("data.readiness.selectProject")}</div>
       </section>
     );
   }
@@ -202,8 +209,8 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
           background: "rgba(255, 255, 255, 0.88)",
         }}
       >
-        <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>Data Readiness</h3>
-        <div className="empty">Assessing data readiness...</div>
+        <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{t("data.readiness.title")}</h3>
+        <div className="empty">{t("data.readiness.assessing")}</div>
       </section>
     );
   }
@@ -218,7 +225,7 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
           background: "rgba(255, 255, 255, 0.88)",
         }}
       >
-        <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>Data Readiness</h3>
+        <h3 style={{ margin: "0 0 8px", fontSize: 15 }}>{t("data.readiness.title")}</h3>
         <div className="errorBox">{error}</div>
       </section>
     );
@@ -261,19 +268,16 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
         }}
       >
         <div>
-          <h3 style={{ margin: 0, fontSize: 15 }}>Data Readiness</h3>
-          <span style={{ color: "#667085", fontSize: 12 }}>
-            High-value project readiness summary.
-          </span>
+          <h3 style={{ margin: 0, fontSize: 15 }}>{t("data.readiness.title")}</h3>
+          <span style={{ color: "#667085", fontSize: 12 }}>{t("data.readiness.description")}</span>
         </div>
         <StatusPill status={data.status} />
       </div>
 
       {hasDicomRawLayout && (
         <SafetyBanner tone="info">
-          <strong>FunRaw / T1Raw DICOM rawdata detected.</strong> This is valid raw input. Converted
-          NIfTI files are not available yet. Run <strong>Conversion Dry-Run</strong> before NIfTI QC
-          or preprocessing.
+          <strong>{t("data.readiness.rawDetectedTitle")}</strong>{" "}
+          {t("data.readiness.rawDetectedDescription")}
         </SafetyBanner>
       )}
 
@@ -300,7 +304,7 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
                   <div key={i}>{w}</div>
                 ))}
                 {filteredWarnings.length > 2 ? (
-                  <div>+{filteredWarnings.length - 2} more in details</div>
+                  <div>{t("data.moreDetails", { count: filteredWarnings.length - 2 })}</div>
                 ) : null}
               </SafetyBanner>
             ) : null}
@@ -317,56 +321,68 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
         }}
       >
         <MetricTile
-          label="rawdata exists"
-          value={data.rawdata_dir ? "Yes" : "No"}
+          label={t("data.readiness.rawdataExists")}
+          value={data.rawdata_dir ? t("data.readiness.yes") : t("data.readiness.no")}
           tone={data.rawdata_dir ? "green" : projectState === "converted_bids" ? "neutral" : "red"}
         />
-        <MetricTile label="imports recorded" value={data.import_count} />
+        <MetricTile label={t("data.readiness.imports")} value={data.import_count} />
         <MetricTile
-          label="DICOM preflight"
-          value={data.dicom_file_count > 0 ? "Detected" : "No DICOM"}
+          label={t("data.readiness.dicomPreflight")}
+          value={
+            data.dicom_file_count > 0 ? t("data.readiness.detected") : t("data.readiness.noDicom")
+          }
           tone={data.dicom_file_count > 0 ? "blue" : "neutral"}
         />
         <MetricTile
-          label="Raw DICOM candidates"
-          value={hasDicomRawLayout ? "See preflight" : "N/A"}
+          label={t("data.readiness.rawCandidates")}
+          value={hasDicomRawLayout ? t("data.readiness.seePreflight") : t("data.readiness.na")}
         />
         <MetricTile
-          label="Converted subjects"
+          label={t("data.readiness.convertedSubjects")}
           value={data.subject_count}
           tone={data.subject_count > 0 ? "green" : "neutral"}
         />
         <MetricTile
-          label="Converted NIfTI status"
-          value={data.image_source_count > 0 ? "Available" : "Not started"}
+          label={t("data.readiness.convertedStatus")}
+          value={
+            data.image_source_count > 0
+              ? t("data.readiness.available")
+              : t("data.readiness.notStarted")
+          }
           tone={data.image_source_count > 0 ? "green" : "amber"}
         />
-        <MetricTile label="DICOM files" value={data.dicom_file_count.toLocaleString()} />
-        <MetricTile label="DICOM series" value={data.dicom_series_count} />
+        <MetricTile
+          label={t("data.readiness.dicomFiles")}
+          value={formatNumber(locale, data.dicom_file_count)}
+        />
+        <MetricTile label={t("data.readiness.dicomSeries")} value={data.dicom_series_count} />
       </div>
 
       <CollapsibleDetails
-        title="Detailed readiness checks"
-        summary={`${data.checks.length} checks`}
+        title={t("data.readiness.detailed")}
+        summary={t("data.readiness.checkCount", { count: data.checks.length })}
       >
         <div style={{ display: "grid", gap: 8 }}>
           {data.checks.map((check) => (
-            <CheckRow key={check.name} check={check} hasDicom={hasDicomRawLayout} />
+            <CheckRow key={check.name} check={check} hasDicom={hasDicomRawLayout} t={t} />
           ))}
         </div>
       </CollapsibleDetails>
 
-      <CollapsibleDetails title="Project paths" summary="rawdata, config, dataset index">
+      <CollapsibleDetails
+        title={t("data.readiness.paths")}
+        summary={t("data.readiness.pathsSummary")}
+      >
         <div style={{ display: "grid", gap: 6, fontSize: 11, color: "#667085" }}>
           <div>
             <strong>rawdata:</strong> <span style={mono}>{data.rawdata_dir || "-"}</span>
           </div>
           <div>
-            <strong>config path:</strong>{" "}
+            <strong>{t("data.readiness.configPath")}:</strong>{" "}
             <span style={mono}>{data.project_config_path || "-"}</span>
           </div>
           <div>
-            <strong>dataset index:</strong>{" "}
+            <strong>{t("data.readiness.datasetIndex")}:</strong>{" "}
             <span style={mono}>{data.dataset_index_path || "-"}</span>
           </div>
         </div>
@@ -374,22 +390,10 @@ export default function DataReadinessPanel({ baseUrl, projectId, projectState }:
 
       {sortedActions.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
+          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>{t("data.bids.nextActions")}</h4>
           <ActionList actions={sortedActions} rawDicom={hasDicomRawLayout} />
         </div>
       )}
     </section>
   );
 }
-
-const metricBox: React.CSSProperties = {
-  padding: "8px 10px",
-  border: "1px solid rgba(137, 150, 171, 0.24)",
-  borderRadius: 6,
-  background: "#fff",
-  display: "grid",
-  gap: 2,
-  color: "#667085",
-  fontSize: 11,
-  fontWeight: 850,
-};

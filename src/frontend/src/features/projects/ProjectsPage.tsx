@@ -1,29 +1,23 @@
 import { useMemo, useState } from "react";
-import { Badge, Button, Dialog, EmptyState, Table, TableEmpty } from "../../components/ui";
+
+import { Badge, Button, Dialog, EmptyState, Icon } from "../../components/ui";
+import { useI18n } from "../../i18n/useI18n";
 import type { ProjectSummary } from "../../lib/types/project";
 import styles from "./ProjectsPage.module.css";
 
-type ProjectFilter = "all" | "needs_setup" | "active_pipeline" | "rsfmri" | "mri";
+type ProjectFilter = "all" | "needs_setup" | "pipeline" | "rsfmri" | "mri";
 
 export interface ProjectsPageProps {
   deletingProjectId: string | null;
   error: string;
   loading: boolean;
-  onClose: () => void;
+  onClose?: () => void;
   onCreateProject: () => void;
   onDeleteProject: (id: string, name: string) => void;
   onSelectProject: (id: string) => void;
   projects: ProjectSummary[];
   selectedProjectId: string | null;
 }
-
-const filters: Array<{ id: ProjectFilter; label: string }> = [
-  { id: "all", label: "All" },
-  { id: "needs_setup", label: "Needs setup" },
-  { id: "active_pipeline", label: "Pipeline set" },
-  { id: "rsfmri", label: "rs-fMRI" },
-  { id: "mri", label: "MRI" },
-];
 
 export function ProjectsPage({
   deletingProjectId,
@@ -36,108 +30,81 @@ export function ProjectsPage({
   projects,
   selectedProjectId,
 }: ProjectsPageProps) {
+  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<ProjectFilter>("all");
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
+  const filters: Array<{ id: ProjectFilter; label: string }> = [
+    { id: "all", label: t("projects.all") },
+    { id: "needs_setup", label: t("projects.needsSetup") },
+    { id: "pipeline", label: t("projects.pipelineSet") },
+    { id: "rsfmri", label: "rs-fMRI" },
+    { id: "mri", label: "MRI" },
+  ];
 
   const filteredProjects = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return projects.filter((project) => {
-      const stage = inferProjectStage(project);
+      const hasPipeline = hasReviewedPipelineReference(project);
       const haystack = [
         project.name,
         project.study_id,
         project.modality,
         project.current_pipeline_id,
-        stage.label,
       ]
         .join(" ")
         .toLowerCase();
-      const matchesQuery = !needle || haystack.includes(needle);
-      const matchesFilter =
-        activeFilter === "all" ||
-        (activeFilter === "needs_setup" && stage.id === "needs_setup") ||
-        (activeFilter === "active_pipeline" && stage.id !== "needs_setup") ||
-        (activeFilter === "rsfmri" && project.modality.toLowerCase().includes("rs-fmri")) ||
-        (activeFilter === "mri" && project.modality.toLowerCase().includes("mri"));
-
-      return matchesQuery && matchesFilter;
+      return (
+        (!needle || haystack.includes(needle)) &&
+        (activeFilter === "all" ||
+          (activeFilter === "needs_setup" && !hasPipeline) ||
+          (activeFilter === "pipeline" && hasPipeline) ||
+          (activeFilter === "rsfmri" && project.modality.toLowerCase().includes("rs-fmri")) ||
+          (activeFilter === "mri" && project.modality.toLowerCase().includes("mri")))
+      );
     });
   }, [activeFilter, projects, query]);
 
-  const totalSubjects = projects.reduce((sum, project) => sum + project.subjects_count, 0);
-  const activePipelineCount = projects.filter(
-    (project) => inferProjectStage(project).id !== "needs_setup",
-  ).length;
-  const rsfmriCount = projects.filter((project) =>
-    project.modality.toLowerCase().includes("rs-fmri"),
-  ).length;
-
-  const handleSelectProject = (id: string) => {
-    onSelectProject(id);
-    onClose();
-  };
-
-  const handleDeleteConfirm = () => {
-    if (!confirmDelete) return;
-    onDeleteProject(confirmDelete.id, confirmDelete.name);
-    setConfirmDelete(null);
+  const selectProject = (projectId: string) => {
+    onSelectProject(projectId);
+    onClose?.();
   };
 
   return (
     <section className={styles.page} aria-labelledby="projects-page-title">
       <header className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>Project Library</p>
+          <p className={styles.eyebrow}>{t("projects.library")}</p>
           <h1 className={styles.title} id="projects-page-title">
-            Projects
+            {t("projects.title")}
           </h1>
-          <p className={styles.subtitle}>
-            Browse local research projects, review pipeline readiness, and open the current project
-            context without touching source imaging data.
-          </p>
+          <p className={styles.subtitle}>{t("projects.subtitle")}</p>
         </div>
-        <Button onClick={onCreateProject} variant="primary">
-          Add project
+        <Button
+          leadingIcon={<Icon height={16} name="plus" width={16} />}
+          onClick={onCreateProject}
+          variant="primary"
+        >
+          {t("projects.add")}
         </Button>
       </header>
 
-      <div className={styles.summaryStrip} aria-label="Project summary">
-        <div className={styles.summaryItem}>
-          <span>Projects</span>
-          <strong>{projects.length}</strong>
-        </div>
-        <div className={styles.summaryItem}>
-          <span>Subjects</span>
-          <strong>{totalSubjects}</strong>
-        </div>
-        <div className={styles.summaryItem}>
-          <span>Pipeline set</span>
-          <strong>{activePipelineCount}</strong>
-        </div>
-        <div className={styles.summaryItem}>
-          <span>rs-fMRI</span>
-          <strong>{rsfmriCount}</strong>
-        </div>
-      </div>
-
       <div className={styles.toolbar}>
-        <div className={styles.search}>
-          <label htmlFor="project-search">Search projects</label>
+        <label className={styles.search}>
+          <span>{t("projects.search")}</span>
           <input
-            id="project-search"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name, study ID, modality, pipeline"
+            placeholder={t("projects.searchPlaceholder")}
             type="search"
             value={query}
           />
-        </div>
-        <div className={styles.filters} aria-label="Project filters">
+        </label>
+        <div className={styles.filters} aria-label={t("projects.filters")}>
           {filters.map((filter) => (
             <button
-              key={filter.id}
               aria-pressed={activeFilter === filter.id}
               className={styles.filterButton}
+              key={filter.id}
               onClick={() => setActiveFilter(filter.id)}
               type="button"
             >
@@ -148,138 +115,114 @@ export function ProjectsPage({
       </div>
 
       {error && projects.length > 0 ? (
-        <div className={styles.inlineWarning} role="status">
-          Project list loaded with a backend warning. Existing rows are shown from the verified
-          response, but no fallback demo projects were added. Error: {error}
+        <div className={styles.warning} role="status">
+          {error}
         </div>
       ) : null}
 
-      <div className={styles.panel}>
-        {loading ? (
-          <div className={styles.loadingBody} role="status" aria-label="Loading projects">
-            <span className={styles.loadingRow} />
-            <span className={styles.loadingRow} />
-            <span className={styles.loadingRow} />
-          </div>
-        ) : error && projects.length === 0 ? (
-          <EmptyState
-            action={
-              <Button onClick={onCreateProject} variant="primary">
-                Add project
-              </Button>
-            }
-            description={
-              <>
-                The backend did not return a verified project list. Showing no project rows avoids
-                presenting demo research data as real work. Error: {error}
-              </>
-            }
-            icon={<VoxelGrid />}
-            title="Project list unavailable"
-          />
-        ) : projects.length === 0 ? (
-          <EmptyState
-            action={
-              <Button onClick={onCreateProject} variant="primary">
-                Create your first research project
-              </Button>
-            }
-            description="Start by referencing an existing local DICOM or BIDS directory. MedImage Agent keeps source research files read-only."
-            icon={<VoxelGrid />}
-            title="Create your first research project"
-          />
-        ) : (
-          <Table className={styles.table} caption={error ? `Project list warning: ${error}` : null}>
-            <thead>
-              <tr>
-                <th scope="col">Project</th>
-                <th scope="col">Data type</th>
-                <th scope="col">Subjects</th>
-                <th scope="col">Current stage</th>
-                <th scope="col">Last activity</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredProjects.length === 0 ? (
-                <TableEmpty colSpan={6}>No projects match the current filters.</TableEmpty>
-              ) : (
-                filteredProjects.map((project) => {
-                  const stage = inferProjectStage(project);
-                  return (
-                    <tr key={project.id}>
-                      <td>
-                        <div className={styles.projectName}>
-                          <strong>{project.name}</strong>
-                          <span>{project.study_id}</span>
-                          <span className={styles.pipelineCell}>{project.current_pipeline_id}</span>
-                        </div>
-                      </td>
-                      <td>{project.modality}</td>
-                      <td>{project.subjects_count}</td>
-                      <td>
-                        <span className={styles.stageCell}>
-                          <Badge tone={stage.tone}>{stage.label}</Badge>
-                          <span className={styles.stageSummary}>{stage.summary}</span>
-                        </span>
-                      </td>
-                      <td>
-                        <span className={styles.muted}>{project.created_date}</span>
-                      </td>
-                      <td>
-                        <div className={styles.actions}>
-                          <Button
-                            onClick={() => handleSelectProject(project.id)}
-                            variant={project.id === selectedProjectId ? "primary" : "secondary"}
-                            size="sm"
-                          >
-                            {project.id === selectedProjectId ? "Open" : "Select"}
-                          </Button>
-                          <Button
-                            disabled={deletingProjectId === project.id}
-                            onClick={() => setConfirmDelete({ id: project.id, name: project.name })}
-                            variant="ghost"
-                            size="sm"
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </Table>
-        )}
-      </div>
-
-      <p className={styles.footerNote}>
-        Project rows reference local project metadata only. DICOM, BIDS, NIfTI, rawdata, and source
-        research files are never edited from this list view.
-      </p>
+      {loading ? (
+        <div aria-label={t("projects.loading")} className={styles.grid} role="status">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <span className={styles.skeletonCard} key={index} />
+          ))}
+        </div>
+      ) : error && projects.length === 0 ? (
+        <EmptyState
+          action={
+            <Button onClick={onCreateProject} variant="primary">
+              {t("projects.add")}
+            </Button>
+          }
+          description={`${t("projects.errorDescription")} ${error}`}
+          icon={<Icon height={22} name="circle-alert" width={22} />}
+          title={t("projects.errorTitle")}
+        />
+      ) : projects.length === 0 ? (
+        <EmptyState
+          action={
+            <Button onClick={onCreateProject} variant="primary">
+              {t("projects.emptyAction")}
+            </Button>
+          }
+          description={t("projects.emptyDescription")}
+          icon={<Icon height={22} name="folder" width={22} />}
+          title={t("projects.emptyTitle")}
+        />
+      ) : filteredProjects.length === 0 ? (
+        <EmptyState title={t("projects.noMatches")} />
+      ) : (
+        <div className={styles.grid}>
+          {filteredProjects.map((project) => {
+            const hasPipeline = hasReviewedPipelineReference(project);
+            return (
+              <article className={styles.card} key={project.id}>
+                <button
+                  className={styles.cardMain}
+                  onClick={() => selectProject(project.id)}
+                  type="button"
+                >
+                  <div className={styles.cardMeta}>
+                    <Badge tone="neutral">{project.modality || t("common.unavailable")}</Badge>
+                    <span className={styles.state} data-state={hasPipeline ? "ready" : "setup"}>
+                      <i aria-hidden="true" />
+                      {hasPipeline ? t("projects.pipelineSet") : t("projects.needsSetup")}
+                    </span>
+                  </div>
+                  <h2>{project.name}</h2>
+                  <p className={styles.studyId}>{project.study_id}</p>
+                  <dl className={styles.cardFacts}>
+                    <div>
+                      <dt>{t("projects.subjects")}</dt>
+                      <dd>{project.subjects_count}</dd>
+                    </div>
+                    <div>
+                      <dt>{t("projects.lastActivity")}</dt>
+                      <dd>{project.created_date || t("common.unavailable")}</dd>
+                    </div>
+                  </dl>
+                </button>
+                <div className={styles.cardActions}>
+                  <Button
+                    onClick={() => selectProject(project.id)}
+                    size="sm"
+                    variant={project.id === selectedProjectId ? "primary" : "secondary"}
+                  >
+                    {project.id === selectedProjectId ? t("common.open") : t("common.select")}
+                  </Button>
+                  <Button
+                    disabled={deletingProjectId === project.id}
+                    onClick={() => setConfirmDelete({ id: project.id, name: project.name })}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {t("common.remove")}
+                  </Button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
 
       <Dialog
         description={
-          confirmDelete ? (
-            <span>
-              Remove <strong>{confirmDelete.name}</strong> from the project list? This preserves
-              data on disk and only removes the recent project listing.
-            </span>
-          ) : null
+          confirmDelete ? t("projects.removeDescription", { name: confirmDelete.name }) : null
         }
         footer={
           confirmDelete ? (
             <>
               <Button onClick={() => setConfirmDelete(null)} variant="secondary">
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 disabled={deletingProjectId === confirmDelete.id}
-                onClick={handleDeleteConfirm}
+                onClick={() => {
+                  onDeleteProject(confirmDelete.id, confirmDelete.name);
+                  setConfirmDelete(null);
+                }}
                 variant="danger"
               >
-                {deletingProjectId === confirmDelete.id ? "Removing..." : "Remove"}
+                {t("common.remove")}
               </Button>
             </>
           ) : null
@@ -288,81 +231,13 @@ export function ProjectsPage({
           if (!open) setConfirmDelete(null);
         }}
         open={Boolean(confirmDelete)}
-        title="Remove project"
+        title={t("projects.removeTitle")}
       />
     </section>
   );
 }
 
-function VoxelGrid() {
-  return (
-    <div className={styles.emptyVisual} aria-hidden="true">
-      {Array.from({ length: 24 }).map((_, index) => (
-        <span className={styles.voxel} key={index} />
-      ))}
-    </div>
-  );
-}
-
-type StageId = "needs_setup" | "data" | "plan" | "preprocessing" | "qc" | "results";
-
-function inferProjectStage(project: ProjectSummary): {
-  id: StageId;
-  label: string;
-  summary: string;
-  tone: "neutral" | "info" | "success" | "warning" | "danger";
-} {
-  const pipeline = project.current_pipeline_id.toLowerCase();
-
-  if (!pipeline || pipeline === "not-selected" || pipeline === "none") {
-    return {
-      id: "needs_setup",
-      label: "Needs setup",
-      summary: "No reviewed pipeline is selected",
-      tone: "warning",
-    };
-  }
-
-  if (/(qc|quality|validation|report)/.test(pipeline)) {
-    return {
-      id: "qc",
-      label: "QC",
-      summary: "Review quality reports and validation evidence",
-      tone: "success",
-    };
-  }
-
-  if (/(result|artifact|alff|falff|reho|connectivity|fc)/.test(pipeline)) {
-    return {
-      id: "results",
-      label: "Results",
-      summary: "Artifact or result workspace is linked",
-      tone: "info",
-    };
-  }
-
-  if (/(preprocess|spm|dpabi|realign|normalize|smooth|segmentation)/.test(pipeline)) {
-    return {
-      id: "preprocessing",
-      label: "Preprocessing",
-      summary: "Preprocessing configuration or run state exists",
-      tone: "info",
-    };
-  }
-
-  if (/(dicom|bids|conversion|convert)/.test(pipeline)) {
-    return {
-      id: "data",
-      label: "Data",
-      summary: "Data preparation or conversion review is linked",
-      tone: "info",
-    };
-  }
-
-  return {
-    id: "plan",
-    label: "Needs review",
-    summary: "Pipeline value is present but not classified as a completed stage",
-    tone: "neutral",
-  };
+function hasReviewedPipelineReference(project: ProjectSummary): boolean {
+  const value = project.current_pipeline_id?.trim().toLowerCase();
+  return Boolean(value && value !== "none" && value !== "not-selected");
 }

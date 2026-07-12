@@ -1,13 +1,12 @@
 .shell {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: var(--shell-gap);
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   min-height: 100vh;
-  padding: var(--shell-padding);
-  background: linear-gradient(180deg, #fbfbfd 0%, var(--color-bg-app) 100%);
+  background: var(--color-bg-app);
 }
 
 .topBarSlot,
+.lifecycleSlot,
 .systemMessages,
 .body,
 .runActivitySlot {
@@ -15,18 +14,14 @@
 }
 
 .body {
-  display: grid;
-  grid-template-columns: var(--shell-sidebar-width) minmax(0, 1fr);
-  gap: var(--shell-gap);
-  align-items: start;
+  position: relative;
   min-height: 0;
 }
 
-.shell[data-inspector="open"] .body {
-  grid-template-columns: var(--shell-sidebar-width) minmax(0, 1fr) minmax(280px, 340px);
+.systemMessages {
+  padding: 10px clamp(20px, 4vw, 64px) 0;
 }
 
-.sidebarSlot,
 .mainSlot,
 .inspectorSlot {
   min-width: 0;
@@ -34,10 +29,17 @@
 
 .mainSlot {
   min-height: 0;
+  padding: 26px clamp(24px, 4.5vw, 72px) 92px;
+  overflow: auto;
 }
 
 .inspectorSlot {
-  min-height: 0;
+  position: fixed;
+  z-index: 70;
+  top: var(--shell-topbar-height);
+  right: 0;
+  bottom: 0;
+  width: min(380px, 38vw);
 }
 
 .runActivitySlot {
@@ -46,28 +48,9 @@
   z-index: 30;
 }
 
-@media (max-width: 1320px) {
-  .body,
-  .shell[data-inspector="open"] .body {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-
-  .inspectorSlot {
-    grid-column: 2;
-  }
-}
-
-@media (max-width: 1040px) {
-  .shell {
-    padding: 12px;
-  }
-
-  .body,
-  .shell[data-inspector="open"] .body {
-    grid-template-columns: 1fr;
-  }
-
-  .inspectorSlot {
-    grid-column: auto;
+@media (max-width: 1120px) {
+  .mainSlot {
+    padding-right: 24px;
+    padding-left: 24px;
   }
 }

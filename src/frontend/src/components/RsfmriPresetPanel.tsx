@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getPipelinePreset, instantiatePipelinePreset } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { getPipelinePreset, instantiatePipelinePreset } from "../lib/api/preset";
 import { buildPresetPlanDraft } from "../lib/presetPlanHandoff";
 import type { PipelinePreset, PipelinePresetInstantiateResponse, PresetPlanDraft } from "../types";
 
@@ -21,6 +23,7 @@ const pill: React.CSSProperties = {
 };
 
 export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [preset, setPreset] = useState<PipelinePreset | null>(null);
   const [result, setResult] = useState<PipelinePresetInstantiateResponse | null>(null);
@@ -31,8 +34,10 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
 
   useEffect(() => {
     if (!projectId) {
+      /* eslint-disable react-hooks/set-state-in-effect -- Project changes reset the guarded preset request state. */
       setPreset(null);
       setResult(null);
+      /* eslint-enable react-hooks/set-state-in-effect */
       return;
     }
     const id = reqRef.current + 1;
@@ -68,21 +73,21 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
   if (!projectId)
     return (
       <Sec>
-        <H3>rs-fMRI Preprocessing Preset</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("settings.preset.title")}</H3>
+        <div className="empty">{t("settings.preset.selectProject")}</div>
       </Sec>
     );
   if (loading)
     return (
       <Sec>
-        <H3>rs-fMRI Preprocessing Preset</H3>
-        <div className="empty">Loading preset...</div>
+        <H3>{t("settings.preset.title")}</H3>
+        <div className="empty">{t("settings.preset.loading")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>rs-fMRI Preprocessing Preset</H3>
+        <H3>{t("settings.preset.title")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -117,13 +122,11 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
           marginBottom: 12,
         }}
       >
-        This preset is a contract MVP for planning only. It does not execute real SPM/DPABI
-        preprocessing. Real MATLAB/SPM execution is not available in this release. Research-use
-        only. Not for clinical use.
+        {t("settings.preset.boundary")}
       </div>
       <p style={{ fontSize: 12, color: "#344054", margin: "0 0 12px" }}>{preset.description}</p>
 
-      <h4 style={subH}>Nodes ({preset.nodes.length})</h4>
+      <h4 style={subH}>{t("settings.preset.nodes", { count: preset.nodes.length })}</h4>
       <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
         {preset.nodes.map((n) => (
           <div
@@ -159,7 +162,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
                     : "rgba(242, 153, 74, 0.28)",
                 }}
               >
-                {n.executable ? "executable" : "stub"}
+                {n.executable ? t("settings.preset.executable") : t("settings.preset.stub")}
               </span>
             </div>
             <div style={{ fontSize: 11, color: "#667085" }}>{n.description}</div>
@@ -169,7 +172,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
 
       {preset.readiness_requirements.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <h4 style={subH}>Readiness Requirements</h4>
+          <h4 style={subH}>{t("settings.preset.requirements")}</h4>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#344054" }}>
             {preset.readiness_requirements.map((r, i) => (
               <li key={i}>{r}</li>
@@ -179,7 +182,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
       )}
       {preset.non_goals.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <h4 style={subH}>Non-Goals</h4>
+          <h4 style={subH}>{t("settings.preset.nonGoals")}</h4>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: "#667085" }}>
             {preset.non_goals.map((g, i) => (
               <li key={i}>{g}</li>
@@ -202,7 +205,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
           fontWeight: 600,
         }}
       >
-        {instLoading ? "Instantiating..." : "Instantiate reviewed plan draft"}
+        {instLoading ? t("settings.preset.instantiating") : t("settings.preset.instantiate")}
       </button>
 
       {result && (
@@ -222,7 +225,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
               borderColor: result.ok ? "rgba(33, 150, 83, 0.24)" : "rgba(235, 87, 87, 0.26)",
             }}
           >
-            {result.ok ? "Instantiated" : "Failed"}
+            {result.ok ? t("settings.preset.instantiated") : t("settings.preset.failed")}
           </span>
           {result.errors.length > 0 && (
             <div className="errorBox" style={{ marginTop: 8 }}>
@@ -244,7 +247,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
           )}
           {result.next_actions.length > 0 && (
             <div style={{ marginTop: 8 }}>
-              <strong style={{ fontSize: 12 }}>Next:</strong>
+              <strong style={{ fontSize: 12 }}>{t("settings.preset.next")}</strong>
               <ul style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 12 }}>
                 {result.next_actions.map((a, i) => (
                   <li key={i}>{a}</li>
@@ -282,7 +285,7 @@ export default function RsfmriPresetPanel({ baseUrl, projectId, onReviewDraft }:
                     fontWeight: 600,
                   }}
                 >
-                  Review this plan in the Plan workspace
+                  {t("settings.preset.reviewPlan")}
                 </button>
               )}
             </>

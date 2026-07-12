@@ -47,6 +47,13 @@ check("main injects runtime backend URL", main.includes("MEDIMAGE_DESKTOP_API_BA
 check("main loads local static frontend", main.includes("loadFile(frontendIndex)") && main.includes("src\", \"frontend\", \"dist"));
 check("main stops managed backend on quit", main.includes("backendProcess.kill()") && main.includes('app.on("before-quit"'));
 check("main supports hidden smoke run", main.includes("MEDIMAGE_DESKTOP_SMOKE") && main.includes("MEDIMAGE_DESKTOP_SMOKE_RESULT"));
+check(
+  "main verifies the mounted React renderer during smoke",
+  main.includes("verifyFrontendRenderer") &&
+    main.includes("reactRootChildCount") &&
+    main.includes("mainLandmarkPresent") &&
+    main.includes("rendererConsoleErrors")
+);
 check("main denies new windows", main.includes("setWindowOpenHandler") && main.includes('action: "deny"'));
 check("main restricts dev URLs to localhost", main.includes("isAllowedDevUrl") && main.includes("127.0.0.1"));
 check("main keeps GUI provider mock", main.includes('MEDIMAGE_GUI_AGENT_PROVIDER: "mock"'));
@@ -69,6 +76,7 @@ check("main does not reference model inference", !/inference|weights|torch|safet
 check("BrowserWindow uses contextIsolation", main.includes("contextIsolation: true"));
 check("BrowserWindow disables nodeIntegration", main.includes("nodeIntegration: false"));
 check("BrowserWindow enables sandbox", main.includes("sandbox: true"));
+check("desktop main never disables Chromium sandbox", !main.includes("--no-sandbox"));
 
 check("preload exposes sync backend URL", preload.includes("MEDIMAGE_API_BASE_URL"));
 check("preload exposes desktop config", preload.includes("__MEDIMAGE_DESKTOP_CONFIG__") && preload.includes("backendBaseUrl"));
@@ -106,6 +114,13 @@ check(
   buildDist.includes("MEDIMAGE_ELECTRON_NSIS_RESOURCES_ARCHIVE") &&
     buildDist.includes("manual-binaries") &&
     buildDist.includes("ELECTRON_BUILDER_BINARIES_DOWNLOAD_OVERRIDE_URL")
+);
+check(
+  "dist wrapper requires a non-empty backend sidecar payload",
+  buildDist.includes("ensureBackendPayload") &&
+    buildDist.includes("medimage-backend.exe") &&
+    buildDist.includes("medimage-backend.bin") &&
+    buildDist.includes("Backend sidecar payload is required")
 );
 
 const ok = checks.every((item) => item.ok);

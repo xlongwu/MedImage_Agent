@@ -1,52 +1,3 @@
-.sideRail {
-  --shell-topbar-height: 56px;
-  position: relative;
-  top: auto;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: calc(100vh - var(--shell-topbar-height) - 48px);
-  gap: 14px;
-  padding: 14px;
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-card);
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: var(--shadow-card);
-  backdrop-filter: blur(18px);
-}
-
-.sideRailFooter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-divider);
-  color: var(--color-text-tertiary);
-  font-size: 11px;
-}
-
-.researchOnlyTag {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-secondary);
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.versionTag {
-  color: var(--color-text-tertiary);
-  font-family: "Cascadia Mono", "Consolas", monospace;
-  font-size: 11px;
-}
-
 .toastLine,
 .streamBanner {
   display: flex;
@@ -80,6 +31,10 @@
 .streamBanner button {
   min-height: 30px;
   padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
   font-size: 12px;
 }
 

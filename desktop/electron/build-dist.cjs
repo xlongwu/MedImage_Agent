@@ -5,6 +5,16 @@ const path = require("node:path");
 
 const electronRoot = __dirname;
 const repoRoot = path.resolve(electronRoot, "..", "..");
+const backendDist = path.join(repoRoot, "desktop", "packaging", "dist", "backend");
+const backendExecutable = path.join(backendDist, "medimage-backend.exe");
+const backendPayloadDir = path.join(
+  repoRoot,
+  "desktop",
+  "packaging",
+  "dist",
+  "backend_payload"
+);
+const backendPayload = path.join(backendPayloadDir, "medimage-backend.bin");
 
 function binPath(root) {
   return path.join(
@@ -62,6 +72,28 @@ function resolveSevenZip() {
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function ensureBackendPayload() {
+  const payloadStat = fs.existsSync(backendPayload) ? fs.statSync(backendPayload) : null;
+  const executableStat = fs.existsSync(backendExecutable)
+    ? fs.statSync(backendExecutable)
+    : null;
+  if (executableStat?.isFile() && executableStat.size > 0) {
+    fs.mkdirSync(backendPayloadDir, { recursive: true });
+    fs.copyFileSync(backendExecutable, backendPayload);
+    console.log(`Prepared backend sidecar payload: ${backendPayload}`);
+    return;
+  }
+
+  if (payloadStat?.isFile() && payloadStat.size > 0) {
+    return;
+  }
+
+  console.error(
+    `Backend sidecar payload is required for desktop packaging. Run desktop/packaging/build_backend.ps1 first: ${backendExecutable}`
+  );
+  process.exit(1);
 }
 
 function findAvailablePort() {
@@ -174,6 +206,7 @@ if (nsisArchiveEnv && !nsisDir) {
 }
 
 async function main() {
+  ensureBackendPayload();
   let localBinariesServer = null;
   const builderEnv = {
     ...process.env,

@@ -426,6 +426,19 @@ function runtimeSnapshot() {
   };
 }
 
+function writeSmokeResult(payload) {
+  const resultPath = process.env.MEDIMAGE_DESKTOP_SMOKE_RESULT;
+  if (!IS_SMOKE_TEST || !resultPath) {
+    return;
+  }
+  fs.mkdirSync(path.dirname(resultPath), { recursive: true });
+  fs.writeFileSync(
+    resultPath,
+    JSON.stringify({ ...runtimeSnapshot(), ...payload }, null, 2),
+    "utf8"
+  );
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("medimage:get-api-base-url", () => backendState.apiBaseUrl);
   ipcMain.handle("medimage:get-runtime", () => runtimeSnapshot());
@@ -487,7 +500,9 @@ function isAllowedDevUrl(url) {
 }
 
 async function loadFrontend(win) {
-  if (!backendState.ready) {
+  const frontendOnlySmoke =
+    IS_SMOKE_TEST && process.env.MEDIMAGE_DESKTOP_SKIP_BACKEND === "true";
+  if (!backendState.ready && !frontendOnlySmoke) {
     await win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(makeBackendErrorHtml())}`);
     return;
   }
@@ -506,6 +521,33 @@ async function loadFrontend(win) {
     throw new Error(`Frontend build not found: ${frontendIndex}`);
   }
   await win.loadFile(frontendIndex);
+}
+
+async function verifyFrontendRenderer(win, attempts = 40) {
+  for (let index = 0; index < attempts; index += 1) {
+    const snapshot = await win.webContents.executeJavaScript(`(() => {
+      const root = document.getElementById("root");
+      const main = document.querySelector("main, [role=main]");
+      return {
+        documentReadyState: document.readyState,
+        documentTitle: document.title,
+        locationProtocol: window.location.protocol,
+        reactRootChildCount: root?.childElementCount ?? 0,
+        reactRootTextLength: root?.textContent?.trim().length ?? 0,
+        mainLandmarkPresent: Boolean(main),
+      };
+    })()`, true);
+    if (
+      snapshot.documentReadyState === "complete" &&
+      snapshot.reactRootChildCount > 0 &&
+      snapshot.reactRootTextLength > 0 &&
+      snapshot.mainLandmarkPresent
+    ) {
+      return snapshot;
+    }
+    await delay(250);
+  }
+  throw new Error("Frontend renderer did not mount a non-empty React application shell.");
 }
 
 async function createWindow() {
@@ -527,6 +569,17 @@ async function createWindow() {
     },
   });
 
+  const rendererConsoleErrors = [];
+  let rendererExit = null;
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    if (level >= 3) {
+      rendererConsoleErrors.push({ message, line, sourceId });
+    }
+  });
+  win.webContents.on("render-process-gone", (_event, details) => {
+    rendererExit = details;
+  });
+
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (event, url) => {
     if (url.startsWith("file://") || url.startsWith("data:text/html") || isAllowedDevUrl(url)) {
@@ -538,23 +591,22 @@ async function createWindow() {
   await loadFrontend(win);
 
   if (IS_SMOKE_TEST) {
-    const resultPath = process.env.MEDIMAGE_DESKTOP_SMOKE_RESULT;
-    if (resultPath) {
-      fs.mkdirSync(path.dirname(resultPath), { recursive: true });
-      fs.writeFileSync(
-        resultPath,
-        JSON.stringify(
-          {
-            ...runtimeSnapshot(),
-            frontendIndex: resolveFrontendIndex(),
-            frontendLoaded: true,
-          },
-          null,
-          2
-        ),
-        "utf8"
+    const renderer = await verifyFrontendRenderer(win);
+    if (rendererExit) {
+      throw new Error(`Frontend renderer exited during smoke verification: ${rendererExit.reason}`);
+    }
+    if (rendererConsoleErrors.length > 0) {
+      throw new Error(
+        `Frontend renderer emitted ${rendererConsoleErrors.length} console error(s): ${rendererConsoleErrors[0].message}`
       );
     }
+    writeSmokeResult({
+      frontendIndex: resolveFrontendIndex(),
+      frontendLoaded: true,
+      rendererVerified: true,
+      renderer,
+      rendererConsoleErrors,
+    });
     app.quit();
   }
 }
@@ -565,6 +617,11 @@ app.whenReady().then(() => {
     backendState = { ...backendState, ready: false, status: "error", error: error.message };
     syncRuntimeEnv();
     appendBackendLog("desktop", `fatal startup error: ${error.stack || error.message}\n`);
+    if (IS_SMOKE_TEST) {
+      writeSmokeResult({ frontendLoaded: false, rendererVerified: false, error: error.message });
+      app.quit();
+      return;
+    }
     dialog.showErrorBox("MedImage Agent startup failed", error.message);
   });
 });

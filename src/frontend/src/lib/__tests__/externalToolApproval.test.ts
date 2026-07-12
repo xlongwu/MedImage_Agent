@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  detectNativePreprocNodes,
-  isNativePreprocApprovalComplete,
-} from "../externalToolApproval";
+import { detectNativePreprocNodes, isNativePreprocApprovalComplete } from "../externalToolApproval";
 
 describe("native preprocessing approval helpers", () => {
   it("detects native full preprocessing execute nodes", () => {

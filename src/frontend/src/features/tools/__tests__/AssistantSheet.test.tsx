@@ -2,61 +2,67 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { I18nProvider } from "../../../i18n/I18nProvider";
 import { AssistantSheet } from "../AssistantSheet";
 
-function renderSheet(overrides: Partial<ComponentProps<typeof AssistantSheet>> = {}) {
+function renderSheet(
+  overrides: Partial<ComponentProps<typeof AssistantSheet>> = {},
+  locale: "en" | "zh-CN" = "en",
+) {
   const onInput = vi.fn();
   const onNewChat = vi.fn();
   const onOpenChange = vi.fn();
   const onSubmit = vi.fn();
 
   render(
-    <AssistantSheet
-      activePageLabel="QC"
-      error=""
-      input=""
-      loading={false}
-      messages={[{ role: "assistant", text: "Ready to help with the current workspace." }]}
-      onInput={onInput}
-      onNewChat={onNewChat}
-      onOpenChange={onOpenChange}
-      onSubmit={onSubmit}
-      open={true}
-      projectName="Demo Project"
-      selectionContext={{
-        artifact: null,
-        dataSeries: {
-          evidenceLevel: "preview_only",
-          series: "series-001",
-          seriesDetail: "Series UID",
-          sourceKind: "mapping_preview",
-          status: "high",
-          subject: "sub-001",
-          subjectDetail: "dicom_series",
-          warnings: [],
-        },
-        image: {
-          plane: "axial",
-          series: "bold",
-          source: "sub-001/func/sub-001_task-rest_bold.nii.gz",
-          subjectId: "sub-001",
-        },
-        planNode: {
-          backend: "spm",
-          detail: "Prepare realignment through reviewed backend gates.",
-          id: "spm_realign",
-          name: "Motion correction",
-          risk: "High risk",
-        },
-        run: {
-          id: "task-1",
-          name: "Preprocessing run",
-          pipeline: "rs-fMRI preprocessing",
-          status: "failed",
-        },
-      }}
-      {...overrides}
-    />,
+    <I18nProvider locale={locale}>
+      <AssistantSheet
+        activePageLabel="QC"
+        error=""
+        input=""
+        loading={false}
+        messages={[{ role: "assistant", text: "Ready to help with the current workspace." }]}
+        onInput={onInput}
+        onNewChat={onNewChat}
+        onOpenChange={onOpenChange}
+        onSubmit={onSubmit}
+        open={true}
+        projectName="Demo Project"
+        selectionContext={{
+          artifact: null,
+          dataSeries: {
+            evidenceLevel: "preview_only",
+            series: "series-001",
+            seriesDetail: "Series UID",
+            sourceKind: "mapping_preview",
+            status: "high",
+            subject: "sub-001",
+            subjectDetail: "dicom_series",
+            warnings: [],
+          },
+          image: {
+            plane: "axial",
+            series: "bold",
+            source: "sub-001/func/sub-001_task-rest_bold.nii.gz",
+            subjectId: "sub-001",
+          },
+          planNode: {
+            backend: "spm",
+            detail: "Prepare realignment through reviewed backend gates.",
+            id: "spm_realign",
+            name: "Motion correction",
+            risk: "High risk",
+          },
+          run: {
+            id: "task-1",
+            name: "Preprocessing run",
+            pipeline: "rs-fMRI preprocessing",
+            status: "failed",
+          },
+        }}
+        {...overrides}
+      />
+    </I18nProvider>,
   );
 
   return { onInput, onNewChat, onOpenChange, onSubmit };
@@ -105,5 +111,15 @@ describe("AssistantSheet", () => {
 
     expect(onNewChat).toHaveBeenCalled();
     expect(onSubmit).toHaveBeenCalled();
+  });
+
+  it("renders assistant context and prompts in Chinese", () => {
+    renderSheet({}, "zh-CN");
+
+    expect(screen.getByRole("dialog", { name: "助手" })).toBeInTheDocument();
+    expect(screen.getByLabelText("助手上下文")).toHaveTextContent("解释／总结／起草");
+    expect(screen.getByLabelText("助手建议")).toHaveTextContent("解释仍待获取的 QC 证据");
+    expect(screen.getByRole("button", { name: "新对话" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "向 AI 助手提问" })).toBeInTheDocument();
   });
 });

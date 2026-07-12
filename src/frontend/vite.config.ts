@@ -1,4 +1,3 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
@@ -7,7 +6,7 @@ export default defineConfig({
   base: "./",
   server: {
     host: "127.0.0.1",
-    port: 5173
+    port: 5173,
   },
   build: {
     target: "es2020",
@@ -25,15 +24,15 @@ export default defineConfig({
           return undefined;
         },
         chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash].[ext]"
-      }
-    }
+        assetFileNames: "assets/[name]-[hash].[ext]",
+      },
+    },
   },
   css: {
     devSourcemap: true,
     modules: {
-      localsConvention: "camelCaseOnly"
-    }
+      localsConvention: "camelCaseOnly",
+    },
   },
   test: {
     globals: true,
@@ -45,8 +44,8 @@ export default defineConfig({
       include: [
         "src/lib/projectWorkflow.ts",
         "src/hooks/useAsyncResource.ts",
-        "src/lib/api/client.ts"
-      ]
-    }
-  }
+        "src/lib/api/client.ts",
+      ],
+    },
+  },
 });

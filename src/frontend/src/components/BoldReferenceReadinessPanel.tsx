@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_API_BASE, getProjectBoldReferenceReadiness } from "../lib/api/legacy";
+import { useI18n } from "../i18n/useI18n";
+import { DEFAULT_API_BASE } from "../lib/api/client";
+import { getProjectBoldReferenceReadiness } from "../lib/api/preprocessing";
 import type { BoldReferenceCandidate, BoldReferenceReadinessResponse } from "../types";
 
 type Props = { baseUrl?: string; projectId: string | null };
@@ -27,6 +29,7 @@ const mono: React.CSSProperties = {
 };
 
 export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Props) {
+  const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
   const [data, setData] = useState<BoldReferenceReadinessResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -35,6 +38,7 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
 
   useEffect(() => {
     if (!projectId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear stale readiness when project selection is removed.
       setData(null);
       return;
     }
@@ -57,21 +61,21 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
   if (!projectId)
     return (
       <Sec>
-        <H3>BOLD Reference Readiness</H3>
-        <div className="empty">Select a project.</div>
+        <H3>{t("technical.BoldReferenceReadiness.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.002")}</div>
       </Sec>
     );
   if (loading)
     return (
       <Sec>
-        <H3>BOLD Reference Readiness</H3>
-        <div className="empty">Inspecting...</div>
+        <H3>{t("technical.BoldReferenceReadiness.001")}</H3>
+        <div className="empty">{t("technical.BoldReferenceReadiness.003")}</div>
       </Sec>
     );
   if (error)
     return (
       <Sec>
-        <H3>BOLD Reference Readiness</H3>
+        <H3>{t("technical.BoldReferenceReadiness.001")}</H3>
         <div className="errorBox">{error}</div>
       </Sec>
     );
@@ -89,8 +93,8 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
         }}
       >
         <div>
-          <H3>BOLD Reference Readiness</H3>
-          <Sub>Inspect BOLD NIfTI files and propose reference strategy.</Sub>
+          <H3>{t("technical.BoldReferenceReadiness.001")}</H3>
+          <Sub>{t("technical.BoldReferenceReadiness.004")}</Sub>
         </div>
         <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
       </div>
@@ -105,7 +109,7 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
           marginBottom: 12,
         }}
       >
-        Read-only planning. No reference image is computed or written.
+        {t("technical.BoldReferenceReadiness.005")}
       </div>
 
       <div
@@ -116,10 +120,10 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
           marginBottom: 12,
         }}
       >
-        <M label="total" value={data.candidate_count} />
-        <M label="ready" value={data.ready_count} />
-        <M label="warning" value={data.warning_count} />
-        <M label="blocked" value={data.blocked_count} />
+        <M label={t("technical.BoldReferenceReadiness.006")} value={data.candidate_count} />
+        <M label={t("technical.BoldReferenceReadiness.007")} value={data.ready_count} />
+        <M label={t("technical.BoldReferenceReadiness.008")} value={data.warning_count} />
+        <M label={t("technical.BoldReferenceReadiness.009")} value={data.blocked_count} />
       </div>
 
       {data.safety_flags && (
@@ -142,7 +146,9 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
 
       {data.candidates.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>BOLD Candidates</h4>
+          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+            {t("technical.BoldReferenceReadiness.010")}
+          </h4>
           <div style={{ display: "grid", gap: 6 }}>
             {data.candidates.map((c, i) => (
               <CandidateRow key={i} candidate={c} />
@@ -160,7 +166,9 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
 
       {data.next_actions.length > 0 && (
         <div>
-          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Next Actions</h4>
+          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+            {t("technical.BoldReferenceReadiness.011")}
+          </h4>
           <div style={{ display: "grid", gap: 5 }}>
             {data.next_actions.map((a, i) => (
               <div
