@@ -206,7 +206,7 @@ def test_nuisance_blocks_when_realignment_motion_qc_is_missing(tmp_path, monkeyp
 
     nuisance = next(item for item in result.stage_results if item.stage_id == "nuisance_regression")
     assert nuisance.status == "blocked"
-    assert any("motion_parameters" in issue for issue in nuisance.blocking_issues)
+    assert any("fd_timeseries" in issue for issue in nuisance.blocking_issues)
 
 
 def test_preview_limit_marks_computed_stage_preview_only(tmp_path, monkeypatch):

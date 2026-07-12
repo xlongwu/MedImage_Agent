@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from src.backend.app.services.mock_store import mock_store
 
@@ -40,6 +40,7 @@ def collect_qc_evidence_roots(
     *,
     include_rawdata: bool = True,
     include_native_outputs: bool = False,
+    store: Any | None = None,
 ) -> list[Path]:
     """Return existing project roots that may hold QC evidence.
 
@@ -47,7 +48,8 @@ def collect_qc_evidence_roots(
     projects converted from DICOM can be reviewed without re-importing BIDS.
     """
 
-    project = mock_store.get_project(project_id)
+    project_store = store or mock_store
+    project = project_store.get_project(project_id)
     if project is None:
         return []
 
@@ -67,7 +69,7 @@ def collect_qc_evidence_roots(
             candidates.append(project_root / "preprocessing_native_runs")
 
     try:
-        candidates.extend(mock_store.list_import_paths(project_id))
+        candidates.extend(project_store.list_import_paths(project_id))
     except Exception:
         pass
 

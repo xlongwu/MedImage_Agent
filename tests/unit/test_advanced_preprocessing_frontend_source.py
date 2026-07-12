@@ -25,6 +25,15 @@ def _read_bids_panel():
 def _read_app():
     return _read("src/frontend/src/App.tsx")
 
+def _read_en_messages():
+    return _read("src/frontend/src/i18n/messages/en.ts")
+
+def _read_workspace_model():
+    return _read("src/frontend/src/features/navigation/workspaceModel.ts")
+
+def _read_workspace_navigation():
+    return _read("src/frontend/src/features/navigation/useWorkspaceNavigation.ts")
+
 def _read_app_shell():
     return _read("src/frontend/src/features/app/AppShellView.tsx")
 
@@ -119,11 +128,12 @@ def test_export_report_button_exists():
     assert "Export preprocessing pipeline report" in content, "Report export button must exist"
 
 def test_stage_names_in_panel():
-    content = _read_advanced_panel()
+    content = _read_advanced_panel() + _read_en_messages()
     stages = ["Slice Timing", "Coregistration", "Smoothing", "Nuisance Regression",
               "Temporal Filtering", "ALFF/ReHo", "Functional Connectivity"]
     for s in stages:
-        assert s in content, f"Stage '{s}' must be referenced in panel"
+        terms = s.lower().replace("/", " ").split()
+        assert all(term in content.lower() for term in terms), f"Stage '{s}' must be represented in the localized UI catalog"
 
 def test_safety_copy_exists():
     content = _read_advanced_panel()
@@ -131,9 +141,10 @@ def test_safety_copy_exists():
     assert "no preprocessing is executed" in content.lower() or "metadata-only" in content.lower(), "No execution statement must exist"
 
 def test_preprocessing_empty_state_copy_exists():
-    content = _read_advanced_panel()
-    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full" in content
-    assert "pipeline." in content
+    panel = _read_advanced_panel()
+    messages = _read_en_messages()
+    assert 't("technical.AdvancedPreprocessingPipeline.002")' in panel
+    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full pipeline." in messages
 
 # ═══════════════════════════════════════════════════════════════════════
 # Forbidden text
@@ -174,8 +185,8 @@ def test_no_auto_execution():
 # ═══════════════════════════════════════════════════════════════════════
 
 def test_project_state_helper_exists():
-    app = _read_app()
-    assert "deriveProjectWorkflowState" in app, "deriveProjectWorkflowState helper must exist"
+    workflow = _read_project_workflow()
+    assert "export function deriveProjectWorkflowState" in workflow, "deriveProjectWorkflowState helper must exist"
 
 def test_raw_dicom_state_exists():
     workflow = _read_project_workflow()
@@ -186,17 +197,16 @@ def test_converted_bids_state_exists():
     assert "converted_bids" in workflow, "converted_bids state must exist"
 
 def test_default_tab_selection_logic_exists():
-    app = _read_app()
-    workflow = _read_project_workflow()
-    assert "setActiveWorkflow" in app, "Tab selection logic must set workflow state"
-    assert "deriveDefaultWorkflowRoute" in app, "Tab selection must use the default workflow helper"
-    assert "dataState" in workflow, "Default workflow helper must inspect dataState"
+    model = _read_workspace_model()
+    navigation = _read_workspace_navigation()
+    assert "locationForProject" in model, "Project selection must have a canonical workspace location"
+    assert "openWorkspace" in navigation and "setLocation" in navigation, "Workspace navigation must update location state"
+    assert 'workspace: "overview"' in model, "Newly opened projects must start from the overview workspace"
 
 def test_created_project_is_optimistically_merged_into_sidebar():
     controller = _read_project_controller()
     assert "mergeCreatedProjectIntoList" in controller, "Created projects must be mergeable into the sidebar list"
-    assert "projectsBeforeReload" in controller or "projectsRef" in controller, "Upload flow must retain the pre-reload project list"
-    assert "mergeCreatedProjectIntoList(result" in controller, (
+    assert "mergeCreatedProjectIntoList(result, refreshed ?? projects.data)" in controller, (
         "Upload flow must show the created project in Recent projects immediately"
     )
     workflow = _read_project_workflow()
@@ -215,7 +225,9 @@ def test_recent_projects_can_be_removed_from_sidebar_without_file_delete():
     assert "deleteProject" in controller, "Recent project delete handler must call the project delete API"
     assert "projectCreateLoading" in controller, "Recent project delete action must have a loading guard"
     assert "handleDeleteRequest" in switcher and "moreButton" in switcher_styles, "Recent project rows need a delete control"
-    assert "data on disk is preserved" in switcher, "Delete confirmation must preserve rawdata safety boundary"
+    messages = _read_en_messages()
+    assert 't("projects.switcher.removeDescription"' in switcher, "Delete confirmation must use the localized safety message"
+    assert "data on disk is preserved" in messages, "Delete confirmation must preserve rawdata safety boundary"
     assert "deleteJson" in client_api and 'method: "DELETE"' in client_api, "API client must support DELETE"
     assert 'deleteJson<ProjectDeleteResponse>(`/api/projects/${encodeURIComponent(projectId)}`)' in projects_api
 
@@ -228,9 +240,10 @@ def test_upload_uses_unique_project_names_and_no_silent_overwrite():
     assert "isProjectNameConflict" in controller, "Upload flow must handle duplicate-name conflicts"
 
 def test_converted_bids_copy():
-    shell = _read_app_shell()
     workspace = _read_data_conversion_workspace()
-    assert "Check preprocessing validation" in workspace or "Create preprocessing run" in workspace
+    messages = _read_en_messages()
+    assert 't("data.checkPreprocessing")' in workspace
+    assert "Check preprocessing validation" in messages
 
 def test_raw_dicom_copy():
     shell = _read_app_shell()
@@ -242,8 +255,9 @@ def test_raw_dicom_copy():
 
 def test_raw_dicom_preprocessing_placeholder():
     workspace = _read_preprocessing_workspace()
-    assert "Complete data" in workspace
-    assert "conversion before preprocessing validation" in workspace
+    messages = _read_en_messages()
+    assert 't("preprocessing.blockedDescription")' in workspace
+    assert "Complete data conversion before preprocessing validation" in messages
 
 def test_tools_drawer_collapsed_by_default():
     controller = _read("src/frontend/src/features/app/useAppController.ts")
@@ -290,14 +304,16 @@ def test_raw_dicom_tab_routing():
     assert '"data"' in workflow and '"raw_dicom"' in workflow, "raw_dicom must default to data tab"
 
 def test_converted_bids_data_conversion_not_primary():
-    shell = _read_app_shell()
     workspace = _read_data_conversion_workspace()
-    assert "DICOM conversion is not the primary" in shell or "DICOM conversion is not the primary" in workspace
-    assert "workflow" in shell or "workflow" in workspace
+    messages = _read_en_messages()
+    assert 't("data.convertedModeNote")' in workspace
+    assert "DICOM conversion is not the primary workflow" in messages
 
 def test_raw_dicom_bids_expected_before_conversion():
     bids = _read_bids_panel()
-    assert "Expected before conversion" in bids, "raw_dicom must expect conversion"
+    messages = _read_en_messages()
+    assert 't("data.bids.expected")' in bids
+    assert "Expected before conversion" in messages, "raw_dicom must expect conversion"
 
 def test_demo_data_like_raw_dicom_priority_source():
     """DICOM evidence with absent converted evidence must route to raw_dicom."""
@@ -339,7 +355,7 @@ def test_nifti_metric_stays_numeric_when_metadata_only():
 def test_real_converted_bids_evidence_still_classifies_converted():
     workflow = _read_project_workflow()
     assert "const hasRealConvertedData" in workflow
-    assert "niftiCount > 0 || hasRealBidsRoots || hasConvertedSubjectEvidence" in workflow
+    assert "niftiCount > 0" in workflow and "hasRealBidsRoots" in workflow and "hasConvertedSubjectEvidence" in workflow
     assert re.search(
         r"if\s*\(\s*hasRealConvertedData\s*\)\s*\{\s*return\s+\"converted_bids\";",
         workflow,
@@ -348,7 +364,9 @@ def test_real_converted_bids_evidence_still_classifies_converted():
 
 def test_empty_project_recommended_action():
     workspace = _read_data_conversion_workspace()
-    assert "Import dataset" in workspace or "Import a BIDS/NIfTI dataset" in workspace, "empty projects must recommend import"
+    messages = _read_en_messages()
+    assert 't("data.emptyTitle")' in workspace
+    assert "Import dataset" in messages or "Import a BIDS/NIfTI dataset" in messages, "empty projects must recommend import"
 
 # ═══════════════════════════════════════════════════════════════════════
 # Phase 5O Dashboard Polish Tests
@@ -384,7 +402,8 @@ def test_show_technical_details_toggle_exists():
     review = _read_review_panel()
     workspace = _read_preprocessing_workspace()
     panel = _read_advanced_panel()
-    assert "Show technical details" in review or "technical details" in review.lower(), \
+    messages = _read_en_messages()
+    assert "showTechDetails" in review and 'technical.DicomConversionReview.action.showTechnicalDetails' in review and "Show technical details" in messages, \
         "Technical details toggle must exist in review panel"
     assert "Show technical details" in workspace or "technical details" in workspace.lower() or "Show technical details" in panel or "technical details" in panel.lower(), \
         "Show technical details toggle must appear in preprocessing workspace or panel"
@@ -405,7 +424,8 @@ def test_expandable_env_flags():
 def test_expandable_mapping_preview():
     """DICOM mapping preview must be behind a collapsible."""
     review = _read_review_panel()
-    assert "DICOM mapping preview" in review, "Mapping preview must exist"
+    assert 'technical.DicomConversionReview.mappings.title' in review
+    assert "DICOM mapping preview" in _read_en_messages(), "Mapping preview must exist"
     assert "CollapsibleDetails" in review or "<details" in review, \
         "Mapping preview must be in a collapsible component"
 
@@ -432,7 +452,8 @@ def test_viewer_height_reduced():
 def test_blocked_conversion_calm_styling():
     """Blocked state must use amber/warning tone, not large red panel."""
     review = _read_review_panel()
-    assert "blocked by safety gates" in review, "Must use calmer 'blocked by safety gates' wording"
+    assert 'technical.DicomConversionReview.005' in review
+    assert "blocked by safety gates" in _read_en_messages(), "Must use calmer 'blocked by safety gates' wording"
     review_css = os.path.join(ROOT, "src/frontend/src/components/DicomConversionReviewPanel.module.css")
     has_amber = "#925400" in review or "rgba(255, 248, 236" in review
     if not has_amber and os.path.exists(review_css):
@@ -449,7 +470,8 @@ def test_conversion_blocked_count_visible():
     """Blocked state must show prerequisite count visibly."""
     review = _read_review_panel()
     assert "blocking_issues.length" in review, "Must show blocking issue count"
-    assert "prerequisite(s) missing" in review, "Must show 'prerequisite(s) missing' text"
+    assert 'technical.DicomConversionReview.blocked.prerequisites' in review
+    assert "prerequisite(s) missing" in _read_en_messages(), "Must show 'prerequisite(s) missing' text"
 
 def test_review_persist_requires_preflight_mappings():
     """Review package persistence must not save an empty mapping package."""
@@ -458,7 +480,8 @@ def test_review_persist_requires_preflight_mappings():
     assert "data.mapping_count > 0" in review, "Persistence must require at least one mapping"
     assert "disabled={persisting || !canPersistReview}" in review, \
         "Persist review package button must be disabled when mappings are absent"
-    assert "Run conversion preflight and review at least one mapping before saving." in review, \
+    assert 'technical.DicomConversionReview.persist.mappingRequired' in review
+    assert "Run conversion preflight and review at least one mapping before saving." in _read_en_messages(), \
         "Empty mapping persistence guard must explain the next step"
 
 def test_review_panel_has_no_mojibake_markers():

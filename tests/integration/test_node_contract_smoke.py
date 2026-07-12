@@ -326,12 +326,13 @@ def test_node_contract_failure_path(real_project_smoke, monkeypatch, tmp_path):
     assert response.status_code == 200, response.text
     payload = response.json()
 
-    # The executor itself should not crash — EXECUTION_SUBMITTED means
-    # the run_pipeline call completed.  The run status reflects failure.
-    assert payload["status"] == "EXECUTION_SUBMITTED", (
-        f"Expected EXECUTION_SUBMITTED, got {payload['status']}: {payload}"
-    )
-    assert "error" not in payload, f"API should not error: {payload}"
+    # The executor itself should not crash. The API truthfully exposes the
+    # terminal failure while preserving the submitted run evidence below.
+    assert payload["status"] == "EXECUTION_FAILED", payload
+    assert payload["ok"] is False
+    assert payload["execution"]["submitted"] is True
+    assert payload["executor_result"]["status"] == "FAILED"
+    assert any("failure status: FAILED" in item for item in payload["errors"])
 
     run_id = payload["run_id"]
 

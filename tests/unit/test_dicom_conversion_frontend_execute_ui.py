@@ -35,6 +35,13 @@ def _read_component_source() -> str:
     return open(path, encoding="utf-8").read()
 
 
+def _read_en_messages() -> str:
+    path = os.path.join(os.getcwd(), "src/frontend/src/i18n/messages/en.ts")
+    if not os.path.exists(path):
+        pytest.skip("English message catalog not found")
+    return open(path, encoding="utf-8").read()
+
+
 def _read_review_panel_source() -> str:
     path = os.path.join(
         os.getcwd(),
@@ -93,7 +100,8 @@ class TestFeatureFlagGating:
         assert "disabled_info" in source, (
             "Component must have disabled_info UI state"
         )
-        assert "DICOM conversion execution UI is disabled" in source, (
+        assert 'technical.DicomConversionExecute.002' in source
+        assert "DICOM conversion execution UI is disabled" in _read_en_messages(), (
             "Disabled info must include explanatory text"
         )
 
@@ -114,8 +122,10 @@ class TestConfirmationDialog:
             "SPM/DPABI/MATLAB",
             "only runs DICOM-to-NIfTI",
         ]
+        messages = _read_en_messages()
+        assert "CONFIRMATION_MESSAGE_KEYS" in source
         for text in confirmations:
-            assert text in source, (
+            assert text in messages, (
                 f"Confirmation text '{text}' not found in component source"
             )
 
@@ -239,7 +249,8 @@ class TestResponseRendering:
         assert "rollback_result_path" in source, (
             "Failure state must display rollback result path"
         )
-        assert "Rawdata remains unchanged" in source, (
+        assert 'technical.DicomConversionExecute.failed.rawdataUnchanged' in source
+        assert "Rawdata remains unchanged" in _read_en_messages(), (
             "Failure state must remind that rawdata is unchanged"
         )
 
@@ -251,7 +262,8 @@ class TestSafetyInvariants:
         """Component must not trigger SPM/DPABI/MATLAB execution."""
         source = _read_component_source()
         # Must mention they are NOT executed
-        assert "SPM/DPABI/MATLAB" in source, (
+        assert "confirm_spm_disabled" in source
+        assert "SPM/DPABI/MATLAB" in _read_en_messages(), (
             "Component must document SPM/DPABI/MATLAB are not executed"
         )
 

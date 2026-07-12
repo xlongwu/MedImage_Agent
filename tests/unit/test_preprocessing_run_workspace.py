@@ -132,7 +132,7 @@ def test_python_preflight_writes_manifest(tmp_path, monkeypatch):
     assert Path(result.manifest_path).exists()
 
 
-def test_external_stages_are_disabled(tmp_path, monkeypatch):
+def test_native_preflight_exposes_executable_stages_without_external_tools(tmp_path, monkeypatch):
     _setup_store(tmp_path, monkeypatch)
     cb = _make_converted_bids(tmp_path, subjects=1)
     from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
@@ -140,10 +140,15 @@ def test_external_stages_are_disabled(tmp_path, monkeypatch):
     req = PreprocessingRunCreateRequest(preprocessing_input_dir=str(cb))
     cr = create_preprocessing_run("brain-tumor-study", req, project_dir=str(tmp_path))
     result = execute_python_preflight("brain-tumor-study", cr.preprocessing_run_id, project_dir=str(tmp_path))
-    # Phase 6C: SPM/MATLAB stages are blocked; Python/GPU stages are planned
-    assert "realignment" in result.disabled_external_stages or "realignment" in result.blocked_stages
-    assert "slice_timing" in result.disabled_external_stages or "slice_timing" in result.blocked_stages
-    assert any(s.status in ("disabled_external", "blocked") for s in result.stage_statuses)
+    # Native preprocessing now owns these stages. The preflight plans them but
+    # does not execute any external SPM/MATLAB/DPABI process.
+    assert result.disabled_external_stages == []
+    assert result.blocked_stages == []
+    status_by_id = {stage.stage_id: stage.status for stage in result.stage_statuses}
+    assert status_by_id["realignment"] == "planned"
+    assert status_by_id["slice_timing"] == "skipped"
+    assert result.safety_flags["no_spm_dpabi_matlab"] is True
+    assert result.safety_flags["python_only"] is True
 
 
 def test_missing_t1w_reported(tmp_path, monkeypatch):

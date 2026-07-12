@@ -13,6 +13,8 @@ from typing import Any
 
 import numpy as np
 
+import src.backend.app.services.mock_store as mock_store_module
+
 from src.backend.app.schemas.desktop import (
     NiftiImageQcRecord,
     NiftiQcSnapshotResponse,
@@ -23,8 +25,11 @@ from src.backend.app.services.image_preview import (
     _relative_path,
     _subject_from_path,
 )
-from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.qc_evidence_roots import collect_qc_evidence_roots
+
+# Compatibility hook for legacy direct service callers and tests. New API
+# routes pass an injected ProjectStore explicitly.
+mock_store = mock_store_module.mock_store
 
 _NIFTI_EXT = (".nii", ".nii.gz")
 _MAX_PIXELS_FOR_STATS = 1_000_000
@@ -41,7 +46,7 @@ def _is_nifti(path: Path) -> bool:
     )
 
 
-def _discover_nifti(project_id: str) -> list[Path]:
+def _discover_nifti(project_id: str, *, store: Any | None = None) -> list[Path]:
     """Discover NIfTI files from project metadata and image sources.
 
     Only uses synthetic fallback when no real project evidence roots are
@@ -50,7 +55,11 @@ def _discover_nifti(project_id: str) -> list[Path]:
     """
     paths: list[Path] = []
 
-    roots = collect_qc_evidence_roots(project_id, include_native_outputs=True)
+    roots = collect_qc_evidence_roots(
+        project_id,
+        include_native_outputs=True,
+        store=store,
+    )
     for root in roots:
         paths.extend(_iter_nifti_files(root))
 
@@ -107,9 +116,13 @@ def _read_stats(data: np.ndarray) -> dict[str, Any]:
     }
 
 
-def build_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
+def build_nifti_qc_snapshot(
+    project_id: str,
+    *,
+    store: Any | None = None,
+) -> NiftiQcSnapshotResponse:
     now = _now_iso()
-    paths = _discover_nifti(project_id)
+    paths = _discover_nifti(project_id, store=store or mock_store)
     images: list[NiftiImageQcRecord] = []
     all_warnings: list[str] = []
     errors: list[str] = []

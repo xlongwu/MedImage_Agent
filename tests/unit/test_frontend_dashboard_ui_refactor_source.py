@@ -10,23 +10,25 @@ def _read(path: str) -> str:
         return handle.read()
 
 
+def _read_en_messages() -> str:
+    return _read("src/frontend/src/i18n/messages/en.ts")
+
+
 def test_app_shell_workspace_structure_exists():
     app = _read("src/frontend/src/App.tsx")
     shell = _read("src/frontend/src/features/app/AppShellView.tsx")
     chrome = _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
     app_shell = _read("src/frontend/src/layouts/AppShell/AppShell.tsx")
     project_shell = _read("src/frontend/src/layouts/ProjectShell/ProjectShell.tsx")
-    app_components = [
-        "AppShellView",
-        "deriveDefaultWorkflowRoute",
-    ]
+    app_components = ["AppShellView"]
     shell_components = [
         "AppShell",
         "ProjectShell",
         "TopBar",
-        "ProjectSwitcher",
-        "ProjectLifecycleSidebar",
-        "ProjectOverviewHeader",
+        "ProjectsPage",
+        "ProjectCreateSheet",
+        "LifecycleRail",
+        "OverviewWorkspace",
         "RunActivityBar",
         "ContextInspector",
         "AssistantSheet",
@@ -43,12 +45,14 @@ def test_app_shell_workspace_structure_exists():
     ]
     for component in app_components:
         assert component in app, f"{component} must be wired from App.tsx"
+    navigation = _read("src/frontend/src/features/navigation/workspaceModel.ts")
+    assert "locationForProject" in navigation and 'workspace: "overview"' in navigation
     for component in shell_components:
         assert component in shell, f"{component} must exist in AppShellView"
     for component in chrome_components:
         assert component in shell or component in chrome, f"{component} must exist in AppShellView or DashboardChrome"
     assert "topBarSlot" in app_shell
-    assert "sidebarSlot" in app_shell
+    assert "lifecycleSlot" in app_shell
     assert "inspectorSlot" in app_shell
     assert "runActivitySlot" in app_shell
     assert 'workspaceId = "workflow-workspace"' in project_shell
@@ -56,9 +60,11 @@ def test_app_shell_workspace_structure_exists():
 
 def test_advanced_preprocessing_placeholder_text_exists():
     panel = _read("src/frontend/src/components/AdvancedPreprocessingPipelinePanel.tsx")
-    assert "Preprocessing validation" in panel
-    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full" in panel
-    assert "pipeline." in panel
+    messages = _read_en_messages()
+    assert 'technical.AdvancedPreprocessingPipeline.001' in panel
+    assert 'technical.AdvancedPreprocessingPipeline.002' in panel
+    assert "Preprocessing validation" in messages
+    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full pipeline." in messages
 
 
 def test_raw_dicom_and_bids_expected_wording_exists():
@@ -68,18 +74,21 @@ def test_raw_dicom_and_bids_expected_wording_exists():
     data_readiness = _read("src/frontend/src/components/DataReadinessPanel.tsx")
     dashboard_chrome = _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
     project_create_panel = _read("src/frontend/src/features/app/ProjectCreateResultPanel.tsx")
-    combined = workspace + bids + nifti + data_readiness + dashboard_chrome + project_create_panel
+    combined = workspace + bids + nifti + data_readiness + dashboard_chrome + project_create_panel + _read_en_messages()
     assert "Raw DICOM candidates" in combined
     assert "Converted subjects" in combined
-    assert "BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion." in bids
+    messages = _read_en_messages()
+    assert 't("data.bids.rawExpectedDescription")' in bids
     assert "NIfTI QC is not applicable until DICOM data is converted." in nifti
+    assert "BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion." in messages
 
 
 def test_next_actions_cleanup_helper_exists():
-    helper = _read("src/frontend/src/components/dashboardUi.tsx")
-    assert "cleanupNextActions" in helper
-    assert "normalizeActionText" in helper
-    assert "rawDicomPriority" in helper
+    component = _read("src/frontend/src/components/dashboardUi.tsx")
+    model = _read("src/frontend/src/components/dashboardUiModel.ts")
+    assert "cleanupNextActions" in component and "cleanupNextActions" in model
+    assert "normalizeActionText" in model
+    assert "rawDicomPriority" in model
 
 
 def test_app_shell_does_not_render_technical_tools_as_default_cards():

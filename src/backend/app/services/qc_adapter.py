@@ -173,7 +173,7 @@ def build_nifti_qc_snapshot(
         build_nifti_qc_snapshot as _build,
     )
 
-    return _build(project_id).model_dump()
+    return _build(project_id, store=store).model_dump()
 
 
 def build_nifti_thumbnail(

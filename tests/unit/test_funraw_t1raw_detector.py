@@ -18,6 +18,7 @@ from src.backend.app.api import (
     project_routes,
 )
 from src.backend.app.main import app
+from src.backend.app.api.dependencies import get_project_store
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import (
@@ -28,7 +29,6 @@ from src.backend.app.services import (
     conversion_planner,
     data_readiness,
     dicom_conversion_execution,
-    nifti_qc_snapshot,
 )
 from src.backend.app.services.funraw_t1raw_detector import (
     _normalize_subject_id,
@@ -67,6 +67,7 @@ def _make_funraw_t1raw_fixture(tmp_path: Path) -> Path:
 
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
+    monkeypatch.setitem(app.dependency_overrides, get_project_store, lambda: store)
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH",
                         tmp_path / "cfg.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT",
@@ -76,7 +77,7 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
                 execute_reviewed_routes, bold_reference_readiness,
                 motion_qc_readiness, conversion_planner,
                 data_readiness, dicom_conversion_execution,
-                nifti_qc_snapshot, mock_store_module):
+                mock_store_module):
         monkeypatch.setattr(mod, "mock_store", store)
     monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
                         tmp_path / "audit")

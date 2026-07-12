@@ -1023,7 +1023,16 @@ def execute_reviewed_preprocessing_pipeline(
         _backend_requires_external_tool(_stage_backend(spec.stage_id, request, spec))
         for spec in enabled_specs
     )
-    if not global_blocking and not explicit_external_backend:
+    # Custom reviewed pipelines intentionally keep the modular orchestrator.
+    # It can resume from already registered stage artifacts (for example a
+    # reviewed realignment result and its motion parameters), while the native
+    # full runner starts from the registered imaging input and owns the complete
+    # fc_minimal/dparsfa_like chain.
+    if (
+        not global_blocking
+        and not explicit_external_backend
+        and request.pipeline_profile != "custom"
+    ):
         return _execute_reviewed_native_full(
             project_id=project_id,
             preprocessing_run_id=preprocessing_run_id,
