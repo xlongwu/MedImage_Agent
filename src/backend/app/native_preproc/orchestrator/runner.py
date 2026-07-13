@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from src.backend.app.native_preproc.dpabi_compat.dparsf_config import convert_dparsf_config
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
+from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.orchestrator.report import run_group_summary
 from src.backend.app.native_preproc.orchestrator.stage_graph import (
     NativeFullStageSpec,
@@ -23,6 +24,7 @@ from src.backend.app.native_preproc.orchestrator.validation import (
     validate_stage_result_artifacts,
 )
 from src.backend.app.native_preproc.stages._common import stage_result
+from src.backend.app.native_preproc.io.nifti_io import load_nifti
 from src.backend.app.native_preproc.stages.alff_falff import run_alff, run_falff
 from src.backend.app.native_preproc.stages.atlas_resampling import run_atlas_resampling
 from src.backend.app.native_preproc.stages.coregistration import run_coregistration
@@ -46,6 +48,26 @@ from src.backend.app.schemas.native_preproc_api import (
     NativeFullPreprocResponse,
     NativeFullStageApiResult,
 )
+
+
+# Process-local hook used by the spawn-safe subject worker.  The runner remains
+# sequential; this only makes stage boundaries observable to its parent.
+_NATIVE_PREPROC_PROGRESS_CALLBACK: Callable[[str, str], None] | None = None
+
+
+def set_native_preproc_progress_callback(callback: Callable[[str, str], None] | None) -> None:
+    global _NATIVE_PREPROC_PROGRESS_CALLBACK
+    _NATIVE_PREPROC_PROGRESS_CALLBACK = callback
+
+
+def _emit_stage_progress(stage_id: str, status: str) -> None:
+    callback = _NATIVE_PREPROC_PROGRESS_CALLBACK
+    if callback is not None:
+        try:
+            callback(stage_id, status)
+        except Exception:
+            # Telemetry must never alter a reviewed scientific computation.
+            pass
 
 
 _BIDS_SUBJECT_RE = re.compile(r"sub-[A-Za-z0-9]+")
@@ -453,6 +475,14 @@ def dry_run_native_full_preproc(
     sidecar = _read_sidecar(sidecar_path)
     tr = _tr_from_request_or_sidecar(request, sidecar)
     input_bold_exists = _path_exists(request.input_bold)
+    input_shape: tuple[int, ...] = (1, 1, 1, 1)
+    if input_bold_exists:
+        try:
+            input_shape = tuple(int(item) for item in load_nifti(request.input_bold).data.shape)
+        except Exception:
+            # The stage graph will report the malformed input separately; dry
+            # run still returns a conservative, inspectable GPU decision.
+            pass
     available = {
         "input_bold": input_bold_exists,
         "bold_4d": input_bold_exists,
@@ -502,6 +532,18 @@ def dry_run_native_full_preproc(
         else:
             stage_results.append(_plain_stage(spec, "planned"))
             mark_planned_outputs(spec)
+    for stage in stage_results:
+        if stage.stage_id == "functional_connectivity":
+            # ROI count is not known until atlas extraction; retain the known
+            # time dimension and plan conservatively for one ROI.
+            shape = (input_shape[3] if len(input_shape) == 4 else 1, 1)
+        else:
+            shape = input_shape
+        stage.result["compute_plan"] = plan_gpu_stage(
+            stage.stage_id,
+            input_shape=shape,
+            policy=request.compute_policy,
+        ).as_dict()
     return _build_response(
         project_id=project_id,
         request=request,
@@ -532,16 +574,19 @@ def _run_stage(
     spec: NativeFullStageSpec,
     call: Callable[[], NativePreprocStageResult],
 ) -> tuple[NativeFullStageApiResult, NativePreprocStageResult | None]:
+    _emit_stage_progress(spec.stage_id, "running")
     try:
         result = call()
     except Exception as exc:  # defensive truthfulness boundary
         api = _plain_stage(spec, "failed", errors=[str(exc)])
+        _emit_stage_progress(spec.stage_id, "failed")
         return api, None
     validation_errors = validate_stage_result_artifacts(result)
     api = _result_to_api(spec, result, validation_errors=validation_errors)
     if validation_errors and result.status in {"succeeded", "warning"}:
         api.status = "failed"
         api.errors.extend(validation_errors)
+    _emit_stage_progress(spec.stage_id, api.status)
     return api, result
 
 
@@ -861,6 +906,7 @@ def execute_native_full_preproc(
                 run_id=run_id,
                 subject_id=request.subject_id,
                 session_id=request.session_id,
+                compute_policy=request.compute_policy,
             ),
         )
         stage_results.append(api)
@@ -885,6 +931,7 @@ def execute_native_full_preproc(
                 polynomial_order=request.polynomial_order,
                 fd_timeseries=fd_timeseries or None,
                 scrub_threshold_mm=request.fd_threshold_mm,
+                compute_policy=request.compute_policy,
                 run_id=run_id,
                 subject_id=request.subject_id,
                 session_id=request.session_id,
@@ -935,6 +982,7 @@ def execute_native_full_preproc(
                 run_id=run_id,
                 subject_id=request.subject_id,
                 session_id=request.session_id,
+                compute_policy=request.compute_policy,
             ),
         )
         stage_results.append(api)
@@ -957,6 +1005,7 @@ def execute_native_full_preproc(
                 run_id=run_id,
                 subject_id=request.subject_id,
                 session_id=request.session_id,
+                compute_policy=request.compute_policy,
             ),
         )
         stage_results.append(api)
@@ -978,6 +1027,7 @@ def execute_native_full_preproc(
                 run_id=run_id,
                 subject_id=request.subject_id,
                 session_id=request.session_id,
+                compute_policy=request.compute_policy,
             ),
         )
         stage_results.append(api)
@@ -1014,6 +1064,7 @@ def execute_native_full_preproc(
                 run_id=run_id,
                 subject_id=request.subject_id,
                 session_id=request.session_id,
+                compute_policy=request.compute_policy,
             ),
         )
         stage_results.append(api)
@@ -1057,6 +1108,7 @@ def execute_native_full_preproc(
                 run_id=run_id,
                 subject_id=request.subject_id,
                 session_id=request.session_id,
+                compute_policy=request.compute_policy,
             ),
         )
         stage_results.append(api)

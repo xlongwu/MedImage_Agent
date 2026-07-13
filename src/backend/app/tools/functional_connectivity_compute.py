@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import numpy as np
+from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
 
 def _generate_atlas(shape: tuple[int, int, int], roi_count: int):
@@ -118,6 +119,7 @@ def compute_fc_cupy(
     generate_seed_map: bool = False,
 ) -> dict[str, Any]:
     """ROI-based functional connectivity on GPU via CuPy."""
+    configure_cupy_cache_dir()
     import cupy as cp
 
     t_start = time.perf_counter()

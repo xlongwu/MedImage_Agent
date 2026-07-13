@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -11,6 +13,20 @@ from src.backend.app.safety.gpu_safety import (
     validate_gpu_memory_budget,
     validate_gpu_timeout,
 )
+
+
+def configure_cupy_cache_dir() -> Path:
+    """Use a writable application cache without overriding an explicit choice.
+
+    CuPy JIT compilation otherwise defaults to a user-profile directory.  The
+    desktop sidecar can run under a restricted account, so cache placement must
+    not make an apparently available GPU fail at its first numerical kernel.
+    """
+    configured = os.environ.get("CUPY_CACHE_DIR")
+    target = Path(configured) if configured else Path(tempfile.gettempdir()) / "medimage-agent" / "cupy-cache"
+    target.mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("CUPY_CACHE_DIR", str(target))
+    return target
 
 
 def is_scoped_derivative_path(path: str | Path, scope_dir: str | Path) -> bool:
@@ -113,15 +129,23 @@ def detect_gpu() -> dict[str, Any]:
     errors: list[str] = []
 
     try:
+        configure_cupy_cache_dir()
         import cupy as cp
-    except ImportError:
+    except ImportError as exc:
         return {
             "ok": True,
             "cupy_available": False,
             "gpu_available": False,
             "device_count": 0,
+            "device_id": None,
             "device_name": None,
-            "warnings": ["CuPy is not installed. GPU backend unavailable."],
+            "free_vram_bytes": None,
+            "total_vram_bytes": None,
+            "cuda_runtime_version": None,
+            "driver_version": None,
+            "gpu_utilization_percent": None,
+            "capability_error_code": "CUPY_IMPORT_FAILED",
+            "warnings": [f"CuPy import failed; GPU backend unavailable: {exc}"],
             "errors": [],
         }
 
@@ -133,7 +157,14 @@ def detect_gpu() -> dict[str, Any]:
                 "cupy_available": True,
                 "gpu_available": False,
                 "device_count": 0,
+                "device_id": None,
                 "device_name": None,
+                "free_vram_bytes": None,
+                "total_vram_bytes": None,
+                "cuda_runtime_version": int(cp.cuda.runtime.runtimeGetVersion()),
+                "driver_version": int(cp.cuda.runtime.driverGetVersion()),
+                "gpu_utilization_percent": None,
+                "capability_error_code": "GPU_UNAVAILABLE",
                 "warnings": ["CuPy is installed but no CUDA device was detected."],
                 "errors": [],
             }
@@ -145,14 +176,27 @@ def detect_gpu() -> dict[str, Any]:
             device_name = device_name.decode("utf-8", errors="replace")
 
         with device:
-            _ = cp.asarray([1.0, 2.0, 3.0]).sum().item()
+            free_bytes, total_bytes = cp.cuda.runtime.memGetInfo()
+            # Exercise a JIT kernel, not merely device enumeration or cuBLAS,
+            # so DLL/compiler/cache failures become a truthful unavailable
+            # result before a reviewed run starts.
+            _ = cp.sin(cp.asarray([1.0, 2.0, 3.0])).sum().item()
 
         return {
             "ok": True,
             "cupy_available": True,
             "gpu_available": True,
             "device_count": int(device_count),
+            "device_id": "cuda:0",
             "device_name": str(device_name),
+            "free_vram_bytes": int(free_bytes),
+            "total_vram_bytes": int(total_bytes),
+            "cuda_runtime_version": int(cp.cuda.runtime.runtimeGetVersion()),
+            "driver_version": int(cp.cuda.runtime.driverGetVersion()),
+            # CuPy does not provide a portable utilization API.  NVML remains
+            # optional, so absence is explicit instead of guessed.
+            "gpu_utilization_percent": None,
+            "capability_error_code": None,
             "warnings": warnings,
             "errors": errors,
         }
@@ -163,7 +207,14 @@ def detect_gpu() -> dict[str, Any]:
             "cupy_available": True,
             "gpu_available": False,
             "device_count": 0,
+            "device_id": None,
             "device_name": None,
+            "free_vram_bytes": None,
+            "total_vram_bytes": None,
+            "cuda_runtime_version": None,
+            "driver_version": None,
+            "gpu_utilization_percent": None,
+            "capability_error_code": "GPU_CAPABILITY_PROBE_FAILED",
             "warnings": [f"CuPy is installed but GPU check failed: {exc}"],
             "errors": [],
         }

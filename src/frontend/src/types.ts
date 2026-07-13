@@ -1573,6 +1573,38 @@ export type NativeFullPreprocConfirmations = {
   confirm_research_use_only?: boolean;
   confirm_no_clinical_use?: boolean;
 };
+export type NativeCpuExecutionPolicy = {
+  mode?: "serial" | "process" | "auto";
+  max_subject_workers?: number | null;
+  cpu_threads_per_worker?: number | null;
+  memory_budget_bytes?: number | null;
+  reserve_cpu_threads?: number | null;
+  adaptive_replanning?: boolean;
+};
+export type NativeComputePolicy = {
+  backend?: "cpu" | "gpu" | "auto";
+  device?: "auto" | "cuda:0";
+  precision?: "float32" | "float64";
+  gpu_memory_budget_bytes?: number | null;
+  max_gpu_jobs?: number | null;
+  chunk_size?: number | null;
+  allow_cpu_fallback?: boolean;
+  adaptive_replanning?: boolean;
+  stage_backends?: Record<"alff" | "falff" | "temporal_filtering" | "nuisance_regression" | "functional_connectivity" | "smoothing" | "atlas_resampling", "cpu" | "gpu" | "auto">;
+};
+export type NativeGpuDetection = {
+  ok: boolean;
+  cupy_available: boolean;
+  gpu_available: boolean;
+  device_id?: string | null;
+  device_name?: string | null;
+  free_vram_bytes?: number | null;
+  total_vram_bytes?: number | null;
+  cuda_runtime_version?: number | null;
+  driver_version?: number | null;
+  warnings: string[];
+  errors: string[];
+};
 export type NativeFullPreprocRequest = {
   run_id?: string;
   conversion_run_id?: string;
@@ -1606,6 +1638,8 @@ export type NativeFullPreprocRequest = {
   atlas_name?: string;
   dparsf_config?: Record<string, unknown>;
   stage_overrides?: Record<string, boolean>;
+  cpu_policy?: NativeCpuExecutionPolicy;
+  compute_policy?: NativeComputePolicy;
   confirmations?: NativeFullPreprocConfirmations;
 };
 export type NativeFullStageApiResult = {
@@ -1626,7 +1660,7 @@ export type NativeFullStageApiResult = {
 };
 export type NativeFullPreprocResponse = {
   ok: boolean;
-  status: "planned" | "succeeded" | "partial" | "blocked" | "failed";
+  status: "planned" | "queued" | "running" | "cancel_requested" | "cancelled" | "interrupted" | "succeeded" | "partial" | "blocked" | "failed";
   dry_run: boolean;
   project_id: string;
   run_id: string;
@@ -1649,6 +1683,17 @@ export type NativeFullPreprocResponse = {
   blocking_issues: string[];
   next_actions: string[];
   safety_flags: Record<string, boolean>;
+  scheduler_mode?: "serial" | "process" | "auto";
+  worker_count_requested?: number | null;
+  worker_count_calculated?: number;
+  worker_count_used?: number;
+  threads_per_worker_calculated?: number;
+  resource_decision?: Record<string, unknown>;
+  subject_execution?: Record<string, unknown>[];
+  progress_url?: string;
+  started_at?: string;
+  finished_at?: string;
+  runtime_seconds?: number | null;
 };
 /** Phase 5E — Sandbox execution */
 export type SpmSandboxExecutionResponse = {

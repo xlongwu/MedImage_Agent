@@ -1,8 +1,4 @@
-"""Tests for ReHo backend GPU/CPU selection and ties fallback logic.
-
-These tests use monkeypatch to simulate GPU availability, ties detection,
-and backend functions — no real CuPy installation is required.
-"""
+"""Tests for ReHo backend GPU/CPU selection and experimental gating."""
 from __future__ import annotations
 import numpy as np
 import pytest
@@ -54,55 +50,47 @@ def _mock_cupy_unavailable(monkeypatch):
 # ── Tests ──
 
 class TestRehoBackendTiesFallback:
-    """Test that ties detection triggers CPU fallback correctly."""
+    """Test experimental ReHo GPU selection without probabilistic tie gates."""
 
-    def test_falls_back_to_cpu_when_ties_detected_prefer_gpu(self, monkeypatch):
-        """prefer_gpu=True + ties detected → CPU fallback (with allow_unvalidated_gpu)."""
+    def test_ties_use_exact_gpu_kernel_when_explicitly_opted_in(self, monkeypatch):
+        """Tied values do not force fallback because the kernel corrects ties."""
         from src.backend.app.tools.reho_compute import compute_reho_backend
 
         data = _make_data(ties=True)
         _mock_cupy_available(monkeypatch)
 
-        # Force ties detection to True
-        monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute._detect_ties_gpu",
-            lambda *a, **kw: True,
-        )
+        monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_cupy", lambda *a, **kw: {
+            "ok": True, "backend": "gpu-cupy", "reho": np.zeros(data.shape[:3], dtype=np.float32),
+            "valid_voxel_count": 1, "skipped_voxel_count": 0, "warnings": [], "errors": [], "runtime_seconds": 0.01,
+        })
 
         result = compute_reho_backend(
             data, neighborhood=7,
             prefer_gpu=True, require_gpu=False,
             allow_unvalidated_gpu=True,
         )
-        assert result["ok"], f"Expected CPU to succeed: {result.get('errors')}"
-        assert result["backend"] == "cpu-numpy", \
-            f"Expected CPU fallback, got {result['backend']}"
-        tie_warnings = [w for w in result.get("warnings", []) if "tied values" in w]
-        assert len(tie_warnings) >= 1, "Expected ties warning in CPU result"
+        assert result["ok"], result.get("errors")
+        assert result["backend"] == "gpu-cupy"
 
-    def test_require_gpu_fails_when_ties_detected(self, monkeypatch):
-        """require_gpu=True + ties detected → failure (no silent CPU fallback)."""
+    def test_require_gpu_uses_exact_kernel_for_ties(self, monkeypatch):
+        """require_gpu=True does not reject tied data after tie correction."""
         from src.backend.app.tools.reho_compute import compute_reho_backend
 
         data = _make_data(ties=True)
         _mock_cupy_available(monkeypatch)
 
-        monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute._detect_ties_gpu",
-            lambda *a, **kw: True,
-        )
+        monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_cupy", lambda *a, **kw: {
+            "ok": True, "backend": "gpu-cupy", "reho": np.zeros(data.shape[:3], dtype=np.float32),
+            "valid_voxel_count": 1, "skipped_voxel_count": 0, "warnings": [], "errors": [], "runtime_seconds": 0.01,
+        })
 
         result = compute_reho_backend(
             data, neighborhood=7,
             prefer_gpu=True, require_gpu=True,
             allow_unvalidated_gpu=True,
         )
-        assert not result["ok"], "Expected failure when require_gpu=True and ties detected"
-        assert result["backend"] == "none"
-        assert result["reho"] is None
-        errors = result.get("errors", [])
-        assert any("require_gpu=True" in e and "tied values" in e for e in errors), \
-            f"Expected clear error message, got: {errors}"
+        assert result["ok"]
+        assert result["backend"] == "gpu-cupy"
 
     def test_require_gpu_fails_when_cupy_unavailable(self, monkeypatch):
         """require_gpu=True + CuPy not installed → failure."""
@@ -127,11 +115,6 @@ class TestRehoBackendTiesFallback:
 
         data = _make_data(ties=False)
         _mock_cupy_available(monkeypatch)
-
-        monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute._detect_ties_gpu",
-            lambda *a, **kw: False,
-        )
 
         # Mock GPU compute to return a success
         def mock_cupy(*a, **kw):
@@ -163,19 +146,13 @@ class TestRehoBackendTiesFallback:
         data = _make_data(ties=False)
         _mock_cupy_available(monkeypatch)
 
-        # Should never call GPU or ties detection
+        # Should never call GPU in default experimental-off mode.
         gpu_called = [False]
         def mock_cupy(*a, **kw):
             gpu_called[0] = True
             return {"ok": True, "backend": "gpu-cupy"}
         monkeypatch.setattr(
             "src.backend.app.tools.reho_compute.compute_reho_cupy", mock_cupy,
-        )
-
-        ties_called = [False]
-        monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute._detect_ties_gpu",
-            lambda *a, **kw: ties_called.__setitem__(0, True) or False,
         )
 
         result = compute_reho_backend(
@@ -187,9 +164,8 @@ class TestRehoBackendTiesFallback:
         assert result["backend"] == "cpu-numpy", \
             f"Expected CPU when allow_unvalidated_gpu=False, got {result['backend']}"
         assert not gpu_called[0], "GPU should not be called without opt-in"
-        assert not ties_called[0], "Ties detection should not be called without opt-in"
         safety_warnings = [w for w in result.get("warnings", [])
-                          if "allow_unvalidated_gpu" in w]
+                          if "experimental" in w]
         assert len(safety_warnings) >= 1, \
             "Expected safety-gate warning explaining allow_unvalidated_gpu"
 
@@ -200,10 +176,6 @@ class TestRehoBackendTiesFallback:
         data = _make_data(ties=False)
         _mock_cupy_available(monkeypatch)
 
-        monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute._detect_ties_gpu",
-            lambda *a, **kw: False,
-        )
         def mock_cupy(*a, **kw):
             return {
                 "ok": True, "backend": "gpu-cupy",
@@ -224,18 +196,17 @@ class TestRehoBackendTiesFallback:
         assert result["ok"]
         assert result["backend"] == "gpu-cupy"
 
-    def test_ties_detection_error_conservative_fallback(self, monkeypatch):
-        """Exception in ties detection → conservative: assume ties, fall back."""
+    def test_gpu_compute_failure_falls_back_when_not_required(self, monkeypatch):
+        """A real GPU compute failure falls back only for non-require mode."""
         from src.backend.app.tools.reho_compute import compute_reho_backend
 
         data = _make_data(ties=False)
         _mock_cupy_available(monkeypatch)
 
-        # Simulate detection crash
-        monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute._detect_ties_gpu",
-            lambda *a, **kw: (_ for _ in ()).throw(RuntimeError("detection crash")),
-        )
+        monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_cupy", lambda *a, **kw: {
+            "ok": False, "backend": "gpu-cupy", "reho": None,
+            "valid_voxel_count": 0, "skipped_voxel_count": 0, "warnings": [], "errors": ["forced failure"], "runtime_seconds": 0.01,
+        })
 
         result = compute_reho_backend(
             data, neighborhood=7,
@@ -243,8 +214,7 @@ class TestRehoBackendTiesFallback:
             allow_unvalidated_gpu=True,
         )
         assert result["ok"]
-        assert result["backend"] == "cpu-numpy", \
-            f"Expected conservative CPU fallback on detection error, got {result['backend']}"
+        assert result["backend"] == "cpu-numpy"
 
 
 class TestRehoBackendDirectCpu:

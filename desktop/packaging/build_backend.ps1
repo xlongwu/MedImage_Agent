@@ -6,8 +6,10 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $SpecPath = Join-Path $RepoRoot "desktop\packaging\pyinstaller_backend.spec"
+$GpuManifestScript = Join-Path $RepoRoot "desktop\packaging\write_gpu_runtime_manifest.py"
 $DistPath = Join-Path $RepoRoot "desktop\packaging\dist\backend"
 $WorkPath = Join-Path $RepoRoot "desktop\packaging\build\backend"
+$AnalysisTocPath = Join-Path $WorkPath "pyinstaller_backend\Analysis-00.toc"
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 
 if (-not $PythonExe) {
@@ -41,10 +43,18 @@ try {
         --workpath $WorkPath `
         --noconfirm `
         --clean
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyInstaller backend build failed with exit code $LASTEXITCODE."
+    }
 
     $ExePath = Join-Path $DistPath "medimage-backend.exe"
     if (-not (Test-Path $ExePath)) {
         throw "PyInstaller did not produce $ExePath"
+    }
+
+    & $PythonExe $GpuManifestScript $DistPath --analysis-toc $AnalysisTocPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to write the GPU runtime manifest."
     }
 
     Write-Host "Backend sidecar built: $ExePath"

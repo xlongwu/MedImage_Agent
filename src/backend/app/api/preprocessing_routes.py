@@ -1234,6 +1234,33 @@ def native_full_preprocessing_execute(
         raise_api_error(exc, error_cls=PipelineError)
 
 
+@router.post(
+    "/api/projects/{project_id}/preprocessing/native/full/execute/async",
+    response_model=NativeFullPreprocResponse,
+)
+def submit_native_full_preprocessing_execute(
+    project_id: str,
+    body: NativeFullPreprocRequest,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    """Queue a reviewed native run; inspect its persisted progress separately."""
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import submit_native_full_execute
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return submit_native_full_execute(
+            project_id,
+            body,
+            project_dir=str(metadata.get("project_dir") or ""),
+            project_metadata=metadata,
+        ).model_dump(mode="json")
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
 @router.get(
     "/api/projects/{project_id}/preprocessing/native/runs/latest",
     response_model=NativeFullPreprocResponse,
@@ -1278,6 +1305,31 @@ def get_native_full_preprocessing_run(
             run_id,
             project_dir=str(metadata.get("project_dir") or ""),
         ).model_dump(mode="json")
+    except Exception as exc:
+        raise_api_error(exc, error_cls=PipelineError)
+
+
+@router.get(
+    "/api/projects/{project_id}/preprocessing/native/runs/{run_id}/progress",
+    response_model=dict[str, Any],
+)
+def get_native_full_preprocessing_progress(
+    project_id: str,
+    run_id: str,
+    store: ProjectStore = Depends(get_project_store),
+) -> dict[str, Any]:
+    try:
+        project = store.get_project(project_id)
+        if not project:
+            raise NotFoundError(f"Project not found: {project_id}")
+        from src.backend.app.services.native_preproc_full import get_native_full_progress
+
+        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+        return get_native_full_progress(
+            project_id,
+            run_id,
+            project_dir=str(metadata.get("project_dir") or ""),
+        )
     except Exception as exc:
         raise_api_error(exc, error_cls=PipelineError)
 

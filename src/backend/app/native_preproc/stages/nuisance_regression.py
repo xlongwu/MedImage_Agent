@@ -2,11 +2,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import numpy as np
 
 from src.backend.app.native_preproc.core.qc import finite_stats
+from src.backend.app.native_preproc.core.compute_backend import (
+    GpuComputeError,
+    compute_nuisance_regression_gpu,
+    cpu_compute_provenance,
+)
 from src.backend.app.native_preproc.dpabi_compat.regressors import (
     RegressorMatrix,
     combine_regressor_matrices,
@@ -21,8 +27,10 @@ from src.backend.app.native_preproc.dpabi_compat.regressors import (
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
 from src.backend.app.native_preproc.io.nifti_io import ensure_4d, load_nifti, save_nifti
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
+from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.stages._common import context_from_output_dir, stage_result
 from src.backend.app.schemas.native_preproc import NativePreprocQC
+from src.backend.app.schemas.native_preproc_api import NativeComputePolicy
 
 
 def regress_confounds(data_4d: np.ndarray, confounds: np.ndarray) -> np.ndarray:
@@ -49,6 +57,35 @@ def regress_confounds(data_4d: np.ndarray, confounds: np.ndarray) -> np.ndarray:
     predicted = matrix.astype(np.float64) @ beta
     residual = flat.astype(np.float64) - predicted.T
     return residual.reshape(original_shape).astype(np.float32)
+
+
+def regress_confounds_with_backend(
+    data_4d: np.ndarray,
+    confounds: np.ndarray,
+    *,
+    compute_policy: NativeComputePolicy | None = None,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    """Keep design construction on CPU, optionally offloading only linalg."""
+    data = np.asarray(data_4d, dtype=np.float32)
+    matrix = np.asarray(confounds, dtype=np.float32)
+    policy = compute_policy or NativeComputePolicy()
+    plan = plan_gpu_stage("nuisance_regression", input_shape=tuple(int(item) for item in data.shape), policy=policy)
+    if plan.selected_backend == "blocked":
+        raise ValueError("; ".join(plan.blocking_issues))
+    if plan.selected_backend == "gpu":
+        try:
+            gpu = compute_nuisance_regression_gpu(data, matrix, plan=plan)
+        except GpuComputeError as exc:
+            if not plan.fallback_allowed:
+                raise ValueError(str(exc)) from exc
+            started_at = perf_counter()
+            residual = regress_confounds(data, matrix)
+            return residual, cpu_compute_provenance(plan, started_at=started_at, fallback_reason=str(exc))
+        return gpu.arrays["residual"], gpu.provenance()
+    started_at = perf_counter()
+    residual = regress_confounds(data, matrix)
+    fallback_reason = ",".join(plan.limiting_factors) if plan.requested_backend == "auto" and plan.limiting_factors else None
+    return residual, cpu_compute_provenance(plan, started_at=started_at, fallback_reason=fallback_reason)
 
 
 def _load_optional_mask(path: str | Path | None) -> np.ndarray | None:
@@ -124,6 +161,7 @@ def run_nuisance_regression(
     run_id: str = "native_preproc_run",
     subject_id: str = "",
     session_id: str = "",
+    compute_policy: NativeComputePolicy | None = None,
 ):
     stage_id = "nuisance_regression"
     context = context_from_output_dir(output_dir, run_id=run_id, subject_id=subject_id, session_id=session_id)
@@ -164,7 +202,13 @@ def run_nuisance_regression(
             mask_threshold=mask_threshold,
         )
         confounds = combine_regressor_matrices(*parts)
-        residual = regress_confounds(image.data, confounds.values)
+        residual, compute_provenance = regress_confounds_with_backend(
+            image.data,
+            confounds.values,
+            compute_policy=compute_policy,
+        )
+        if compute_provenance.get("fallback_reason"):
+            warnings.append(f"gpu_fallback:{compute_provenance['fallback_reason']}")
         qc_metrics = confounds.qc
         if qc_metrics["rank"] >= image.data.shape[3]:
             warnings.append("confound_matrix_rank_reaches_timepoints_overfit_risk")
@@ -215,6 +259,7 @@ def run_nuisance_regression(
                 "input_shape": [int(value) for value in image.data.shape],
                 "output_shape": [int(value) for value in residual.shape],
                 "confound_matrix": qc_metrics,
+                "compute": compute_provenance,
                 "output_stats": finite_stats(residual),
                 "timepoints_preserved": bool(residual.shape[3] == image.data.shape[3]),
             },
@@ -223,13 +268,14 @@ def run_nuisance_regression(
         return stage_result(
             context,
             stage_id=stage_id,
-            parameters=parameters,
+            parameters={**parameters, "compute": compute_provenance},
             status=status,
             capability_level="numerically_implemented",
             qc=qc,
             output_artifacts=output_refs,
             warnings=warnings,
             errors=errors,
+            backend="gpu" if compute_provenance.get("actual_backend") == "gpu-cupy" else "native_python",
         )
     except Exception as exc:
         errors.append(str(exc))

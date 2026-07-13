@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import numpy as np
+from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
 
 def compute_nuisance_regression_numpy(
@@ -71,6 +72,7 @@ def compute_nuisance_regression_cupy(
     X: np.ndarray,
 ) -> dict[str, Any]:
     """OLS nuisance regression on GPU via CuPy pseudoinverse + cuBLAS matmul."""
+    configure_cupy_cache_dir()
     import cupy as cp
 
     t_start = time.perf_counter()

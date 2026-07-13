@@ -43,6 +43,7 @@ def provenance(
     output_checksums: dict[str, str] | None = None,
     warnings: list[str] | None = None,
     dtype: str = "float32",
+    backend: str = "native_python",
     subject_id: str = "",
     session_id: str = "",
 ) -> NativePreprocProvenance:
@@ -52,10 +53,10 @@ def provenance(
         implementation="native_python",
         input_artifact_ids=input_artifact_ids or [],
         parameters=parameters,
-        backend="native_python",
+        backend=backend,  # type: ignore[arg-type]
         precision=dtype,
         dtype=dtype,
-        package_versions=package_versions("numpy", "scipy", "nibabel"),
+        package_versions=package_versions("numpy", "scipy", "nibabel", "cupy"),
         warnings=warnings or [],
         output_checksums=output_checksums or {},
         subject_id=subject_id,
@@ -76,10 +77,22 @@ def stage_result(
     output_artifacts: list[Any] | None = None,
     warnings: list[str] | None = None,
     errors: list[str] | None = None,
+    backend: str = "native_python",
 ) -> NativePreprocStageResult:
+    compute = parameters.get("compute") if isinstance(parameters.get("compute"), dict) else None
+    if backend == "gpu" and compute is not None:
+        try:
+            from src.backend.app.native_preproc.orchestrator.gpu_performance_model import record_gpu_measurement
+
+            measurement = record_gpu_measurement(context.root_dir.parent, compute)
+            if measurement is not None:
+                parameters = {**parameters, "gpu_performance_measurement": measurement}
+        except Exception:
+            # Feedback telemetry must never invalidate a numerical artifact.
+            pass
     result = NativePreprocStageResult(
         stage_id=stage_id,
-        backend="native_python",
+        backend=backend,  # type: ignore[arg-type]
         input_artifacts=input_artifacts or [],
         output_artifacts=output_artifacts or [],
         parameters=parameters,
@@ -96,6 +109,7 @@ def stage_result(
                 artifact.artifact_id: artifact.checksum for artifact in output_artifacts or [] if artifact.checksum
             },
             warnings=warnings or [],
+            backend=backend,
             subject_id=context.subject_id,
             session_id=context.session_id,
         ),

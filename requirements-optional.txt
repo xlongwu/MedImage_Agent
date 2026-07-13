@@ -5,8 +5,10 @@
 pydicom>=2.4.0
 
 # GPU acceleration. Install the variant matching the local CUDA runtime.
-# Example: pip install cupy-cuda12x
-# cupy-cuda12x>=13.0.0
+# Target desktop validation chain: NVIDIA CUDA 12.x / RTX 4060 (8 GiB).
+# This remains optional so CPU-only installations retain their existing start
+# and reference-computation behaviour.
+cupy-cuda12x>=13.0.0,<14.0.0
 
 # Optional PyTorch CUDA backend for ALFF experiments.
 # torch>=2.2.0

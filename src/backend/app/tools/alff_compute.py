@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import numpy as np
+from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
 
 def _safe_falff(numerator: np.ndarray, denominator: np.ndarray) -> np.ndarray:
@@ -79,6 +80,7 @@ def compute_alff_cupy(
     warnings: list[str] = []
 
     try:
+        configure_cupy_cache_dir()
         import cupy as cp
     except ImportError as exc:
         raise RuntimeError("CuPy is not installed.") from exc

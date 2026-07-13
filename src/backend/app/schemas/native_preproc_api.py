@@ -3,11 +3,16 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 NativeFullRunStatus = Literal[
     "planned",
+    "queued",
+    "running",
+    "cancel_requested",
+    "cancelled",
+    "interrupted",
     "succeeded",
     "partial",
     "blocked",
@@ -21,6 +26,68 @@ class NativeFullPreprocConfirmations(BaseModel):
     confirm_no_external_tools: bool = False
     confirm_research_use_only: bool = False
     confirm_no_clinical_use: bool = False
+
+
+class NativeCpuExecutionPolicy(BaseModel):
+    """Resource controls for subject-level native CPU execution.
+
+    Values supplied by a caller are deliberately bounds, not a promise that a
+    run may consume those resources.  The runtime planner remains the final
+    authority so a copied request cannot overcommit a different workstation.
+    """
+
+    mode: Literal["serial", "process", "auto"] = "serial"
+    max_subject_workers: int | None = Field(default=None, ge=1, le=32)
+    cpu_threads_per_worker: int | None = Field(default=None, ge=1, le=64)
+    memory_budget_bytes: int | None = Field(default=None, ge=1)
+    reserve_cpu_threads: int | None = Field(default=None, ge=0, le=64)
+    adaptive_replanning: bool = True
+
+    @model_validator(mode="after")
+    def validate_resource_bounds(self) -> "NativeCpuExecutionPolicy":
+        if self.memory_budget_bytes is not None and self.memory_budget_bytes < 64 * 1024 * 1024:
+            raise ValueError("memory_budget_bytes must reserve at least 64 MiB.")
+        return self
+
+
+NativeComputeBackend = Literal["cpu", "gpu", "auto"]
+NativeComputeDevice = Literal["auto", "cuda:0"]
+_GPU_CAPABLE_NATIVE_STAGES = frozenset({
+    "alff", "falff", "temporal_filtering", "nuisance_regression", "functional_connectivity",
+    "smoothing", "atlas_resampling",
+})
+
+
+class NativeComputePolicy(BaseModel):
+    """Reviewed compute policy for native scientific stages.
+
+    This deliberately models only reviewed choices.  It is not a pass-through
+    for CUDA options, kernel names, paths, or arbitrary device identifiers.
+    ``gpu`` is a require-GPU request; only ``auto`` may fall back to CPU.
+    """
+
+    backend: NativeComputeBackend = "cpu"
+    device: NativeComputeDevice = "auto"
+    precision: Literal["float32", "float64"] = "float32"
+    gpu_memory_budget_bytes: int | None = Field(default=None, ge=1)
+    max_gpu_jobs: int | None = Field(default=None, ge=1, le=32)
+    chunk_size: int | None = Field(default=None, ge=1)
+    allow_cpu_fallback: bool = True
+    adaptive_replanning: bool = True
+    stage_backends: dict[str, NativeComputeBackend] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_gpu_policy(self) -> "NativeComputePolicy":
+        unknown = sorted(set(self.stage_backends) - _GPU_CAPABLE_NATIVE_STAGES)
+        if unknown:
+            raise ValueError(f"stage_backends contains unsupported or non-GPU stage IDs: {', '.join(unknown)}.")
+        if self.gpu_memory_budget_bytes is not None and self.gpu_memory_budget_bytes < 64 * 1024 * 1024:
+            raise ValueError("gpu_memory_budget_bytes must reserve at least 64 MiB.")
+        # A require-GPU request never silently degrades, even if a legacy
+        # client sends the old fallback field as true.
+        if self.backend == "gpu" and self.allow_cpu_fallback is False:
+            return self
+        return self
 
 
 class NativeFullPreprocRequest(BaseModel):
@@ -38,6 +105,8 @@ class NativeFullPreprocRequest(BaseModel):
     conversion_run_id: str = ""
     dparsf_config: dict[str, Any] = Field(default_factory=dict)
     stage_overrides: dict[str, bool] = Field(default_factory=dict)
+    cpu_policy: NativeCpuExecutionPolicy = Field(default_factory=NativeCpuExecutionPolicy)
+    compute_policy: NativeComputePolicy = Field(default_factory=NativeComputePolicy)
 
     remove_first: int = 0
     enable_slice_timing: bool = True
@@ -106,10 +175,23 @@ class NativeFullPreprocResponse(BaseModel):
     blocking_issues: list[str] = Field(default_factory=list)
     next_actions: list[str] = Field(default_factory=list)
     safety_flags: dict[str, bool] = Field(default_factory=dict)
+    scheduler_mode: Literal["serial", "process", "auto"] = "serial"
+    worker_count_requested: int | None = None
+    worker_count_calculated: int = 1
+    worker_count_used: int = 1
+    threads_per_worker_calculated: int = 1
+    resource_decision: dict[str, Any] = Field(default_factory=dict)
+    subject_execution: list[dict[str, Any]] = Field(default_factory=list)
+    progress_url: str = ""
+    started_at: str = ""
+    finished_at: str = ""
+    runtime_seconds: float | None = None
 
 
 __all__ = [
     "NativeFullPreprocConfirmations",
+    "NativeCpuExecutionPolicy",
+    "NativeComputePolicy",
     "NativeFullPreprocRequest",
     "NativeFullPreprocResponse",
     "NativeFullRunStatus",

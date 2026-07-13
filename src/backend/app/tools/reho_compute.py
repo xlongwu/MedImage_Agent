@@ -5,6 +5,80 @@ from typing import Any
 
 import numpy as np
 
+from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
+
+
+_REHO_TIE_KERNEL = None
+
+
+def _cupy_tie_corrected_kcc_kernel(cp):
+    """Compile the deterministic average-rank/tie-corrected KCC kernel once."""
+    global _REHO_TIE_KERNEL
+    if _REHO_TIE_KERNEL is not None:
+        return _REHO_TIE_KERNEL
+    _REHO_TIE_KERNEL = cp.RawKernel(
+        r'''
+        extern "C" __global__
+        void tie_corrected_kcc(const float* data, float* output,
+                               const int voxel_count, const int judges, const int timepoints) {
+            const int voxel = blockDim.x * blockIdx.x + threadIdx.x;
+            if (voxel >= voxel_count) return;
+            const int base = voxel * judges * timepoints;
+            bool finite = true;
+            for (int judge = 0; judge < judges && finite; ++judge) {
+                for (int t = 0; t < timepoints; ++t) {
+                    const float value = data[base + judge * timepoints + t];
+                    if (!(value == value) || value > 3.402823e38F || value < -3.402823e38F) { finite = false; break; }
+                }
+            }
+            if (!finite) { output[voxel] = 0.0f; return; }
+
+            const double mean_rank_sum = 0.5 * (double)judges * (double)(timepoints + 1);
+            double squared_sum = 0.0;
+            for (int t = 0; t < timepoints; ++t) {
+                double rank_sum = 0.0;
+                for (int judge = 0; judge < judges; ++judge) {
+                    const float value = data[base + judge * timepoints + t];
+                    int less = 0;
+                    int equal = 0;
+                    for (int other = 0; other < timepoints; ++other) {
+                        const float candidate = data[base + judge * timepoints + other];
+                        if (candidate < value) ++less;
+                        if (candidate == value) ++equal;
+                    }
+                    rank_sum += 1.0 + (double)less + 0.5 * (double)(equal - 1);
+                }
+                const double delta = rank_sum - mean_rank_sum;
+                squared_sum += delta * delta;
+            }
+
+            double ties = 0.0;
+            for (int judge = 0; judge < judges; ++judge) {
+                for (int t = 0; t < timepoints; ++t) {
+                    const float value = data[base + judge * timepoints + t];
+                    bool first = true;
+                    for (int earlier = 0; earlier < t; ++earlier) {
+                        if (data[base + judge * timepoints + earlier] == value) { first = false; break; }
+                    }
+                    if (first) {
+                        int group = 0;
+                        for (int other = 0; other < timepoints; ++other) {
+                            if (data[base + judge * timepoints + other] == value) ++group;
+                        }
+                        ties += (double)group * (double)group * (double)group - (double)group;
+                    }
+                }
+            }
+            const double numerator = 12.0 * squared_sum;
+            const double denominator = (double)(judges * judges) * ((double)timepoints * timepoints * timepoints - timepoints)
+                                       - (double)judges * ties;
+            output[voxel] = denominator != 0.0 ? (float)(numerator / denominator) : 0.0f;
+        }
+        ''',
+        "tie_corrected_kcc",
+    )
+    return _REHO_TIE_KERNEL
+
 
 def _offsets(nb: int) -> list[tuple[int, int, int]]:
     off = []
@@ -173,6 +247,7 @@ def compute_reho_cupy(
     z_chunk_size: int = 8,
 ) -> dict[str, Any]:
     """Compute ReHo using CuPy (GPU) with z-slice chunking."""
+    configure_cupy_cache_dir()
     import cupy as cp
 
     t_start = time.perf_counter()
@@ -192,6 +267,7 @@ def compute_reho_cupy(
 
     off = _offsets(neighborhood)
     K = len(off)
+    kernel = _cupy_tie_corrected_kcc_kernel(cp)
 
     try:
         data_gpu = cp.asarray(data_4d, dtype=cp.float32)
@@ -202,6 +278,7 @@ def compute_reho_cupy(
                 "runtime_seconds": time.perf_counter() - t_start}
 
     reho_gpu = cp.zeros((nx, ny, nz), dtype=cp.float32)
+    gm_gpu = cp.asarray(gm_mask, dtype=cp.bool_) if gm_mask is not None else None
     vc_total = 0
     sc_total = 0
 
@@ -244,32 +321,19 @@ def compute_reho_cupy(
             nz_idx = cp.clip(nz_idx, 0, nz - 1)
             neighbor_data[:, ki, :] = data_gpu[nx_idx, ny_idx, nz_idx, :]
 
-        # Compute ranks per timepoint within each voxel (vectorized).
-        # neighbor_data: (nv, K, T) — for each voxel, K neighbors each with T timepoints.
-        # Each of the K voxels is a "judge" that ranks its T timepoints.
-        # So we rank along axis=2 (the T axis) — rank timepoints within each voxel.
-        # Double argsort gives ranks (1-based after +1.0).
-        order = cp.argsort(cp.argsort(neighbor_data, axis=2), axis=2).astype(cp.float64) + 1.0  # (nv, K, T)
-
-        # Sum ranks across K judges (axis=1) for each timepoint → rank_sum per timepoint.
-        rs = cp.sum(order, axis=1)  # (nv, T)
-        rm = cp.mean(rs, axis=1, keepdims=True)  # (nv, 1)
-        num = 12.0 * cp.sum((rs - rm) ** 2, axis=1)  # (nv,)
-
-        # Denominator: K^2 * (T^3 - T). Ties correction omitted for GPU speed;
-        # CPU path handles ties exactly. For typical MRI data ties are rare.
-        den = float(K ** 2) * (nt ** 3 - nt)  # scalar
-
-        # KCC values
-        kcc = cp.where(den != 0, num / den, 0.0).astype(cp.float32)
+        # One GPU thread calculates one neighbourhood.  It uses exact average
+        # ranks and the complete per-judge tie correction, avoiding the former
+        # probabilistic/double-argsort approximation.
+        kcc = cp.empty(nv, dtype=cp.float32)
+        threads = 128
+        kernel(((nv + threads - 1) // threads,), (threads,), (neighbor_data, kcc, nv, K, nt))
 
         # Check for non-finite neighbor data
         finite_mask = cp.all(cp.isfinite(neighbor_data.reshape(nv, -1)), axis=1)
         kcc = cp.where(finite_mask, kcc, 0.0)
 
         # Apply GM mask if provided
-        if gm_mask is not None:
-            gm_gpu = cp.asarray(gm_mask, dtype=cp.bool_)
+        if gm_gpu is not None:
             gm_flat = gm_gpu[x_flat, y_flat, z_flat]
             kcc = cp.where(gm_flat, kcc, 0.0)
             sc_total += int(cp.count_nonzero(~gm_flat))
@@ -297,31 +361,6 @@ def compute_reho_cupy(
     }
 
 
-def _detect_ties_gpu(data_4d: np.ndarray, sample_voxels: int = 1000) -> bool:
-    """Quick heuristic: check if the data likely contains tied values.
-
-    Ties break the GPU double-argsort ranking (which does not apply average
-    ranks or ties correction). We sample a small subset of voxels and check
-    for duplicate values within their time-series. This is a fast heuristic,
-    not an exhaustive check.
-
-    Returns True if ties are detected, meaning CPU fallback is needed.
-    """
-    if data_4d.ndim != 4:
-        return False
-    nx, ny, nz, nt = data_4d.shape
-    rng = np.random.default_rng(0)
-    # Sample interior voxels
-    xs = rng.integers(1, max(2, nx - 1), size=min(sample_voxels, (nx - 2) * (ny - 2) * (nz - 2)))
-    ys = rng.integers(1, max(2, ny - 1), size=len(xs))
-    zs = rng.integers(1, max(2, nz - 1), size=len(xs))
-    for i in range(len(xs)):
-        ts = data_4d[xs[i], ys[i], zs[i], :]
-        if ts.size > 1 and np.unique(ts).size < ts.size:
-            return True
-    return False
-
-
 def compute_reho_backend(
     data_4d: np.ndarray,
     neighborhood: int = 27,
@@ -333,17 +372,11 @@ def compute_reho_backend(
 ) -> dict[str, Any]:
     """Compute ReHo with automatic GPU/CPU backend selection.
 
-    GPU path does NOT implement ties correction (average ranks + tie factor).
-    Ties detection is a probabilistic heuristic (random sampling of voxels)
-    and cannot guarantee safety.
-
-    By default, the GPU path is **disabled** even when ``prefer_gpu=True``
-    because the GPU backend lacks ties correction.  Callers that want to use
-    the GPU despite this must set ``allow_unvalidated_gpu=True`` and accept
-    the risk.
-
-    When ``require_gpu=True`` and ties are detected, this function returns
-    failure immediately — it never silently falls back to CPU in that case.
+    The GPU kernel uses deterministic average ranks and full per-judge tie
+    correction.  It still remains an experimental direct-compute candidate
+    until its independent whole-volume and real-data release gate completes;
+    native preprocessing therefore continues to select its CPU canonical path.
+    ``allow_unvalidated_gpu`` is an explicit opt-in for this direct helper.
     """
     gpu_available = False
     if prefer_gpu or require_gpu:
@@ -362,58 +395,31 @@ def compute_reho_backend(
             "runtime_seconds": 0.0,
         }
 
-    # Safety gate: GPU ties correction is unimplemented and ties detection is
-    # probabilistic.  Unless the caller explicitly opts in, route to CPU.
+    # Keep the experimental implementation off by default without pretending
+    # that a random tie sample is a correctness proof.
     if prefer_gpu and not require_gpu and not allow_unvalidated_gpu:
         cpu_result = compute_reho_numpy(data_4d, neighborhood, gm_mask)
         cpu_result.setdefault("warnings", []).append(
-            "ReHo GPU path disabled: GPU backend lacks ties correction and "
-            "ties detection is probabilistic (random voxel sampling). Using "
-            "CPU path. Set allow_unvalidated_gpu=True to opt into GPU at "
-            "your own risk."
+            "ReHo GPU path remains experimental pending its independent "
+            "whole-volume and real-data release gate. Using CPU canonical "
+            "path. Set allow_unvalidated_gpu=True only for reviewed "
+            "experimental validation."
         )
         return cpu_result
 
-    # Auto-fallback: GPU path does not handle ties. Detect and fall back.
+    # No probabilistic tie detector is used: the CuPy kernel implements the
+    # same average-rank/tie-correction formula for every voxel in each chunk.
     use_gpu = gpu_available
-    ties_warning = ""
-    if use_gpu:
-        try:
-            has_ties = _detect_ties_gpu(data_4d)
-        except Exception:
-            has_ties = True  # conservative: fall back on detection error
-        if has_ties:
-            if require_gpu:
-                return {
-                    "ok": False, "backend": "none",
-                    "reho": None,
-                    "valid_voxel_count": 0, "skipped_voxel_count": 0,
-                    "warnings": [],
-                    "errors": [
-                        "require_gpu=True but GPU ReHo cannot proceed: "
-                        "tied values were detected and the GPU backend does "
-                        "not implement ties correction. Use "
-                        "require_gpu=False to allow CPU fallback."
-                    ],
-                    "runtime_seconds": 0.0,
-                }
-            use_gpu = False
-            ties_warning = (
-                "ReHo GPU path skipped: tied values detected in data. "
-                "GPU does not implement ties correction; using CPU path."
-            )
 
     if use_gpu:
         result = compute_reho_cupy(data_4d, neighborhood, gm_mask, z_chunk_size)
         if result["ok"]:
             return result
         if require_gpu:
-            if ties_warning:
-                result["warnings"].append(ties_warning)
             return result
         # Fall through to CPU on GPU failure when prefer_gpu
 
     cpu_result = compute_reho_numpy(data_4d, neighborhood, gm_mask)
-    if ties_warning:
-        cpu_result.setdefault("warnings", []).append(ties_warning)
+    if gpu_available:
+        cpu_result.setdefault("warnings", []).append("ReHo GPU computation failed; using CPU canonical path.")
     return cpu_result

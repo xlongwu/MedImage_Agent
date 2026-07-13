@@ -2,16 +2,24 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Literal
 
 import numpy as np
 
 from src.backend.app.native_preproc.core.qc import finite_stats
+from src.backend.app.native_preproc.core.compute_backend import (
+    GpuComputeError,
+    compute_alff_falff_gpu,
+    cpu_compute_provenance,
+)
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
+from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.io.nifti_io import ensure_4d, load_nifti, save_nifti
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
 from src.backend.app.native_preproc.stages._common import context_from_output_dir, stage_result
 from src.backend.app.schemas.native_preproc import NativePreprocQC
+from src.backend.app.schemas.native_preproc_api import NativeComputePolicy
 
 
 StandardizationMode = Literal["none", "zscore"]
@@ -55,6 +63,8 @@ def compute_alff_falff_maps(
     denominator_band: tuple[float, float] | None = None,
     mask_3d: np.ndarray | None = None,
     standardization: StandardizationMode = "none",
+    compute_policy: NativeComputePolicy | None = None,
+    compute_stage_id: Literal["alff", "falff"] = "alff",
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any], list[str]]:
     """Compute ALFF and fALFF maps from a 4D BOLD series.
 
@@ -97,17 +107,50 @@ def compute_alff_falff_maps(
     if not np.any(denominator_mask):
         raise ValueError("No non-DC FFT bins available for fALFF denominator.")
 
-    demeaned = data - np.mean(data, axis=3, keepdims=True)
-    amplitude = np.abs(np.fft.rfft(demeaned, axis=3)).astype(np.float32)
-    band_amp = amplitude[..., numerator_mask]
-    denominator_amp = amplitude[..., denominator_mask]
+    policy = compute_policy or NativeComputePolicy()
+    plan = plan_gpu_stage(compute_stage_id, input_shape=tuple(int(item) for item in data.shape), policy=policy)
+    compute_backend = "cpu-numpy"
+    compute_runtime: dict[str, Any] = {}
+    fallback_reason: str | None = None
+    if plan.selected_backend == "blocked":
+        raise ValueError("; ".join(plan.blocking_issues))
+    if plan.selected_backend == "gpu":
+        try:
+            gpu = compute_alff_falff_gpu(
+                data,
+                tr=tr,
+                numerator_mask=numerator_mask,
+                denominator_mask=denominator_mask,
+                plan=plan,
+            )
+        except GpuComputeError as exc:
+            if plan.fallback_allowed:
+                warnings.append(f"gpu_fallback:{exc}")
+                fallback_reason = str(exc)
+            else:
+                raise ValueError(str(exc)) from exc
+        else:
+            compute_backend = gpu.backend
+            compute_runtime = gpu.provenance()
+            raw_alff = gpu.arrays["raw_alff"]
+            band_sum = gpu.arrays["band_sum"]
+            denominator_sum = gpu.arrays["denominator_sum"]
+    if compute_backend == "cpu-numpy":
+        if plan.requested_backend == "auto" and plan.limiting_factors:
+            fallback_reason = ",".join(plan.limiting_factors)
+            warnings.append(f"gpu_fallback:{fallback_reason}")
+        started_at = perf_counter()
+        demeaned = data - np.mean(data, axis=3, keepdims=True)
+        amplitude = np.abs(np.fft.rfft(demeaned, axis=3)).astype(np.float32)
+        band_amp = amplitude[..., numerator_mask]
+        denominator_amp = amplitude[..., denominator_mask]
+        raw_alff = np.mean(band_amp, axis=3).astype(np.float32)
+        band_sum = np.sum(band_amp, axis=3).astype(np.float32)
+        denominator_sum = np.sum(denominator_amp, axis=3).astype(np.float32)
+        compute_runtime = cpu_compute_provenance(plan, started_at=started_at, fallback_reason=fallback_reason)
 
     alff = np.zeros(data.shape[:3], dtype=np.float32)
-    raw_alff = np.mean(band_amp, axis=3).astype(np.float32)
     alff[selected] = raw_alff[selected]
-
-    band_sum = np.sum(band_amp, axis=3).astype(np.float32)
-    denominator_sum = np.sum(denominator_amp, axis=3).astype(np.float32)
     falff = np.zeros(data.shape[:3], dtype=np.float32)
     valid_denominator = selected & (denominator_sum > 0.0)
     falff[valid_denominator] = (band_sum[valid_denominator] / denominator_sum[valid_denominator]).astype(np.float32)
@@ -139,6 +182,7 @@ def compute_alff_falff_maps(
         "standardization": standardization,
         "alff_stats": finite_stats(alff),
         "falff_stats": finite_stats(falff),
+        "compute": compute_runtime,
     }
     return alff, falff, qc, warnings
 
@@ -153,6 +197,7 @@ def _run_alff_or_falff(
     denominator_band: tuple[float, float] | None = None,
     mask: str | Path | None = None,
     standardization: StandardizationMode = "none",
+    compute_policy: NativeComputePolicy | None = None,
     run_id: str = "native_preproc_run",
     subject_id: str = "",
     session_id: str = "",
@@ -163,7 +208,7 @@ def _run_alff_or_falff(
         "tr": float(tr),
         "freq_band": [float(freq_band[0]), float(freq_band[1])],
         "denominator_band": [float(denominator_band[0]), float(denominator_band[1])] if denominator_band else None,
-        "mask": str(mask) if mask else None,
+        "mask_provided": bool(mask),
         "standardization": standardization,
         "implementation_note": "native_numpy_fft_clean_room_rewrite_from_existing_formula",
     }
@@ -180,6 +225,8 @@ def _run_alff_or_falff(
             denominator_band=denominator_band,
             mask_3d=mask_data,
             standardization=standardization,
+            compute_policy=compute_policy,
+            compute_stage_id=metric,
         )
         warnings.extend(compute_warnings)
         output_data = alff if metric == "alff" else falff
@@ -212,6 +259,7 @@ def _run_alff_or_falff(
             output_artifacts=[output_ref],
             warnings=warnings,
             errors=errors,
+            backend="gpu" if metric_qc["compute"].get("actual_backend") == "gpu-cupy" else "native_python",
         )
     except Exception as exc:
         errors.append(str(exc))
@@ -237,6 +285,7 @@ def run_alff(
     denominator_band: tuple[float, float] | None = None,
     mask: str | Path | None = None,
     standardization: StandardizationMode = "none",
+    compute_policy: NativeComputePolicy | None = None,
     run_id: str = "native_preproc_run",
     subject_id: str = "",
     session_id: str = "",
@@ -250,6 +299,7 @@ def run_alff(
         denominator_band=denominator_band,
         mask=mask,
         standardization=standardization,
+        compute_policy=compute_policy,
         run_id=run_id,
         subject_id=subject_id,
         session_id=session_id,
@@ -265,6 +315,7 @@ def run_falff(
     denominator_band: tuple[float, float] | None = None,
     mask: str | Path | None = None,
     standardization: StandardizationMode = "none",
+    compute_policy: NativeComputePolicy | None = None,
     run_id: str = "native_preproc_run",
     subject_id: str = "",
     session_id: str = "",
@@ -278,6 +329,7 @@ def run_falff(
         denominator_band=denominator_band,
         mask=mask,
         standardization=standardization,
+        compute_policy=compute_policy,
         run_id=run_id,
         subject_id=subject_id,
         session_id=session_id,

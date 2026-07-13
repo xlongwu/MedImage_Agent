@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import numpy as np
+from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
 
 def compute_temporal_filter_numpy(
@@ -70,6 +71,7 @@ def compute_temporal_filter_cupy(
     high_hz: float,
 ) -> dict[str, Any]:
     """Band-pass filter on GPU via CuPy cuFFT."""
+    configure_cupy_cache_dir()
     import cupy as cp
 
     t_start = time.perf_counter()

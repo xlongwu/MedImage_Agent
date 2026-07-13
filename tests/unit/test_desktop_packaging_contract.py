@@ -22,6 +22,7 @@ def test_desktop_packaging_files_exist():
         "desktop/packaging/pyinstaller_backend.spec",
         "desktop/packaging/pyinstaller_desktop_launcher.spec",
         "desktop/packaging/build_backend.ps1",
+        "desktop/packaging/write_gpu_runtime_manifest.py",
         "desktop/packaging/build_launcher.ps1",
         "desktop/packaging/build_frontend.ps1",
         "desktop/packaging/build_desktop.ps1",
@@ -125,8 +126,17 @@ def test_pyinstaller_spec_excludes_blocked_gui_and_model_modules():
     assert "medimage-backend" in spec
     assert "upx=False" in spec
     assert 'runtime_tmpdir="."' in spec
-    assert 'collect_submodules("scipy")' in spec
+    assert '"scipy.ndimage"' in spec
+    assert '"scipy.signal"' in spec
+    assert 'collect_submodules("scipy")' not in spec
     assert 'collect_dynamic_libs("scipy")' in spec
+    assert '"cudart64_12.dll"' in spec
+    assert '"cublas64_12.dll"' in spec
+    assert '"licenses/cuda"' in spec
+    assert 'collect_submodules("cupy_backends")' in spec
+    assert 'collect_submodules("cupy")' in spec
+    assert 'collect_data_files("cupy", includes=["_core/include/**/*"])' in spec
+    assert 'collect_submodules("fastrlock")' in spec
     assert '"pywinauto"' in spec
     assert '"torch"' in spec
     assert '"safetensors"' in spec
@@ -175,6 +185,19 @@ def test_backend_build_checks_native_scientific_dependencies():
     assert "scipy.ndimage" in build_backend
     assert "scipy.signal" in build_backend
     assert "Scientific packaging dependency check failed" in build_backend
+    assert "GpuManifestScript" in build_backend
+    assert "AnalysisTocPath" in build_backend
+    assert "GPU runtime manifest" in build_backend
+
+
+def test_gpu_runtime_manifest_is_portable_and_inventory_based():
+    manifest_writer = read("desktop/packaging/write_gpu_runtime_manifest.py")
+
+    assert "gpu_runtime_manifest.json" in manifest_writer
+    assert "bundled_gpu_dlls" in manifest_writer
+    assert "cuda_driver_requirement" in manifest_writer
+    assert "rglob(\"*.dll\")" in manifest_writer
+    assert "analysis_toc" in manifest_writer
 
 
 def test_desktop_dist_wrapper_uses_workspace_caches():

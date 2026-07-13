@@ -2,14 +2,22 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import numpy as np
 
 from src.backend.app.native_preproc.core.qc import finite_stats
+from src.backend.app.native_preproc.core.compute_backend import (
+    GpuComputeError,
+    compute_functional_connectivity_gpu,
+    cpu_compute_provenance,
+)
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
+from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.stages._common import context_from_output_dir, stage_result
 from src.backend.app.schemas.native_preproc import NativePreprocQC
+from src.backend.app.schemas.native_preproc_api import NativeComputePolicy
 
 
 def read_roi_timeseries_tsv(path: str | Path) -> tuple[list[str], np.ndarray]:
@@ -47,6 +55,7 @@ def compute_roi_functional_connectivity(
     roi_timeseries: np.ndarray,
     *,
     roi_names: list[str] | None = None,
+    compute_policy: NativeComputePolicy | None = None,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, Any], list[str]]:
     warnings: list[str] = []
     matrix = np.asarray(roi_timeseries, dtype=np.float32)
@@ -70,17 +79,64 @@ def compute_roi_functional_connectivity(
             + ",".join(str(names[index]) for index in np.flatnonzero(constant))
         )
 
-    denom = np.outer(stds, stds) * float(n_timepoints - 1)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        corr = (centered.T @ centered) / denom
-    corr = np.where(np.isfinite(corr), corr, 0.0).astype(np.float32)
-    np.fill_diagonal(corr, 1.0)
-    if np.any(constant):
-        for index in np.flatnonzero(constant):
-            corr[index, :] = 0.0
-            corr[:, index] = 0.0
-            corr[index, index] = 1.0
-    fisher_z = fisher_z_transform(corr)
+    policy = compute_policy or NativeComputePolicy()
+    plan = plan_gpu_stage("functional_connectivity", input_shape=tuple(int(item) for item in matrix.shape), policy=policy)
+    if plan.selected_backend == "blocked":
+        raise ValueError("; ".join(plan.blocking_issues))
+    compute_provenance: dict[str, Any]
+    if plan.selected_backend == "gpu":
+        try:
+            gpu = compute_functional_connectivity_gpu(matrix, plan=plan)
+        except GpuComputeError as exc:
+            if not plan.fallback_allowed:
+                raise ValueError(str(exc)) from exc
+            gpu = None
+            compute_provenance = {
+                "requested_backend": plan.requested_backend,
+                "actual_backend": "cpu-numpy",
+                "fallback_reason": str(exc),
+                "plan": plan.as_dict(),
+            }
+        if gpu is not None:
+            corr = gpu.arrays["correlation"]
+            fisher_z = gpu.arrays["fisher_z"]
+            compute_provenance = gpu.provenance()
+        else:
+            started_at = perf_counter()
+            denom = np.outer(stds, stds) * float(n_timepoints - 1)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                corr = (centered.T @ centered) / denom
+            corr = np.where(np.isfinite(corr), corr, 0.0).astype(np.float32)
+            np.fill_diagonal(corr, 1.0)
+            if np.any(constant):
+                for index in np.flatnonzero(constant):
+                    corr[index, :] = 0.0
+                    corr[:, index] = 0.0
+                    corr[index, index] = 1.0
+            fisher_z = fisher_z_transform(corr)
+            compute_provenance = cpu_compute_provenance(
+                plan, started_at=started_at, fallback_reason=compute_provenance["fallback_reason"]
+            )
+    else:
+        started_at = perf_counter()
+        denom = np.outer(stds, stds) * float(n_timepoints - 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            corr = (centered.T @ centered) / denom
+        corr = np.where(np.isfinite(corr), corr, 0.0).astype(np.float32)
+        np.fill_diagonal(corr, 1.0)
+        if np.any(constant):
+            for index in np.flatnonzero(constant):
+                corr[index, :] = 0.0
+                corr[:, index] = 0.0
+                corr[index, index] = 1.0
+        fisher_z = fisher_z_transform(corr)
+        compute_provenance = cpu_compute_provenance(
+            plan,
+            started_at=started_at,
+            fallback_reason=",".join(plan.limiting_factors)
+            if plan.requested_backend == "auto" and plan.limiting_factors
+            else None,
+        )
     qc = {
         "timepoints": n_timepoints,
         "roi_count": n_rois,
@@ -90,6 +146,7 @@ def compute_roi_functional_connectivity(
         "constant_roi_count": int(np.count_nonzero(constant)),
         "symmetric": bool(np.allclose(corr, corr.T, atol=1e-6)),
         "diagonal_all_ones": bool(np.allclose(np.diag(corr), 1.0, atol=1e-6)),
+        "compute": compute_provenance,
     }
     return corr, fisher_z, qc, warnings
 
@@ -111,11 +168,12 @@ def run_functional_connectivity(
     run_id: str = "native_preproc_run",
     subject_id: str = "",
     session_id: str = "",
+    compute_policy: NativeComputePolicy | None = None,
 ):
     stage_id = "functional_connectivity"
     context = context_from_output_dir(output_dir, run_id=run_id, subject_id=subject_id, session_id=session_id)
     parameters: dict[str, Any] = {
-        "roi_timeseries": str(roi_timeseries),
+        "roi_timeseries_provided": bool(roi_timeseries),
         "correlation_method": "pearson",
         "fisher_z": "arctanh_clipped_0_999999_diagonal_zero",
     }
@@ -124,8 +182,15 @@ def run_functional_connectivity(
 
     try:
         labels, matrix = read_roi_timeseries_tsv(roi_timeseries)
-        corr, fisher_z, fc_qc, compute_warnings = compute_roi_functional_connectivity(matrix, roi_names=labels)
+        corr, fisher_z, fc_qc, compute_warnings = compute_roi_functional_connectivity(
+            matrix,
+            roi_names=labels,
+            compute_policy=compute_policy,
+        )
         warnings.extend(compute_warnings)
+        fallback_reason = fc_qc.get("compute", {}).get("fallback_reason")
+        if fallback_reason:
+            warnings.append(f"gpu_fallback:{fallback_reason}")
         stage_dir = context.stage_artifact_dir(stage_id)
         artifact_dir = stage_dir / stage_id
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -169,6 +234,7 @@ def run_functional_connectivity(
             output_artifacts=output_refs,
             warnings=warnings,
             errors=errors,
+            backend="gpu" if fc_qc["compute"].get("actual_backend") == "gpu-cupy" else "native_python",
         )
     except Exception as exc:
         errors.append(str(exc))

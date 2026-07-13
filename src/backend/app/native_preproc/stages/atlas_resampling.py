@@ -2,16 +2,69 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 
 from src.backend.app.native_preproc.core.qc import finite_stats
-from src.backend.app.native_preproc.core.resampling import resample_spatial_to_reference
+from src.backend.app.native_preproc.core.compute_backend import (
+    GpuComputeError,
+    compute_atlas_resampling_gpu,
+    cpu_compute_provenance,
+)
+from src.backend.app.native_preproc.core.resampling import _output_to_input_voxel_mapping, resample_spatial_to_reference
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
 from src.backend.app.native_preproc.io.nifti_io import load_nifti, save_nifti
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
+from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.stages._common import context_from_output_dir, stage_result
 from src.backend.app.schemas.native_preproc import NativePreprocQC
+from src.backend.app.schemas.native_preproc_api import NativeComputePolicy
+
+
+def resample_atlas_with_backend(
+    atlas_data: np.ndarray,
+    atlas_affine: np.ndarray,
+    reference_shape: tuple[int, int, int],
+    reference_affine: np.ndarray,
+    *,
+    reference_transform: np.ndarray | None = None,
+    compute_policy: NativeComputePolicy | None = None,
+) -> tuple[np.ndarray, dict[str, object]]:
+    policy = compute_policy or NativeComputePolicy()
+    plan = plan_gpu_stage("atlas_resampling", input_shape=tuple(int(item) for item in atlas_data.shape), policy=policy)
+    if plan.selected_backend == "blocked":
+        raise ValueError("; ".join(plan.blocking_issues))
+    if plan.selected_backend == "gpu":
+        matrix, offset = _output_to_input_voxel_mapping(
+            atlas_affine, reference_affine, reference_transform
+        )
+        try:
+            gpu = compute_atlas_resampling_gpu(
+                atlas_data, matrix=matrix, offset=offset, output_shape=reference_shape, plan=plan
+            )
+        except GpuComputeError as exc:
+            if not plan.fallback_allowed:
+                raise ValueError(str(exc)) from exc
+            started_at = perf_counter()
+            output = resample_spatial_to_reference(
+                atlas_data, atlas_affine, reference_shape, reference_affine,
+                input_to_reference_affine=reference_transform, order=0, output_dtype=np.int16,
+            )
+            return output, cpu_compute_provenance(plan, started_at=started_at, fallback_reason=str(exc))
+        return gpu.arrays["resampled"], gpu.provenance()
+    started_at = perf_counter()
+    output = resample_spatial_to_reference(
+        atlas_data, atlas_affine, reference_shape, reference_affine,
+        input_to_reference_affine=reference_transform, order=0, output_dtype=np.int16,
+    )
+    return output, cpu_compute_provenance(
+        plan,
+        started_at=started_at,
+        fallback_reason=",".join(plan.limiting_factors)
+        if plan.requested_backend == "auto" and plan.limiting_factors
+        else None,
+    )
 
 
 def run_atlas_resampling(
@@ -23,6 +76,7 @@ def run_atlas_resampling(
     run_id: str = "native_preproc_run",
     subject_id: str = "",
     session_id: str = "",
+    compute_policy: NativeComputePolicy | None = None,
 ):
     stage_id = "atlas_resampling"
     context = context_from_output_dir(output_dir, run_id=run_id, subject_id=subject_id, session_id=session_id)
@@ -40,15 +94,16 @@ def run_atlas_resampling(
         if atlas_image.data.ndim != 3:
             raise ValueError(f"atlas_resampling requires 3D atlas input, got {atlas_image.data.shape}.")
         reference_shape = reference.data.shape[:3]
-        resampled = resample_spatial_to_reference(
+        resampled, compute_provenance = resample_atlas_with_backend(
             atlas_image.data,
             atlas_image.affine,
             reference_shape,
             reference.affine,
-            input_to_reference_affine=reference_transform,
-            order=0,
-            output_dtype=np.int16,
+            reference_transform=reference_transform,
+            compute_policy=compute_policy,
         )
+        if compute_provenance.get("fallback_reason"):
+            warnings.append(f"gpu_fallback:{compute_provenance['fallback_reason']}")
         output_path = derivative_path(
             context.stage_artifact_dir(stage_id),
             atlas_image.path,
@@ -80,19 +135,21 @@ def run_atlas_resampling(
                 "output_labels": output_labels,
                 "fractional_label_voxels": fractional_voxels,
                 "output_stats": finite_stats(rounded),
+                "compute": compute_provenance,
             },
             warnings=warnings,
         )
         return stage_result(
             context,
             stage_id=stage_id,
-            parameters=parameters,
+            parameters={**parameters, "compute": compute_provenance},
             status="succeeded",
             capability_level="numerically_implemented",
             qc=qc,
             output_artifacts=[output_ref],
             warnings=warnings,
             errors=errors,
+            backend="gpu" if compute_provenance.get("actual_backend") == "gpu-cupy" else "native_python",
         )
     except Exception as exc:
         errors.append(str(exc))

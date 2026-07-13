@@ -256,6 +256,43 @@ def validate_gpu_memory_budget(
     return result
 
 
+def validate_live_gpu_memory(
+    *,
+    estimated_peak_bytes: int,
+    free_vram_bytes: int | None,
+    total_vram_bytes: int | None = None,
+    user_budget_bytes: int | None = None,
+) -> GpuSafetyResult:
+    """Validate a planned peak against a fresh CuPy ``memGetInfo`` sample.
+
+    This is intentionally separate from the old static tensor guard: a valid
+    array shape can still be unsafe when a display workload or another process
+    has consumed VRAM after planning.
+    """
+    result = GpuSafetyResult(estimated_bytes=estimated_peak_bytes)
+    if estimated_peak_bytes <= 0:
+        result.ok = False
+        result.errors.append(GpuSafetyIssue("GPU_MEMORY_ESTIMATE_INVALID", "error", "Estimated GPU peak bytes must be positive."))
+        return result
+    if free_vram_bytes is None or free_vram_bytes < 0:
+        result.ok = False
+        result.errors.append(GpuSafetyIssue("GPU_VRAM_PROBE_FAILED", "error", "Live GPU free-memory probe is unavailable."))
+        return result
+    reserve = max(512 * 1024 * 1024, int((total_vram_bytes or free_vram_bytes) * 0.15))
+    usable = max(0, free_vram_bytes - reserve)
+    if user_budget_bytes is not None:
+        usable = min(usable, user_budget_bytes)
+    if estimated_peak_bytes > usable:
+        result.ok = False
+        result.cleanup_recommended = True
+        result.errors.append(GpuSafetyIssue(
+            "GPU_MEMORY_BUDGET_EXCEEDED",
+            "error",
+            f"Estimated peak {estimated_peak_bytes} bytes exceeds live usable VRAM {usable} bytes.",
+        ))
+    return result
+
+
 # ── Timeout ──
 
 def validate_gpu_timeout(
@@ -348,6 +385,15 @@ def normalize_gpu_exception(exc: BaseException) -> GpuSafetyResult:
                 message=f"GPU out of memory: {exc}",
             )],
             cleanup_recommended=True,
+        )
+    if "dll" in msg or "driver" in msg or "cuda" in msg:
+        return GpuSafetyResult(
+            ok=False,
+            errors=[GpuSafetyIssue(
+                code="GPU_RUNTIME_UNAVAILABLE",
+                severity="error",
+                message=f"GPU CUDA runtime or driver is unavailable: {exc}",
+            )],
         )
     return GpuSafetyResult(
         ok=False,

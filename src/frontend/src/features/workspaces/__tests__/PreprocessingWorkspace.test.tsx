@@ -6,22 +6,25 @@ import { I18nProvider } from "../../../i18n/I18nProvider";
 import type { NativeFullPreprocResponse } from "../../../types";
 import {
   createPreprocessingRun,
-  executeNativeFullPreprocessing,
+  submitNativeFullPreprocessing,
   executeReviewedPreprocessingPipeline,
   getLatestNativeFullPreprocessingRun,
   getNativeFullPreprocessingReport,
   getNativeFullPreprocessingValidation,
+  getNativeGpuDetection,
   runNativeFullPreprocessingDryRun,
 } from "../../../lib/api/preprocessing";
 import { PreprocessingWorkspace } from "../PreprocessingWorkspace";
 
 vi.mock("../../../lib/api/preprocessing", () => ({
   createPreprocessingRun: vi.fn(),
-  executeNativeFullPreprocessing: vi.fn(),
+  submitNativeFullPreprocessing: vi.fn(),
+  getNativeFullPreprocessingProgress: vi.fn(),
   executeReviewedPreprocessingPipeline: vi.fn(),
   getLatestNativeFullPreprocessingRun: vi.fn(),
   getNativeFullPreprocessingReport: vi.fn(),
   getNativeFullPreprocessingValidation: vi.fn(),
+  getNativeGpuDetection: vi.fn(),
   runNativeFullPreprocessingDryRun: vi.fn(),
 }));
 
@@ -64,10 +67,11 @@ vi.mock("../../../components/RsfmriSmoothingQcPanel", () => ({
 const executeReviewedMock = vi.mocked(executeReviewedPreprocessingPipeline);
 const createRunMock = vi.mocked(createPreprocessingRun);
 const nativeDryRunMock = vi.mocked(runNativeFullPreprocessingDryRun);
-const nativeExecuteMock = vi.mocked(executeNativeFullPreprocessing);
+const nativeExecuteMock = vi.mocked(submitNativeFullPreprocessing);
 const latestNativeRunMock = vi.mocked(getLatestNativeFullPreprocessingRun);
 const nativeValidationMock = vi.mocked(getNativeFullPreprocessingValidation);
 const nativeReportMock = vi.mocked(getNativeFullPreprocessingReport);
+const nativeGpuDetectionMock = vi.mocked(getNativeGpuDetection);
 
 function inventory(overrides: Partial<ProjectInventory> = {}): ProjectInventory {
   return {
@@ -214,6 +218,10 @@ describe("PreprocessingWorkspace", () => {
     latestNativeRunMock.mockReset();
     nativeValidationMock.mockReset();
     nativeReportMock.mockReset();
+    nativeGpuDetectionMock.mockReset();
+    nativeGpuDetectionMock.mockResolvedValue({
+      ok: true, cupy_available: false, gpu_available: false, warnings: [], errors: [],
+    });
   });
 
   it("keeps raw DICOM preprocessing blocked with a data conversion CTA", () => {

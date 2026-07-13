@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import builtins
+
+import pytest
 
 from src.backend.app.tools.gpu_utils import (
     apply_gpu_guard,
@@ -18,6 +21,21 @@ def test_detect_gpu_never_requires_gpu():
     assert "gpu_available" in result
     assert "warnings" in result
     assert "errors" in result
+
+
+def test_detect_gpu_distinguishes_import_failure(monkeypatch: pytest.MonkeyPatch):
+    original_import = builtins.__import__
+
+    def reject_cupy(name, *args, **kwargs):
+        if name == "cupy":
+            raise ImportError("packaged CuPy dependency missing")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", reject_cupy)
+    result = detect_gpu()
+
+    assert result["capability_error_code"] == "CUPY_IMPORT_FAILED"
+    assert "packaged CuPy dependency missing" in result["warnings"][0]
 
 
 def test_scoped_derivative_path_blocks_rawdata_and_external_paths(tmp_path):

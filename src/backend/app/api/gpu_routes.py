@@ -45,7 +45,6 @@ async def gpu_synthetic_benchmark(request: dict[str, Any]):
     import time
 
     shape = tuple(request.get("shape", [32, 32, 32, 128]))
-    filter_type = request.get("filter_type", "bandpass")
     low_hz = float(request.get("low_hz", 0.01))
     high_hz = float(request.get("high_hz", 0.08))
     tr = float(request.get("tr", 2.0))
@@ -53,15 +52,25 @@ async def gpu_synthetic_benchmark(request: dict[str, Any]):
     data = np.random.default_rng(42).normal(size=shape).astype(np.float32)
 
     t0 = time.time()
-    _cpu = compute_alff_numpy(data, low_hz=low_hz, high_hz=high_hz, tr=tr)
+    frequency_band = (low_hz, high_hz)
+    _cpu = compute_alff_numpy(data, tr=tr, freq_band=frequency_band)
     cpu_time = round(time.time() - t0, 3)
 
     gpu_time = None
     gpu_error = None
     try:
         t0 = time.time()
-        _gpu = compute_alff_backend(data, low_hz=low_hz, high_hz=high_hz, tr=tr, prefer_gpu=True)
-        gpu_time = round(time.time() - t0, 3)
+        gpu_result = compute_alff_backend(
+            data,
+            tr=tr,
+            freq_band=frequency_band,
+            prefer_gpu=True,
+            require_gpu=True,
+        )
+        if not gpu_result.get("ok") or gpu_result.get("backend") != "gpu-cupy":
+            gpu_error = "; ".join(gpu_result.get("errors", [])) or "CuPy GPU ALFF did not run."
+        else:
+            gpu_time = round(time.time() - t0, 3)
     except Exception as exc:
         gpu_error = str(exc)
 

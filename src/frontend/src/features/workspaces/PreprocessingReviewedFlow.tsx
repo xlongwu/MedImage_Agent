@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  executeNativeFullPreprocessing,
   executeReviewedPreprocessingPipeline,
+  getNativeGpuDetection,
   getLatestNativeFullPreprocessingRun,
+  getNativeFullPreprocessingProgress,
   getNativeFullPreprocessingReport,
   getNativeFullPreprocessingValidation,
   runNativeFullPreprocessingDryRun,
+  submitNativeFullPreprocessing,
 } from "../../lib/api/preprocessing";
 import type {
   NativeFullPreprocConfirmations,
   NativeFullPreprocRequest,
   NativeFullPreprocResponse,
+  NativeGpuDetection,
   NativeFullStageApiResult,
   PreprocessingPipelineExecuteRequest,
   PreprocessingPipelineExecuteResponse,
@@ -299,6 +302,10 @@ export function PreprocessingReviewedFlow({
   const [nativeValidation, setNativeValidation] = useState<Record<string, unknown> | null>(null);
   const [nativeReport, setNativeReport] = useState<Record<string, unknown> | null>(null);
   const [nativeError, setNativeError] = useState("");
+  const [nativeProgress, setNativeProgress] = useState<Record<string, unknown> | null>(null);
+  const [cpuMode, setCpuMode] = useState<"serial" | "process" | "auto">("serial");
+  const [computeBackend, setComputeBackend] = useState<"cpu" | "gpu" | "auto">("cpu");
+  const [gpuDetection, setGpuDetection] = useState<NativeGpuDetection | null>(null);
 
   const visibleStages = useMemo(
     () =>
@@ -344,6 +351,32 @@ export function PreprocessingReviewedFlow({
       cancelled = true;
     };
   }, [baseUrl, projectId, nativeResult]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getNativeGpuDetection(baseUrl)
+      .then((result) => { if (!cancelled) setGpuDetection(result); })
+      .catch(() => { if (!cancelled) setGpuDetection(null); });
+    return () => { cancelled = true; };
+  }, [baseUrl]);
+
+  useEffect(() => {
+    if (!projectId || !nativeResult?.run_id || !["queued", "running"].includes(nativeResult.status)) return;
+    let stopped = false;
+    const refresh = () => {
+      void getNativeFullPreprocessingProgress(baseUrl, projectId, nativeResult.run_id)
+        .then((progress) => { if (!stopped) setNativeProgress(progress); })
+        .catch((): undefined => undefined);
+      void getLatestNativeFullPreprocessingRun(baseUrl, projectId)
+        .then((run) => {
+          if (!stopped && run.run_id === nativeResult.run_id && !["queued", "running"].includes(run.status)) setNativeResult(run);
+        })
+        .catch((): undefined => undefined);
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 3000);
+    return () => { stopped = true; window.clearInterval(timer); };
+  }, [baseUrl, nativeResult?.run_id, nativeResult?.status, projectId]);
 
   const executeReviewedFlow = async () => {
     if (!projectId || !preprocessingRunId || !canSubmit) return;
@@ -391,6 +424,7 @@ export function PreprocessingReviewedFlow({
           preprocessingRunId: nativeRunId,
           profile,
           templatePath,
+          computeBackend,
         }),
       );
       setNativeResult(response);
@@ -408,7 +442,7 @@ export function PreprocessingReviewedFlow({
     setNativeValidation(null);
     setNativeReport(null);
     try {
-      const response = await executeNativeFullPreprocessing(
+      const response = await submitNativeFullPreprocessing(
         baseUrl,
         projectId,
         buildNativeRequest({
@@ -420,9 +454,12 @@ export function PreprocessingReviewedFlow({
           preprocessingRunId: nativeRunId,
           profile,
           templatePath,
+          cpuMode,
+          computeBackend,
         }),
       );
       setNativeResult(response);
+      setNativeProgress(null);
     } catch (err) {
       setNativeError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -636,6 +673,12 @@ export function PreprocessingReviewedFlow({
         pendingAction={nativeAction}
         report={nativeReport}
         result={nativeResult}
+        progress={nativeProgress}
+        cpuMode={cpuMode}
+        onCpuModeChange={setCpuMode}
+        computeBackend={computeBackend}
+        onComputeBackendChange={setComputeBackend}
+        gpuDetection={gpuDetection}
         runId={nativeRunId}
         validation={nativeValidation}
       />
@@ -712,6 +755,12 @@ function NativeFullWorkflowCard({
   pendingAction,
   report,
   result,
+  progress,
+  cpuMode,
+  onCpuModeChange,
+  computeBackend,
+  onComputeBackendChange,
+  gpuDetection,
   runId,
   validation,
 }: {
@@ -729,6 +778,12 @@ function NativeFullWorkflowCard({
   pendingAction: NativeAction;
   report: Record<string, unknown> | null;
   result: NativeFullPreprocResponse | null;
+  progress: Record<string, unknown> | null;
+  cpuMode: "serial" | "process" | "auto";
+  onCpuModeChange: (mode: "serial" | "process" | "auto") => void;
+  computeBackend: "cpu" | "gpu" | "auto";
+  onComputeBackendChange: (backend: "cpu" | "gpu" | "auto") => void;
+  gpuDetection: NativeGpuDetection | null;
   runId: string;
   validation: Record<string, unknown> | null;
 }) {
@@ -783,6 +838,34 @@ function NativeFullWorkflowCard({
         ))}
       </div>
 
+      <label className={styles.fieldShell}>
+        <span>CPU scheduling mode</span>
+        <select aria-label="CPU scheduling mode" value={cpuMode} onChange={(event) => onCpuModeChange(event.target.value as typeof cpuMode)}>
+          <option value="serial">serial (default)</option>
+          <option value="process">process</option>
+          <option value="auto">auto</option>
+        </select>
+      </label>
+      <div className={styles.gateSummary} aria-label="Native GPU capability">
+        <div><span>GPU device</span><strong>{gpuDetection?.gpu_available ? gpuDetection.device_name || gpuDetection.device_id || "CUDA device" : "Unavailable"}</strong></div>
+        <div><span>CuPy</span><strong>{gpuDetection?.cupy_available ? "available" : "unavailable"}</strong></div>
+        <div><span>Free VRAM</span><strong>{gpuDetection?.free_vram_bytes ? `${Math.round(gpuDetection.free_vram_bytes / 1024 / 1024)} MiB` : "-"}</strong></div>
+      </div>
+      <label className={styles.fieldShell}>
+        <span>GPU compute backend</span>
+        <select aria-label="GPU compute backend" value={computeBackend} onChange={(event) => onComputeBackendChange(event.target.value as typeof computeBackend)}>
+          <option value="cpu">CPU (default, reference)</option>
+          <option value="gpu">GPU (reviewed CuPy execution; no fallback)</option>
+          <option value="auto">Auto (falls back visibly to CPU)</option>
+        </select>
+        <small>GPU applies only to released numerical stages. ReHo remains CPU until separately validated.</small>
+      </label>
+      {progress ? <div className={styles.gateSummary} aria-label="Native preprocessing live progress">
+        <div><span>Subjects</span><strong>{String(progress.completed_subjects ?? 0)} / {String(progress.total_subjects ?? "?")}</strong></div>
+        <div><span>Live status</span><strong>{String(progress.status ?? "queued")}</strong></div>
+        <div><span>Last heartbeat</span><strong>{String(progress.heartbeat_at ?? "-")}</strong></div>
+      </div> : null}
+
       <div className={styles.reviewedActions}>
         <Button variant="secondary" onClick={onDryRun} disabled={!canDryRun}>
           {pendingAction === "dry-run"
@@ -812,6 +895,7 @@ function NativeFullWorkflowCard({
           <tr>
             <th>{t("preprocessing.flow.stage")}</th>
             <th>{t("preprocessing.flow.status")}</th>
+            <th>Backend</th>
             <th>{t("preprocessing.flow.artifacts")}</th>
             <th>{t("preprocessing.flow.issue")}</th>
           </tr>
@@ -826,12 +910,13 @@ function NativeFullWorkflowCard({
                     {stage.status}
                   </Badge>
                 </td>
+                <td>{stage.backend}</td>
                 <td>{stage.output_artifacts.length}</td>
                 <td>{firstNativeIssue(stage)}</td>
               </tr>
             ))
           ) : (
-            <TableEmpty colSpan={4}>{t("preprocessing.flow.nativeRowsEmpty")}</TableEmpty>
+            <TableEmpty colSpan={5}>{t("preprocessing.flow.nativeRowsEmpty")}</TableEmpty>
           )}
         </tbody>
       </Table>
@@ -1246,6 +1331,8 @@ function buildNativeRequest({
   preprocessingRunId,
   profile,
   templatePath,
+  cpuMode = "serial",
+  computeBackend = "cpu",
 }: {
   atlasPath: string;
   confirmations?: Record<NativeConfirmationKey, boolean>;
@@ -1255,6 +1342,8 @@ function buildNativeRequest({
   preprocessingRunId: string;
   profile: Profile;
   templatePath: string;
+  cpuMode?: "serial" | "process" | "auto";
+  computeBackend?: "cpu" | "gpu" | "auto";
 }): NativeFullPreprocRequest {
   const tr = parseOptionalNumber(fallbackTr);
   return {
@@ -1265,6 +1354,8 @@ function buildNativeRequest({
     tr,
     include_global_signal: includeGlobalSignal,
     stage_overrides: nativeStageOverrides(profile),
+    cpu_policy: { mode: cpuMode },
+    compute_policy: { backend: computeBackend },
     confirmations,
   };
 }

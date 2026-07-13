@@ -2,12 +2,24 @@
 from __future__ import annotations
 
 import hashlib
+import multiprocessing
 import re
-from datetime import datetime, timezone
+from threading import Thread
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from queue import Empty
 
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
+from src.backend.app.native_preproc.orchestrator.progress import (
+    initial_progress,
+    load_progress,
+    now_iso as progress_now_iso,
+    write_progress,
+)
+from src.backend.app.native_preproc.orchestrator.resource_planner import ResourceDecision, plan_subject_execution
+from src.backend.app.native_preproc.orchestrator.subject_worker import execute_subject_worker
 from src.backend.app.native_preproc.orchestrator.runner import (
     dry_run_native_full_preproc,
     execute_native_full_preproc,
@@ -558,6 +570,7 @@ def _write_batch_response(
     dry_run: bool,
     child_runs: list[tuple[str, NativeFullPreprocResponse]],
     warnings: list[str],
+    resource_decision: ResourceDecision | None = None,
     persist: bool = True,
 ) -> NativeFullPreprocResponse:
     child_summaries = [_child_summary(response, subject_id) for subject_id, response in child_runs]
@@ -710,6 +723,16 @@ def _write_batch_response(
             else ["Review native validation and final reports before package export."]
         ),
         safety_flags=safety_flags,
+        scheduler_mode=(resource_decision.scheduler_mode if resource_decision else "serial"),  # type: ignore[arg-type]
+        worker_count_requested=(resource_decision.worker_count_requested if resource_decision else None),
+        worker_count_calculated=(resource_decision.worker_count_calculated if resource_decision else 1),
+        worker_count_used=(resource_decision.worker_count_used if resource_decision else 1),
+        threads_per_worker_calculated=(resource_decision.threads_per_worker_calculated if resource_decision else 1),
+        resource_decision=(resource_decision.as_dict() if resource_decision else {}),
+        subject_execution=child_summaries,
+        progress_url=f"/api/projects/{project_id}/preprocessing/native/runs/{run_id}/progress",
+        started_at=(progress_now_iso() if resource_decision else ""),
+        finished_at=(progress_now_iso() if resource_decision else ""),
     )
     if persist:
         atomic_write_json(manifest_path, response.model_dump(mode="json"), schema_version=1)
@@ -732,23 +755,132 @@ def _run_registered_batch(
     if len(subject_requests) <= 1:
         return None
     run_id, run_dir = _batch_run_dir(request, project_id=project_id, project_dir=project_dir)
+    decision = plan_subject_execution(subject_requests, request.cpu_policy)
+    warnings.append(
+        "CPU scheduler decision: "
+        f"mode={decision.scheduler_mode}, workers={decision.worker_count_used}, "
+        f"threads_per_worker={decision.threads_per_worker_calculated}."
+    )
+    progress = initial_progress(
+        project_id=project_id,
+        run_id=run_id,
+        run_dir=run_dir,
+        subject_ids=[item.subject_id for item in subject_requests],
+        resource_decision=decision.as_dict(),
+    )
+    if persist:
+        run_dir.mkdir(parents=True, exist_ok=True)
+        write_progress(run_dir, progress)
+
     child_runs: list[tuple[str, NativeFullPreprocResponse]] = []
-    for subject_request in subject_requests:
-        subject_id = subject_request.subject_id
-        child_request = subject_request.model_copy(
+    child_requests = [
+        item.model_copy(
             update={
-                "run_id": f"{run_id}_{subject_id}",
-                # Keep the subject run directly under the batch run directory.
-                # Windows path limits can otherwise block long motion-QC artifact names.
-                "output_dir": str(run_dir / subject_id),
+                "run_id": f"{run_id}_{item.subject_id}",
+                # A child owns this directory and nothing at the batch root.
+                "output_dir": str(run_dir / item.subject_id),
             }
         )
-        response = (
-            dry_run_native_full_preproc(project_id, child_request, project_dir=project_dir)
-            if dry_run
-            else execute_native_full_preproc(project_id, child_request, project_dir=project_dir)
+        for item in subject_requests
+    ]
+
+    def mark_event(event: dict[str, Any]) -> None:
+        subject_id = str(event.get("subject_id") or "")
+        subject = progress["subjects"].get(subject_id)
+        if not isinstance(subject, dict):
+            return
+        kind = str(event.get("kind") or "")
+        now = str(event.get("at") or progress_now_iso())
+        subject["heartbeat_at"] = now
+        if kind == "subject_started":
+            subject.update({"status": "running", "started_at": now, "worker_pid": event.get("worker_pid")})
+            progress["status"] = "running"
+        elif kind == "stage":
+            subject.update({"stage_id": str(event.get("stage_id") or ""), "stage_status": str(event.get("stage_status") or "")})
+        elif kind == "subject_finished":
+            subject.update({"status": str(event.get("status") or "succeeded"), "finished_at": now})
+        elif kind == "subject_failed":
+            subject.update({"status": "failed", "error_message": str(event.get("error") or "worker failure"), "finished_at": now})
+        if persist:
+            write_progress(run_dir, progress)
+
+    def failed_response(subject_id: str, error: str) -> NativeFullPreprocResponse:
+        return NativeFullPreprocResponse(
+            ok=False,
+            status="failed",
+            project_id=project_id,
+            run_id=f"{run_id}_{subject_id}",
+            run_dir=str(run_dir / subject_id),
+            errors=[error],
+            failed_stages=["subject_worker"],
+            safety_flags={"rawdata_readonly_confirmed": True, "no_external_tools_executed": True},
         )
-        child_runs.append((subject_id, response))
+
+    # Dry-runs are intentionally kept in-process.  They create no numerical
+    # artifacts and the resulting resource decision remains visible to users.
+    if dry_run or decision.worker_count_used <= 1 or decision.scheduler_mode == "serial":
+        for child_request in child_requests:
+            subject_id = child_request.subject_id
+            mark_event({"kind": "subject_started", "subject_id": subject_id, "at": progress_now_iso()})
+            try:
+                response = (
+                    dry_run_native_full_preproc(project_id, child_request, project_dir=project_dir)
+                    if dry_run
+                    else execute_native_full_preproc(project_id, child_request, project_dir=project_dir)
+                )
+            except Exception as exc:  # preserve completed siblings
+                response = failed_response(subject_id, str(exc))
+            child_runs.append((subject_id, response))
+            mark_event({"kind": "subject_finished", "subject_id": subject_id, "status": response.status, "at": progress_now_iso()})
+    else:
+        mp_context = multiprocessing.get_context("spawn")
+        manager = multiprocessing.Manager()
+        events = manager.Queue()
+        try:
+            with ProcessPoolExecutor(max_workers=decision.worker_count_used, mp_context=mp_context) as executor:
+                futures = {
+                    executor.submit(
+                        execute_subject_worker,
+                        {
+                            "project_id": project_id,
+                            "project_dir": project_dir,
+                            "subject_id": child_request.subject_id,
+                            "request": child_request.model_dump(mode="json"),
+                            "threads_per_worker": decision.threads_per_worker_calculated,
+                            "events": events,
+                        },
+                    ): child_request.subject_id
+                    for child_request in child_requests
+                }
+                pending = set(futures)
+                while pending:
+                    done, pending = wait(pending, timeout=0.25, return_when=FIRST_COMPLETED)
+                    while True:
+                        try:
+                            mark_event(events.get_nowait())
+                        except Empty:
+                            break
+                    for future in done:
+                        subject_id = futures[future]
+                        try:
+                            payload = future.result()
+                            if payload.get("error"):
+                                response = failed_response(subject_id, str(payload["error"]))
+                            else:
+                                response = NativeFullPreprocResponse.model_validate(payload["response"])
+                        except Exception as exc:
+                            response = failed_response(subject_id, f"Subject worker failed: {exc}")
+                        child_runs.append((subject_id, response))
+                        progress["completed_subjects"] = len(child_runs)
+                        mark_event({"kind": "subject_finished", "subject_id": subject_id, "status": response.status, "at": progress_now_iso()})
+        finally:
+            manager.shutdown()
+    child_runs.sort(key=lambda item: item[0])
+    progress["completed_subjects"] = len(child_runs)
+    progress["status"] = _batch_status([response for _, response in child_runs])
+    progress["finished_at"] = progress_now_iso()
+    if persist:
+        write_progress(run_dir, progress)
     return _write_batch_response(
         project_id=project_id,
         run_id=run_id,
@@ -756,6 +888,7 @@ def _run_registered_batch(
         dry_run=dry_run,
         child_runs=child_runs,
         warnings=warnings,
+        resource_decision=decision,
         persist=persist,
     )
 
@@ -812,13 +945,138 @@ def run_native_full_execute(
     return response
 
 
+def submit_native_full_execute(
+    project_id: str,
+    request: NativeFullPreprocRequest,
+    *,
+    project_dir: str = "",
+    project_metadata: dict[str, object] | None = None,
+) -> NativeFullPreprocResponse:
+    """Persist a queued run and execute it outside the HTTP request lifecycle."""
+    required = (
+        "confirm_reviewed_native_execution",
+        "confirm_rawdata_readonly",
+        "confirm_no_external_tools",
+        "confirm_research_use_only",
+        "confirm_no_clinical_use",
+    )
+    missing = [name for name in required if not bool(getattr(request.confirmations, name))]
+    if missing:
+        return NativeFullPreprocResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            blocking_issues=[f"Missing required native execution confirmation: {name}" for name in missing],
+            safety_flags={"rawdata_not_modified": True, "no_external_tools_executed": True},
+        )
+    run_id = request.run_id or _batch_run_id(project_id)
+    queued_request = request.model_copy(update={"run_id": run_id})
+    subjects, warnings = _registered_subject_requests(queued_request, project_metadata=project_metadata)
+    if not subjects:
+        subjects = [queued_request]
+    run_dir = _batch_run_dir(queued_request, project_id=project_id, project_dir=project_dir)[1]
+    decision = plan_subject_execution(subjects, queued_request.cpu_policy)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    progress = initial_progress(
+        project_id=project_id,
+        run_id=run_id,
+        run_dir=run_dir,
+        subject_ids=[item.subject_id or "single_subject" for item in subjects],
+        resource_decision=decision.as_dict(),
+    )
+    write_progress(run_dir, progress)
+    response = NativeFullPreprocResponse(
+        ok=True,
+        status="queued",
+        project_id=project_id,
+        run_id=run_id,
+        run_dir=str(run_dir),
+        warnings=[*warnings, "Native preprocessing was queued for background execution."],
+        safety_flags={"rawdata_readonly_confirmed": True, "no_external_tools_executed": True, "no_matlab_spm_dpabi": True},
+        scheduler_mode=queued_request.cpu_policy.mode,
+        worker_count_requested=decision.worker_count_requested,
+        worker_count_calculated=decision.worker_count_calculated,
+        worker_count_used=decision.worker_count_used,
+        threads_per_worker_calculated=decision.threads_per_worker_calculated,
+        resource_decision=decision.as_dict(),
+        progress_url=f"/api/projects/{project_id}/preprocessing/native/runs/{run_id}/progress",
+        started_at=str(progress["started_at"]),
+    )
+    atomic_write_json(run_dir / "native_full_run_manifest.json", response.model_dump(mode="json"), schema_version=1)
+
+    def run_background() -> None:
+        try:
+            run_native_full_execute(project_id, queued_request, project_dir=project_dir, project_metadata=project_metadata)
+        except Exception as exc:
+            failed = response.model_copy(update={
+                "ok": False,
+                "status": "failed",
+                "errors": [str(exc)],
+                "finished_at": progress_now_iso(),
+            })
+            atomic_write_json(run_dir / "native_full_run_manifest.json", failed.model_dump(mode="json"), schema_version=1)
+            progress["status"] = "failed"
+            progress["errors"] = [str(exc)]
+            progress["finished_at"] = progress_now_iso()
+            write_progress(run_dir, progress)
+
+    Thread(target=run_background, name=f"native-preproc-{run_id}", daemon=True).start()
+    return response
+
+
 def get_native_full_run(
     project_id: str,
     run_id: str,
     *,
     project_dir: str = "",
 ) -> NativeFullPreprocResponse:
-    return load_native_full_run_manifest(project_id, run_id, project_dir=project_dir)
+    response = load_native_full_run_manifest(project_id, run_id, project_dir=project_dir)
+    if response.status not in {"queued", "running", "cancel_requested"} or not response.run_dir:
+        return response
+    progress = load_progress(Path(response.run_dir))
+    if not progress:
+        return response
+    status = str(progress.get("status") or response.status)
+    heartbeat = str(progress.get("heartbeat_at") or "")
+    try:
+        stale = datetime.now(timezone.utc) - datetime.fromisoformat(heartbeat) > timedelta(minutes=2)
+    except ValueError:
+        stale = False
+    if status in {"queued", "running", "cancel_requested"} and stale:
+        status = "interrupted"
+        progress["status"] = status
+        progress["finished_at"] = progress_now_iso()
+        progress.setdefault("errors", []).append("Native preprocessing heartbeat became stale; run marked interrupted.")
+        write_progress(Path(response.run_dir), progress)
+    if status in {"interrupted", "cancelled", "failed", "partial", "succeeded"}:
+        return response.model_copy(
+            update={
+                "ok": status == "succeeded",
+                "status": status,
+                "errors": list(progress.get("errors") or response.errors),
+                "finished_at": str(progress.get("finished_at") or response.finished_at),
+            }
+        )
+    return response
+
+
+def get_native_full_progress(
+    project_id: str,
+    run_id: str,
+    *,
+    project_dir: str = "",
+) -> dict[str, object]:
+    run = get_native_full_run(project_id, run_id, project_dir=project_dir)
+    progress = load_progress(Path(run.run_dir)) if run.run_dir else None
+    if progress is None:
+        return {
+            "project_id": project_id,
+            "run_id": run_id,
+            "status": run.status,
+            "available": False,
+            "message": "No persisted native preprocessing progress snapshot found.",
+        }
+    return {"available": True, **progress}
 
 
 def get_latest_native_full_run(
@@ -897,8 +1155,10 @@ def get_native_full_report(
 __all__ = [
     "get_latest_native_full_run",
     "get_native_full_report",
+    "get_native_full_progress",
     "get_native_full_run",
     "get_native_full_validation",
     "run_native_full_dry_run",
     "run_native_full_execute",
+    "submit_native_full_execute",
 ]

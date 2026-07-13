@@ -10,6 +10,7 @@ from src.backend.app.safety.gpu_safety import (
     check_cuda_availability,
     estimate_tensor_bytes,
     validate_gpu_memory_budget,
+    validate_live_gpu_memory,
     validate_gpu_timeout,
     validate_gpu_concurrency,
     normalize_gpu_exception,
@@ -127,6 +128,22 @@ def test_zero_dim_blocked():
 def test_invalid_batch_size_blocked():
     r = validate_gpu_memory_budget([64, 64, 64], batch_size=0)
     assert not r.ok
+
+
+def test_live_memory_guard_uses_runtime_free_vram_and_reserve():
+    ok = validate_live_gpu_memory(
+        estimated_peak_bytes=512 * 1024 * 1024,
+        free_vram_bytes=4 * 1024 * 1024 * 1024,
+        total_vram_bytes=8 * 1024 * 1024 * 1024,
+    )
+    blocked = validate_live_gpu_memory(
+        estimated_peak_bytes=2 * 1024 * 1024 * 1024,
+        free_vram_bytes=700 * 1024 * 1024,
+        total_vram_bytes=8 * 1024 * 1024 * 1024,
+    )
+    assert ok.ok
+    assert not blocked.ok
+    assert any(item.code == "GPU_MEMORY_BUDGET_EXCEEDED" for item in blocked.errors)
 
 
 # ── Timeout ──
