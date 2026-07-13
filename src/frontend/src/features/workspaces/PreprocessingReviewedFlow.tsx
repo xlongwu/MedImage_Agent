@@ -355,27 +355,44 @@ export function PreprocessingReviewedFlow({
   useEffect(() => {
     let cancelled = false;
     void getNativeGpuDetection(baseUrl)
-      .then((result) => { if (!cancelled) setGpuDetection(result); })
-      .catch(() => { if (!cancelled) setGpuDetection(null); });
-    return () => { cancelled = true; };
+      .then((result) => {
+        if (!cancelled) setGpuDetection(result);
+      })
+      .catch(() => {
+        if (!cancelled) setGpuDetection(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [baseUrl]);
 
   useEffect(() => {
-    if (!projectId || !nativeResult?.run_id || !["queued", "running"].includes(nativeResult.status)) return;
+    if (!projectId || !nativeResult?.run_id || !["queued", "running"].includes(nativeResult.status))
+      return;
     let stopped = false;
     const refresh = () => {
       void getNativeFullPreprocessingProgress(baseUrl, projectId, nativeResult.run_id)
-        .then((progress) => { if (!stopped) setNativeProgress(progress); })
+        .then((progress) => {
+          if (!stopped) setNativeProgress(progress);
+        })
         .catch((): undefined => undefined);
       void getLatestNativeFullPreprocessingRun(baseUrl, projectId)
         .then((run) => {
-          if (!stopped && run.run_id === nativeResult.run_id && !["queued", "running"].includes(run.status)) setNativeResult(run);
+          if (
+            !stopped &&
+            run.run_id === nativeResult.run_id &&
+            !["queued", "running"].includes(run.status)
+          )
+            setNativeResult(run);
         })
         .catch((): undefined => undefined);
     };
     refresh();
     const timer = window.setInterval(refresh, 3000);
-    return () => { stopped = true; window.clearInterval(timer); };
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
   }, [baseUrl, nativeResult?.run_id, nativeResult?.status, projectId]);
 
   const executeReviewedFlow = async () => {
@@ -840,31 +857,72 @@ function NativeFullWorkflowCard({
 
       <label className={styles.fieldShell}>
         <span>CPU scheduling mode</span>
-        <select aria-label="CPU scheduling mode" value={cpuMode} onChange={(event) => onCpuModeChange(event.target.value as typeof cpuMode)}>
+        <select
+          aria-label="CPU scheduling mode"
+          value={cpuMode}
+          onChange={(event) => onCpuModeChange(event.target.value as typeof cpuMode)}
+        >
           <option value="serial">serial (default)</option>
           <option value="process">process</option>
           <option value="auto">auto</option>
         </select>
       </label>
       <div className={styles.gateSummary} aria-label="Native GPU capability">
-        <div><span>GPU device</span><strong>{gpuDetection?.gpu_available ? gpuDetection.device_name || gpuDetection.device_id || "CUDA device" : "Unavailable"}</strong></div>
-        <div><span>CuPy</span><strong>{gpuDetection?.cupy_available ? "available" : "unavailable"}</strong></div>
-        <div><span>Free VRAM</span><strong>{gpuDetection?.free_vram_bytes ? `${Math.round(gpuDetection.free_vram_bytes / 1024 / 1024)} MiB` : "-"}</strong></div>
+        <div>
+          <span>GPU device</span>
+          <strong>
+            {gpuDetection?.gpu_available
+              ? gpuDetection.device_name || gpuDetection.device_id || "CUDA device"
+              : "Unavailable"}
+          </strong>
+        </div>
+        <div>
+          <span>CuPy</span>
+          <strong>{gpuDetection?.cupy_available ? "available" : "unavailable"}</strong>
+        </div>
+        <div>
+          <span>Free VRAM</span>
+          <strong>
+            {gpuDetection?.free_vram_bytes
+              ? `${Math.round(gpuDetection.free_vram_bytes / 1024 / 1024)} MiB`
+              : "-"}
+          </strong>
+        </div>
       </div>
       <label className={styles.fieldShell}>
         <span>GPU compute backend</span>
-        <select aria-label="GPU compute backend" value={computeBackend} onChange={(event) => onComputeBackendChange(event.target.value as typeof computeBackend)}>
+        <select
+          aria-label="GPU compute backend"
+          value={computeBackend}
+          onChange={(event) => onComputeBackendChange(event.target.value as typeof computeBackend)}
+        >
           <option value="cpu">CPU (default, reference)</option>
           <option value="gpu">GPU (reviewed CuPy execution; no fallback)</option>
           <option value="auto">Auto (falls back visibly to CPU)</option>
         </select>
-        <small>GPU applies only to released numerical stages. ReHo remains CPU until separately validated.</small>
+        <small>
+          GPU applies only to released numerical stages. ReHo remains CPU until separately
+          validated.
+        </small>
       </label>
-      {progress ? <div className={styles.gateSummary} aria-label="Native preprocessing live progress">
-        <div><span>Subjects</span><strong>{String(progress.completed_subjects ?? 0)} / {String(progress.total_subjects ?? "?")}</strong></div>
-        <div><span>Live status</span><strong>{String(progress.status ?? "queued")}</strong></div>
-        <div><span>Last heartbeat</span><strong>{String(progress.heartbeat_at ?? "-")}</strong></div>
-      </div> : null}
+      {progress ? (
+        <div className={styles.gateSummary} aria-label="Native preprocessing live progress">
+          <div>
+            <span>Subjects</span>
+            <strong>
+              {String(progress.completed_subjects ?? 0)} / {String(progress.total_subjects ?? "?")}
+            </strong>
+          </div>
+          <div>
+            <span>Live status</span>
+            <strong>{String(progress.status ?? "queued")}</strong>
+          </div>
+          <div>
+            <span>Last heartbeat</span>
+            <strong>{String(progress.heartbeat_at ?? "-")}</strong>
+          </div>
+        </div>
+      ) : null}
 
       <div className={styles.reviewedActions}>
         <Button variant="secondary" onClick={onDryRun} disabled={!canDryRun}>

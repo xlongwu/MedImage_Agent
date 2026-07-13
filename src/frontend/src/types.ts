@@ -1590,7 +1590,16 @@ export type NativeComputePolicy = {
   chunk_size?: number | null;
   allow_cpu_fallback?: boolean;
   adaptive_replanning?: boolean;
-  stage_backends?: Record<"alff" | "falff" | "temporal_filtering" | "nuisance_regression" | "functional_connectivity" | "smoothing" | "atlas_resampling", "cpu" | "gpu" | "auto">;
+  stage_backends?: Record<
+    | "alff"
+    | "falff"
+    | "temporal_filtering"
+    | "nuisance_regression"
+    | "functional_connectivity"
+    | "smoothing"
+    | "atlas_resampling",
+    "cpu" | "gpu" | "auto"
+  >;
 };
 export type NativeGpuDetection = {
   ok: boolean;
@@ -1660,7 +1669,17 @@ export type NativeFullStageApiResult = {
 };
 export type NativeFullPreprocResponse = {
   ok: boolean;
-  status: "planned" | "queued" | "running" | "cancel_requested" | "cancelled" | "interrupted" | "succeeded" | "partial" | "blocked" | "failed";
+  status:
+    | "planned"
+    | "queued"
+    | "running"
+    | "cancel_requested"
+    | "cancelled"
+    | "interrupted"
+    | "succeeded"
+    | "partial"
+    | "blocked"
+    | "failed";
   dry_run: boolean;
   project_id: string;
   run_id: string;

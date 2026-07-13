@@ -114,7 +114,11 @@ export async function submitNativeFullPreprocessing(
   );
 }
 
-export async function getNativeFullPreprocessingProgress(baseUrl: string, projectId: string, runId: string) {
+export async function getNativeFullPreprocessingProgress(
+  baseUrl: string,
+  projectId: string,
+  runId: string,
+) {
   return requestJson<Record<string, unknown>>(
     baseUrl,
     `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/runs/${encodeURIComponent(runId)}/progress`,

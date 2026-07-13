@@ -220,7 +220,11 @@ describe("PreprocessingWorkspace", () => {
     nativeReportMock.mockReset();
     nativeGpuDetectionMock.mockReset();
     nativeGpuDetectionMock.mockResolvedValue({
-      ok: true, cupy_available: false, gpu_available: false, warnings: [], errors: [],
+      ok: true,
+      cupy_available: false,
+      gpu_available: false,
+      warnings: [],
+      errors: [],
     });
   });
 
