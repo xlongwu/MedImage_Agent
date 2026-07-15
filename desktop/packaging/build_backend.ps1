@@ -10,6 +10,7 @@ $GpuManifestScript = Join-Path $RepoRoot "desktop\packaging\write_gpu_runtime_ma
 $DistPath = Join-Path $RepoRoot "desktop\packaging\dist\backend"
 $WorkPath = Join-Path $RepoRoot "desktop\packaging\build\backend"
 $AnalysisTocPath = Join-Path $WorkPath "pyinstaller_backend\Analysis-00.toc"
+$CuPyCacheDir = Join-Path $WorkPath "cupy_cache"
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
 
 if (-not $PythonExe) {
@@ -23,8 +24,14 @@ if (-not $PythonExe) {
     }
 }
 
+$PreviousCuPyCacheDir = $env:CUPY_CACHE_DIR
+$HadCuPyCacheDir = Test-Path Env:CUPY_CACHE_DIR
+
 Push-Location $RepoRoot
 try {
+    New-Item -ItemType Directory -Force -Path $CuPyCacheDir | Out-Null
+    $env:CUPY_CACHE_DIR = $CuPyCacheDir
+
     if (-not $SkipDependencyInstall) {
         & $PythonExe -m pip install -r requirements.txt
         & $PythonExe -m pip install pyinstaller
@@ -60,5 +67,11 @@ try {
     Write-Host "Backend sidecar built: $ExePath"
 }
 finally {
+    if ($HadCuPyCacheDir) {
+        $env:CUPY_CACHE_DIR = $PreviousCuPyCacheDir
+    }
+    else {
+        Remove-Item Env:CUPY_CACHE_DIR -ErrorAction SilentlyContinue
+    }
     Pop-Location
 }

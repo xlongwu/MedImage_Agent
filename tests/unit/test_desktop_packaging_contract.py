@@ -196,6 +196,9 @@ def test_backend_build_checks_native_scientific_dependencies():
     assert "GpuManifestScript" in build_backend
     assert "AnalysisTocPath" in build_backend
     assert "GPU runtime manifest" in build_backend
+    assert "CUPY_CACHE_DIR" in build_backend
+    assert "cupy_cache" in build_backend
+    assert "Remove-Item Env:CUPY_CACHE_DIR" in build_backend
 
 
 def test_gpu_runtime_manifest_is_portable_and_inventory_based():
