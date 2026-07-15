@@ -68,13 +68,17 @@ def test_electron_main_contract():
     assert "sandbox: true" in main
     assert "--no-sandbox" not in main
     assert "setWindowOpenHandler" in main
-    assert "resolveDcm2niixPath" in main
-    assert "MEDIMAGE_DCM2NIIX_PATH" in main
-    assert "MEDIMAGE_ENABLE_DICOM_CONVERSION" in main
-    assert "MEDIMAGE_ENABLE_REVIEWED_EXECUTION" in main
-    assert "MEDIMAGE_ALLOW_USER_DATA_CONVERSION" in main
-    assert "MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT" in main
-    assert "MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE" in main
+    assert "resolveDcm2niixPath" not in main
+    assert "MEDIMAGE_DCM2NIIX_PATH" not in main
+    assert "MEDIMAGE_ENABLE_DICOM_CONVERSION" not in main
+    assert "MEDIMAGE_ENABLE_REVIEWED_EXECUTION" not in main
+    assert "MEDIMAGE_ALLOW_USER_DATA_CONVERSION" not in main
+    assert "MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT" not in main
+    assert "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE" not in main
+    assert "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE" not in main
+    assert "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION" not in main
+    assert "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE" not in main
+    assert "MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE" not in main
     assert "VITE_ENABLE_DICOM_EXECUTE_UI" not in main
     assert "MEDIMAGE_FRONTEND_DICOM_EXECUTE_UI_ENABLED" not in main
     assert "MEDIMAGE_MATLAB_ENABLED" not in main
@@ -99,7 +103,9 @@ def test_electron_builder_contract():
 
     assert "../../src/frontend/dist" in builder
     assert "../packaging/dist/backend_payload" in builder
-    assert "../resources/tools" in builder
+    assert "../resources/tools" not in builder
+    assert "../../matlab" not in builder
+    assert "workspace_seed/matlab" not in builder
     assert "workspace_seed/examples" in builder
     assert "target: nsis" in builder
     assert "target: portable" in builder
@@ -137,6 +143,8 @@ def test_pyinstaller_spec_excludes_blocked_gui_and_model_modules():
     assert 'collect_submodules("cupy")' in spec
     assert 'collect_data_files("cupy", includes=["_core/include/**/*"])' in spec
     assert 'collect_submodules("fastrlock")' in spec
+    assert "dcm2niix" not in spec.lower()
+    assert "resources/tools" not in spec
     assert '"pywinauto"' in spec
     assert '"torch"' in spec
     assert '"safetensors"' in spec

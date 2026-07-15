@@ -120,22 +120,10 @@ function ensureDesktopWorkspace() {
     const seedRoot = path.join(getResourcesRoot(), "workspace_seed");
     copySeedDirectory(path.join(seedRoot, "examples"), path.join(workspace, "examples"));
     copySeedDirectory(path.join(seedRoot, "docs"), path.join(workspace, "docs"));
-    copySeedDirectory(path.join(seedRoot, "matlab"), path.join(workspace, "matlab"));
   }
 
   fs.mkdirSync(path.join(workspace, "outputs"), { recursive: true });
   return workspace;
-}
-
-function resolveDcm2niixPath() {
-  const candidates = [
-    process.env.MEDIMAGE_DCM2NIIX_PATH,
-    path.join(getResourcesRoot(), "tools", "windows-x64", "dcm2niix.exe"),
-    path.join(getResourcesRoot(), "tools", "dcm2niix.exe"),
-    path.join(getRepoRoot(), "desktop", "resources", "tools", "windows-x64", "dcm2niix.exe"),
-    path.join(getRepoRoot(), "desktop", "resources", "tools", "dcm2niix.exe"),
-  ];
-  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || "";
 }
 
 function syncRuntimeEnv() {
@@ -314,12 +302,6 @@ async function startBackend() {
   appendBackendLog("desktop", `backend executable: ${backend.executablePath}\n`);
   appendBackendLog("desktop", `backend port: ${port}\n`);
   appendBackendLog("desktop", `frontend path: ${resolveFrontendIndex()}\n`);
-  const dcm2niixPath = resolveDcm2niixPath();
-  appendBackendLog(
-    "desktop",
-    `dcm2niix path: ${dcm2niixPath || "not found in bundled resources"}\n`
-  );
-
   backendProcess = spawn(backend.command, backend.args, {
     cwd: backend.cwd,
     env: {
@@ -330,16 +312,8 @@ async function startBackend() {
       MEDIMAGE_BACKEND_HOST: API_HOST,
       MEDIMAGE_BACKEND_PORT: String(port),
       MEDIMAGE_GUI_AGENT_PROVIDER: "mock",
-      MEDIMAGE_ENABLE_DICOM_CONVERSION: "1",
-      MEDIMAGE_ENABLE_REVIEWED_EXECUTION: "1",
-      MEDIMAGE_ALLOW_USER_DATA_CONVERSION: "1",
-      MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT: "1",
-      MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE: "1",
-      MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE: "1",
-      MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION: "1",
-      MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE: "1",
-      MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE: "1",
-      ...(dcm2niixPath ? { MEDIMAGE_DCM2NIIX_PATH: dcm2niixPath } : {}),
+      // Execution gates are never enabled by the desktop shell. Explicit
+      // operator/test environment configuration remains authoritative.
     },
     stdio: "pipe",
     windowsHide: true,
