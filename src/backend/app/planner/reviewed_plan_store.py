@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -14,6 +15,14 @@ from src.backend.app.planner.project_context import (
     load_project_context,
     validate_plan_project_context,
 )
+from src.backend.app.planner.plan_validator import validate_plan
+from src.backend.app.planner.plan_validator import validate_goal_contract_reachability
+from src.backend.app.planner.goal_contract_builder import (
+    build_goal_contract_semantics,
+    finalize_goal_contract,
+    goal_contract_identity_payload,
+)
+from src.backend.app.schemas.goal_contract import GoalContract, GoalContractCandidate
 from src.backend.app.schemas.desktop import ReviewedPlanRecord, RunLinkRecord
 from src.backend.app.services.mock_store import mock_store, utc_now_iso
 
@@ -22,8 +31,25 @@ class ReviewedPlanStoreError(ValueError):
     """Raised when a reviewed plan cannot be persisted or linked safely."""
 
 
-def reviewed_plan_identity(project_id: str, plan: dict[str, Any]) -> tuple[str, str]:
-    plan_hash = stable_hash(plan)
+def normalize_reviewed_plan(plan: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return the contract-normalized plan and its validation evidence."""
+    result = validate_plan(plan)
+    normalized = result.normalized_plan if result.ok and result.normalized_plan else plan
+    return normalized, result.to_dict()
+
+
+def reviewed_plan_identity(
+    project_id: str,
+    plan: dict[str, Any],
+    goal_contract_semantics: dict[str, Any] | None = None,
+) -> tuple[str, str]:
+    normalized, _ = normalize_reviewed_plan(plan)
+    identity_payload: dict[str, Any] = {"plan": normalized}
+    if goal_contract_semantics is not None:
+        identity_payload["goal_contract"] = goal_contract_identity_payload(
+            goal_contract_semantics
+        )
+    plan_hash = stable_hash(identity_payload if goal_contract_semantics is not None else normalized)
     identity_hash = stable_hash({"project_id": project_id, "plan_hash": plan_hash})
     return f"reviewed_{identity_hash[:20]}", plan_hash
 
@@ -32,8 +58,9 @@ def new_run_identity() -> tuple[str, str]:
     return f"runlink_{uuid4().hex[:20]}", f"run_{uuid4().hex[:20]}"
 
 
-def _project_dir(project_id: str) -> Path:
-    project = mock_store.get_project(project_id)
+def _project_dir(project_id: str, store=None) -> Path:
+    project_store = store or mock_store
+    project = project_store.get_project(project_id)
     if project is None:
         raise ReviewedPlanStoreError(f"PROJECT_NOT_FOUND: {project_id}")
     value = project.metadata.get("project_dir")
@@ -81,18 +108,86 @@ def save_reviewed_plan(
     provider: str | None = None,
     status: str = "REVIEWED",
     warnings: list[str] | None = None,
+    goal_contract_candidate: GoalContractCandidate | dict[str, Any] | None = None,
+    reviewed_actor: str | None = None,
+    lineage: dict[str, Any] | None = None,
+    store=None,
 ) -> ReviewedPlanRecord:
     """Upsert a stable SQLite plan index and write its immutable snapshot."""
     try:
-        context = load_project_context(project_id, project_config_path)
+        context = load_project_context(project_id, project_config_path, store=store)
     except ProjectContextError as exc:
         raise ReviewedPlanStoreError(str(exc)) from exc
     context_errors = validate_plan_project_context(plan, context)
     if context_errors:
         raise ReviewedPlanStoreError("; ".join(context_errors))
 
-    project_dir = _project_dir(project_id)
-    reviewed_plan_id, plan_hash = reviewed_plan_identity(project_id, plan)
+    normalized_plan, contract_validation = normalize_reviewed_plan(plan)
+    project_store = store or mock_store
+    project_dir = _project_dir(project_id, store=project_store)
+    candidate: GoalContractCandidate | None = None
+    if goal_contract_candidate is not None:
+        try:
+            candidate = (
+                goal_contract_candidate
+                if isinstance(goal_contract_candidate, GoalContractCandidate)
+                else GoalContractCandidate(**goal_contract_candidate)
+            )
+        except Exception as exc:
+            raise ReviewedPlanStoreError(
+                "GOAL_CONTRACT_CANDIDATE_INVALID: review-time contract is invalid"
+            ) from exc
+        if goal and goal.strip() != candidate.goal_text.strip():
+            raise ReviewedPlanStoreError(
+                "GOAL_TEXT_MISMATCH: goal and reviewed Goal Contract disagree"
+            )
+        goal = candidate.goal_text
+    goal_build = build_goal_contract_semantics(normalized_plan, goal)
+    # The deterministic builder produces a review candidate only.  A caller
+    # must explicitly return that candidate as reviewed input before it can be
+    # frozen into plan identity or authorize execution.
+    goal_semantics = candidate.semantics() if candidate is not None else None
+    identity_semantics = goal_semantics or {
+        "schema_version": 1,
+        "goal_text": str(goal or ""),
+        "goal_kind": "needs_goal_review",
+        "scope": {"subject_ids": [], "session_ids": [], "include": [], "exclude": [], "completeness_required": True},
+        "criteria": [],
+        "minimum_capability_level": "unavailable",
+        "allowed_limitation_flags": [],
+        "forbidden_limitation_flags": ["simplified", "preview_only", "partial"],
+        "evaluation_policy_version": "goal-evaluator-v1",
+    }
+    reviewed_plan_id, plan_hash = reviewed_plan_identity(
+        project_id,
+        normalized_plan,
+        identity_semantics,
+    )
+    goal_contract: GoalContract | None = None
+    goal_contract_issues: list[str] = []
+    if goal_semantics is not None:
+        goal_contract = finalize_goal_contract(
+            semantics=goal_semantics,
+            project_id=project_id,
+            reviewed_plan_id=reviewed_plan_id,
+            plan_hash=plan_hash,
+            reviewed_actor=reviewed_actor,
+            reviewed_at=datetime.now(timezone.utc) if reviewed_actor else None,
+        )
+        goal_contract_issues = list(
+            dict.fromkeys(
+                issue.message
+                for issue in validate_goal_contract_reachability(
+                    normalized_plan,
+                    goal_contract,
+                )
+            )
+        )
+        if goal_contract_issues:
+            raise ReviewedPlanStoreError("; ".join(goal_contract_issues))
+    effective_status = status
+    if goal_contract is None and status == "REVIEWED":
+        effective_status = "NEEDS_GOAL_REVIEW"
     now = utc_now_iso()
     plan_path = _snapshot_path(project_dir, reviewed_plan_id)
     record = ReviewedPlanRecord(
@@ -105,23 +200,41 @@ def save_reviewed_plan(
         rawdata_dir=str(context.rawdata_dir) if context.rawdata_dir else None,
         plan_hash=plan_hash,
         plan_path=str(plan_path),
-        status=status,
+        status=effective_status,
         created_at=now,
         updated_at=now,
         warnings=list(warnings or []),
         payload={
-            "plan": plan,
-            "validation": dict(validation or {}),
+            "plan": normalized_plan,
+            "normalized_plan_hash": stable_hash(normalized_plan),
+            "validation": {
+                **contract_validation,
+                **dict(validation or {}),
+                "normalized_params_hash": contract_validation.get("normalized_params_hash", ""),
+                "contract_versions": contract_validation.get("contract_versions", {}),
+                "validation_evidence": contract_validation.get("validation_evidence", []),
+            },
             "goal": goal,
+            "goal_contract": goal_contract.model_dump(mode="json") if goal_contract else None,
+            "goal_contract_status": "reviewed" if goal_contract else "needs_goal_review",
+            "goal_contract_candidate": (
+                goal_build.semantics if candidate is None and goal_build.ok else None
+            ),
+            "goal_contract_issue": (
+                None
+                if candidate is not None
+                else goal_build.reason or "GOAL_CONTRACT_REVIEW_REQUIRED"
+            ),
             "provider": provider,
+            "lineage": dict(lineage or {}),
         },
     )
-    stored = mock_store.add_reviewed_plan(record)
+    stored = project_store.add_reviewed_plan(record)
     try:
         write_reviewed_plan_snapshot(stored, project_dir)
     except Exception as exc:
         snapshot_warning = f"PLAN_SNAPSHOT_WRITE_FAILED: {exc}"
-        stored = mock_store.update_reviewed_plan(
+        stored = project_store.update_reviewed_plan(
             stored.reviewed_plan_id,
             warnings=list(dict.fromkeys([*stored.warnings, snapshot_warning])),
         ) or stored
@@ -151,22 +264,62 @@ def resolve_reviewed_plan_for_execution(
 ) -> ReviewedPlanRecord:
     if not context.project_id:
         raise ReviewedPlanStoreError("PROJECT_ID_REQUIRED: real execution needs a project id")
-    expected_id, plan_hash = reviewed_plan_identity(context.project_id, plan)
-    if reviewed_plan_id and reviewed_plan_id != expected_id:
-        raise ReviewedPlanStoreError(
-            "REVIEWED_PLAN_MISMATCH: reviewed_plan_id does not match the submitted plan"
-        )
-    record = mock_store.get_reviewed_plan(reviewed_plan_id or expected_id)
+    normalized_plan, _ = normalize_reviewed_plan(plan)
+    normalized_plan_hash = stable_hash(normalized_plan)
+    record = mock_store.get_reviewed_plan(reviewed_plan_id) if reviewed_plan_id else None
+    if record is None and reviewed_plan_id:
+        raise ReviewedPlanStoreError("REVIEWED_PLAN_NOT_FOUND: save this reviewed plan before execution")
     if record is None:
-        record = mock_store.find_reviewed_plan(context.project_id, plan_hash)
+        matches = [
+            item
+            for item in mock_store.list_reviewed_plans(context.project_id)
+            if item.payload.get("normalized_plan_hash") == normalized_plan_hash
+        ]
+        if len(matches) == 1:
+            record = matches[0]
+        elif len(matches) > 1:
+            raise ReviewedPlanStoreError(
+                "REVIEWED_PLAN_ID_REQUIRED: multiple reviewed Goal Contracts exist for this plan"
+            )
+        else:
+            legacy_id, legacy_hash = reviewed_plan_identity(context.project_id, normalized_plan)
+            record = mock_store.get_reviewed_plan(legacy_id) or mock_store.find_reviewed_plan(
+                context.project_id, legacy_hash
+            )
     if record is None:
         raise ReviewedPlanStoreError(
             "REVIEWED_PLAN_NOT_FOUND: save this reviewed plan before execution"
         )
-    if record.project_id != context.project_id or record.plan_hash != plan_hash:
+    if record.project_id != context.project_id:
         raise ReviewedPlanStoreError(
             "REVIEWED_PLAN_MISMATCH: persisted reviewed plan does not match execution"
         )
+    stored_normalized_hash = record.payload.get("normalized_plan_hash")
+    if stored_normalized_hash and stored_normalized_hash != normalized_plan_hash:
+        raise ReviewedPlanStoreError(
+            "REVIEWED_PLAN_MISMATCH: normalized plan changed after review"
+        )
+    goal_contract_payload = record.payload.get("goal_contract")
+    if record.payload.get("goal_contract_status") != "reviewed" or not isinstance(goal_contract_payload, dict):
+        raise ReviewedPlanStoreError(
+            "REVIEWED_PLAN_NEEDS_GOAL_REVIEW: legacy plan has no reviewed Goal Contract"
+        )
+    try:
+        goal_contract = GoalContract(**goal_contract_payload)
+    except Exception as exc:
+        raise ReviewedPlanStoreError("GOAL_CONTRACT_INVALID: persisted contract cannot be loaded") from exc
+    canonical_goal = goal_contract.model_dump(mode="json")
+    expected_goal_hash = canonical_goal.pop("goal_contract_hash", None)
+    if stable_hash(canonical_goal) != expected_goal_hash:
+        raise ReviewedPlanStoreError("GOAL_CONTRACT_TAMPERED: canonical hash mismatch")
+    semantics = goal_contract_identity_payload(goal_contract.model_dump(mode="json"))
+    expected_id, expected_plan_hash = reviewed_plan_identity(
+        context.project_id,
+        normalized_plan,
+        semantics,
+    )
+    if record.reviewed_plan_id != expected_id or record.plan_hash != expected_plan_hash:
+        raise ReviewedPlanStoreError("REVIEWED_PLAN_GOAL_BINDING_MISMATCH")
     if Path(record.project_config_path).resolve() != context.project_config_path:
         raise ReviewedPlanStoreError(
             "PROJECT_CONFIG_MISMATCH: reviewed plan uses a different project config"

@@ -12,6 +12,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from src.backend.app.api.dependencies import ProjectStore
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.schemas.desktop import (
     AssistantChatRequest,
     AssistantChatResponse,
@@ -147,6 +148,9 @@ async def run_pipeline(
     from src.backend.app.services.mock_store import mock_store
     from src.backend.app.services.pipeline_runner import run_pipeline_task
     from src.backend.app.services.task_manager import task_manager
+
+    if request.execution_mode != "simulated":
+        reject_execution_contract("pipeline.task", project_id=request.project_id)
 
     if not request.input_sequences:
         raise HTTPException(status_code=400, detail="input_sequences must not be empty")

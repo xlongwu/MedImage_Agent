@@ -27,6 +27,7 @@ from src.backend.app.services import (
     motion_qc_readiness,
 )
 from src.backend.app.services.mock_store import SQLiteDesktopStore
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -88,14 +89,17 @@ def _make_plan(created: dict) -> dict:
 
 
 def _save_plan(client: TestClient, created: dict, plan: dict) -> str:
+    goal = "Consistency test"
     resp = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
             "plan": plan,
             "project_config_path": created["project_config_path"],
             "validation": {"ok": True},
-            "goal": "Consistency test",
+            "goal": goal,
             "provider": "mock",
+            "goal_contract_candidate": reviewed_goal_candidate(plan, goal),
+            "reviewed_actor": "test-reviewer",
         },
     )
     assert resp.status_code == 200, resp.text
@@ -238,8 +242,7 @@ def test_consistency_failure_does_not_call_executor(tmp_path, monkeypatch):
     # Also patch run_pipeline to detect if it's called
     called = []
     monkeypatch.setattr(
-        execute_reviewed_routes,
-        "run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kwargs: called.append(True) or {"status": "SUCCESS"},
     )
 

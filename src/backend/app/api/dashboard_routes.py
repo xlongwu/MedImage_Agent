@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 
 from src.backend.app.api.dependencies import ProjectStore
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.core.config import get_backend_settings
 from src.backend.app.schemas.desktop import (
     AssistantChatRequest,
@@ -601,6 +602,8 @@ def generate_task_audit_package(task_id: str) -> TaskAuditPackageResponse:
 
 @router.post("/api/pipelines/run", response_model=PipelineRunResponse, deprecated=True)
 async def run_pipeline(request: PipelineRunRequest) -> PipelineRunResponse:
+    if request.execution_mode != "simulated":
+        reject_execution_contract("dashboard.pipeline", project_id=request.project_id)
     if not request.input_sequences:
         raise HTTPException(status_code=400, detail="input_sequences must not be empty")
     if request.execution_mode == "external_smoke" and request.external_smoke_mode == "approved_smoke":
@@ -1161,6 +1164,7 @@ def post_conversion_execute(
     project_id: str,
     request_raw: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    reject_execution_contract("dashboard.conversion", project_id=project_id)
     """Flag-gated public DICOM-to-NIfTI conversion execute endpoint.
 
     **Only executes when ALL preconditions pass.**  Returns blocked otherwise.
@@ -1769,6 +1773,7 @@ def get_spm_runtime_preflight(project_id: str) -> dict[str, Any]:
 @router.post("/api/projects/{project_id}/preprocessing/spm-runtime/synthetic-smoke", deprecated=True)
 def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
     """Generate synthetic SPM Slice Timing + Realign smoke artifacts."""
+    reject_execution_contract("dashboard.spm_synthetic_smoke", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.spm_runtime import SpmSyntheticSmokeRequest
@@ -1815,6 +1820,7 @@ def post_spm_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     """Sandboxed Slice Timing + Realign execution: copies BOLD, runs MATLAB/SPM, captures output."""
+    reject_execution_contract("dashboard.slice_timing_realign", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_spm_execution import SpmSandboxExecutionRequest
@@ -1892,6 +1898,7 @@ def post_coreg_norm_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     """Sandboxed Coregistration + Normalization execution."""
+    reject_execution_contract("dashboard.coreg_normalize", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_coreg_norm_execution import CoregNormSandboxExecutionRequest
@@ -1968,6 +1975,7 @@ def post_smoothing_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     """Sandboxed Smoothing execution on copied normalized functional inputs."""
+    reject_execution_contract("dashboard.smoothing", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_smoothing_execution import SmoothingSandboxExecutionRequest
@@ -2047,6 +2055,7 @@ def post_nuisance_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     """Sandboxed Nuisance Regression execution (Python-only, metadata-first)."""
+    reject_execution_contract("dashboard.nuisance_regression", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_nuisance_execution import NuisanceSandboxExecutionRequest
@@ -2119,6 +2128,7 @@ def post_filtering_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     """Sandboxed Temporal Filtering execution (Python-only)."""
+    reject_execution_contract("dashboard.temporal_filtering", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_filtering_execution import FilteringSandboxExecutionRequest
@@ -2192,6 +2202,7 @@ def post_alff_reho_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     """Sandboxed ALFF/ReHo execution (Python-only)."""
+    reject_execution_contract("dashboard.alff_reho", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_alff_reho_execution import AlffRehoSandboxExecutionRequest
@@ -2267,6 +2278,7 @@ def post_fc_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
     """Sandboxed FC execution (Python-only, atlas-optional)."""
+    reject_execution_contract("dashboard.functional_connectivity", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_fc_execution import FcSandboxExecutionRequest

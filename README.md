@@ -24,7 +24,7 @@ Current release line: **v0.6.0-rc1**. See
 
 - Python 3.11+
 - Node.js 20+
-- MATLAB + SPM12 optional, only for explicitly env-gated SPM workflows
+- `pydicom` and `nibabel` optional, required for the in-project DICOM converter
 - CuPy optional, only for GPU paths
 
 ### Install
@@ -154,15 +154,21 @@ desktop/
   packaging/                   PyInstaller and Windows build scripts
 
 docs/
-  releases/                    historical release notes
-  tasks/                       temporary Codex task handoffs
-  archive/                     historical plans and agent outputs
-  architecture.md              current architecture
-  DESKTOP_APP_PACKAGING.md     packaging guide
+  文档索引.md                   current documentation index
+  架构与决策/                   current architecture and ADRs
+  项目概览/                     capability matrix and compatibility pointers
+  安全与审批/                   safety boundaries and run lifecycle
+  预处理与科学计算/             scientific and external-tool contracts
+  桌面与前端/                   desktop packaging and frontend guidance
+  发布记录/                     version-bound historical release notes
+
+specs/
+  规范/                         durable engineering and scientific specifications
+  阶段记录/                     retained phase-level historical records
 
 tests/
   unit/                        unit and source-contract tests
-  integration/                 opt-in smoke and integration tests
+  integration/                 integration and opt-in smoke tests
 ```
 
 ## Safety Architecture
@@ -173,16 +179,19 @@ tests/
 | Approval required | Tool Catalog + Approval Gate + explicit confirmations |
 | Path traversal blocked | `path_safety.py` and project/run artifact IDs |
 | Frontend isolated | HTTP API modules and approved Electron bridge |
-| External tools gated | environment flags, approval/readiness checks, audit records |
+| Execution contained in project | registered Python runners, approval/readiness checks, audit records |
 | Research use only | UI and documentation warnings |
 
 ## Known Limitations
 
 - Not for clinical diagnosis or medical decision-making.
-- DPABI execution remains disabled by default.
-- MATLAB/SPM execution requires local tools plus explicit env flags.
+- Preprocessing uses the in-project Python implementation; MATLAB, SPM, and
+  DPABI executables are not required or invoked.
 - DICOM conversion execution is default-blocked and requires release approval
   evidence and multiple confirmations.
+- Native DICOM conversion currently supports classic single-frame MR series
+  and Siemens single-frame mosaic MR time series; unsupported or mixed series
+  fail closed.
 - ALFF/fALFF, ReHo, and functional connectivity have Python backend paths where
   their required inputs exist; metadata-only and preview outputs remain labeled
   as such.

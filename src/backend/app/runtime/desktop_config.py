@@ -280,14 +280,14 @@ def get_dicom_conversion_capability() -> dict[str, Any]:
 
     try:
         from src.backend.app.services.dicom_conversion_execution import (
-            _detect_dcm2niix_runtime,
+            check_native_dicom_converter_availability,
         )
-        detection = _detect_dcm2niix_runtime()
+        detection = check_native_dicom_converter_availability()
         available = bool(detection.get("found"))
-        path = detection.get("executable_path")
+        path = None
         version = detection.get("version")
-        sha256 = detection.get("sha256")
-        strategy = detection.get("strategy")
+        sha256 = None
+        strategy = "in_project_python"
         error = detection.get("error")
     except Exception as exc:
         available = False
@@ -295,12 +295,12 @@ def get_dicom_conversion_capability() -> dict[str, Any]:
         version = None
         sha256 = None
         strategy = "none"
-        error = f"dcm2niix detection failed: {exc}"
+        error = f"Native DICOM converter dependency check failed: {exc}"
 
     return {
         "enabled": bool(dc.get("enabled", False)),
         "converter_available": available,
-        "converter_name": "dcm2niix",
+        "converter_name": "medimage-native",
         "converter_path": path,
         "converter_version": version,
         "converter_sha256": sha256,

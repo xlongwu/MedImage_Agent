@@ -26,6 +26,18 @@ from src.backend.app.schemas.desktop import (
     TaskLogEntry,
     TaskStatus,
 )
+from src.backend.app.schemas.execution_ticket import ExecutionTicket, ExecutionTicketEvent
+from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
+from src.backend.app.schemas.observation import ObservationRecord
+from src.backend.app.schemas.goal_contract import GoalEvaluationRecord
+from src.backend.app.schemas.recovery import DiagnosisRecord, RecoveryProposal
+from src.backend.app.schemas.recovery_attempt import (
+    RecoveryApprovalEvent,
+    RecoveryApprovalRecord,
+    RecoveryAttemptEvent,
+    RecoveryAttemptRecord,
+    RecoveryQuotaReservation,
+)
 
 
 DEFAULT_STORE_PATH = Path("outputs/work/desktop/desktop_state.sqlite")
@@ -143,6 +155,170 @@ class SQLiteDesktopStore:
                     ON run_links(project_id, updated_at);
                 CREATE INDEX IF NOT EXISTS idx_run_links_reviewed_plan
                     ON run_links(reviewed_plan_id, updated_at);
+                CREATE TABLE IF NOT EXISTS execution_tickets (
+                    execution_ticket_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    issued_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_execution_tickets_project_issued
+                    ON execution_tickets(project_id, issued_at);
+                CREATE TABLE IF NOT EXISTS execution_ticket_events (
+                    event_id TEXT PRIMARY KEY,
+                    execution_ticket_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_execution_ticket_events_ticket_time
+                    ON execution_ticket_events(execution_ticket_id, occurred_at);
+                CREATE TABLE IF NOT EXISTS agent_lifecycles (
+                    lifecycle_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_agent_lifecycles_project_updated
+                    ON agent_lifecycles(project_id, updated_at);
+                CREATE TABLE IF NOT EXISTS agent_lifecycle_events (
+                    event_id TEXT PRIMARY KEY,
+                    lifecycle_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    command_id TEXT NOT NULL UNIQUE,
+                    from_state TEXT,
+                    to_state TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_agent_lifecycle_events_lifecycle_time
+                    ON agent_lifecycle_events(lifecycle_id, occurred_at);
+                CREATE TABLE IF NOT EXISTS observations (
+                    observation_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    run_id TEXT NOT NULL,
+                    observation_hash TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    collected_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_observations_hash
+                    ON observations(observation_hash);
+                CREATE INDEX IF NOT EXISTS idx_observations_project_lifecycle_time
+                    ON observations(project_id, lifecycle_id, collected_at);
+                CREATE INDEX IF NOT EXISTS idx_observations_project_run_time
+                    ON observations(project_id, run_id, collected_at);
+                CREATE TABLE IF NOT EXISTS goal_evaluations (
+                    goal_evaluation_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    observation_id TEXT NOT NULL,
+                    goal_contract_id TEXT NOT NULL,
+                    goal_evaluation_hash TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    evaluated_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_goal_evaluations_hash
+                    ON goal_evaluations(goal_evaluation_hash);
+                CREATE INDEX IF NOT EXISTS idx_goal_evaluations_project_lifecycle_time
+                    ON goal_evaluations(project_id, lifecycle_id, evaluated_at);
+                CREATE INDEX IF NOT EXISTS idx_goal_evaluations_observation_time
+                    ON goal_evaluations(observation_id, evaluated_at);
+                CREATE TABLE IF NOT EXISTS recovery_diagnoses (
+                    diagnosis_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    goal_evaluation_id TEXT NOT NULL,
+                    diagnosis_hash TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_recovery_diagnoses_hash
+                    ON recovery_diagnoses(diagnosis_hash);
+                CREATE INDEX IF NOT EXISTS idx_recovery_diagnoses_lifecycle_time
+                    ON recovery_diagnoses(project_id, lifecycle_id, created_at);
+                CREATE TABLE IF NOT EXISTS recovery_proposals (
+                    recovery_proposal_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    diagnosis_id TEXT NOT NULL,
+                    recovery_proposal_hash TEXT NOT NULL,
+                    recommended_candidate_id TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_recovery_proposals_hash
+                    ON recovery_proposals(recovery_proposal_hash);
+                CREATE INDEX IF NOT EXISTS idx_recovery_proposals_lifecycle_time
+                    ON recovery_proposals(project_id, lifecycle_id, created_at);
+                CREATE TABLE IF NOT EXISTS recovery_approvals (
+                    recovery_approval_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    recovery_proposal_id TEXT NOT NULL,
+                    candidate_id TEXT NOT NULL,
+                    command_id TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    approved_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_recovery_approvals_lifecycle_time
+                    ON recovery_approvals(project_id, lifecycle_id, approved_at);
+                CREATE TABLE IF NOT EXISTS recovery_approval_events (
+                    event_id TEXT PRIMARY KEY,
+                    recovery_approval_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    command_id TEXT NOT NULL UNIQUE,
+                    event_type TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_recovery_approval_events_approval_time
+                    ON recovery_approval_events(recovery_approval_id, occurred_at);
+                CREATE TABLE IF NOT EXISTS recovery_attempts (
+                    recovery_attempt_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    recovery_proposal_id TEXT NOT NULL,
+                    candidate_id TEXT NOT NULL,
+                    command_id TEXT NOT NULL UNIQUE,
+                    idempotency_key TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_recovery_attempts_lifecycle_time
+                    ON recovery_attempts(project_id, lifecycle_id, created_at);
+                CREATE TABLE IF NOT EXISTS recovery_attempt_events (
+                    event_id TEXT PRIMARY KEY,
+                    recovery_attempt_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    command_id TEXT NOT NULL UNIQUE,
+                    event_type TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_recovery_attempt_events_attempt_time
+                    ON recovery_attempt_events(recovery_attempt_id, occurred_at);
+                CREATE TABLE IF NOT EXISTS recovery_quota_reservations (
+                    reservation_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    lifecycle_id TEXT NOT NULL,
+                    recovery_attempt_id TEXT NOT NULL UNIQUE,
+                    status TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_recovery_quota_lifecycle_time
+                    ON recovery_quota_reservations(project_id, lifecycle_id, created_at);
                 """
             )
 
@@ -491,6 +667,19 @@ class SQLiteDesktopStore:
 
             conn.execute("DELETE FROM run_links WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM reviewed_plans WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM execution_ticket_events WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM execution_tickets WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM agent_lifecycle_events WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM agent_lifecycles WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM observations WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM goal_evaluations WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM recovery_diagnoses WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM recovery_proposals WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM recovery_approval_events WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM recovery_approvals WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM recovery_attempt_events WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM recovery_attempts WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM recovery_quota_reservations WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM imports WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM dataset_health WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM models WHERE project_id = ?", (project_id,))
@@ -695,6 +884,802 @@ class SQLiteDesktopStore:
                 (self._dump_model(updated), updated.updated_at, run_link_id),
             )
         return updated
+
+    def add_execution_ticket(self, ticket: ExecutionTicket) -> ExecutionTicket:
+        payload = ticket.model_dump(mode="json")
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO execution_tickets
+                    (execution_ticket_id, project_id, status, payload, issued_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ticket.execution_ticket_id,
+                    ticket.project_id,
+                    ticket.status,
+                    json.dumps(payload, ensure_ascii=False),
+                    ticket.issued_at.isoformat(),
+                    ticket.issued_at.isoformat(),
+                ),
+            )
+        return ticket
+
+    def get_execution_ticket(self, execution_ticket_id: str) -> ExecutionTicket | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM execution_tickets WHERE execution_ticket_id = ?",
+                (execution_ticket_id,),
+            ).fetchone()
+        return ExecutionTicket(**json.loads(row["payload"])) if row else None
+
+    def list_execution_tickets(self, project_id: str) -> list[ExecutionTicket]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM execution_tickets
+                WHERE project_id = ? ORDER BY issued_at DESC, execution_ticket_id DESC
+                """,
+                (project_id,),
+            ).fetchall()
+        return [ExecutionTicket(**json.loads(row["payload"])) for row in rows]
+
+    def update_execution_ticket(
+        self,
+        execution_ticket_id: str,
+        **updates: object,
+    ) -> ExecutionTicket | None:
+        current = self.get_execution_ticket(execution_ticket_id)
+        if current is None:
+            return None
+        payload = current.model_dump(mode="json")
+        payload.update(updates)
+        updated = ExecutionTicket(**payload)
+        now = utc_now_iso()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE execution_tickets
+                SET status = ?, payload = ?, updated_at = ?
+                WHERE execution_ticket_id = ?
+                """,
+                (
+                    updated.status,
+                    json.dumps(updated.model_dump(mode="json"), ensure_ascii=False),
+                    now,
+                    execution_ticket_id,
+                ),
+            )
+        return updated
+
+    def add_execution_ticket_event(
+        self,
+        event: ExecutionTicketEvent,
+    ) -> ExecutionTicketEvent:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO execution_ticket_events
+                    (event_id, execution_ticket_id, project_id, event_type, payload, occurred_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.event_id,
+                    event.execution_ticket_id,
+                    event.project_id,
+                    event.event_type,
+                    json.dumps(event.model_dump(mode="json"), ensure_ascii=False),
+                    event.occurred_at.isoformat(),
+                ),
+            )
+        return event
+
+    def list_execution_ticket_events(
+        self,
+        execution_ticket_id: str,
+    ) -> list[ExecutionTicketEvent]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM execution_ticket_events
+                WHERE execution_ticket_id = ? ORDER BY rowid
+                """,
+                (execution_ticket_id,),
+            ).fetchall()
+        return [ExecutionTicketEvent(**json.loads(row["payload"])) for row in rows]
+
+    def create_agent_lifecycle(
+        self,
+        record: AgentLifecycleRecord,
+        event: AgentLifecycleEvent,
+    ) -> AgentLifecycleRecord:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_lifecycles
+                    (lifecycle_id, project_id, state, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.lifecycle_id,
+                    record.project_id,
+                    record.state,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.created_at.isoformat(),
+                    record.updated_at.isoformat(),
+                ),
+            )
+            self._insert_agent_lifecycle_event(conn, event)
+        return record
+
+    def add_observation(self, record: ObservationRecord) -> ObservationRecord:
+        """Append one immutable observation snapshot."""
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO observations
+                    (observation_id, project_id, lifecycle_id, run_id,
+                     observation_hash, payload, collected_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.observation_id,
+                    record.bindings.project_id,
+                    record.bindings.lifecycle_id,
+                    record.bindings.run_id,
+                    record.observation_hash,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.collected_at.isoformat(),
+                ),
+            )
+        return record
+
+    def get_observation(self, observation_id: str) -> ObservationRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM observations WHERE observation_id = ?",
+                (observation_id,),
+            ).fetchone()
+        return ObservationRecord(**json.loads(row["payload"])) if row else None
+
+    def list_observations(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+        run_id: str | None = None,
+    ) -> list[ObservationRecord]:
+        clauses = ["project_id = ?"]
+        params: list[str] = [project_id]
+        if lifecycle_id is not None:
+            clauses.append("lifecycle_id = ?")
+            params.append(lifecycle_id)
+        if run_id is not None:
+            clauses.append("run_id = ?")
+            params.append(run_id)
+        query = (
+            "SELECT payload FROM observations WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY collected_at DESC, observation_id DESC"
+        )
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [ObservationRecord(**json.loads(row["payload"])) for row in rows]
+
+    def add_goal_evaluation(
+        self,
+        record: GoalEvaluationRecord,
+    ) -> GoalEvaluationRecord:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO goal_evaluations
+                    (goal_evaluation_id, project_id, lifecycle_id, observation_id,
+                     goal_contract_id, goal_evaluation_hash, status, payload, evaluated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.goal_evaluation_id,
+                    record.project_id,
+                    record.lifecycle_id,
+                    record.observation_id,
+                    record.goal_contract_id,
+                    record.goal_evaluation_hash,
+                    record.status,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.evaluated_at.isoformat(),
+                ),
+            )
+        return record
+
+    def get_goal_evaluation(
+        self,
+        goal_evaluation_id: str,
+    ) -> GoalEvaluationRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM goal_evaluations WHERE goal_evaluation_id = ?",
+                (goal_evaluation_id,),
+            ).fetchone()
+        return GoalEvaluationRecord(**json.loads(row["payload"])) if row else None
+
+    def list_goal_evaluations(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+        observation_id: str | None = None,
+    ) -> list[GoalEvaluationRecord]:
+        clauses = ["project_id = ?"]
+        params: list[str] = [project_id]
+        if lifecycle_id is not None:
+            clauses.append("lifecycle_id = ?")
+            params.append(lifecycle_id)
+        if observation_id is not None:
+            clauses.append("observation_id = ?")
+            params.append(observation_id)
+        query = (
+            "SELECT payload FROM goal_evaluations WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY evaluated_at DESC, goal_evaluation_id DESC"
+        )
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [GoalEvaluationRecord(**json.loads(row["payload"])) for row in rows]
+
+    def add_recovery_diagnosis(self, record: DiagnosisRecord) -> DiagnosisRecord:
+        """Append one immutable diagnosis bound to immutable evidence."""
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO recovery_diagnoses
+                    (diagnosis_id, project_id, lifecycle_id, goal_evaluation_id,
+                     diagnosis_hash, payload, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.diagnosis_id,
+                    record.bindings.project_id,
+                    record.bindings.lifecycle_id,
+                    record.bindings.goal_evaluation_id,
+                    record.diagnosis_hash,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.created_at.isoformat(),
+                ),
+            )
+        return record
+
+    def get_recovery_diagnosis(self, diagnosis_id: str) -> DiagnosisRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM recovery_diagnoses WHERE diagnosis_id = ?",
+                (diagnosis_id,),
+            ).fetchone()
+        return DiagnosisRecord(**json.loads(row["payload"])) if row else None
+
+    def list_recovery_diagnoses(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+    ) -> list[DiagnosisRecord]:
+        clauses = ["project_id = ?"]
+        params = [project_id]
+        if lifecycle_id is not None:
+            clauses.append("lifecycle_id = ?")
+            params.append(lifecycle_id)
+        query = (
+            "SELECT payload FROM recovery_diagnoses WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY created_at DESC, diagnosis_id DESC"
+        )
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [DiagnosisRecord(**json.loads(row["payload"])) for row in rows]
+
+    def add_recovery_proposal(self, record: RecoveryProposal) -> RecoveryProposal:
+        """Append one immutable proposal; it conveys no ticket authority."""
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO recovery_proposals
+                    (recovery_proposal_id, project_id, lifecycle_id, diagnosis_id,
+                     recovery_proposal_hash, recommended_candidate_id, payload, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.recovery_proposal_id,
+                    record.bindings.project_id,
+                    record.bindings.lifecycle_id,
+                    record.diagnosis_id,
+                    record.recovery_proposal_hash,
+                    record.recommended_candidate_id,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.created_at.isoformat(),
+                ),
+            )
+        return record
+
+    def get_recovery_proposal(self, proposal_id: str) -> RecoveryProposal | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM recovery_proposals WHERE recovery_proposal_id = ?",
+                (proposal_id,),
+            ).fetchone()
+        return RecoveryProposal(**json.loads(row["payload"])) if row else None
+
+    def list_recovery_proposals(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+    ) -> list[RecoveryProposal]:
+        clauses = ["project_id = ?"]
+        params = [project_id]
+        if lifecycle_id is not None:
+            clauses.append("lifecycle_id = ?")
+            params.append(lifecycle_id)
+        query = (
+            "SELECT payload FROM recovery_proposals WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY created_at DESC, recovery_proposal_id DESC"
+        )
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, tuple(params)).fetchall()
+        return [RecoveryProposal(**json.loads(row["payload"])) for row in rows]
+
+    def add_recovery_approval(
+        self,
+        record: RecoveryApprovalRecord,
+        event: RecoveryApprovalEvent,
+    ) -> RecoveryApprovalRecord:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO recovery_approvals
+                    (recovery_approval_id, project_id, lifecycle_id,
+                     recovery_proposal_id, candidate_id, command_id, status,
+                     payload, approved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.recovery_approval_id,
+                    record.project_id,
+                    record.lifecycle_id,
+                    record.recovery_proposal_id,
+                    record.candidate_id,
+                    record.command_id,
+                    record.status,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.approved_at.isoformat(),
+                ),
+            )
+            self._insert_recovery_approval_event(conn, event)
+        return record
+
+    @staticmethod
+    def _insert_recovery_approval_event(
+        conn: sqlite3.Connection,
+        event: RecoveryApprovalEvent,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO recovery_approval_events
+                (event_id, recovery_approval_id, project_id, command_id,
+                 event_type, payload, occurred_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event.event_id,
+                event.recovery_approval_id,
+                event.project_id,
+                event.command_id,
+                event.event_type,
+                json.dumps(event.model_dump(mode="json"), ensure_ascii=False),
+                event.occurred_at.isoformat(),
+            ),
+        )
+
+    def get_recovery_approval(self, approval_id: str) -> RecoveryApprovalRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM recovery_approvals WHERE recovery_approval_id = ?",
+                (approval_id,),
+            ).fetchone()
+        return RecoveryApprovalRecord(**json.loads(row["payload"])) if row else None
+
+    def list_recovery_approvals(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+    ) -> list[RecoveryApprovalRecord]:
+        clauses = ["project_id = ?"]
+        params = [project_id]
+        if lifecycle_id is not None:
+            clauses.append("lifecycle_id = ?")
+            params.append(lifecycle_id)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT payload FROM recovery_approvals WHERE "
+                + " AND ".join(clauses)
+                + " ORDER BY approved_at DESC, recovery_approval_id DESC",
+                tuple(params),
+            ).fetchall()
+        return [RecoveryApprovalRecord(**json.loads(row["payload"])) for row in rows]
+
+    def list_recovery_approval_events(
+        self,
+        approval_id: str,
+    ) -> list[RecoveryApprovalEvent]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM recovery_approval_events
+                WHERE recovery_approval_id = ? ORDER BY occurred_at, event_id
+                """,
+                (approval_id,),
+            ).fetchall()
+        return [RecoveryApprovalEvent(**json.loads(row["payload"])) for row in rows]
+
+    def update_recovery_approval(
+        self,
+        record: RecoveryApprovalRecord,
+        event: RecoveryApprovalEvent,
+        *,
+        expected_status: str,
+    ) -> RecoveryApprovalRecord:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE recovery_approvals SET status = ?, payload = ?
+                WHERE recovery_approval_id = ? AND status = ?
+                """,
+                (
+                    record.status,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.recovery_approval_id,
+                    expected_status,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("RECOVERY_APPROVAL_CONCURRENT_UPDATE")
+            self._insert_recovery_approval_event(conn, event)
+        return record
+
+    def create_recovery_attempt(
+        self,
+        record: RecoveryAttemptRecord,
+        event: RecoveryAttemptEvent,
+    ) -> RecoveryAttemptRecord:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO recovery_attempts
+                    (recovery_attempt_id, project_id, lifecycle_id,
+                     recovery_proposal_id, candidate_id, command_id,
+                     idempotency_key, status, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    record.recovery_attempt_id,
+                    record.project_id,
+                    record.lifecycle_id,
+                    record.recovery_proposal_id,
+                    record.candidate_id,
+                    record.command_id,
+                    record.idempotency_key,
+                    record.status,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.created_at.isoformat(),
+                    record.updated_at.isoformat(),
+                ),
+            )
+            self._insert_recovery_attempt_event(conn, event)
+        return record
+
+    @staticmethod
+    def _insert_recovery_attempt_event(
+        conn: sqlite3.Connection,
+        event: RecoveryAttemptEvent,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO recovery_attempt_events
+                (event_id, recovery_attempt_id, project_id, lifecycle_id,
+                 command_id, event_type, payload, occurred_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event.event_id,
+                event.recovery_attempt_id,
+                event.project_id,
+                event.lifecycle_id,
+                event.command_id,
+                event.event_type,
+                json.dumps(event.model_dump(mode="json"), ensure_ascii=False),
+                event.occurred_at.isoformat(),
+            ),
+        )
+
+    def get_recovery_attempt(self, attempt_id: str) -> RecoveryAttemptRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM recovery_attempts WHERE recovery_attempt_id = ?",
+                (attempt_id,),
+            ).fetchone()
+        return RecoveryAttemptRecord(**json.loads(row["payload"])) if row else None
+
+    def get_recovery_attempt_by_idempotency(
+        self,
+        idempotency_key: str,
+    ) -> RecoveryAttemptRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM recovery_attempts WHERE idempotency_key = ?",
+                (idempotency_key,),
+            ).fetchone()
+        return RecoveryAttemptRecord(**json.loads(row["payload"])) if row else None
+
+    def list_recovery_attempts(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+    ) -> list[RecoveryAttemptRecord]:
+        clauses = ["project_id = ?"]
+        params = [project_id]
+        if lifecycle_id is not None:
+            clauses.append("lifecycle_id = ?")
+            params.append(lifecycle_id)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT payload FROM recovery_attempts WHERE "
+                + " AND ".join(clauses)
+                + " ORDER BY created_at DESC, recovery_attempt_id DESC",
+                tuple(params),
+            ).fetchall()
+        return [RecoveryAttemptRecord(**json.loads(row["payload"])) for row in rows]
+
+    def list_recovery_attempt_events(
+        self,
+        attempt_id: str,
+    ) -> list[RecoveryAttemptEvent]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM recovery_attempt_events
+                WHERE recovery_attempt_id = ? ORDER BY occurred_at, event_id
+                """,
+                (attempt_id,),
+            ).fetchall()
+        return [RecoveryAttemptEvent(**json.loads(row["payload"])) for row in rows]
+
+    def transition_recovery_attempt(
+        self,
+        record: RecoveryAttemptRecord,
+        event: RecoveryAttemptEvent,
+        *,
+        expected_status: str,
+    ) -> RecoveryAttemptRecord:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE recovery_attempts
+                SET status = ?, payload = ?, updated_at = ?
+                WHERE recovery_attempt_id = ? AND status = ?
+                """,
+                (
+                    record.status,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.updated_at.isoformat(),
+                    record.recovery_attempt_id,
+                    expected_status,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("RECOVERY_ATTEMPT_CONCURRENT_TRANSITION")
+            self._insert_recovery_attempt_event(conn, event)
+        return record
+
+    def reserve_recovery_quota(
+        self,
+        reservation: RecoveryQuotaReservation,
+    ) -> RecoveryQuotaReservation:
+        """Atomically check every hard dimension and reserve it once."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM recovery_quota_reservations
+                WHERE project_id = ? AND lifecycle_id = ?
+                  AND status IN ('reserved', 'consumed')
+                """,
+                (reservation.project_id, reservation.lifecycle_id),
+            ).fetchall()
+            existing = [
+                RecoveryQuotaReservation(**json.loads(row["payload"])) for row in rows
+            ]
+            limits = reservation.effective_limits
+            if len(existing) + 1 > limits["max_lifecycle_recovery_attempts"]:
+                raise RuntimeError("RECOVERY_QUOTA_LIFECYCLE_EXCEEDED")
+            for node_id in reservation.node_ids:
+                count = sum(node_id in item.node_ids for item in existing)
+                if count + 1 > limits["max_node_attempts"]:
+                    raise RuntimeError("RECOVERY_QUOTA_NODE_EXCEEDED")
+            for node_id in reservation.node_ids:
+                for subject_id in reservation.subject_ids:
+                    count = sum(
+                        node_id in item.node_ids and subject_id in item.subject_ids
+                        for item in existing
+                    )
+                    if count + 1 > limits["max_subject_node_attempts"]:
+                        raise RuntimeError("RECOVERY_QUOTA_SUBJECT_NODE_EXCEEDED")
+            replan_count = sum(item.reserves_replan for item in existing)
+            if reservation.reserves_replan and replan_count + 1 > limits["max_replans"]:
+                raise RuntimeError("RECOVERY_QUOTA_REPLAN_EXCEEDED")
+            wall_total = sum(item.reserved_wall_seconds for item in existing)
+            if wall_total + reservation.reserved_wall_seconds > limits["max_recovery_wall_seconds"]:
+                raise RuntimeError("RECOVERY_QUOTA_WALL_EXCEEDED")
+            conn.execute(
+                """
+                INSERT INTO recovery_quota_reservations
+                    (reservation_id, project_id, lifecycle_id,
+                     recovery_attempt_id, status, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    reservation.reservation_id,
+                    reservation.project_id,
+                    reservation.lifecycle_id,
+                    reservation.recovery_attempt_id,
+                    reservation.status,
+                    json.dumps(reservation.model_dump(mode="json"), ensure_ascii=False),
+                    reservation.created_at.isoformat(),
+                    reservation.created_at.isoformat(),
+                ),
+            )
+        return reservation
+
+    def get_recovery_quota_reservation(
+        self,
+        reservation_id: str,
+    ) -> RecoveryQuotaReservation | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM recovery_quota_reservations WHERE reservation_id = ?",
+                (reservation_id,),
+            ).fetchone()
+        return RecoveryQuotaReservation(**json.loads(row["payload"])) if row else None
+
+    def list_recovery_quota_reservations(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+    ) -> list[RecoveryQuotaReservation]:
+        clauses = ["project_id = ?"]
+        params = [project_id]
+        if lifecycle_id is not None:
+            clauses.append("lifecycle_id = ?")
+            params.append(lifecycle_id)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT payload FROM recovery_quota_reservations WHERE "
+                + " AND ".join(clauses)
+                + " ORDER BY created_at, reservation_id",
+                tuple(params),
+            ).fetchall()
+        return [RecoveryQuotaReservation(**json.loads(row["payload"])) for row in rows]
+
+    def update_recovery_quota_reservation(
+        self,
+        record: RecoveryQuotaReservation,
+        *,
+        expected_status: str,
+    ) -> RecoveryQuotaReservation:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE recovery_quota_reservations
+                SET status = ?, payload = ?, updated_at = ?
+                WHERE reservation_id = ? AND status = ?
+                """,
+                (
+                    record.status,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    (record.consumed_at or record.released_at or record.created_at).isoformat(),
+                    record.reservation_id,
+                    expected_status,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("RECOVERY_QUOTA_RESERVATION_CONCURRENT_UPDATE")
+        return record
+
+    @staticmethod
+    def _insert_agent_lifecycle_event(
+        conn: sqlite3.Connection,
+        event: AgentLifecycleEvent,
+    ) -> None:
+        conn.execute(
+            """
+            INSERT INTO agent_lifecycle_events
+                (event_id, lifecycle_id, project_id, command_id, from_state,
+                 to_state, payload, occurred_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event.event_id,
+                event.lifecycle_id,
+                event.project_id,
+                event.command_id,
+                event.from_state,
+                event.to_state,
+                json.dumps(event.model_dump(mode="json"), ensure_ascii=False),
+                event.occurred_at.isoformat(),
+            ),
+        )
+
+    def get_agent_lifecycle(self, lifecycle_id: str) -> AgentLifecycleRecord | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM agent_lifecycles WHERE lifecycle_id = ?",
+                (lifecycle_id,),
+            ).fetchone()
+        return AgentLifecycleRecord(**json.loads(row["payload"])) if row else None
+
+    def list_agent_lifecycles(self, project_id: str) -> list[AgentLifecycleRecord]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM agent_lifecycles
+                WHERE project_id = ? ORDER BY updated_at DESC, lifecycle_id DESC
+                """,
+                (project_id,),
+            ).fetchall()
+        return [AgentLifecycleRecord(**json.loads(row["payload"])) for row in rows]
+
+    def transition_agent_lifecycle(
+        self,
+        record: AgentLifecycleRecord,
+        event: AgentLifecycleEvent,
+        *,
+        expected_state: str,
+    ) -> AgentLifecycleRecord:
+        with self._lock, self._connect() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE agent_lifecycles
+                SET state = ?, payload = ?, updated_at = ?
+                WHERE lifecycle_id = ? AND project_id = ? AND state = ?
+                """,
+                (
+                    record.state,
+                    json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
+                    record.updated_at.isoformat(),
+                    record.lifecycle_id,
+                    record.project_id,
+                    expected_state,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise RuntimeError("LIFECYCLE_CONCURRENT_TRANSITION")
+            self._insert_agent_lifecycle_event(conn, event)
+        return record
+
+    def list_agent_lifecycle_events(
+        self,
+        lifecycle_id: str,
+    ) -> list[AgentLifecycleEvent]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload FROM agent_lifecycle_events
+                WHERE lifecycle_id = ? ORDER BY rowid
+                """,
+                (lifecycle_id,),
+            ).fetchall()
+        return [AgentLifecycleEvent(**json.loads(row["payload"])) for row in rows]
 
     def get_study_overview(self, study_id: str) -> StudyOverview | None:
         with self._lock, self._connect() as conn:

@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from src.backend.app.api._errors import raise_api_error
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.api.models import (
     AgentExecuteRequest,
     AgentPlanRequest,
@@ -50,13 +51,8 @@ from src.backend.app.api.models import (
     ReleaseReadinessRequest,
 )
 from src.backend.app.core.exceptions import ConfigError
-from src.backend.app.runtime.pipeline_executor import run_pipeline
 from src.backend.app.tools.report_exporter import get_latest_rsfmri_report_export, list_rsfmri_report_exports
 from src.backend.app.tools.report_package_validator import get_latest_rsfmri_report_validation, list_rsfmri_report_validations
-from src.backend.app.runtime.agent_runtime import (
-    run_orchestrator_execute,
-    run_orchestrator_plan,
-)
 from src.backend.app.runtime.path_safety import PathSafetyError, read_safe_text_file
 from src.backend.app.runtime.run_inspector import (
     inspect_run,
@@ -64,10 +60,6 @@ from src.backend.app.runtime.run_inspector import (
     read_state_detail,
 )
 from src.backend.app.runtime.error_diagnoser import diagnose_run
-from src.backend.app.runtime.retry_runtime import (
-    dry_run_retry_plan,
-    execute_retry_plan,
-)
 from src.backend.app.runtime.scheduler import create_scheduler_plan
 from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
 from src.backend.app.tools.gpu_utils import detect_gpu
@@ -99,6 +91,10 @@ from src.backend.app.tools.rsfmri_plan_tool import write_rsfmri_preprocessing_pl
 from src.backend.app.version import APP_VERSION
 
 router = APIRouter()
+
+
+def _reject_legacy_pipeline_execution(**_: object) -> dict[str, Any]:
+    reject_execution_contract("rsfmri.legacy_pipeline")
 
 
 def _read_json_if_exists(path: str | Path) -> dict[str, Any] | None:
@@ -228,7 +224,7 @@ def api_rsfmri_preprocessing_plan_latest() -> dict[str, Any]:
 
 @router.post("/api/rsfmri/spm/realign-motion-qc")
 def api_rsfmri_spm_realign_motion_qc(payload: RsfmriSpmRealignMotionQcRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -238,7 +234,7 @@ def api_rsfmri_spm_realign_motion_qc(payload: RsfmriSpmRealignMotionQcRequest) -
 
 @router.post("/api/rsfmri/spm/slice-timing")
 def api_rsfmri_spm_slice_timing(payload: RsfmriSpmSliceTimingRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -271,7 +267,7 @@ def api_rsfmri_st_realign_motion_qc(payload: RsfmriStRealignMotionQcRequest) -> 
         approved_pipeline_path.write_text(yaml.safe_dump(pipeline_data, sort_keys=False), encoding="utf-8")
 
     pipeline_to_run = str(approved_pipeline_path) if approved_pipeline_path else payload.pipeline_path
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=pipeline_to_run,
     )
@@ -288,7 +284,7 @@ def api_rsfmri_st_realign_motion_qc(payload: RsfmriStRealignMotionQcRequest) -> 
 
 @router.post("/api/rsfmri/coregistration-qc")
 def api_rsfmri_coregistration_qc(payload: RsfmriCoregistrationQcRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -298,7 +294,7 @@ def api_rsfmri_coregistration_qc(payload: RsfmriCoregistrationQcRequest) -> dict
 
 @router.post("/api/rsfmri/segmentation-tissue-qc")
 def api_rsfmri_segmentation_tissue_qc(payload: RsfmriSegmentationTissueQcRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -308,7 +304,7 @@ def api_rsfmri_segmentation_tissue_qc(payload: RsfmriSegmentationTissueQcRequest
 
 @router.post("/api/rsfmri/normalization-qc")
 def api_rsfmri_normalization_qc(payload: RsfmriNormalizationQcRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -318,7 +314,7 @@ def api_rsfmri_normalization_qc(payload: RsfmriNormalizationQcRequest) -> dict[s
 
 @router.post("/api/rsfmri/smoothing-qc")
 def api_rsfmri_smoothing_qc(payload: RsfmriSmoothingQcRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -328,7 +324,7 @@ def api_rsfmri_smoothing_qc(payload: RsfmriSmoothingQcRequest) -> dict[str, Any]
 
 @router.post("/api/rsfmri/nuisance-regression")
 def api_rsfmri_nuisance_regression(payload: RsfmriNuisanceRegressionRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -338,7 +334,7 @@ def api_rsfmri_nuisance_regression(payload: RsfmriNuisanceRegressionRequest) -> 
 
 @router.post("/api/rsfmri/temporal-filtering")
 def api_rsfmri_temporal_filtering(payload: RsfmriTemporalFilteringRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -348,7 +344,7 @@ def api_rsfmri_temporal_filtering(payload: RsfmriTemporalFilteringRequest) -> di
 
 @router.post("/api/rsfmri/alff-falff")
 def api_rsfmri_alff_falff(payload: RsfmriAlffFalffRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -358,7 +354,7 @@ def api_rsfmri_alff_falff(payload: RsfmriAlffFalffRequest) -> dict[str, Any]:
 
 @router.post("/api/rsfmri/reho")
 def api_rsfmri_reho(payload: RsfmriRehoRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -368,7 +364,7 @@ def api_rsfmri_reho(payload: RsfmriRehoRequest) -> dict[str, Any]:
 
 @router.post("/api/rsfmri/functional-connectivity")
 def api_rsfmri_functional_connectivity(payload: RsfmriFunctionalConnectivityRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -378,7 +374,7 @@ def api_rsfmri_functional_connectivity(payload: RsfmriFunctionalConnectivityRequ
 
 @router.post("/api/rsfmri/group-summary")
 def api_rsfmri_group_summary(payload: RsfmriGroupSummaryRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -388,7 +384,7 @@ def api_rsfmri_group_summary(payload: RsfmriGroupSummaryRequest) -> dict[str, An
 
 @router.post("/api/rsfmri/report-export")
 def api_rsfmri_report_export(payload: RsfmriReportExportRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -399,7 +395,7 @@ def api_rsfmri_report_export(payload: RsfmriReportExportRequest) -> dict[str, An
 
 @router.post("/api/rsfmri/report-validation")
 def api_rsfmri_report_validation(payload: RsfmriReportValidationRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )
@@ -422,7 +418,7 @@ def api_rsfmri_report_validation_legacy(payload: RsfmriReportValidationRequest) 
 
 @router.post("/api/release-readiness")
 def api_release_readiness(payload: ReleaseReadinessRequest) -> dict[str, Any]:
-    result = run_pipeline(
+    result = _reject_legacy_pipeline_execution(
         project_config_path=payload.project_config_path,
         pipeline_path=payload.pipeline_path,
     )

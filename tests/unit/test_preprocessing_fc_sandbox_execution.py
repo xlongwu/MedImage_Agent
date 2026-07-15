@@ -49,7 +49,8 @@ def test_endpoint_200(tmp_path):
     from src.backend.app.main import app; client = TestClient(app)
     resp = client.post("/api/projects/brain-tumor-study/preprocessing/runs/pp-test/fc/execute-sandbox",
         json={"dry_run_id": "dr", "confirm_sandbox_copy": True})
-    assert resp.status_code == 200
+    assert resp.status_code == 410
+    assert resp.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
 # ── P1-5: sub-sub-* filename fix ──

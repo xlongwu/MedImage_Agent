@@ -50,6 +50,7 @@ DicomConversionStatus = Literal[
 ]
 
 DicomConversionTool = Literal[
+    "medimage-native",
     "dcm2niix",
     "unknown",
 ]
@@ -303,6 +304,27 @@ def build_dcm2niix_command_template(
     )
 
 
+def build_native_dicom_conversion_template(
+    *,
+    input_dir: str,
+    output_dir: str,
+    filename_pattern: str,
+) -> Dcm2niixCommandTemplate:
+    """Build a structured native conversion plan with no executable command."""
+
+    return Dcm2niixCommandTemplate(
+        tool="medimage-native",
+        executable="",
+        input_dir=input_dir,
+        output_dir=output_dir,
+        filename_pattern=filename_pattern,
+        compress="y",
+        bids_sidecar=True,
+        create_bids=True,
+        command_preview="MedImage native Python DICOM-to-NIfTI conversion (no external process)",
+    )
+
+
 def build_disabled_conversion_response(
     *,
     project_id: str = "",
@@ -438,6 +460,7 @@ Dcm2niixAvailabilityStatus = Literal[
 ]
 
 DicomConversionSandboxMode = Literal[
+    "native",
     "fake_outputs",
     "mock_subprocess",
     "disabled",

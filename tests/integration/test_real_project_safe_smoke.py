@@ -19,6 +19,7 @@ from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.runtime.pipeline_executor import run_pipeline as real_run_pipeline
 from src.backend.app.services.mock_store import SQLiteDesktopStore
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 
 def _rawdata_snapshot(rawdata_dir: Path) -> dict[str, str]:
@@ -126,14 +127,17 @@ def real_project_smoke(tmp_path: Path, monkeypatch):
     assert metadata["dataset_index_path"] == created["dataset_index_path"]
 
     plan = _safe_reviewed_plan(created)
+    goal = "Inspect the selected real project safely"
     saved = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
             "plan": plan,
             "project_config_path": created["project_config_path"],
             "validation": {"ok": True},
-            "goal": "Inspect the selected real project safely",
+            "goal": goal,
             "provider": "deterministic-test",
+            "goal_contract_candidate": reviewed_goal_candidate(plan, goal),
+            "reviewed_actor": "safe-smoke-test",
         },
     )
     assert saved.status_code == 200, saved.text
@@ -170,7 +174,9 @@ def test_real_project_safe_reviewed_execute_uses_real_executor(
     reviewed = real_project_smoke["reviewed"]
     run_links_seen_before_executor: list[str] = []
 
-    def observed_real_executor(*, project_config_path: str, pipeline_path: str) -> dict:
+    def observed_real_executor(
+        *, project_config_path: str, pipeline_path: str, execution_context
+    ) -> dict:
         pipeline = yaml.safe_load(Path(pipeline_path).read_text(encoding="utf-8"))
         run_id = pipeline["execution"]["run_id"]
         links = store.list_run_links(created["project_id"])
@@ -181,11 +187,11 @@ def test_real_project_safe_reviewed_execute_uses_real_executor(
         return real_run_pipeline(
             project_config_path=project_config_path,
             pipeline_path=pipeline_path,
+            execution_context=execution_context,
         )
 
     monkeypatch.setattr(
-        execute_reviewed_routes,
-        "run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         observed_real_executor,
     )
     body = _execute_body(
@@ -266,7 +272,10 @@ def test_real_project_safe_reviewed_execute_still_requires_confirmation(
         executor_called = True
         raise AssertionError("executor must not run without approval")
 
-    monkeypatch.setattr(execute_reviewed_routes, "run_pipeline", fail_if_called)
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
+        fail_if_called,
+    )
     response = real_project_smoke["client"].post(
         "/api/plans/execute-reviewed",
         json=_execute_body(

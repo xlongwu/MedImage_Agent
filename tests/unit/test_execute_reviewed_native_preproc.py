@@ -11,6 +11,74 @@ from src.backend.app.main import app
 client = TestClient(app)
 
 
+def _attach_persisted_review_context(monkeypatch, tmp_path, body):
+    from uuid import uuid4
+
+    from src.backend.app.api import execute_reviewed_routes
+    from src.backend.app.planner import project_context, reviewed_plan_store
+    from src.backend.app.planner.goal_contract_builder import (
+        build_goal_contract_semantics,
+    )
+    from src.backend.app.schemas.desktop import ProjectDetail
+    from src.backend.app.services.mock_store import SQLiteDesktopStore
+
+    project_id = f"native-reviewed-{uuid4().hex[:12]}"
+    project_dir = tmp_path / project_id
+    rawdata_dir = project_dir / "rawdata"
+    dataset_index_path = project_dir / "dataset_index.json"
+    rawdata_dir.mkdir(parents=True)
+    dataset_index_path.write_text('{"subjects": []}', encoding="utf-8")
+    store = SQLiteDesktopStore(tmp_path / f"{project_id}.sqlite")
+    store.add_project(
+        ProjectDetail(
+            id=project_id,
+            name="Native reviewed execution",
+            study_id=project_id,
+            modality="rs-fMRI",
+            created_date="test",
+            subjects_count=0,
+            current_pipeline_id="native_full_preprocessing",
+            sequences=[],
+            scans_count=0,
+            total_size="0 B",
+            current_model_id="none",
+            metadata={
+                "source": "created",
+                "project_dir": str(project_dir),
+                "rawdata_dir": str(rawdata_dir),
+                "dataset_index_path": str(dataset_index_path),
+                "project_config_path": body["project_config_path"],
+            },
+        ),
+        health_status="Ready",
+        rawdata_dir=str(rawdata_dir),
+    )
+    for module in (execute_reviewed_routes, project_context, reviewed_plan_store):
+        monkeypatch.setattr(module, "mock_store", store)
+    context = project_context.load_project_context(
+        project_id, body["project_config_path"]
+    )
+    plan = project_context.apply_project_context_to_plan(body["plan"], context)
+    body["plan"] = plan
+    goal_candidate = build_goal_contract_semantics(
+        plan, "native preprocessing test"
+    )
+    assert goal_candidate.ok and goal_candidate.semantics is not None
+    record = reviewed_plan_store.save_reviewed_plan(
+        project_id=project_id,
+        project_config_path=body["project_config_path"],
+        plan=plan,
+        validation={"ok": True},
+        goal="native preprocessing test",
+        provider="test",
+        goal_contract_candidate=goal_candidate.semantics,
+        reviewed_actor="test-reviewer",
+    )
+    body["project_id"] = project_id
+    body["reviewed_plan_id"] = record.reviewed_plan_id
+    return body
+
+
 def _write_project_config(path) -> None:
     config = {
         "project": {"name": "native-preproc-test", "description": "test project"},
@@ -90,7 +158,7 @@ def _native_execute_plan_missing_template_and_atlas(tmp_path) -> dict[str, objec
     return plan
 
 
-def test_native_full_preprocessing_allows_reviewed_execution(monkeypatch, tmp_path) -> None:
+def test_native_full_preprocessing_requires_persisted_review(monkeypatch, tmp_path) -> None:
     cfg = tmp_path / "project_config.yaml"
     _write_project_config(cfg)
     monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
@@ -103,7 +171,7 @@ def test_native_full_preprocessing_allows_reviewed_execution(monkeypatch, tmp_pa
         tmp_path / "reviewed_pipelines",
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "native-run-001"},
     )
 
@@ -131,16 +199,11 @@ def test_native_full_preprocessing_allows_reviewed_execution(monkeypatch, tmp_pa
     )
 
     payload = response.json()
-    assert payload["status"] == "EXECUTION_SUBMITTED"
-    assert payload["adapter"]["policy"]["allowed_native_preproc_nodes"] == [
-        "native_preproc_full_execute"
-    ]
-    assert payload["adapter"]["policy"]["blocked_native_preproc_nodes"] == []
-    assert payload["execution"]["executor_called"] is True
-    assert payload["execution"]["run_id"] == "native-run-001"
+    assert payload["status"] == "REVIEWED_PLAN_REQUIRED"
+    assert payload["execution"]["executor_called"] is False
 
 
-def test_native_full_preprocessing_executor_failure_is_not_reported_as_submitted(
+def test_native_full_preprocessing_unpersisted_failure_request_is_not_dispatched(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -156,7 +219,7 @@ def test_native_full_preprocessing_executor_failure_is_not_reported_as_submitted
         tmp_path / "reviewed_pipelines",
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {
             "status": "FAILED",
             "run_id": "native-run-002",
@@ -188,12 +251,9 @@ def test_native_full_preprocessing_executor_failure_is_not_reported_as_submitted
     )
 
     payload = response.json()
-    assert payload["status"] == "EXECUTION_FAILED"
+    assert payload["status"] == "REVIEWED_PLAN_REQUIRED"
     assert payload["ok"] is False
-    assert payload["executor_result"]["status"] == "FAILED"
-    assert payload["execution"]["executor_called"] is True
-    assert payload["execution"]["run_id"] == "native-run-002"
-    assert payload["errors"] == ["native preprocessing returned partial/blocked stages"]
+    assert payload["execution"]["executor_called"] is False
 
 
 def test_native_full_preprocessing_dry_run_blocks_missing_template_and_atlas(
@@ -239,7 +299,7 @@ def test_native_full_preprocessing_execute_blocks_before_executor_when_readiness
     _write_project_config(cfg)
     monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: (_ for _ in ()).throw(AssertionError("executor should not run")),
     )
 
@@ -267,7 +327,58 @@ def test_native_full_preprocessing_execute_blocks_before_executor_when_readiness
     )
 
     payload = response.json()
-    assert payload["status"] == "NATIVE_PREPROC_READINESS_BLOCKED"
+    assert payload["status"] == "REVIEWED_PLAN_REQUIRED"
     assert payload["ok"] is False
     assert payload["execution"]["executor_called"] is False
     assert payload["pipeline_yaml"]["written"] is False
+
+
+def test_native_full_preprocessing_persisted_plan_dispatches_with_contract_ticket(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    cfg = tmp_path / "project_config.yaml"
+    _write_project_config(cfg)
+    monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
+    monkeypatch.setattr(
+        "src.backend.app.api.execute_reviewed_routes._check_native_preproc_readiness",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        "src.backend.app.api.execute_reviewed_routes.pipeline_writer.REVIEWED_PIPELINE_DIR",
+        tmp_path / "reviewed_pipelines",
+    )
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
+        lambda **kw: {"status": "SUCCESS", "run_id": "native-persisted-001"},
+    )
+    body = {
+        "plan": _native_execute_plan(),
+        "approval": {
+            "approved": True,
+            "approved_by": "reviewer",
+            "approved_nodes": ["native_preproc_full_execute"],
+            "rejected_nodes": [],
+            "native_preprocessing_acknowledgement": True,
+            "no_external_tools_confirmed": True,
+            "rawdata_read_only_confirmed": True,
+            "risk_acknowledgement": True,
+            "subject_scope_confirmed": True,
+        },
+        "dry_run": False,
+        "confirm_execution": True,
+        "persist_audit": True,
+        "write_pipeline_yaml": True,
+        "project_config_path": str(cfg),
+    }
+    response = client.post(
+        "/api/plans/execute-reviewed",
+        json=_attach_persisted_review_context(monkeypatch, tmp_path, body),
+    )
+    payload = response.json()
+    assert payload["status"] == "EXECUTION_SUBMITTED"
+    assert payload["execution"]["executor_called"] is True
+    assert payload["execution_ticket"]["normalized_params_hash"]
+    assert payload["execution_ticket"]["contract_versions"] == [
+        ["native_preproc_full_execute", "1.0.0"]
+    ]

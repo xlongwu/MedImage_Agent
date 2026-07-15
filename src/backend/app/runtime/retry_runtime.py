@@ -305,54 +305,14 @@ def execute_retry_plan(
     approved: bool = False,
     work_dir: str = "./work",
 ) -> dict[str, Any]:
-    retry_run_id = retry_run_id or _default_retry_run_id(run_id)
-
-    if not approved:
-        return {
-            "ok": False,
-            "mode": "EXECUTE",
-            "run_id": run_id,
-            "retry_run_id": retry_run_id,
-            "errors": ["Retry execution requires approved=true."],
-        }
-
-    project_config = _load_project_config(project_config_path)
-    dry_run = dry_run_retry_plan(run_id, retry_run_id, work_dir)
-
-    out_dir = Path(work_dir) / "retry_runs" / retry_run_id
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    if not dry_run.get("ok"):
-        return dry_run
-
-    results = []
-    for step in dry_run.get("steps", []):
-        result = _run_single_retry_step(
-            retry_run_id=retry_run_id,
-            project_config=project_config,
-            classified_step=step,
-        )
-        results.append(result)
-
-    failed = [item for item in results if item.get("status") == "FAILED"]
-    executed = [item for item in results if item.get("status") != "SKIPPED"]
-
-    summary = {
-        "ok": len(failed) == 0,
+    return {
+        "ok": False,
         "mode": "EXECUTE",
+        "status": "EXECUTION_CONTRACT_REQUIRED",
+        "error_code": "EXECUTION_CONTRACT_REQUIRED",
         "run_id": run_id,
-        "retry_run_id": retry_run_id,
-        "approved": approved,
-        "steps_total": len(results),
-        "steps_executed": len(executed),
-        "steps_failed": len(failed),
-        "steps_skipped": sum(1 for item in results if item.get("status") == "SKIPPED"),
-        "results": results,
-        "errors": [err for item in failed for err in item.get("errors", [])],
-        "warnings": [],
+        "retry_run_id": retry_run_id or _default_retry_run_id(run_id),
+        "errors": [
+            "Retry execution must be authorized by an execution ticket and orchestrator."
+        ],
     }
-
-    path = out_dir / "retry_execution_summary.json"
-    path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
-    summary["retry_execution_summary_path"] = str(path)
-    return summary

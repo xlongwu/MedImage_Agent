@@ -51,9 +51,14 @@ def _get_config() -> LLMProviderConfig:
 
 def _tool_catalog_summary() -> list[dict[str, Any]]:
     """Return a compact summary of the Tool Catalog for prompt injection."""
+    from src.backend.app.runtime.node_contract_registry import NODE_CONTRACTS  # noqa: E402
     from src.backend.app.runtime.tool_catalog import build_tool_catalog  # noqa: E402
 
-    items = build_tool_catalog()
+    items = [
+        item for item in build_tool_catalog()
+        if NODE_CONTRACTS.get(item.id) is not None
+        and NODE_CONTRACTS[item.id].executable
+    ]
     return [
         {
             "id": item.id,
@@ -91,6 +96,7 @@ RULES (non-negotiable):
 5. For nodes that require approval (requires_approval=true), set params.approved=false.
 6. Order nodes so that dependencies appear before dependents.
 7. Chain dependencies sequentially where processing order matters.
+8. Optional top-level fields are "confidence" (0..1), "missing_prerequisites" (list), and "risks" (list).
 
 TOOL CATALOG (ONLY these node IDs are valid):
 {catalog_json}
@@ -108,6 +114,12 @@ OUTPUT (JSON only):
 # ── JSON parser ──────────────────────────────────────────────────────────────
 
 _CODE_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)```", re.DOTALL)
+_ALLOWED_PLAN_FIELDS = {
+    "pipeline_id", "nodes", "confidence", "missing_prerequisites", "risks",
+}
+_ALLOWED_NODE_FIELDS = {
+    "id", "backend", "depends_on", "params", "input_types", "output_types",
+}
 
 
 def parse_llm_plan_json(content: str) -> dict[str, Any]:
@@ -135,6 +147,44 @@ def parse_llm_plan_json(content: str) -> dict[str, Any]:
 
     if not isinstance(data, dict):
         raise ValueError("LLM_PLAN_JSON_PARSE_ERROR: parsed JSON is not a dict")
+
+    unknown_fields = sorted(set(data) - _ALLOWED_PLAN_FIELDS)
+    if unknown_fields:
+        raise ValueError(
+            f"LLM_PLAN_SCHEMA_ERROR: unknown top-level fields: {unknown_fields}"
+        )
+    if not isinstance(data.get("pipeline_id"), str) or not data["pipeline_id"].strip():
+        raise ValueError("LLM_PLAN_SCHEMA_ERROR: pipeline_id must be a non-empty string")
+    nodes = data.get("nodes")
+    if not isinstance(nodes, list):
+        raise ValueError("LLM_PLAN_SCHEMA_ERROR: nodes must be a list")
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict):
+            raise ValueError(f"LLM_PLAN_SCHEMA_ERROR: node {index} must be an object")
+        unknown_node_fields = sorted(set(node) - _ALLOWED_NODE_FIELDS)
+        if unknown_node_fields:
+            raise ValueError(
+                f"LLM_PLAN_SCHEMA_ERROR: node {index} has unknown fields: {unknown_node_fields}"
+            )
+        required = {"id", "backend", "depends_on", "params"}
+        missing = sorted(required - set(node))
+        if missing:
+            raise ValueError(
+                f"LLM_PLAN_SCHEMA_ERROR: node {index} is missing fields: {missing}"
+            )
+    confidence = data.get("confidence")
+    if confidence is not None and (
+        isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not 0 <= float(confidence) <= 1
+    ):
+        raise ValueError("LLM_PLAN_SCHEMA_ERROR: confidence must be between 0 and 1")
+    for field_name in ("missing_prerequisites", "risks"):
+        value = data.get(field_name)
+        if value is not None and (
+            not isinstance(value, list) or not all(isinstance(item, str) for item in value)
+        ):
+            raise ValueError(f"LLM_PLAN_SCHEMA_ERROR: {field_name} must be a list of strings")
 
     return data
 
@@ -221,7 +271,34 @@ def call_openai_compatible_provider(
             errors=["LLM_API_CALL_FAILED: empty content in response"],
         )
 
-    return LLMProviderResult(ok=True, content=content, raw=raw)
+    try:
+        candidate = parse_llm_plan_json(content)
+        from src.backend.app.planner.plan_validator import validate_plan  # noqa: E402
+
+        validation = validate_plan(candidate)
+        if not validation.ok:
+            return LLMProviderResult(
+                ok=False,
+                content="",
+                raw=raw,
+                errors=[
+                    "LLM_PLAN_VALIDATION_FAILED: "
+                    + "; ".join(f"{issue.code}: {issue.message}" for issue in validation.errors)
+                ],
+            )
+    except ValueError as exc:
+        return LLMProviderResult(
+            ok=False,
+            content="",
+            raw=raw,
+            errors=[str(exc)],
+        )
+
+    return LLMProviderResult(
+        ok=True,
+        content=json.dumps(candidate, ensure_ascii=False),
+        raw=raw,
+    )
 
 
 # ── Backward-compat stubs (used by pipeline_planner.py) ──────────────────────

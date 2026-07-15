@@ -113,6 +113,7 @@ def reviewed_plan_to_pipeline_dict(
 
         nodes_out.append({
             "id": nid,
+            "contract_version": node.get("contract_version"),
             "name": cat.name if cat else str(nid),
             "agent": "system",
             "backend": backend,

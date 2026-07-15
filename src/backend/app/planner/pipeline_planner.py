@@ -8,7 +8,6 @@ from typing import Any
 
 from src.backend.app.planner.llm_provider import PlannerProviderError, get_planner_provider_from_env
 from src.backend.app.runtime.node_registry import get_node_runner
-from src.backend.app.runtime.pipeline_executor import run_pipeline
 from src.backend.app.schemas.pipeline_schema import PipelineValidationError, load_pipeline_yaml
 
 
@@ -248,55 +247,12 @@ def validate_pipeline_plan(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def execute_pipeline_plan(payload: dict[str, Any]) -> dict[str, Any]:
-    approved = bool(payload.get("approved", False))
-    draft = payload.get("draft")
-    if not draft and payload.get("plan_id"):
-        draft = _load_draft(str(payload["plan_id"]))
-    if not draft:
-        draft = draft_pipeline_plan(payload)
-
-    validation = validate_pipeline_plan({"draft": draft})
-    if not validation.get("ok"):
-        return {"ok": False, "status": "INVALID", "validation": validation}
-
-    if validation.get("requires_approval") and not approved:
-        return {
-            "ok": False,
-            "status": "APPROVAL_REQUIRED",
-            "plan_id": draft.get("plan_id"),
-            "errors": ["Planner execution requires approved=true for external-backend plans."],
-            "validation": validation,
-        }
-
-    project_config_path = payload.get("project_config_path") or draft.get("request", {}).get(
-        "project_config_path",
-        "examples/project_config_dataset.yaml",
-    )
-    pipeline_path = validation["pipeline_path"]
-    summary = run_pipeline(project_config_path, pipeline_path)
-
-    execution = {
-        "ok": summary.get("status") in {"SUCCESS", "PARTIAL"},
-        "plan_id": draft.get("plan_id"),
-        "approved": approved,
-        "requires_approval": validation.get("requires_approval", False),
-        "approval": {
-            "approved": approved,
-            "required": validation.get("requires_approval", False),
-            "reason": "external backend nodes present" if validation.get("requires_approval") else "python-only plan",
-        },
-        "project_config_path": project_config_path,
-        "pipeline_path": pipeline_path,
-        "summary": summary,
-        "validation": validation,
-        "executed_at": _now_iso(),
+    return {
+        "ok": False,
+        "status": "EXECUTION_CONTRACT_REQUIRED",
+        "error_code": "EXECUTION_CONTRACT_REQUIRED",
+        "replacement": "/api/plans/execute-reviewed",
     }
-    out_dir = PLANNER_ROOT / "executions"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    execution_path = out_dir / f"{draft.get('plan_id', 'adhoc')}.json"
-    execution_path.write_text(json.dumps(execution, ensure_ascii=False, indent=2), encoding="utf-8")
-    execution["execution_path"] = str(execution_path)
-    return execution
 
 
 def get_planner_history(limit: int = 20) -> dict[str, Any]:

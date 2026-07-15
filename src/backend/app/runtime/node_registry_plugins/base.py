@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from src.backend.app.schemas.pipeline_schema import PipelineNode
+
+if TYPE_CHECKING:
+    from src.backend.app.runtime.tool_execution_context import ToolExecutionContext
 
 
 @dataclass
@@ -16,6 +19,7 @@ class NodeExecutionContext:
     spm_dir: str
     dpabi_dir: str
     derivatives_dir: str = "./derivatives"
+    tool_execution_context: "ToolExecutionContext | None" = None
 
 
 NodeRunner = Callable[..., dict[str, Any]]

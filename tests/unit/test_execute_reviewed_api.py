@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from fastapi.testclient import TestClient
 
 from src.backend.app.main import app
+from src.backend.app.planner.reviewed_plan_store import ReviewedPlanStoreError
 
 client = TestClient(app)
 
@@ -289,7 +291,9 @@ def test_dpabi_policy_blocked():
         "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
         "dry_run": True,
     })
-    assert resp.json()["status"] in ("APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED")
+    assert resp.json()["status"] in (
+        "VALIDATION_FAILED", "APPROVAL_GATE_BLOCKED", "EXECUTION_POLICY_BLOCKED"
+    )
 
 
 # ── 24. Adapter summary present on blocked ──
@@ -693,6 +697,99 @@ def _write_project_config(path, rawdata_readonly=True):
     return path
 
 
+def _attach_persisted_review_context(monkeypatch, tmp_path, body):
+    """Give execution tests the same persisted authority required in production."""
+    from uuid import uuid4
+
+    from src.backend.app.api import execute_reviewed_routes
+    from src.backend.app.planner import project_context, reviewed_plan_store
+    from src.backend.app.schemas.desktop import ProjectDetail
+    from src.backend.app.services.mock_store import SQLiteDesktopStore
+
+    project_id = f"reviewed-test-{uuid4().hex[:12]}"
+    project_dir = tmp_path / project_id
+    rawdata_dir = project_dir / "rawdata"
+    dataset_index_path = project_dir / "dataset_index.json"
+    project_dir.mkdir(parents=True, exist_ok=True)
+    rawdata_dir.mkdir(parents=True, exist_ok=True)
+    dataset_index_path.write_text('{"subjects": []}', encoding="utf-8")
+    config_path = str(body["project_config_path"])
+    plan = body["plan"]
+    store = SQLiteDesktopStore(tmp_path / f"{project_id}.sqlite")
+    store.add_project(
+        ProjectDetail(
+            id=project_id,
+            name="Reviewed execution test",
+            study_id=project_id,
+            modality="rs-fMRI",
+            created_date="test",
+            subjects_count=0,
+            current_pipeline_id=str(plan.get("pipeline_id") or "test"),
+            sequences=[],
+            scans_count=0,
+            total_size="0 B",
+            current_model_id="none",
+            metadata={
+                "source": "created",
+                "project_dir": str(project_dir),
+                "rawdata_dir": str(rawdata_dir),
+                "dataset_index_path": str(dataset_index_path),
+                "project_config_path": config_path,
+            },
+        ),
+        health_status="Ready",
+        rawdata_dir=str(rawdata_dir),
+    )
+    for module in (execute_reviewed_routes, project_context, reviewed_plan_store):
+        monkeypatch.setattr(module, "mock_store", store)
+    context = project_context.load_project_context(project_id, config_path)
+    plan = project_context.apply_project_context_to_plan(plan, context)
+    body["plan"] = plan
+    node_ids = [
+        str(node["id"])
+        for node in plan.get("nodes", [])
+        if isinstance(node, dict) and node.get("id")
+    ]
+    goal_contract_candidate = {
+        "goal_text": "execution boundary test",
+        "goal_kind": "reviewed_execution_boundary",
+        "scope": {"completeness_required": True},
+        "criteria": [
+            {
+                "criterion_id": "execution-terminal",
+                "criterion_type": "pipeline_terminal",
+                "target": "pipeline",
+                "required_evidence": ["pipeline_summary", "node_states"],
+                "expected": {"statuses": ["SUCCESS", "COMPLETED"], "active_nodes": 0},
+                "failure_semantics": "indeterminate_if_source_incomplete",
+            },
+            {
+                "criterion_id": "execution-nodes",
+                "criterion_type": "node_status",
+                "target": "required_nodes",
+                "required_evidence": ["node_states"],
+                "expected": {"node_ids": node_ids, "statuses": ["SUCCESS", "COMPLETED"]},
+                "failure_semantics": "indeterminate_if_source_incomplete",
+            },
+        ],
+        "minimum_capability_level": "unavailable",
+        "builder_source": "explicit_test_review",
+    }
+    record = reviewed_plan_store.save_reviewed_plan(
+        project_id=project_id,
+        project_config_path=config_path,
+        plan=plan,
+        validation={"ok": True},
+        goal="execution boundary test",
+        provider="test",
+        goal_contract_candidate=goal_contract_candidate,
+        reviewed_actor="test-reviewer",
+    )
+    body["project_id"] = project_id
+    body["reviewed_plan_id"] = record.reviewed_plan_id
+    return body
+
+
 def _preflight_body(monkeypatch, tmp_path, **overrides):
     """Build a body for dry_run=false preflight with env enabled + valid config.
 
@@ -706,7 +803,7 @@ def _preflight_body(monkeypatch, tmp_path, **overrides):
     )
     # Default: mock executor to return success (tests can override)
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "mock-run-001"},
     )
     cfg = tmp_path / "project_config.yaml"
@@ -733,7 +830,7 @@ def _preflight_body(monkeypatch, tmp_path, **overrides):
         "project_config_path": str(cfg),
     }
     body.update(overrides)
-    return body
+    return _attach_persisted_review_context(monkeypatch, tmp_path, body)
 
 
 # ── 48. dry_run=false + env not set → REVIEWED_EXECUTION_DISABLED ──
@@ -803,12 +900,11 @@ def test_preflight_nonexistent_project_config(monkeypatch):
 
 # ── 54. preflight → validation failed → VALIDATION_FAILED ──
 
-def test_preflight_validation_failed(monkeypatch, tmp_path):
-    body = _preflight_body(monkeypatch, tmp_path, plan={
-        "pipeline_id": "bad", "nodes": [{"id": "nonexistent_xyz", "depends_on": []}],
-    })
-    resp = client.post("/api/plans/execute-reviewed", json=body)
-    assert resp.json()["status"] == "VALIDATION_FAILED"
+def test_invalid_plan_cannot_be_persisted_as_goal_reviewed(monkeypatch, tmp_path):
+    with pytest.raises(ReviewedPlanStoreError, match="without a contract"):
+        _preflight_body(monkeypatch, tmp_path, plan={
+            "pipeline_id": "bad", "nodes": [{"id": "nonexistent_xyz", "depends_on": []}],
+        })
 
 
 # ── 55. preflight → approval blocked → APPROVAL_GATE_BLOCKED ──
@@ -1013,11 +1109,16 @@ def test_m5t016_bad_config_no_executor(monkeypatch):
 # ── 73. validation failed → executor not called ──
 
 def test_m5t016_validation_failed_no_executor(monkeypatch, tmp_path):
-    body = _preflight_body(monkeypatch, tmp_path, plan={
-        "pipeline_id": "bad", "nodes": [{"id": "nonexistent_xyz", "depends_on": []}],
-    })
-    resp = client.post("/api/plans/execute-reviewed", json=body)
-    assert resp.json()["execution"]["executor_called"] is False
+    calls = []
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    with pytest.raises(ReviewedPlanStoreError, match="without a contract"):
+        _preflight_body(monkeypatch, tmp_path, plan={
+            "pipeline_id": "bad", "nodes": [{"id": "nonexistent_xyz", "depends_on": []}],
+        })
+    assert calls == []
 
 
 # ── 74. approval blocked → executor not called ──
@@ -1087,7 +1188,7 @@ def test_m5t016_executor_called_once(monkeypatch, tmp_path):
     # _preflight_body monkeypatches run_pipeline too — override AFTER
     body = _preflight_body(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _tracking_executor,
     )
     client.post("/api/plans/execute-reviewed", json=body)
@@ -1123,7 +1224,9 @@ def test_m5t016_execution_submitted_submitted(monkeypatch, tmp_path):
 def test_m5t016_execution_submitted_run_id(monkeypatch, tmp_path):
     body = _preflight_body(monkeypatch, tmp_path)
     resp = client.post("/api/plans/execute-reviewed", json=body)
-    assert resp.json()["execution"]["run_id"] == "mock-run-001"
+    data = resp.json()
+    assert data["execution"]["run_id"].startswith("run_")
+    assert data["executor_result"]["run_id"] == "mock-run-001"
 
 
 # ── 84. run_pipeline throws → EXECUTION_FAILED ──
@@ -1135,7 +1238,7 @@ def test_m5t016_executor_throws(monkeypatch, tmp_path):
     # _preflight_body monkeypatches run_pipeline — override AFTER
     body = _preflight_body(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _failing_executor,
     )
     resp = client.post("/api/plans/execute-reviewed", json=body)
@@ -1152,7 +1255,7 @@ def test_m5t016_executor_throws_executor_called(monkeypatch, tmp_path):
     # _preflight_body monkeypatches run_pipeline — override AFTER
     body = _preflight_body(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _failing_executor,
     )
     resp = client.post("/api/plans/execute-reviewed", json=body)
@@ -1191,23 +1294,33 @@ def test_m5t016_dpabi_no_executor(monkeypatch, tmp_path):
 # ── 89. manual_required node → executor not called ──
 
 def test_m5t016_manual_required_no_executor(monkeypatch, tmp_path):
-    body = _preflight_body(monkeypatch, tmp_path, plan={
-        "pipeline_id": "test",
-        "nodes": [{"id": "gui_acpc_manual", "backend": "gui-agent", "depends_on": [], "params": {}}],
-    })
-    resp = client.post("/api/plans/execute-reviewed", json=body)
-    assert resp.json()["execution"]["executor_called"] is False
+    calls = []
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    with pytest.raises(ReviewedPlanStoreError, match="without a contract"):
+        _preflight_body(monkeypatch, tmp_path, plan={
+            "pipeline_id": "test",
+            "nodes": [{"id": "gui_acpc_manual", "backend": "gui-agent", "depends_on": [], "params": {}}],
+        })
+    assert calls == []
 
 
 # ── 90. unknown node → executor not called ──
 
 def test_m5t016_unknown_node_no_executor(monkeypatch, tmp_path):
-    body = _preflight_body(monkeypatch, tmp_path, plan={
-        "pipeline_id": "test",
-        "nodes": [{"id": "completely_unknown_node_xyz", "depends_on": [], "params": {}}],
-    })
-    resp = client.post("/api/plans/execute-reviewed", json=body)
-    assert resp.json()["execution"]["executor_called"] is False
+    calls = []
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
+        lambda **kwargs: calls.append(kwargs),
+    )
+    with pytest.raises(ReviewedPlanStoreError, match="without a contract"):
+        _preflight_body(monkeypatch, tmp_path, plan={
+            "pipeline_id": "test",
+            "nodes": [{"id": "completely_unknown_node_xyz", "depends_on": [], "params": {}}],
+        })
+    assert calls == []
 
 
 # ── 91. audit written before executor call ──
@@ -1251,7 +1364,7 @@ def test_m5t017_executor_throws_submitted_false(monkeypatch, tmp_path):
 
     body = _preflight_body(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _failing_executor,
     )
     resp = client.post("/api/plans/execute-reviewed", json=body)
@@ -1263,16 +1376,15 @@ def test_m5t017_executor_throws_submitted_false(monkeypatch, tmp_path):
 
 # ── 95. contract node → executor not called (blocked by safe allowlist) ──
 
-def test_m5t017_contract_node_no_executor(monkeypatch, tmp_path):
-    # M7-T002b: dpabi_capability_inspection now allowed through safe allowlist
+def test_m5t017_unavailable_contract_node_no_executor(monkeypatch, tmp_path):
     body = _preflight_body(monkeypatch, tmp_path, plan={
         "pipeline_id": "test",
         "nodes": [{"id": "dpabi_capability_inspection", "depends_on": [], "params": {}}],
     })
     resp = client.post("/api/plans/execute-reviewed", json=body)
     data = resp.json()
-    assert data["status"] == "EXECUTION_SUBMITTED"
-    assert data["execution"]["executor_called"] is True
+    assert data["status"] == "VALIDATION_FAILED"
+    assert data["execution"]["executor_called"] is False
 
 
 # ── 96. pipeline YAML on disk is before executor call ──
@@ -1286,7 +1398,7 @@ def test_m5t017_yaml_on_disk_before_executor(monkeypatch, tmp_path):
 
     body = _preflight_body(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _capture_executor,
     )
     resp = client.post("/api/plans/execute-reviewed", json=body)
@@ -1324,7 +1436,7 @@ def test_m5t017_executor_failure_no_rawdata(monkeypatch, tmp_path):
 
     body = _preflight_body(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _failing_executor,
     )
     resp = client.post("/api/plans/execute-reviewed", json=body)
@@ -1376,7 +1488,7 @@ def _spm_smoke_body(monkeypatch, tmp_path, **overrides):
         tmp_path,
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "mock-spm-smoke-001"},
     )
     cfg = tmp_path / "project_config.yaml"
@@ -1422,7 +1534,7 @@ def _spm_smoke_body(monkeypatch, tmp_path, **overrides):
         "actor": "ci-smoke",
     }
     body.update(overrides)
-    return body
+    return _attach_persisted_review_context(monkeypatch, tmp_path, body)
 
 
 # ── 101. spm_smoke_test + explicit node + backend approval → EXECUTION_SUBMITTED ──
@@ -1493,7 +1605,7 @@ def _sandbox_realign_body(monkeypatch, tmp_path, **overrides):
         tmp_path,
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "mock-realign-001"},
     )
     cfg = tmp_path / "project_config.yaml"
@@ -1525,7 +1637,7 @@ def _sandbox_realign_body(monkeypatch, tmp_path, **overrides):
         "confirm_execution": True, "actor": "ci",
     }
     body.update(overrides)
-    return body
+    return _attach_persisted_review_context(monkeypatch, tmp_path, body)
 
 
 # ── 106. sandbox realign + explicit approval → EXECUTION_SUBMITTED ──
@@ -1613,7 +1725,7 @@ def _slice_timing_sandbox_body(monkeypatch, tmp_path, **overrides):
         "src.backend.app.api.execute_reviewed_routes.pipeline_writer.REVIEWED_PIPELINE_DIR", tmp_path,
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "mock-st-001"},
     )
     cfg = tmp_path / "project_config.yaml"
@@ -1638,7 +1750,7 @@ def _slice_timing_sandbox_body(monkeypatch, tmp_path, **overrides):
         "confirm_execution": True, "actor": "ci",
     }
     body.update(overrides)
-    return body
+    return _attach_persisted_review_context(monkeypatch, tmp_path, body)
 
 
 def test_m6t006d_slice_timing_sandbox_submitted(monkeypatch, tmp_path):

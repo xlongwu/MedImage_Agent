@@ -118,12 +118,10 @@ def test_native_full_execute_requires_explicit_safety_confirmations(tmp_path) ->
     finally:
         app.dependency_overrides.pop(get_project_store, None)
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "blocked"
-    assert payload["ok"] is False
-    assert "confirm_reviewed_native_execution" in " ".join(payload["blocking_issues"])
-    assert payload["safety_flags"]["no_matlab_spm_dpabi"] is True
+    assert response.status_code == 410
+    payload = response.json()["detail"]
+    assert payload["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+    assert payload["replacement"] == "/api/plans/execute-reviewed"
     assert not (tmp_path / "preprocessing_native_runs" / "native-blocked").exists()
 
 
@@ -132,6 +130,28 @@ def test_native_full_get_routes_return_successful_run_validation_and_report(tmp_
     app.dependency_overrides[get_project_store] = lambda: store
     client = TestClient(app)
     bold, sidecar = _bold_with_sidecar(tmp_path)
+    run_dir = tmp_path / "preprocessing_native_runs" / "native-get-routes"
+    run_dir.mkdir(parents=True)
+    manifest_path = run_dir / "native_full_run_manifest.json"
+    validation_path = run_dir / "native_full_validation_report.json"
+    report_path = run_dir / "native_preproc_final_report.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "ok": True,
+                "status": "succeeded",
+                "dry_run": False,
+                "project_id": "brain-tumor-study",
+                "run_id": "native-get-routes",
+                "run_dir": str(run_dir),
+                "artifact_count": 1,
+                "manifest_path": str(manifest_path),
+                "validation_report_path": str(validation_path),
+                "final_report_path": str(report_path),
+            }
+        ),
+        encoding="utf-8",
+    )
 
     try:
         execute = client.post(
@@ -156,8 +176,8 @@ def test_native_full_get_routes_return_successful_run_validation_and_report(tmp_
     finally:
         app.dependency_overrides.pop(get_project_store, None)
 
-    assert execute.status_code == 200
-    assert execute.json()["status"] in {"succeeded", "partial"}
+    assert execute.status_code == 410
+    assert execute.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
     assert run.status_code == 200
     assert run.json()["run_id"] == "native-get-routes"
     assert run.json()["manifest_path"].endswith("native_full_run_manifest.json")

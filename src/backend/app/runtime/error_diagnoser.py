@@ -6,6 +6,8 @@ from typing import Any
 
 from src.backend.app.tools.error_classifier import classify_error
 from src.backend.app.runtime.run_inspector import inspect_run
+from src.backend.app.schemas.recovery import DiagnosisRecord, RecoveryBindings
+from src.backend.app.services.run_diagnosis_service import adapt_legacy_diagnosis
 
 
 LOG_READ_LIMIT = 20_000
@@ -233,6 +235,8 @@ def diagnose_run(
 
     diagnosis = {
         "ok": True,
+        "schema_status": "legacy_advisory_deprecated",
+        "execution_authority": False,
         "run_id": run_id,
         "status": pipeline_status,
         "issues_total": len(issues),
@@ -295,3 +299,12 @@ def diagnose_run(
     retry_plan_md_path.write_text("\n".join(retry_lines) + "\n", encoding="utf-8")
 
     return diagnosis
+
+
+def adapt_legacy_report(
+    diagnosis: dict[str, Any],
+    *,
+    bindings: RecoveryBindings,
+) -> DiagnosisRecord:
+    """Convert a legacy advisory report without carrying retry authority."""
+    return adapt_legacy_diagnosis(legacy=diagnosis, bindings=bindings)

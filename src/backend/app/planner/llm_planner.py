@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src.backend.app.planner.plan_validator import validate_plan
+from src.backend.app.planner.goal_contract_builder import build_goal_contract_semantics
 
 
 # ── Dataclasses ──────────────────────────────────────────────────────────────
@@ -41,6 +42,11 @@ class PlannerResponse:
     messages: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    confidence: float | None = None
+    missing_prerequisites: list[str] = field(default_factory=list)
+    risks: list[str] = field(default_factory=list)
+    clarification_required: bool = False
+    goal_contract_candidate: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,6 +58,11 @@ class PlannerResponse:
             "messages": self.messages,
             "warnings": self.warnings,
             "errors": self.errors,
+            "confidence": self.confidence,
+            "missing_prerequisites": self.missing_prerequisites,
+            "risks": self.risks,
+            "clarification_required": self.clarification_required,
+            "goal_contract_candidate": self.goal_contract_candidate,
         }
 
 
@@ -155,6 +166,12 @@ _RULES: list[tuple[set[str], str, list[str]]] = [
 
 def _infer_backend(node_id: str) -> str:
     """Infer a backend string for a node; falls back to 'python'."""
+    from src.backend.app.runtime.tool_catalog import get_tool_catalog_item
+
+    try:
+        return get_tool_catalog_item(node_id).backend
+    except KeyError:
+        pass
     if node_id.startswith("native_preproc_"):
         return "native_python"
     if node_id.startswith("spm_"):
@@ -382,13 +399,21 @@ def generate_plan_from_goal(
             )
 
         validation = validate_plan(plan)
+        goal_contract = build_goal_contract_semantics(plan, goal)
+        missing_prerequisites = list(plan.get("missing_prerequisites") or [])
+        risks = list(plan.get("risks") or [])
         return PlannerResponse(
-            ok=validation.ok,
+            ok=validation.ok and not missing_prerequisites,
             provider=provider,
             goal=goal,
             plan=plan,
             validation=validation.to_dict(),
             messages=[f"Generated plan via {provider} ({len(plan.get('nodes', []))} nodes)."],
+            confidence=(float(plan["confidence"]) if "confidence" in plan else None),
+            missing_prerequisites=missing_prerequisites,
+            risks=risks,
+            clarification_required=bool(missing_prerequisites) or goal_contract.clarification_required,
+            goal_contract_candidate=goal_contract.semantics,
         )
 
     # ── Rule matching ──
@@ -404,21 +429,37 @@ def generate_plan_from_goal(
             project_context=project_context,
         )
         validation = validate_plan(plan)
+        validation_errors = [f"[{issue.code}] {issue.message}" for issue in validation.errors]
+        missing_prerequisites = (
+            ["Provide a registered conversion_run_id or one explicit input_bold before review."]
+            if any(
+                issue.code == "NODE_PARAMETER_INVALID"
+                and "input_bold or conversion_run_id" in issue.message
+                for issue in validation.errors
+            )
+            else []
+        )
         messages.append(
             "Matched goal to native full preprocessing using registered NIfTI/BIDS evidence."
         )
         if validation.warnings:
             for w in validation.warnings:
                 warnings.append(f"[{w.code}] {w.message}")
+        goal_contract = build_goal_contract_semantics(plan, goal)
         return PlannerResponse(
-            ok=validation.ok and len(errors) == 0,
+            ok=validation.ok,
             provider=provider,
             goal=goal,
             plan=plan,
             validation=validation.to_dict(),
             messages=messages,
             warnings=warnings,
-            errors=errors,
+            errors=validation_errors,
+            confidence=1.0,
+            missing_prerequisites=missing_prerequisites,
+            risks=[f"high-risk node: {node_id}" for node_id in validation.high_risk_nodes],
+            clarification_required=not validation.ok or goal_contract.clarification_required,
+            goal_contract_candidate=goal_contract.semantics,
         )
 
     best_match: tuple[int, str, list[str]] | None = None
@@ -453,6 +494,7 @@ def generate_plan_from_goal(
     if validation.warnings:
         for w in validation.warnings:
             warnings.append(f"[{w.code}] {w.message}")
+    goal_contract = build_goal_contract_semantics(plan, goal)
 
     return PlannerResponse(
         ok=validation.ok and len(errors) == 0,
@@ -463,6 +505,10 @@ def generate_plan_from_goal(
         messages=messages,
         warnings=warnings,
         errors=errors,
+        confidence=1.0,
+        risks=[f"high-risk node: {node_id}" for node_id in validation.high_risk_nodes],
+        clarification_required=goal_contract.clarification_required,
+        goal_contract_candidate=goal_contract.semantics,
     )
 
 

@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from src.backend.app.api._errors import raise_api_error
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.api.models import (
     AgentExecuteRequest,
     AgentPlanRequest,
@@ -50,13 +51,8 @@ from src.backend.app.api.models import (
     ReleaseReadinessRequest,
 )
 from src.backend.app.core.exceptions import ConfigError
-from src.backend.app.runtime.pipeline_executor import run_pipeline
 from src.backend.app.tools.report_exporter import get_latest_rsfmri_report_export, list_rsfmri_report_exports
 from src.backend.app.tools.report_package_validator import get_latest_rsfmri_report_validation, list_rsfmri_report_validations
-from src.backend.app.runtime.agent_runtime import (
-    run_orchestrator_execute,
-    run_orchestrator_plan,
-)
 from src.backend.app.runtime.path_safety import PathSafetyError, read_safe_text_file
 from src.backend.app.runtime.run_inspector import (
     inspect_run,
@@ -64,10 +60,6 @@ from src.backend.app.runtime.run_inspector import (
     read_state_detail,
 )
 from src.backend.app.runtime.error_diagnoser import diagnose_run
-from src.backend.app.runtime.retry_runtime import (
-    dry_run_retry_plan,
-    execute_retry_plan,
-)
 from src.backend.app.runtime.scheduler import create_scheduler_plan
 from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
 from src.backend.app.tools.gpu_utils import detect_gpu
@@ -148,23 +140,7 @@ def _load_project_config(path: str) -> dict[str, Any]:
 
 @router.post("/api/dpabi/capability")
 def api_dpabi_capability(payload: DpabiCapabilityRequest) -> dict[str, Any]:
-    try:
-        project_config = _load_project_config(payload.project_config_path)
-        runtime = project_config.get("runtime", {})
-        third_party = project_config.get("third_party", {})
-
-        result = run_dpabi_capability_inspection(
-            matlab_command=runtime.get("matlab_command", "matlab"),
-            dpabi_dir=third_party.get("dpabi_dir", "./third_party/DPABI"),
-            work_dir=payload.work_dir,
-            log_dir=payload.log_dir,
-            matlab_script_dir="./matlab",
-        )
-        return result
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise_api_error(exc)
+    reject_execution_contract("dpabi.capability")
 
 @router.post("/api/dpabi/scaffold")
 def api_dpabi_scaffold(payload: DpabiCapabilityRequest) -> dict[str, Any]:
@@ -232,41 +208,11 @@ def api_dpabi_run_plan(request: DpabiRunPlanRequest) -> dict[str, Any]:
 
 @router.post("/api/dpabi/sandbox-smoke")
 def api_dpabi_sandbox_smoke(request: DpabiSandboxSmokeRequest) -> dict[str, Any]:
-    try:
-        project_config = _load_project_config(request.project_config_path)
-        result = run_dpabi_sandbox_smoke(
-            matlab_command=project_config.get("matlab_command", "matlab"),
-            dpabi_dir=project_config.get("dpabi_dir", "./third_party/DPABI"),
-            work_dir=request.work_dir,
-            log_dir=request.log_dir,
-            approved=request.approved,
-            approved_by=request.approved_by,
-            matlab_script_dir="./matlab",
-        )
-        return result
-    except Exception as exc:
-        raise_api_error(exc)
+    reject_execution_contract("dpabi.sandbox_smoke")
 
 @router.post("/api/dpabi/subject-smooth")
 def api_dpabi_subject_smooth(request: DpabiSubjectSmoothRequest) -> dict[str, Any]:
-    try:
-        project_config = _load_project_config(request.project_config_path)
-        result = run_dpabi_subject_smooth(
-            matlab_command=project_config.get("matlab_command", "matlab"),
-            dpabi_dir=project_config.get("dpabi_dir", "./third_party/DPABI"),
-            subject_id=request.subject_id,
-            input_bold=request.input_bold,
-            derivatives_dir=project_config.get("derivatives_dir", "./derivatives"),
-            work_dir=request.work_dir,
-            log_dir=request.log_dir,
-            function_name=request.function_name,
-            fwhm=request.fwhm,
-            approved=request.approved,
-            matlab_script_dir="./matlab",
-        )
-        return result
-    except Exception as exc:
-        raise_api_error(exc)
+    reject_execution_contract("dpabi.subject_smooth")
 
 @router.post("/api/dpabi/subject-wrapper-report")
 def api_dpabi_subject_wrapper_report(request: DpabiSubjectWrapperReportRequest) -> dict[str, Any]:
@@ -282,18 +228,7 @@ def api_dpabi_subject_wrapper_report(request: DpabiSubjectWrapperReportRequest) 
 
 @router.post("/api/dpabi/signature-probe")
 def api_dpabi_signature_probe(request: DpabiSignatureProbeRequest) -> dict[str, Any]:
-    try:
-        project_config = _load_project_config(request.project_config_path)
-        result = run_dpabi_signature_probe(
-            matlab_command=project_config.get("matlab_command", "matlab"),
-            dpabi_dir=project_config.get("dpabi_dir", "./third_party/DPABI"),
-            work_dir=request.work_dir,
-            log_dir=request.log_dir,
-            matlab_script_dir="./matlab",
-        )
-        return result
-    except Exception as exc:
-        raise_api_error(exc)
+    reject_execution_contract("dpabi.signature_probe")
 
 @router.post("/api/dpabi/wrapper-contracts")
 def api_dpabi_wrapper_contracts(request: DpabiSignatureProbeRequest) -> dict[str, Any]:
@@ -310,21 +245,7 @@ def api_dpabi_wrapper_contracts(request: DpabiSignatureProbeRequest) -> dict[str
 
 @router.post("/api/dpabi/single-function-sandbox")
 def api_dpabi_single_function_sandbox(request: DpabiSingleFunctionRequest) -> dict[str, Any]:
-    try:
-        project_config = _load_project_config(request.project_config_path)
-        result = run_dpabi_single_function_sandbox(
-            matlab_command=project_config.get("matlab_command", "matlab"),
-            dpabi_dir=project_config.get("dpabi_dir", "./third_party/DPABI"),
-            work_dir=request.work_dir,
-            log_dir=request.log_dir,
-            function_name=request.function_name,
-            approved=request.approved,
-            approved_by=request.approved_by,
-            matlab_script_dir="./matlab",
-        )
-        return result
-    except Exception as exc:
-        raise_api_error(exc)
+    reject_execution_contract("dpabi.single_function_sandbox")
 
 @router.post("/api/dpabi/wrapper-validation-matrix")
 def api_dpabi_wrapper_validation_matrix(request: DpabiWrapperValidationRequest) -> dict[str, Any]:
@@ -381,17 +302,7 @@ def api_dpabi_template_instantiate(request: DpabiTemplateInstantiateRequest) -> 
 
 @router.post("/api/dpabi/template-execute")
 def api_dpabi_template_execute(request: DpabiTemplateExecuteRequest) -> dict[str, Any]:
-    try:
-        result = execute_dpabi_template_instance(
-            instance_id=request.instance_id,
-            project_config_path=request.project_config_path,
-            approved=request.approved,
-            approved_by=request.approved_by,
-            work_dir=request.work_dir,
-        )
-        return result
-    except Exception as exc:
-        raise_api_error(exc)
+    reject_execution_contract("dpabi.template.execute")
 
 @router.get("/api/dpabi/template-wizard/options")
 def api_dpabi_template_wizard_options() -> dict[str, Any]:
@@ -448,34 +359,12 @@ async def dpabi_template_library_view():
 @router.post("/api/dpabi/smoke-test")
 async def dpabi_smoke_test(request: dict[str, Any]):
     """Run DPABI environment smoke test."""
-    from src.backend.app.tools.dpabi_wrapper import run_dpabi_smoke_test
-
-    return run_dpabi_smoke_test(
-        dpabi_dir=request.get("dpabi_dir", "./third_party/DPABI_V8.2_240510"),
-        matlab_command=request.get("matlab_command", "matlab"),
-        work_dir=request.get("work_dir", "./work"),
-        log_dir=request.get("log_dir", "./logs"),
-        approved=request.get("approved", False),
-    )
+    reject_execution_contract("dpabi.smoke_test")
 
 @router.post("/api/dpabi/run-single-function")
 async def dpabi_run_single_function(request: dict[str, Any]):
     """Run a single DPABI function."""
-    from src.backend.app.tools.dpabi_wrapper import run_dpabi_single_function
-
-    return run_dpabi_single_function(
-        function_name=request.get("function_name", "y_Smooth"),
-        input_bold=request.get("input_bold", ""),
-        subject_id=request.get("subject_id", "sub-001"),
-        derivatives_dir=request.get("derivatives_dir", "./derivatives"),
-        work_dir=request.get("work_dir", "./work"),
-        log_dir=request.get("log_dir", "./logs"),
-        dpabi_dir=request.get("dpabi_dir", "./third_party/DPABI_V8.2_240510"),
-        matlab_command=request.get("matlab_command", "matlab"),
-        mode=request.get("mode", "contract_only"),
-        approved=request.get("approved", False),
-        params=request.get("params"),
-    )
+    reject_execution_contract("dpabi.run_single_function")
 
 @router.get("/api/dpabi/function-list")
 async def dpabi_function_list():

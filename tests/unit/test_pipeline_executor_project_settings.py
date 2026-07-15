@@ -7,11 +7,20 @@ No real MATLAB/SPM/DPABI nodes are executed.
 from __future__ import annotations
 
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 import yaml
 
+from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.runtime.pipeline_executor import load_project_config, run_pipeline
+from src.backend.app.runtime.execution_gateway import (
+    ExecutionGateway,
+    current_safe_allowlist_fingerprint,
+)
+from src.backend.app.runtime.node_contract_registry import get_node_contract
+from src.backend.app.services.execution_ticket_service import ExecutionTicketService
+from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
 # ── Helpers ──
@@ -82,6 +91,53 @@ def _write_minimal_pipeline(tmp_path: Path, run_id: str = "run_test",
     return p
 
 
+def _run_via_gateway(tmp_path: Path, config: Path, pipeline: Path) -> dict:
+    """Exercise the runtime through the same verified boundary as production."""
+    payload = yaml.safe_load(pipeline.read_text(encoding="utf-8"))
+    node_ids = [str(node["id"]) for node in payload.get("nodes", [])]
+    backends = [str(node["backend"]) for node in payload.get("nodes", [])]
+    service = ExecutionTicketService(
+        SQLiteDesktopStore(tmp_path / f"ticket-{uuid4().hex}.sqlite")
+    )
+    ticket = service.issue(
+        project_id="executor-settings-test",
+        reviewed_plan_id="reviewed-settings-test",
+        plan_hash="settings-test-hash",
+        approval_context_id="settings-test-approval",
+        approved_actor="test",
+        approved_node_ids=node_ids,
+        approved_backend_ids=backends,
+        input_roots=[str(tmp_path)],
+        output_roots=[str(tmp_path)],
+        project_config_path=str(config),
+        pipeline_path=str(pipeline),
+        safe_allowlist_fingerprint=current_safe_allowlist_fingerprint(),
+        normalized_params_hash="normalized-params-hash",
+        contract_versions={
+            node_id: (
+                get_node_contract(node_id).contract_version
+                if node_id != "nonexistent_node_xyz"
+                else "missing"
+            )
+            for node_id in node_ids
+        },
+        audit_id="settings-test-audit",
+    )
+    result, _ = ExecutionGateway(service).dispatch(
+        execution_ticket_id=ticket.execution_ticket_id,
+        project_id=ticket.project_id,
+        reviewed_plan_id=ticket.reviewed_plan_id,
+        plan_hash=ticket.plan_hash,
+        approval_context_id=ticket.approval_context_id,
+        normalized_params_hash=ticket.normalized_params_hash,
+        contract_versions=ticket.contract_versions,
+        project_config_path=str(config),
+        pipeline_path=str(pipeline),
+        executor=run_pipeline,
+    )
+    return result
+
+
 # ── Tests: load_project_config ──
 
 def test_load_project_config_returns_dict(tmp_path: Path):
@@ -122,7 +178,7 @@ def test_run_pipeline_returns_invalid_on_missing_work_dir(tmp_path: Path):
                                 log_dir=str(tmp_path / "logs"))
     pipeline = _write_minimal_pipeline(tmp_path)
 
-    result = run_pipeline(str(cfg), str(pipeline))
+    result = _run_via_gateway(tmp_path, cfg, pipeline)
 
     assert result["status"] == "INVALID", (
         f"Expected INVALID on bad config, got {result['status']}"
@@ -137,7 +193,7 @@ def test_run_pipeline_returns_invalid_on_missing_spm_dir(tmp_path: Path):
                                 spm_dir=None)
     pipeline = _write_minimal_pipeline(tmp_path)
 
-    result = run_pipeline(str(cfg), str(pipeline))
+    result = _run_via_gateway(tmp_path, cfg, pipeline)
 
     assert result["status"] == "INVALID"
     assert "Failed to load project config" in result.get("error", "")
@@ -145,10 +201,7 @@ def test_run_pipeline_returns_invalid_on_missing_spm_dir(tmp_path: Path):
 
 def test_run_pipeline_returns_invalid_on_nonexistent_config(tmp_path: Path):
     pipeline = _write_minimal_pipeline(tmp_path)
-    result = run_pipeline(
-        str(tmp_path / "no_such_config.yaml"),
-        str(pipeline),
-    )
+    result = _run_via_gateway(tmp_path, tmp_path / "no_such_config.yaml", pipeline)
     assert result["status"] == "INVALID"
     assert "Failed to load project config" in result.get("error", "")
 
@@ -165,7 +218,7 @@ def test_no_real_matlab_spm_dpabi_executed(tmp_path: Path):
                                 log_dir=str(tmp_path / "logs"))
     pipeline = _write_minimal_pipeline(tmp_path)
 
-    result = run_pipeline(str(cfg), str(pipeline))
+    result = _run_via_gateway(tmp_path, cfg, pipeline)
 
     assert result["status"] == "INVALID"
     # No pipeline_runs/ created, no node states generated
@@ -189,7 +242,7 @@ def test_bad_config_writes_summary_in_work_dir(tmp_path: Path):
                                 log_dir=str(tmp_path / "logs"))
     pipeline = _write_minimal_pipeline(tmp_path)
 
-    result = run_pipeline(str(cfg), str(pipeline))
+    result = _run_via_gateway(tmp_path, cfg, pipeline)
 
     assert result["status"] == "INVALID"
     assert "error" in result
@@ -210,19 +263,10 @@ def test_valid_config_with_nonexistent_node(tmp_path: Path):
                                        run_id="run_no_node",
                                        node_id="nonexistent_node_xyz")
 
-    result = run_pipeline(str(cfg), str(pipeline))
+    with pytest.raises(SafetyError, match="CAPABILITY_NODE_CONTRACT_MISSING"):
+        _run_via_gateway(tmp_path, cfg, pipeline)
 
     # Config loaded → pipeline parsed → node lookup failed
     # Status: FAILED because node not found in registry
-    assert result["status"] == "FAILED", (
-        f"Expected FAILED (node not found), got {result['status']}"
-    )
-    assert any("No node runner registered" in err for err in result.get("errors", [])), (
-        "Expected 'No node runner registered' error"
-    )
     # Verify the pipeline did NOT reach any real MATLAB/SPM node —
     # the only node was 'nonexistent_node_xyz' which failed before execution
-    assert not any(
-        nid in str(result.get("node_states", []))
-        for nid in ["spm_", "matlab_", "dpabi_", "environment_check"]
-    ), "Real MATLAB/SPM/DPABI node states should not appear"

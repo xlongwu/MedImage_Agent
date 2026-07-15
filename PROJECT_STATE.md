@@ -1,6 +1,6 @@
 # Project State
 
-Current as of 2026-06-28.
+Current as of 2026-07-15.
 
 ## Version and Branch
 
@@ -34,11 +34,10 @@ their tag state.
   packages, release readiness, release approval metadata, rollback support, and
   a public conversion endpoint that is default-blocked by environment flags and
   approval/readiness gates.
-- The guarded public DICOM conversion path has been verified against real
-  DemoData when all maintainer execution flags and approvals are present:
-  1104 DICOM files produce 6 NIfTI outputs and 6 JSON sidecars under the
-  project workspace, with rawdata count unchanged and dcm2niix provenance
-  recorded.
+- The in-project Python DICOM converter supports classic single-frame MR and
+  Siemens single-frame mosaic MR. One DemoData subject (240 functional mosaic
+  instances and 128 structural slices) was converted and reload-checked on
+  Windows with exact pre/post rawdata hashes, sizes, and mtimes unchanged.
 - Feature-flagged frontend execute UI for DICOM conversion; hidden by default.
 - Reviewed rs-fMRI preprocessing workflow for converted inputs, including a
   unified stage catalog, artifact registry and lineage, Minimal FC backend
@@ -57,16 +56,14 @@ their tag state.
 - DICOM conversion execution is not automatic. It requires explicit environment
   flags, release approval/readiness evidence, confirmation payloads, audit
   package evidence, checksum/rollback checks, and safe output roots.
-- SPM/MATLAB sandbox preprocessing requires explicit opt-in flags and local
-  tool availability.
+- Reviewed preprocessing uses in-project Python kernels. MATLAB, SPM, and
+  DPABI executables are outside the supported execution path.
 - Reviewed Minimal FC can continue from already registered realignment outputs;
   this is a resume/registration path. It is not a one-click local SPM
   realignment execution claim while MATLAB/SPM gates remain unsatisfied.
-- DPABI remains disabled by default.
 - Full DICOM-to-reviewed-FC GUI E2E on real multi-subject data, true
-  MATLAB/SPM preprocessing execution in this local environment, group
-  statistics, classification, clinical diagnosis, report editing, and
-  auto-update are not current capabilities.
+  multi-subject workflow validation, group statistics, classification,
+  clinical diagnosis, report editing, and auto-update are not current capabilities.
 
 ## Validation Baseline
 
@@ -85,11 +82,9 @@ their tag state.
 - Current task-level validation is recorded in the final Completion Report and
   the local phase execution record rather than appended here as a development
   diary.
-- Current Phase 6B DICOM conversion focused validation includes strict
-  `tests/integration/test_dicom_conversion_public_e2e_smoke.py` execution with
-  `MEDIMAGE_E2E_SMOKE_RAWDATA_DIR` pointing to DemoData. The smoke now requires
-  real success, 6 NIfTI outputs, 6 provenance output paths, and unchanged
-  rawdata.
+- Native DICOM validation includes synthetic geometry/affine/error tests,
+  guarded approval/audit/artifact/provenance execution tests, and an opt-in
+  one-subject DemoData reload comparison.
 
 ## Packaging State
 
@@ -111,8 +106,8 @@ their tag state.
   safe atlas artifact or a controlled repository-template copy into
   derivatives, and numeric metric maps plus atlas artifacts are reload-checked
   by pipeline validation. The full DICOM-to-reviewed-FC GUI workflow is not
-  yet E2E validated. SPM/MATLAB stages remain **Needs Verification** and stay
-  off by default.
+  yet E2E validated. Compatibility labels derived from SPM/DPABI conventions
+  do not imply those external products are executed.
 - Scientific-computation sandbox services previously reported `succeeded` for
   both "sandbox prepared" and "numeric result produced". Per-metric status
   now distinguishes these; older manifests are read with backward-compatible
@@ -127,10 +122,9 @@ their tag state.
   active project interpreter and `--basetemp=.pytest_tmp`.
 - The desktop SQLite state store is ignored runtime state and can accumulate
   stale local paths.
-- Full DICOM-to-preprocessing-to-report GUI E2E remains unproven while
-  SPM/MATLAB preprocessing stages are unavailable, blocked by environment
-  gates, or resume-only through already registered artifacts. Preview/subset
-  runs and synthetic-atlas FC remain labeled `preview_only` or `partial`.
+- Full DICOM-to-preprocessing-to-report GUI E2E remains unproven.
+  Preview/subset runs and synthetic-atlas FC remain labeled `preview_only` or
+  `partial`.
 
 ## Next Work
 

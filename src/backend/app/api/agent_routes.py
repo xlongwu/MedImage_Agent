@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from src.backend.app.api._errors import raise_api_error
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.api.models import (
     AgentExecuteRequest,
     AgentPlanRequest,
@@ -19,10 +20,7 @@ from src.backend.app.api.models import (
     SchedulerPlanRequest,
 )
 from src.backend.app.core.exceptions import ConfigError
-from src.backend.app.runtime.agent_runtime import (
-    run_orchestrator_execute,
-    run_orchestrator_plan,
-)
+from src.backend.app.runtime.agent_runtime import run_orchestrator_plan
 from src.backend.app.runtime.run_inspector import (
     inspect_run,
     list_available_runs,
@@ -31,7 +29,6 @@ from src.backend.app.runtime.run_inspector import (
 from src.backend.app.runtime.error_diagnoser import diagnose_run
 from src.backend.app.runtime.retry_runtime import (
     dry_run_retry_plan,
-    execute_retry_plan,
 )
 from src.backend.app.runtime.scheduler import create_scheduler_plan
 from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
@@ -99,26 +96,7 @@ def agent_plan(request: AgentPlanRequest) -> dict[str, Any]:
 
 @router.post("/api/agent/execute")
 def agent_execute(request: AgentExecuteRequest) -> dict[str, Any]:
-    if not request.approved:
-        raise HTTPException(
-            status_code=403,
-            detail="Execution requires approved=true.",
-        )
-
-    plan_path = Path("outputs/work") / "agent_runs" / request.agent_run_id / "plan.json"
-
-    result = run_orchestrator_execute(
-        agent_run_id=request.agent_run_id,
-        project_config_path=request.project_config_path,
-        pipeline_path=request.pipeline_path,
-        plan_path=str(plan_path),
-        approved=request.approved,
-    )
-
-    if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result)
-
-    return result
+    reject_execution_contract("agent.execute")
 
 @router.get("/api/agent-runs/{agent_run_id}")
 def get_agent_run(agent_run_id: str) -> dict[str, Any]:
@@ -190,19 +168,7 @@ def api_retry_execute(payload: RetryExecuteRequest) -> dict[str, Any]:
     if "/" in run_id or "\\" in run_id or ".." in run_id:
         raise HTTPException(status_code=400, detail="Invalid run_id.")
 
-    if not payload.approved:
-        raise HTTPException(status_code=403, detail="Retry execution requires approved=true.")
-
-    result = execute_retry_plan(
-        run_id=run_id,
-        project_config_path=payload.project_config_path,
-        retry_run_id=payload.retry_run_id,
-        approved=payload.approved,
-    )
-    if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result)
-
-    return result
+    reject_execution_contract("retry.execute")
 
 @router.get("/api/retry-runs/{retry_run_id}")
 def api_get_retry_run(retry_run_id: str) -> dict[str, Any]:

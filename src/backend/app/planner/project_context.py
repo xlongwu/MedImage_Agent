@@ -142,13 +142,15 @@ def _augment_diagnostics_with_registered_outputs(
 def load_project_context(
     project_id: str | None,
     project_config_path: str | None,
+    store=None,
 ) -> ProjectContext:
+    project_store = store or mock_store
     """Load project paths from config, supplemented and checked against the store."""
     stored_project = None
     stored_metadata: dict[str, Any] = {}
 
     if project_id:
-        stored_project = mock_store.get_project(project_id)
+        stored_project = project_store.get_project(project_id)
         if stored_project is None:
             raise ProjectContextError(f"PROJECT_NOT_FOUND: {project_id}")
         stored_metadata = _mapping(stored_project.metadata)
@@ -188,7 +190,7 @@ def load_project_context(
         str(config_project_id) if config_project_id else None
     )
     if stored_project is None and resolved_project_id:
-        stored_project = mock_store.get_project(resolved_project_id)
+        stored_project = project_store.get_project(resolved_project_id)
         if stored_project is not None:
             stored_metadata = _mapping(stored_project.metadata)
 

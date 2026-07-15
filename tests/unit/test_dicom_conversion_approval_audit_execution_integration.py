@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit.test_native_dicom_to_nifti import _write_classic_series
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
@@ -135,12 +137,15 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
     run_dir.mkdir(parents=True)
     logs_dir = run_dir / "logs"
     logs_dir.mkdir(parents=True)
-    input_dir = project_dir / "test-input" / "sub-001"
-    input_dir.mkdir(parents=True)
-    output_dir = project_dir / "converted_bids" / "sub-001" / "func"
+    input_dir = project_dir / "rawdata" / "T1Raw" / "Sub_001"
+    _write_classic_series(input_dir)
+    output_root = project_dir / "converted_bids"
+    output_dir = output_root / "sub-001" / "anat"
 
+    approval_record = _make_approved_approval_record()
+    approval_record["output_root"] = str(output_root)
     (run_dir / "approval_record.json").write_text(
-        json.dumps(_make_approved_approval_record())
+        json.dumps(approval_record)
     )
     (run_dir / "audit_preview.json").write_text(
         json.dumps(_make_audit_preview(str(project_dir / "converted_bids")))
@@ -149,7 +154,15 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
         json.dumps({"status": "ready", "ok": True})
     )
     (run_dir / "mapping_snapshot.json").write_text(
-        json.dumps(_make_mapping_snapshot(1))
+        json.dumps({
+            "mappings": [{
+                "source_path": str(input_dir),
+                "subject_id": "sub-001",
+                "modality": "anat",
+                "suffix": "T1w",
+                "output_filename": "sub-001_T1w.nii.gz",
+            }]
+        })
     )
     (run_dir / "command_templates.json").write_text(
         json.dumps(
@@ -227,6 +240,13 @@ def _patch_subprocess_with(monkeypatch, runner):
             return _version_result()
         return runner(argv)
     monkeypatch.setattr(sp, "run", _smart_run)
+
+
+def _set_missing_mapping_source(run_dir: Path) -> None:
+    path = run_dir / "mapping_snapshot.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["mappings"][0]["source_path"] = str(run_dir / "missing-dicom-series")
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -366,8 +386,8 @@ def test_missing_rollback_plan_blocks_execution(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_audit_start_file_written_before_runner(tmp_path, monkeypatch):
-    """Gate 6: audit_execution_start.json must be written before subprocess."""
+def test_audit_start_file_written_without_external_runner(tmp_path, monkeypatch):
+    """Gate 6: audit start is persisted and no subprocess is invoked."""
     _monkeypatch_dcm2niix_available(monkeypatch, tmp_path)
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
@@ -376,22 +396,14 @@ def test_audit_start_file_written_before_runner(tmp_path, monkeypatch):
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
-    audit_start_seen = []
-
-    def track_and_run(argv):
-        # Check that audit start file exists at subprocess call time
-        run_dir = project_dir / "conversion_runs" / "conv-test"
-        audit_start_path = run_dir / "audit_execution_start.json"
-        audit_start_seen.append(audit_start_path.exists())
-        return _fake_successful_runner(argv)
-
-    _patch_subprocess_with(monkeypatch, track_and_run)
+    import subprocess as sp
+    called = []
+    monkeypatch.setattr(sp, "run", lambda *a, **kw: called.append(a))
     result = run_internal_user_dicom_conversion_from_persisted_package(
         "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
     )
     assert result.status == "succeeded", f"Expected succeeded, got {result.status}"
-    assert len(audit_start_seen) > 0, "Subprocess must have been called"
-    assert all(audit_start_seen), "Audit start file must exist before each subprocess call"
+    assert called == [], "Native conversion must not invoke subprocess"
 
     # Verify the audit start file content
     audit_start_path = project_dir / "conversion_runs" / "conv-test" / "audit_execution_start.json"
@@ -399,6 +411,8 @@ def test_audit_start_file_written_before_runner(tmp_path, monkeypatch):
     data = json.loads(audit_start_path.read_text())
     assert data["audit_state"] == "execution_started"
     assert data["started_at"] is not None
+    assert data["backend"] == "medimage-native"
+    assert data["no_external_process"] is True
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -445,7 +459,8 @@ def test_audit_final_file_written_on_failure(tmp_path, monkeypatch):
     )
     project_dir = tmp_path / "project"
     project_dir.mkdir()
-    _setup_complete_review_package(project_dir, "conv-test")
+    run_dir = _setup_complete_review_package(project_dir, "conv-test")
+    _set_missing_mapping_source(run_dir)
 
     _patch_subprocess_with(monkeypatch, _fake_failing_runner)
     result = run_internal_user_dicom_conversion_from_persisted_package(
@@ -466,8 +481,8 @@ def test_audit_final_file_written_on_failure(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_stdout_error_with_zero_return_code_fails_execution(tmp_path, monkeypatch):
-    """Phase 6B: dcm2niix stdout errors fail even when return code is 0."""
+def test_native_execution_does_not_consume_subprocess_stdout(tmp_path, monkeypatch):
+    """Native execution is independent of injected subprocess behavior."""
     _monkeypatch_dcm2niix_available(monkeypatch, tmp_path)
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
@@ -488,8 +503,8 @@ def test_stdout_error_with_zero_return_code_fails_execution(tmp_path, monkeypatc
         "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
     )
 
-    assert result.status == "failed"
-    assert any("reported_error=True" in err for err in result.errors)
+    assert result.status == "succeeded"
+    assert result.errors == []
 
 
 def test_missing_expected_nifti_fails_execution(tmp_path, monkeypatch):
@@ -500,7 +515,8 @@ def test_missing_expected_nifti_fails_execution(tmp_path, monkeypatch):
     )
     project_dir = tmp_path / "project"
     project_dir.mkdir()
-    _setup_complete_review_package(project_dir, "conv-test")
+    run_dir = _setup_complete_review_package(project_dir, "conv-test")
+    _set_missing_mapping_source(run_dir)
 
     def no_output_runner(argv):
         return type("R", (), {
@@ -515,7 +531,7 @@ def test_missing_expected_nifti_fails_execution(tmp_path, monkeypatch):
     )
 
     assert result.status == "failed"
-    assert any("expected_nifti_exists=False" in err for err in result.errors)
+    assert any("does not exist" in err for err in result.errors)
 
 
 def test_provenance_references_approval_record(tmp_path, monkeypatch):
@@ -601,8 +617,8 @@ def test_provenance_references_checksum_snapshots(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_provenance_records_dcm2niix_binary_and_commands(tmp_path, monkeypatch):
-    """Phase 6B: provenance records dcm2niix binary SHA, strategy, argv, and duration."""
+def test_provenance_records_native_backend_without_external_commands(tmp_path, monkeypatch):
+    """Provenance identifies the in-project backend and records no argv."""
     _monkeypatch_dcm2niix_available(monkeypatch, tmp_path)
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
@@ -621,17 +637,11 @@ def test_provenance_records_dcm2niix_binary_and_commands(tmp_path, monkeypatch):
     data = json.loads(provenance_path.read_text())
     meta = data.get("metadata", {})
 
-    assert meta["dcm2niix_version"] == "v1.0.20260416"
-    assert meta["dcm2niix_expected_version"] == "v1.0.20260416"
-    assert meta["dcm2niix_executable_path"]
-    assert meta["dcm2niix_detection_strategy"] in {"env_var", "mamba_env", "path", "bundled"}
-    assert meta["dcm2niix_binary_sha256"]
-    assert meta["dcm2niix_command_count"] >= 1
-    first_command = meta["dcm2niix_commands"][0]
-    assert isinstance(first_command["argv"], list)
-    assert first_command["argv"][0] == meta["dcm2niix_executable_path"]
-    assert first_command["duration_ms"] >= 0
-    assert first_command["return_code"] == 0
+    assert data["backend"] == "python"
+    assert data["command_template_id"] == "medimage-native-dicom-v1"
+    assert meta["algorithm_id"] == "medimage.native_dicom_to_nifti"
+    assert meta["no_external_process"] is True
+    assert "dcm2niix_commands" not in meta
 
 
 def test_provenance_references_rollback_plan(tmp_path, monkeypatch):
@@ -668,7 +678,8 @@ def test_failure_references_rollback_plan(tmp_path, monkeypatch):
     )
     project_dir = tmp_path / "project"
     project_dir.mkdir()
-    _setup_complete_review_package(project_dir, "conv-test")
+    run_dir = _setup_complete_review_package(project_dir, "conv-test")
+    _set_missing_mapping_source(run_dir)
 
     _patch_subprocess_with(monkeypatch, _fake_failing_runner)
     run_internal_user_dicom_conversion_from_persisted_package(
@@ -734,21 +745,17 @@ def test_run_conversion_execute_still_blocked():
 
 
 def test_no_public_conversion_endpoint():
-    """Gate 16: Public /conversion/execute endpoint exists but is blocked by default.
-
-    In Phase 4L-2 the endpoint is implemented behind env flags and approval gates.
-    Without env flags, it returns 200 with status=disabled/blocked.
-    """
+    """Gate 16: Phase 7 permanently retires this weak execution route."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from src.backend.app.main import app
 
     client = TestClient(app)
     resp = client.post("/api/projects/test/conversion/execute", json={})
-    assert resp.status_code == 200, f"Expected 200 blocked, got {resp.status_code}"
-    data = resp.json()
-    assert data["ok"] is False
-    assert data["status"] in ("disabled", "blocked")
+    assert resp.status_code == 410
+    detail = resp.json()["detail"]
+    assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+    assert detail["replacement"] == "/api/plans/execute-reviewed"
 
     # /conversion/run must still not exist
     resp2 = client.post("/api/projects/test/conversion/run", json={})

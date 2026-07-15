@@ -7,7 +7,18 @@ from pathlib import Path
 from typing import Any
 
 from src.backend.app.runtime.node_registry import NodeExecutionContext, get_node_runner
+from src.backend.app.runtime.execution_gateway import (
+    VerifiedExecutionContext,
+    assert_verified_execution_context,
+)
+from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.runtime.scheduler import get_scheduler_config
+from src.backend.app.runtime.capability_enforcement import (
+    enforce_node_capabilities,
+    enforce_recovery_pipeline_scope,
+    filter_recovery_subjects,
+)
+from src.backend.app.runtime.tool_execution_context import ToolExecutionContext
 from src.backend.app.runtime.state_store import (
     determine_status_from_result,
     now_iso,
@@ -64,7 +75,25 @@ def get_complete_subjects(dataset_index: dict[str, Any]) -> list[dict[str, Any]]
 def run_pipeline(
     project_config_path: str | Path,
     pipeline_path: str | Path,
+    *,
+    execution_context: VerifiedExecutionContext | None = None,
 ) -> dict[str, Any]:
+    assert_verified_execution_context(execution_context)
+    assert execution_context is not None
+    resolved_config = str(Path(project_config_path).expanduser().resolve())
+    resolved_pipeline = str(Path(pipeline_path).expanduser().resolve())
+    if resolved_config != execution_context.verified_project_config_path:
+        raise SafetyError(
+            "EXECUTION_CONTEXT_PROJECT_CONFIG_MISMATCH",
+            code="EXECUTION_CONTEXT_PROJECT_CONFIG_MISMATCH",
+        )
+    if resolved_pipeline != execution_context.verified_pipeline_path:
+        raise SafetyError(
+            "EXECUTION_CONTEXT_PIPELINE_MISMATCH",
+            code="EXECUTION_CONTEXT_PIPELINE_MISMATCH",
+        )
+    if execution_context.ticket.is_expired():
+        raise SafetyError("EXECUTION_TICKET_EXPIRED", code="EXECUTION_TICKET_EXPIRED")
     started_at = now_iso()
     errors: list[str] = []
     node_states: list[str] = []
@@ -125,6 +154,11 @@ def run_pipeline(
         }
 
     run_id = pipeline.execution.get("run_id", "run_default")
+    enforce_recovery_pipeline_scope(
+        execution_context.ticket,
+        pipeline_node_ids=(node.id for node in pipeline.nodes),
+        run_id=run_id,
+    )
     stop_on_failure = pipeline.execution.get("stop_on_failure", True)
 
     work_dir = project_config["runtime"]["work_dir"]
@@ -144,6 +178,10 @@ def run_pipeline(
         spm_dir=spm_dir,
         dpabi_dir=dpabi_dir,
         derivatives_dir=derivatives_dir,
+        tool_execution_context=ToolExecutionContext.from_ticket(
+            execution_context.ticket,
+            execution_context.ticket_service,
+        ),
     )
 
     node_status_map: dict[str, str] = {}
@@ -166,6 +204,9 @@ def run_pipeline(
 
     for node in pipeline.nodes:
         node_started_at = now_iso()
+
+        assert context.tool_execution_context is not None
+        enforce_node_capabilities(context.tool_execution_context, node)
 
         deps_satisfied = all(
             node_status_map.get(dep) == "SUCCESS" for dep in node.depends_on
@@ -252,6 +293,8 @@ def run_pipeline(
                         for subj_dir in spm_smooth_dir.iterdir():
                             if subj_dir.is_dir() and subj_dir.name.startswith("sub-"):
                                 subjects.append({"subject_id": subj_dir.name})
+
+            subjects = filter_recovery_subjects(execution_context.ticket, subjects)
 
             if not subjects:
                 error_msg = f"Node '{node.id}' is subject-level but no COMPLETE subjects found"

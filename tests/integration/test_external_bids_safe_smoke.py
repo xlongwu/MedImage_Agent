@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 import yaml
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 
 EXTERNAL_BIDS_ENV = "MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR"
@@ -549,15 +550,18 @@ def test_external_bids_safe_reviewed_execute_is_read_only(
         == created["project_config_path"]
     )
 
+    goal = "Inspect a user-selected external BIDS/rawdata directory safely"
     saved = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
             "plan": plan,
             "project_config_path": created["project_config_path"],
             "validation": {"ok": True, "precheck": precheck},
-            "goal": "Inspect a user-selected external BIDS/rawdata directory safely",
+            "goal": goal,
             "provider": "deterministic-test",
             "warnings": list(precheck.get("warnings", [])),
+            "goal_contract_candidate": reviewed_goal_candidate(plan, goal),
+            "reviewed_actor": "external-bids-smoke-test",
         },
     )
     assert saved.status_code == 200, saved.text

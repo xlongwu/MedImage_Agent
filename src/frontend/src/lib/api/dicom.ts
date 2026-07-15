@@ -111,7 +111,8 @@ export interface DicomConversionPrepareConfirmations {
   rawdata_readonly: boolean;
   research_use_only: boolean;
   no_clinical_use: boolean;
-  external_converter: boolean;
+  native_converter: boolean;
+  external_converter?: boolean;
   rollback_policy: boolean;
   risk_acknowledgement: boolean;
   approval_audit: boolean;

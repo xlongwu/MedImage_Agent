@@ -17,6 +17,7 @@ from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services.mock_store import SQLiteDesktopStore
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
@@ -81,14 +82,17 @@ def _reviewed_plan(created: dict) -> dict:
 
 
 def _save_plan(client: TestClient, created: dict, plan: dict) -> dict:
+    goal = "Events and logs test"
     response = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
             "plan": plan,
             "project_config_path": created["project_config_path"],
             "validation": {"ok": True},
-            "goal": "Events and logs test",
+            "goal": goal,
             "provider": "mock",
+            "goal_contract_candidate": reviewed_goal_candidate(plan, goal),
+            "reviewed_actor": "test-reviewer",
         },
     )
     assert response.status_code == 200, response.text

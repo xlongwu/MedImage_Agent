@@ -19,6 +19,8 @@ import yaml
 from fastapi.testclient import TestClient
 
 from src.backend.app.main import app
+from src.backend.app.schemas.desktop import ProjectDetail
+from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 client = TestClient(app)
 
@@ -101,6 +103,86 @@ def _request_body(plan: dict, project_config_path: str, **overrides) -> dict:
     return body
 
 
+def _persist_review_context(monkeypatch, tmp_path: Path, plan: dict, config_path: str):
+    """Create the persisted project/review identity required for real execution."""
+    from src.backend.app.api import execute_reviewed_routes
+    from src.backend.app.planner import project_context, reviewed_plan_store
+    from src.backend.app.planner.goal_contract_builder import (
+        build_goal_contract_semantics,
+    )
+
+    project_id = f"synthetic-smoke-{tmp_path.name}"
+    project_dir = tmp_path / "project"
+    rawdata_dir = project_dir / "rawdata"
+    dataset_index_path = project_dir / "dataset_index.json"
+    rawdata_dir.mkdir(parents=True, exist_ok=True)
+    dataset_index_path.write_text('{"subjects": []}', encoding="utf-8")
+    store = SQLiteDesktopStore(tmp_path / "desktop.sqlite")
+    store.add_project(
+        ProjectDetail(
+            id=project_id,
+            name="Synthetic reviewed smoke",
+            study_id=project_id,
+            modality="rs-fMRI",
+            created_date="test",
+            subjects_count=0,
+            current_pipeline_id=str(plan.get("pipeline_id") or "test"),
+            sequences=[],
+            scans_count=0,
+            total_size="0 B",
+            current_model_id="none",
+            metadata={
+                "source": "created",
+                "project_dir": str(project_dir),
+                "rawdata_dir": str(rawdata_dir),
+                "dataset_index_path": str(dataset_index_path),
+                "project_config_path": config_path,
+            },
+        ),
+        health_status="Ready",
+        rawdata_dir=str(rawdata_dir),
+    )
+    for module in (execute_reviewed_routes, project_context, reviewed_plan_store):
+        monkeypatch.setattr(module, "mock_store", store)
+    context = project_context.load_project_context(project_id, config_path)
+    plan = project_context.apply_project_context_to_plan(plan, context)
+    goal_candidate = build_goal_contract_semantics(plan, "synthetic execution smoke")
+    candidate_semantics = goal_candidate.semantics
+    if not goal_candidate.ok:
+        candidate_semantics = {
+            "goal_text": "synthetic execution smoke",
+            "goal_kind": "reviewed_execution_boundary",
+            "scope": {"completeness_required": True},
+            "criteria": [
+                {
+                    "criterion_id": "reviewed-nodes",
+                    "criterion_type": "node_status",
+                    "target": "required_nodes",
+                    "required_evidence": ["node_states"],
+                    "expected": {
+                        "node_ids": [node["id"] for node in plan["nodes"]],
+                        "statuses": ["SUCCESS", "COMPLETED"],
+                    },
+                    "failure_semantics": "indeterminate_if_source_incomplete",
+                }
+            ],
+            "minimum_capability_level": "unavailable",
+            "builder_source": "explicit_test_review",
+        }
+    assert candidate_semantics is not None
+    reviewed = reviewed_plan_store.save_reviewed_plan(
+        project_id=project_id,
+        project_config_path=config_path,
+        plan=plan,
+        validation={"ok": True},
+        goal="synthetic execution smoke",
+        provider="test",
+        goal_contract_candidate=candidate_semantics,
+        reviewed_actor="test-reviewer",
+    )
+    return plan, project_id, reviewed.reviewed_plan_id
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Smoke: safe Python-only plan → EXECUTION_SUBMITTED
 # ══════════════════════════════════════════════════════════════════════════════
@@ -112,15 +194,16 @@ def test_safe_plan_execution_submitted(monkeypatch, tmp_path):
     # ── Mock executor ──
     executor_calls = []
 
-    def _fake_run_pipeline(project_config_path, pipeline_path):
+    def _fake_run_pipeline(*, project_config_path, pipeline_path, execution_context):
         executor_calls.append({
             "project_config_path": project_config_path,
             "pipeline_path": pipeline_path,
+            "ticket_id": execution_context.ticket.execution_ticket_id,
         })
         return {"status": "SUCCESS", "run_id": "ci-mock-run-001"}
 
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _fake_run_pipeline,
     )
 
@@ -138,11 +221,19 @@ def test_safe_plan_execution_submitted(monkeypatch, tmp_path):
 
     # ── Create config ──
     config_path = _write_config(tmp_path)
+    plan, project_id, reviewed_plan_id = _persist_review_context(
+        monkeypatch, tmp_path, _safe_plan(), config_path
+    )
 
     # ── Call API ──
     resp = client.post(
         "/api/plans/execute-reviewed",
-        json=_request_body(_safe_plan(), config_path),
+        json=_request_body(
+            plan,
+            config_path,
+            project_id=project_id,
+            reviewed_plan_id=reviewed_plan_id,
+        ),
     )
 
     # ── Assert ──
@@ -154,11 +245,13 @@ def test_safe_plan_execution_submitted(monkeypatch, tmp_path):
     assert data["execution"]["executor_called"] is True                    # 4
     assert data["execution"]["submitted"] is True                          # 5
     assert data["execution"]["run_id"] is not None                         # 6
-    assert data["execution"]["run_id"] == "ci-mock-run-001"                # 6b
+    assert data["execution"]["run_id"].startswith("run_")                  # 6b
+    assert data["executor_result"]["run_id"] == "ci-mock-run-001"
 
     # ── Executor called once ──
     assert len(executor_calls) == 1                                         # 7
     call = executor_calls[0]
+    assert data["execution_ticket"]["execution_ticket_id"] == call["ticket_id"]
     assert call["project_config_path"] == config_path                      # 8
     assert Path(call["pipeline_path"]).exists()                            # 9
 
@@ -202,7 +295,7 @@ def test_unsafe_spm_plan_blocked(monkeypatch, tmp_path):
         return {"status": "SHOULD_NOT_BE_CALLED"}
 
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _fake_run_pipeline,
     )
 
@@ -218,17 +311,26 @@ def test_unsafe_spm_plan_blocked(monkeypatch, tmp_path):
     )
 
     config_path = _write_config(tmp_path)
+    plan, project_id, reviewed_plan_id = _persist_review_context(
+        monkeypatch, tmp_path, _unsafe_plan(), config_path
+    )
     resp = client.post(
         "/api/plans/execute-reviewed",
-        json=_request_body(_unsafe_plan(), config_path),
+        json=_request_body(
+            plan,
+            config_path,
+            project_id=project_id,
+            reviewed_plan_id=reviewed_plan_id,
+        ),
     )
 
     data = resp.json()
     assert resp.status_code == 200
     # Policy blocked (SPM nodes are blocked by execution policy)
     assert data["status"] in ("EXECUTION_POLICY_BLOCKED",
-                               "SAFE_EXECUTION_POLICY_BLOCKED",
-                               "APPROVAL_GATE_BLOCKED")
+                              "SAFE_EXECUTION_POLICY_BLOCKED",
+                              "APPROVAL_GATE_BLOCKED",
+                              "REVIEWED_PLAN_NEEDS_GOAL_REVIEW")
     assert data["execution"]["executor_called"] is False
     assert len(executor_calls) == 0  # executor NOT called
 
@@ -248,7 +350,7 @@ def test_dry_run_true_does_not_call_executor(monkeypatch, tmp_path):
         return {"status": "SHOULD_NOT_BE_CALLED"}
 
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         _fake_run_pipeline,
     )
 

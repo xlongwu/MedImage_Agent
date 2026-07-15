@@ -23,7 +23,7 @@ Pipeline Runtime 和注册节点 runner 内。
 
 - Python 3.11+
 - Node.js 20+
-- MATLAB + SPM12 可选，仅用于显式环境变量门控的 SPM 工作流
+- `pydicom` 和 `nibabel` 可选，项目内置 DICOM 转换需要这两个依赖
 - CuPy 可选，仅用于 GPU 路径
 
 ### 安装
@@ -148,9 +148,17 @@ desktop/
   packaging/                   PyInstaller 与 Windows 构建脚本
 
 docs/
-  releases/                    历史发布说明
-  architecture.md              当前架构
-  DESKTOP_APP_PACKAGING.md     打包指南
+  文档索引.md                   当前文档索引
+  架构与决策/                   当前架构与 ADR
+  项目概览/                     能力矩阵和兼容入口
+  安全与审批/                   安全边界与运行生命周期
+  预处理与科学计算/             科学计算与外部工具契约
+  桌面与前端/                   桌面打包和前端指南
+  发布记录/                     与版本绑定的历史发布说明
+
+specs/
+  规范/                         持久的工程与科学计算规范
+  阶段记录/                     保留的阶段级历史记录
 
 tests/
   unit/                        单元测试和源码契约测试
@@ -165,15 +173,16 @@ tests/
 | 必须审批 | Tool Catalog + Approval Gate + 显式确认 |
 | 防目录穿越 | `path_safety.py` 和 project/run artifact ID |
 | 前端隔离 | HTTP API modules 和受控 Electron bridge |
-| 外部工具门控 | 环境变量、approval/readiness、audit records |
+| 执行限定在项目内 | 注册 Python runner、approval/readiness、audit records |
 | 仅研究用途 | UI 和文档警示 |
 
 ## 已知限制
 
 - 不用于临床诊断或医疗决策。
-- DPABI 执行默认禁用。
-- MATLAB/SPM 执行需要本地工具和显式环境变量。
+- 预处理使用项目内置 Python 实现，不要求也不会调用 MATLAB、SPM 或 DPABI 可执行程序。
 - DICOM 转换执行默认阻断，需要 release approval evidence 和多重确认。
+- 内置 DICOM 转换当前支持经典单帧 MR 序列和 Siemens 单帧 mosaic MR
+  时间序列；混合序列或不支持的格式会安全拒绝。
 - ALFF/fALFF、ReHo 和 functional connectivity 在满足输入条件时已有 Python 后端路径；
   metadata-only 和 preview 输出仍会明确标注为对应状态。
 - 当前发布线不包含 group statistics、classification、diagnosis model、report

@@ -2178,7 +2178,7 @@ export const messagesEn = {
   "technical.DicomConversionExecute.failed.rawdataUnchanged":
     "Rawdata remains unchanged. Review the rollback evidence above before retrying.",
   "technical.DicomConversionExecute.submitting.description":
-    "The backend is executing dcm2niix. This may take several minutes for large datasets. Do not close this page.",
+    "The backend is running the in-project DICOM converter. Large datasets may take several minutes. Do not close this page.",
   "technical.DicomConversionExecute.submitting.requesting": "requesting execution...",
   "technical.DicomConversionExecute.result.partialTitle": "Conversion partially completed",
   "technical.DicomConversionExecute.result.completeTitle": "Conversion complete",
@@ -2196,7 +2196,7 @@ export const messagesEn = {
   "technical.DicomConversionExecute.path.provenance": "Provenance",
   "technical.DicomConversionExecute.confirm.title": "Approve & Execute DICOM Conversion",
   "technical.DicomConversionExecute.confirm.description":
-    "You are about to execute DICOM-to-NIfTI conversion using dcm2niix. This is a one-way operation. Confirm each statement below before proceeding.",
+    "You are about to run the in-project DICOM-to-NIfTI converter. Confirm each statement below before proceeding.",
   "technical.DicomConversionExecute.confirm.researchDisclaimer":
     "MedImage Agent is for research use only. It is not for clinical use or medical decision-making. Rawdata remains read-only. SPM/DPABI/MATLAB are not executed. Full preprocessing is not triggered.",
   "technical.DicomConversionReleaseReadiness.001": "Release Readiness",
@@ -2256,7 +2256,7 @@ export const messagesEn = {
   "technical.DicomConversionReview.label.auditRequired": "Audit required",
   "technical.DicomConversionReview.blocked.prerequisites": "{count} prerequisite(s) missing.",
   "technical.DicomConversionReview.action.showTechnicalDetails": "Show technical details",
-  "technical.DicomConversionReview.dcm2niix.title": "dcm2niix Availability",
+  "technical.DicomConversionReview.dcm2niix.title": "Native converter availability",
   "technical.DicomConversionReview.dcm2niix.envEnabled": "environment enabled",
   "technical.DicomConversionReview.dcm2niix.missingFlags": "missing flags",
   "technical.DicomConversionReview.templates.title": "Command templates",
@@ -2283,7 +2283,7 @@ export const messagesEn = {
   "technical.DicomConversionReview.approval.item.userApproval":
     "User approval record with all required fields",
   "technical.DicomConversionReview.approval.item.auditBeforeExecution":
-    "Audit record persisted before dcm2niix is called",
+    "Audit record persisted before native conversion starts",
   "technical.DicomConversionReview.approval.item.confirmExecution": "confirm_execution=true",
   "technical.DicomConversionReview.approval.item.approvalId": "Conversion-specific approval ID",
   "technical.DicomConversionReview.approval.item.mappingsReviewed":
@@ -2299,7 +2299,7 @@ export const messagesEn = {
   "technical.DicomConversionReview.approval.item.templatesReviewed": "Command templates reviewed",
   "technical.DicomConversionReview.approval.item.noShellString": "No shell string acknowledgement",
   "technical.DicomConversionReview.approval.item.dcm2niixAvailable":
-    "dcm2niix availability verified (on PATH, version recorded)",
+    "In-project converter dependencies verified and versions recorded",
   "technical.DicomConversionReview.approval.item.environmentFlags":
     "All required environment flags present",
   "technical.DicomConversionReview.approval.item.artifactPaths":
@@ -2554,7 +2554,7 @@ export const messagesEn = {
   "technical.DicomConversionExecute.confirm.no_clinical_use":
     "I understand this is not for clinical use.",
   "technical.DicomConversionExecute.confirm.external_converter":
-    "I acknowledge dcm2niix is an external converter.",
+    "I acknowledge the reviewed in-project converter and its supported DICOM scope.",
   "technical.DicomConversionExecute.confirm.rollback_policy": "I acknowledge the rollback policy.",
   "technical.DicomConversionExecute.confirm.risk_acknowledgement":
     "I acknowledge the conversion risks.",

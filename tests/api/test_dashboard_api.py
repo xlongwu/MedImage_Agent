@@ -279,16 +279,8 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
             "execution_mode": "external_smoke",
         },
     )
-    assert run.status_code == 200
-    task_id = run.json()["task_id"]
-    detail = client.get(f"/api/tasks/{task_id}")
-    assert detail.status_code == 200
-    assert detail.json()["status"] == "running"
-    assert detail.json()["execution_mode"] == "external_smoke"
-
-    events = client.get(f"/api/tasks/{task_id}/events")
-    assert events.status_code == 200
-    assert events.json()[0]["message"] == "Pipeline request accepted"
+    assert run.status_code == 410
+    assert run.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
 def test_dicom_preflight_api_reads_demodata_metadata_only():
@@ -464,7 +456,8 @@ def test_approved_smoke_requires_explicit_approval():
             "approved": False,
         },
     )
-    assert blocked.status_code == 403
+    assert blocked.status_code == 410
+    assert blocked.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
     missing_name = client.post(
         "/api/pipelines/run",
@@ -480,7 +473,8 @@ def test_approved_smoke_requires_explicit_approval():
             "approved_by": "",
         },
     )
-    assert missing_name.status_code == 400
+    assert missing_name.status_code == 410
+    assert missing_name.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
 def test_task_approval_records_event_and_diagnostics(monkeypatch):
@@ -506,19 +500,8 @@ def test_task_approval_records_event_and_diagnostics(monkeypatch):
             "execution_mode": "external_smoke",
         },
     )
-    assert created.status_code == 200
-    task_id = created.json()["task_id"]
-
-    approval = client.post(
-        f"/api/tasks/{task_id}/approve",
-        json={"approved": True, "approved_by": "QA Lead"},
-    )
-    assert approval.status_code == 200
-    assert approval.json()["approval"]["approved_by"] == "QA Lead"
-
-    diagnostics = client.get(f"/api/tasks/{task_id}/diagnostics")
-    assert diagnostics.status_code == 200
-    assert diagnostics.json()["approval"]["approved_by"] == "QA Lead"
+    assert created.status_code == 410
+    assert created.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
 def test_fake_external_smoke_artifacts_and_diagnostics(monkeypatch):

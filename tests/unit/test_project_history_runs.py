@@ -90,6 +90,37 @@ def _reviewed_plan(created: dict) -> dict:
 
 
 def _save_plan(client: TestClient, created: dict, plan: dict) -> dict:
+    goal_candidate = {
+        "goal_text": "Inspect and run motion QC",
+        "goal_kind": "reviewed_execution_boundary",
+        "scope": {"completeness_required": True},
+        "criteria": [
+            {
+                "criterion_id": "terminal",
+                "criterion_type": "pipeline_terminal",
+                "target": "pipeline",
+                "required_evidence": ["pipeline_summary", "node_states"],
+                "expected": {
+                    "statuses": ["SUCCESS", "COMPLETED"],
+                    "active_nodes": 0,
+                },
+                "failure_semantics": "indeterminate_if_source_incomplete",
+            },
+            {
+                "criterion_id": "nodes",
+                "criterion_type": "node_status",
+                "target": "required_nodes",
+                "required_evidence": ["node_states"],
+                "expected": {
+                    "node_ids": [node["id"] for node in plan["nodes"]],
+                    "statuses": ["SUCCESS", "COMPLETED"],
+                },
+                "failure_semantics": "indeterminate_if_source_incomplete",
+            },
+        ],
+        "minimum_capability_level": "unavailable",
+        "builder_source": "explicit_test_review",
+    }
     response = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
@@ -98,6 +129,8 @@ def _save_plan(client: TestClient, created: dict, plan: dict) -> dict:
             "validation": {"ok": True},
             "goal": "Inspect and run motion QC",
             "provider": "mock",
+            "goal_contract_candidate": goal_candidate,
+            "reviewed_actor": "test-reviewer",
         },
     )
     assert response.status_code == 200, response.text
@@ -166,7 +199,9 @@ def test_real_execution_persists_run_link_before_executor_and_exposes_history(
         tmp_path / "pipelines",
     )
 
-    def fake_executor(*, project_config_path: str, pipeline_path: str) -> dict:
+    def fake_executor(
+        *, project_config_path: str, pipeline_path: str, execution_context
+    ) -> dict:
         links = store.list_run_links(created["project_id"])
         assert len(links) == 1
         assert links[0].status == "RUNNING"
@@ -176,7 +211,9 @@ def test_real_execution_persists_run_link_before_executor_and_exposes_history(
         summary_path.write_text("{}", encoding="utf-8")
         return {"status": "SUCCESS", "run_id": run_id, "summary_path": str(summary_path)}
 
-    monkeypatch.setattr(execute_reviewed_routes, "run_pipeline", fake_executor)
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR", fake_executor
+    )
     response = client.post(
         "/api/plans/execute-reviewed",
         json=_execute_body(created, plan, reviewed["reviewed_plan_id"]),
@@ -264,11 +301,15 @@ def test_repeated_real_execution_gets_unique_run_ids(tmp_path, monkeypatch):
         tmp_path / "pipelines",
     )
 
-    def fake_executor(*, project_config_path: str, pipeline_path: str) -> dict:
+    def fake_executor(
+        *, project_config_path: str, pipeline_path: str, execution_context
+    ) -> dict:
         pipeline = yaml.safe_load(Path(pipeline_path).read_text(encoding="utf-8"))
         return {"status": "SUCCESS", "run_id": pipeline["execution"]["run_id"]}
 
-    monkeypatch.setattr(execute_reviewed_routes, "run_pipeline", fake_executor)
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR", fake_executor
+    )
     body = _execute_body(created, plan, reviewed["reviewed_plan_id"])
     first = client.post("/api/plans/execute-reviewed", json=body).json()
     second = client.post("/api/plans/execute-reviewed", json=body).json()
@@ -302,7 +343,9 @@ def test_run_link_write_failure_blocks_executor(tmp_path, monkeypatch):
         return {"status": "SUCCESS"}
 
     monkeypatch.setattr(store, "add_run_link", fail_add_run_link)
-    monkeypatch.setattr(execute_reviewed_routes, "run_pipeline", fake_executor)
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR", fake_executor
+    )
     response = client.post(
         "/api/plans/execute-reviewed",
         json=_execute_body(created, plan, reviewed["reviewed_plan_id"]),
@@ -326,5 +369,5 @@ def test_real_execution_requires_matching_persisted_reviewed_plan(tmp_path, monk
     )
 
     assert response.status_code == 200
-    assert response.json()["status"] == "REVIEWED_PLAN_MISMATCH"
+    assert response.json()["status"] == "REVIEWED_PLAN_NOT_FOUND"
     assert response.json()["execution"]["executor_called"] is False

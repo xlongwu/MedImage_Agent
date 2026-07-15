@@ -10,6 +10,20 @@ from src.backend.app.schemas.desktop import (
     RunLinkRecord,
     StudyOverview,
 )
+from src.backend.app.schemas.execution_ticket import ExecutionTicket, ExecutionTicketEvent
+from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
+from src.backend.app.schemas.observation import ObservationRecord
+from src.backend.app.schemas.goal_contract import GoalEvaluationRecord
+from src.backend.app.schemas.recovery import DiagnosisRecord, RecoveryProposal
+from src.backend.app.schemas.recovery_attempt import (
+    RecoveryApprovalEvent,
+    RecoveryApprovalRecord,
+    RecoveryAttemptEvent,
+    RecoveryAttemptRecord,
+    RecoveryQuotaReservation,
+)
+
+
 class ProjectStore(Protocol):
     def list_projects(self) -> list[ProjectSummary]: ...
 
@@ -27,6 +41,12 @@ class ProjectStore(Protocol):
 
     def get_reviewed_plan(self, reviewed_plan_id: str) -> ReviewedPlanRecord | None: ...
 
+    def add_reviewed_plan(self, record: ReviewedPlanRecord) -> ReviewedPlanRecord: ...
+
+    def update_reviewed_plan(
+        self, reviewed_plan_id: str, **updates: object
+    ) -> ReviewedPlanRecord | None: ...
+
     def list_run_links(
         self,
         project_id: str,
@@ -38,6 +58,155 @@ class ProjectStore(Protocol):
         project_id: str,
         run_id: str,
     ) -> RunLinkRecord | None: ...
+
+    def add_run_link(self, record: RunLinkRecord) -> RunLinkRecord: ...
+
+    def get_execution_ticket(
+        self,
+        execution_ticket_id: str,
+    ) -> ExecutionTicket | None: ...
+
+    def list_execution_tickets(self, project_id: str) -> list[ExecutionTicket]: ...
+
+    def list_execution_ticket_events(
+        self,
+        execution_ticket_id: str,
+    ) -> list[ExecutionTicketEvent]: ...
+
+    def create_agent_lifecycle(
+        self,
+        record: AgentLifecycleRecord,
+        event: AgentLifecycleEvent,
+    ) -> AgentLifecycleRecord: ...
+
+    def get_agent_lifecycle(self, lifecycle_id: str) -> AgentLifecycleRecord | None: ...
+
+    def list_agent_lifecycles(self, project_id: str) -> list[AgentLifecycleRecord]: ...
+
+    def transition_agent_lifecycle(
+        self,
+        record: AgentLifecycleRecord,
+        event: AgentLifecycleEvent,
+        *,
+        expected_state: str,
+    ) -> AgentLifecycleRecord: ...
+
+    def list_agent_lifecycle_events(
+        self,
+        lifecycle_id: str,
+    ) -> list[AgentLifecycleEvent]: ...
+
+    def add_observation(self, record: ObservationRecord) -> ObservationRecord: ...
+
+    def get_observation(self, observation_id: str) -> ObservationRecord | None: ...
+
+    def list_observations(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+        run_id: str | None = None,
+    ) -> list[ObservationRecord]: ...
+
+    def add_goal_evaluation(
+        self,
+        record: GoalEvaluationRecord,
+    ) -> GoalEvaluationRecord: ...
+
+    def get_goal_evaluation(
+        self,
+        goal_evaluation_id: str,
+    ) -> GoalEvaluationRecord | None: ...
+
+    def list_goal_evaluations(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+        observation_id: str | None = None,
+    ) -> list[GoalEvaluationRecord]: ...
+
+    def add_recovery_diagnosis(self, record: DiagnosisRecord) -> DiagnosisRecord: ...
+
+    def get_recovery_diagnosis(self, diagnosis_id: str) -> DiagnosisRecord | None: ...
+
+    def list_recovery_diagnoses(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+    ) -> list[DiagnosisRecord]: ...
+
+    def add_recovery_proposal(self, record: RecoveryProposal) -> RecoveryProposal: ...
+
+    def get_recovery_proposal(self, proposal_id: str) -> RecoveryProposal | None: ...
+
+    def list_recovery_proposals(
+        self,
+        project_id: str,
+        *,
+        lifecycle_id: str | None = None,
+    ) -> list[RecoveryProposal]: ...
+
+    def add_recovery_approval(
+        self, record: RecoveryApprovalRecord, event: RecoveryApprovalEvent
+    ) -> RecoveryApprovalRecord: ...
+
+    def get_recovery_approval(self, approval_id: str) -> RecoveryApprovalRecord | None: ...
+
+    def list_recovery_approvals(
+        self, project_id: str, *, lifecycle_id: str | None = None
+    ) -> list[RecoveryApprovalRecord]: ...
+
+    def list_recovery_approval_events(self, approval_id: str) -> list[RecoveryApprovalEvent]: ...
+
+    def update_recovery_approval(
+        self,
+        record: RecoveryApprovalRecord,
+        event: RecoveryApprovalEvent,
+        *,
+        expected_status: str,
+    ) -> RecoveryApprovalRecord: ...
+
+    def create_recovery_attempt(
+        self, record: RecoveryAttemptRecord, event: RecoveryAttemptEvent
+    ) -> RecoveryAttemptRecord: ...
+
+    def get_recovery_attempt(self, attempt_id: str) -> RecoveryAttemptRecord | None: ...
+
+    def get_recovery_attempt_by_idempotency(
+        self, idempotency_key: str
+    ) -> RecoveryAttemptRecord | None: ...
+
+    def list_recovery_attempts(
+        self, project_id: str, *, lifecycle_id: str | None = None
+    ) -> list[RecoveryAttemptRecord]: ...
+
+    def list_recovery_attempt_events(self, attempt_id: str) -> list[RecoveryAttemptEvent]: ...
+
+    def transition_recovery_attempt(
+        self,
+        record: RecoveryAttemptRecord,
+        event: RecoveryAttemptEvent,
+        *,
+        expected_status: str,
+    ) -> RecoveryAttemptRecord: ...
+
+    def reserve_recovery_quota(
+        self, reservation: RecoveryQuotaReservation
+    ) -> RecoveryQuotaReservation: ...
+
+    def get_recovery_quota_reservation(
+        self, reservation_id: str
+    ) -> RecoveryQuotaReservation | None: ...
+
+    def list_recovery_quota_reservations(
+        self, project_id: str, *, lifecycle_id: str | None = None
+    ) -> list[RecoveryQuotaReservation]: ...
+
+    def update_recovery_quota_reservation(
+        self, record: RecoveryQuotaReservation, *, expected_status: str
+    ) -> RecoveryQuotaReservation: ...
 
 
 import src.backend.app.services.mock_store as _mock_store_module

@@ -153,4 +153,5 @@ MedImage Agent v0.2.0 在 v0.1.0 MVP 基础上完成了 **GPU 加速矩阵计算
 | v0.5.0 | LLM Advisor Layer | 2026-Q4 |
 | v0.6.0 | 真实数据沙盒 | 2026-Q4 |
 
-详见 `docs/项目概览/下一阶段计划.md`
+后续工作的当前权威入口为根目录 `PROJECT_STATE.md`；本发布记录只描述当时的
+MVP 状态。

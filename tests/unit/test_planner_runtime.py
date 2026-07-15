@@ -78,4 +78,5 @@ def test_planner_execution_requires_approval_for_external_pipeline():
     })
 
     assert result["ok"] is False
-    assert result["status"] == "APPROVAL_REQUIRED"
+    assert result["status"] == "EXECUTION_CONTRACT_REQUIRED"
+    assert result["replacement"] == "/api/plans/execute-reviewed"

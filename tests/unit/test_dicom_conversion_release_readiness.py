@@ -394,7 +394,7 @@ def test_run_conversion_execute_still_blocked(monkeypatch):
 
 
 def test_no_public_conversion_execute_endpoint():
-    """Gate 15: Public /conversion/execute route exists but is blocked by default.
+    """Gate 15: the legacy route is a stable audited 410 after Phase 7.
 
     In Phase 4L-2 the endpoint is implemented behind env flags.
     Without env flags, it returns 200 with status=disabled/blocked.
@@ -407,10 +407,10 @@ def test_no_public_conversion_execute_endpoint():
     try:
         client = TestClient(app)
         resp = client.post("/api/projects/test/conversion/execute", json={})
-        assert resp.status_code == 200, f"Expected 200 blocked, got {resp.status_code}"
-        data = resp.json()
-        assert data["ok"] is False
-        assert data["status"] in ("disabled", "blocked")
+        assert resp.status_code == 410
+        detail = resp.json()["detail"]
+        assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+        assert detail["replacement"] == "/api/plans/execute-reviewed"
         resp2 = client.post("/api/projects/test/conversion/run", json={})
         assert resp2.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp2.status_code}"
     finally:

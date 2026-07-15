@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from src.backend.app.api.execution_contract import reject_execution_contract
 
 router = APIRouter()
 
@@ -76,15 +77,4 @@ async def workflow_run(request: dict[str, Any]):
 
     Delegates heavy computation to workflow_runner module.
     """
-    from src.backend.app.tools.workflow_runner import (
-        run_quickstart_demo_workflow,
-        run_real_data_workflow,
-    )
-
-    data_source = request.get("data_source", "demo")
-    dataset_path = request.get("dataset_path", "")
-
-    if data_source == "demo" or not dataset_path or "synthetic" in str(dataset_path).lower():
-        return run_quickstart_demo_workflow()
-
-    return run_real_data_workflow(dataset_path)
+    reject_execution_contract("realdata.workflow")

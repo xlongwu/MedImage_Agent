@@ -107,7 +107,8 @@ def test_tool_catalog_covers_plugin_registry_nodes():
     assert set(node_registry.NODE_REGISTRY) <= catalog_ids
 
 
-def test_compatibility_helper_aliases_remain_patchable():
-    assert callable(node_registry.run_matlab_check)
-    assert callable(node_registry.run_spm_smoke_test)
-    assert callable(node_registry.run_dpabi_capability_inspection)
+def test_external_helper_aliases_are_not_exposed_by_runtime_registry():
+    assert not hasattr(node_registry, "run_matlab_check")
+    assert not hasattr(node_registry, "run_spm_smoke_test")
+    assert not hasattr(node_registry, "run_dpabi_capability_inspection")
+    assert node_registry.NODE_REGISTRY["spm_realign_subject"].__name__ == "_external_legacy_node_blocker"

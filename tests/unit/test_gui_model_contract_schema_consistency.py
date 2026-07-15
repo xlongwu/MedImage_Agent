@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 
 import pytest
@@ -33,6 +35,17 @@ ALL_ALLOWED = {
     "input": lambda: validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration()),
     "audit": lambda: validate_and_build_model_audit_record(**allowed_model_audit_metadata_declaration()),
 }
+
+
+def _assert_module_has_no_forbidden_imports(module) -> None:
+    forbidden = {"pywinauto", "torch", "transformers", "safetensors"}
+    imported: set[str] = set()
+    for node in ast.walk(ast.parse(inspect.getsource(module))):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".", 1)[0])
+    assert imported.isdisjoint(forbidden), imported & forbidden
 
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Common result schema
@@ -345,23 +358,27 @@ def test_audit_blocks_rawdata_path():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_no_pywinauto():
-    import sys
-    assert "pywinauto" not in sys.modules
+    from src.backend.app.runtime import gui_model_provider_policy
+
+    _assert_module_has_no_forbidden_imports(gui_model_provider_policy)
 
 
 def test_no_torch():
-    import sys
-    assert "torch" not in sys.modules
+    from src.backend.app.runtime import gui_model_runtime_isolation
+
+    _assert_module_has_no_forbidden_imports(gui_model_runtime_isolation)
 
 
 def test_no_transformers():
-    import sys
-    assert "transformers" not in sys.modules
+    from src.backend.app.runtime import gui_model_input_redaction
+
+    _assert_module_has_no_forbidden_imports(gui_model_input_redaction)
 
 
 def test_no_safetensors():
-    import sys
-    assert "safetensors" not in sys.modules
+    from src.backend.app.runtime import gui_model_audit_contract
+
+    _assert_module_has_no_forbidden_imports(gui_model_audit_contract)
 
 
 def test_all_decls_json_serializable():

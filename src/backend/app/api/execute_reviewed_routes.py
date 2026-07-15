@@ -22,8 +22,13 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from src.backend.app.config.settings import ProjectSettings
+from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.planner.approval_gate import check_approval_gate
-from src.backend.app.planner.audit_record import build_review_audit_record, write_audit_record
+from src.backend.app.planner.audit_record import (
+    build_review_audit_record,
+    stable_hash,
+    write_audit_record,
+)
 from src.backend.app.planner.plan_adapter import adapt_reviewed_plan
 from src.backend.app.planner.plan_validator import validate_plan
 from src.backend.app.planner.project_context import (
@@ -39,7 +44,10 @@ from src.backend.app.planner.reviewed_plan_store import (
     resolve_reviewed_plan_for_execution,
 )
 from src.backend.app.planner import pipeline_writer  # imported as module for monkeypatch
-from src.backend.app.runtime.pipeline_executor import run_pipeline  # for monkeypatch
+from src.backend.app.runtime.execution_gateway import (
+    ExecutionGateway,
+    current_safe_allowlist_fingerprint,
+)
 from src.backend.app.schemas.desktop import ReviewedPlanRecord
 from src.backend.app.schemas.execution_consistency import (
     ExecutionConsistencyInput,
@@ -50,6 +58,8 @@ from src.backend.app.schemas.native_preproc_api import (
     NativeFullPreprocRequest,
 )
 from src.backend.app.services.mock_store import mock_store
+from src.backend.app.services.execution_ticket_service import ExecutionTicketService
+from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.native_preproc_full import run_native_full_dry_run
 
 router = APIRouter()
@@ -663,6 +673,54 @@ def _run_consistency_preflight(
     return None
 
 
+def _ticket_roots(
+    *,
+    context: ProjectContext,
+    settings: ProjectSettings,
+    written_path: Path,
+) -> tuple[list[str], list[str]]:
+    input_roots: set[str] = {
+        str(Path(settings.source_path).resolve().parent),
+    }
+    output_roots: set[str] = {
+        str(Path(settings.runtime.work_dir).resolve()),
+        str(Path(settings.runtime.log_dir).resolve()),
+        str(Path(settings.runtime.derivatives_dir).resolve()),
+        str(Path(settings.runtime.report_dir).resolve()),
+        str(written_path.resolve().parent),
+    }
+    if context.project_dir is not None:
+        input_roots.add(str(context.project_dir.resolve()))
+        output_roots.add(str(context.project_dir.resolve()))
+        output_roots.add(str((context.project_dir / "derivatives").resolve()))
+        output_roots.add(str((context.project_dir / "work").resolve()))
+    if context.rawdata_dir is not None:
+        input_roots.add(str(context.rawdata_dir.resolve()))
+        rawdata = context.rawdata_dir.resolve()
+        output_roots = {
+            root for root in output_roots if Path(root).resolve() != rawdata
+        }
+    if context.dataset_index_path is not None:
+        input_roots.add(str(context.dataset_index_path.resolve().parent))
+    return sorted(input_roots), sorted(output_roots)
+
+
+def _approval_context_id(
+    *,
+    reviewed_plan: ReviewedPlanRecord,
+    approval: dict[str, Any] | None,
+    gate: dict[str, Any],
+) -> str:
+    return "approval_" + stable_hash(
+        {
+            "reviewed_plan_id": reviewed_plan.reviewed_plan_id,
+            "plan_hash": reviewed_plan.plan_hash,
+            "approval": approval or {},
+            "gate": gate,
+        }
+    )[:24]
+
+
 # ── Main endpoint ────────────────────────────────────────────────────────────
 
 @router.post("/api/plans/execute-reviewed")
@@ -711,26 +769,39 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             )
 
         reviewed_plan: ReviewedPlanRecord | None = None
-        if context and context.source == "created":
-            try:
-                reviewed_plan = resolve_reviewed_plan_for_execution(
+        if not context or context.source != "created":
+            return _with_link_fields(
+                _project_context_blocked(
+                    "REVIEWED_PLAN_REQUIRED",
+                    request,
+                    [
+                        "REVIEWED_PLAN_REQUIRED: real execution requires a persisted "
+                        "project and reviewed-plan identity"
+                    ],
                     context,
-                    plan,
-                    request.reviewed_plan_id,
-                )
-            except ReviewedPlanStoreError as exc:
-                return _with_link_fields(
-                    _project_context_blocked(
-                        _reviewed_plan_error_status(exc),
-                        request,
-                        [str(exc)],
-                        context,
-                    ),
-                    reviewed_plan_id=request.reviewed_plan_id,
-                )
+                ),
+                reviewed_plan_id=request.reviewed_plan_id,
+            )
+        try:
+            reviewed_plan = resolve_reviewed_plan_for_execution(
+                context,
+                plan,
+                request.reviewed_plan_id,
+            )
+        except ReviewedPlanStoreError as exc:
+            return _with_link_fields(
+                _project_context_blocked(
+                    _reviewed_plan_error_status(exc),
+                    request,
+                    [str(exc)],
+                    context,
+                ),
+                reviewed_plan_id=request.reviewed_plan_id,
+            )
 
         # 5. Re-validate plan
-        validation = validate_plan(plan).to_dict()
+        validation_result = validate_plan(plan)
+        validation = validation_result.to_dict()
         if not validation.get("ok"):
             result = {
                 "ok": False,
@@ -804,6 +875,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 gate, result, request.actor, request,
             )
             return result
+        plan = validation_result.normalized_plan
 
         native_readiness = _check_native_preproc_readiness(plan, request, context)
         if native_readiness is not None and not native_readiness.get("ok"):
@@ -1040,11 +1112,96 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 pipeline_path=str(written_path) if written_path else None,
             )
 
-        # 13. Call executor — FIRST TIME in M5 series
+        # 13. Issue a server-side capability and dispatch through the sole gateway.
         try:
-            executor_result = run_pipeline(
-                project_config_path=request.project_config_path,
+            assert reviewed_plan is not None
+            assert context is not None
+            assert settings is not None
+            assert written_path is not None
+            approval_context_id = _approval_context_id(
+                reviewed_plan=reviewed_plan,
+                approval=request.approval,
+                gate=gate,
+            )
+            input_roots, output_roots = _ticket_roots(
+                context=context,
+                settings=settings,
+                written_path=written_path,
+            )
+            nodes = [
+                node for node in plan.get("nodes", []) if isinstance(node, dict)
+            ]
+            goal_contract = reviewed_plan.payload.get("goal_contract")
+            if not isinstance(goal_contract, dict):
+                raise SafetyError(
+                    "REVIEWED_PLAN_NEEDS_GOAL_REVIEW",
+                    code="REVIEWED_PLAN_NEEDS_GOAL_REVIEW",
+                )
+            goal_contract_hash = str(goal_contract.get("goal_contract_hash") or "")
+            evaluation_policy_version = str(
+                goal_contract.get("evaluation_policy_version") or ""
+            )
+            if not goal_contract_hash or not evaluation_policy_version:
+                raise SafetyError(
+                    "GOAL_CONTRACT_BINDING_REQUIRED",
+                    code="GOAL_CONTRACT_BINDING_REQUIRED",
+                )
+            ticket_service = ExecutionTicketService(mock_store)
+            issued_ticket = ticket_service.issue(
+                project_id=reviewed_plan.project_id,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                plan_hash=reviewed_plan.plan_hash,
+                approval_context_id=approval_context_id,
+                approved_actor=str(
+                    (request.approval or {}).get("approved_by")
+                    or request.actor
+                    or "local-user"
+                ),
+                approved_node_ids=[str(node.get("id") or "") for node in nodes],
+                approved_backend_ids=[
+                    str(node.get("backend") or "unknown") for node in nodes
+                ],
+                input_roots=input_roots,
+                output_roots=output_roots,
+                readonly_roots=(
+                    [str(context.rawdata_dir.resolve())]
+                    if context.rawdata_dir is not None
+                    else []
+                ),
+                project_config_path=str(request.project_config_path),
                 pipeline_path=str(written_path),
+                safe_allowlist_fingerprint=current_safe_allowlist_fingerprint(),
+                normalized_params_hash=validation_result.normalized_params_hash,
+                contract_versions=validation_result.contract_versions,
+                audit_id=str(audit_info.get("audit_id") or ""),
+                goal_contract_hash=goal_contract_hash,
+                evaluation_policy_version=evaluation_policy_version,
+                max_retry_count=0,
+            )
+            orchestrator = AgentOrchestrator(mock_store)
+            lifecycle = orchestrator.prepare_reviewed_execution(
+                project_id=reviewed_plan.project_id,
+                reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                execution_ticket_id=issued_ticket.execution_ticket_id,
+                audit_id=issued_ticket.audit_id,
+                actor=issued_ticket.approved_actor,
+            )
+            executor_result, consumed_ticket, lifecycle = orchestrator.dispatch_execution(
+                lifecycle=lifecycle,
+                actor=issued_ticket.approved_actor,
+                dispatch=lambda: ExecutionGateway(ticket_service).dispatch(
+                    execution_ticket_id=issued_ticket.execution_ticket_id,
+                    project_id=reviewed_plan.project_id,
+                    reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                    plan_hash=reviewed_plan.plan_hash,
+                    approval_context_id=approval_context_id,
+                    normalized_params_hash=validation_result.normalized_params_hash,
+                    contract_versions=validation_result.contract_versions,
+                    project_config_path=str(request.project_config_path),
+                    pipeline_path=str(written_path),
+                    goal_contract_hash=goal_contract_hash,
+                    evaluation_policy_version=evaluation_policy_version,
+                ),
             )
         except Exception as exc:
             if run_link_id and reviewed_plan:
@@ -1074,6 +1231,16 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "plan_summary": _plan_summary(plan, validation),
                 "project_config_path": request.project_config_path,
                 "execution": _execution_meta(executor_called=True),
+                "execution_ticket": (
+                    issued_ticket.model_dump(mode="json")
+                    if "issued_ticket" in locals()
+                    else None
+                ),
+                "lifecycle": (
+                    lifecycle.model_dump(mode="json")
+                    if "lifecycle" in locals()
+                    else None
+                ),
                 "audit": audit_info,
                 "errors": [str(exc)],
             }
@@ -1131,6 +1298,17 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             if executor_failed and not executor_errors:
                 executor_errors = [f"Executor returned failure status: {raw_status or 'UNKNOWN'}"]
         if executor_failed:
+            if "orchestrator" in locals() and "lifecycle" in locals() and lifecycle.state == "RUNNING":
+                lifecycle = orchestrator.transition(
+                    project_id=lifecycle.project_id,
+                    lifecycle_id=lifecycle.lifecycle_id,
+                    to_state="FAILED",
+                    command_id=f"executor:{consumed_ticket.execution_ticket_id}:failed",
+                    actor=consumed_ticket.approved_actor,
+                    source_command="executor_failed",
+                    reason="; ".join(executor_errors),
+                    updates={"last_error": "; ".join(executor_errors)},
+                )
             result = {
                 "ok": False,
                 "status": "EXECUTION_FAILED",
@@ -1149,6 +1327,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                     executor_called=True,
                 ),
                 "executor_result": executor_result,
+                "lifecycle": lifecycle.model_dump(mode="json"),
                 "audit": audit_info,
                 "errors": executor_errors,
                 "warnings": response_warnings,
@@ -1179,6 +1358,8 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 executor_called=True,
             ),
             "executor_result": executor_result,
+            "execution_ticket": consumed_ticket.model_dump(mode="json"),
+            "lifecycle": lifecycle.model_dump(mode="json"),
             "audit": audit_info,
             "warnings": response_warnings,
         }
@@ -1213,7 +1394,8 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 context,
             )
 
-    validation = validate_plan(plan).to_dict()
+    validation_result = validate_plan(plan)
+    validation = validation_result.to_dict()
 
     if not validation.get("ok"):
         result = {
@@ -1235,6 +1417,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             None, result, request.actor, request,
         )
         return result
+    plan = validation_result.normalized_plan
 
     # ── 2. Re-check approval gate ──
     gate = check_approval_gate(plan, validation, request.approval).to_dict()

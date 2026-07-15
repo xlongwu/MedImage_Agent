@@ -33,6 +33,7 @@ from src.backend.app.planner.project_context import (
 from src.backend.app.runtime.pipeline_executor import (
     run_pipeline as real_run_pipeline,
 )
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 
 def _save_contract_smoke_plan(client, created: dict) -> dict:
@@ -55,14 +56,17 @@ def _save_contract_smoke_plan(client, created: dict) -> dict:
         },
         context,
     )
+    goal = "Validate the executor node contract"
     save_resp = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
             "plan": plan,
             "project_config_path": created["project_config_path"],
             "validation": {"ok": True},
-            "goal": "Validate the executor node contract",
+            "goal": goal,
             "provider": "contract-smoke-test",
+            "goal_contract_candidate": reviewed_goal_candidate(plan, goal),
+            "reviewed_actor": "contract-smoke-test",
         },
     )
     assert save_resp.status_code == 200, save_resp.text
@@ -89,14 +93,17 @@ def _save_contract_smoke_failure_plan(client, created: dict) -> dict:
         },
         context,
     )
+    goal = "Validate failure path in node contract"
     save_resp = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
             "plan": plan,
             "project_config_path": created["project_config_path"],
             "validation": {"ok": True},
-            "goal": "Validate failure path in node contract",
+            "goal": goal,
             "provider": "contract-smoke-test",
+            "goal_contract_candidate": reviewed_goal_candidate(plan, goal),
+            "reviewed_actor": "contract-smoke-test",
         },
     )
     assert save_resp.status_code == 200, save_resp.text
@@ -142,7 +149,7 @@ def test_node_contract_happy_path(real_project_smoke, monkeypatch, tmp_path):
 
     # ── Patch the real pipeline executor ────────────────────────────────
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         real_run_pipeline,
     )
 
@@ -287,7 +294,7 @@ def test_node_contract_failure_path(real_project_smoke, monkeypatch, tmp_path):
     reviewed = _save_contract_smoke_failure_plan(client, created)
 
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         real_run_pipeline,
     )
 

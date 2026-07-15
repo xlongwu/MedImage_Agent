@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from src.backend.app.api.dependencies import ProjectStore
+from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.schemas.dicom_conversion_prepare import (
     DicomConversionPrepareConfirmations,
     DicomConversionPrepareRequest,
@@ -45,10 +46,7 @@ def _now_iso() -> str:
 
 
 def _write_json(path: str | Path, data: dict[str, Any]) -> str:
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-    return str(p)
+    return str(atomic_write_json(path, data, schema_version=1))
 
 
 def _sha256_file(path: Path) -> str:
@@ -150,7 +148,7 @@ def run_dicom_conversion_prepare(
     and persists the approval package in one call.
     """
     from src.backend.app.services.dicom_conversion_execution import (
-        _detect_dcm2niix_runtime,
+        check_native_dicom_converter_availability,
         run_conversion_preflight,
     )
     from src.backend.app.schemas.dicom_conversion_execution import (
@@ -213,11 +211,11 @@ def run_dicom_conversion_prepare(
         blocking.extend(preflight.blocking_issues or ["Preflight not ready."])
 
     # ── 2. Validate dcm2niix ───────────────────────────────────────────
-    dcm2niix_info = _detect_dcm2niix_runtime()
-    dcm2niix_available = bool(dcm2niix_info.get("found"))
-    if not dcm2niix_available:
+    native_converter_info = check_native_dicom_converter_availability()
+    native_converter_available = bool(native_converter_info.get("found"))
+    if not native_converter_available:
         blocking.append(
-            dcm2niix_info.get("error") or "dcm2niix was not found."
+            native_converter_info.get("error") or "Native DICOM converter dependencies are unavailable."
         )
 
     # ── 3. Validate mappings ───────────────────────────────────────────
@@ -321,8 +319,8 @@ def run_dicom_conversion_prepare(
         rawdata_read_only_confirmed=confirmations.rawdata_readonly,
         command_templates_reviewed=confirmations.mappings_reviewed,
         no_shell_string_confirmed=True,
-        dcm2niix_availability_confirmed=dcm2niix_available,
-        dcm2niix_version=dcm2niix_info.get("version"),
+        dcm2niix_availability_confirmed=native_converter_available,
+        dcm2niix_version=None,
         env_flags_confirmed=env_gates_ok,
         rawdata_checksum_snapshot_path=str(checksum_before_path) if checksum_before_exists else None,
         rawdata_checksum_confirmed=checksum_before_exists,
@@ -331,7 +329,9 @@ def run_dicom_conversion_prepare(
         missing_env_flags=preflight.missing_env_flags,
         rollback_policy_acknowledged=confirmations.rollback_policy,
         clinical_use_prohibited_acknowledged=confirmations.no_clinical_use,
-        external_tool_acknowledgement=confirmations.external_converter,
+        # Legacy approval field now records acknowledgement of the reviewed
+        # in-project converter; no external tool is executed.
+        external_tool_acknowledgement=confirmations.native_converter,
         risk_acknowledgement=confirmations.risk_acknowledgement,
         confirm_execution=confirmations.confirm_execution,
     )
@@ -359,11 +359,15 @@ def run_dicom_conversion_prepare(
         "prepared_at": _now_iso(),
         "prepared_by": request.approved_by,
         "preflight_status": preflight.status,
-        "dcm2niix_available": dcm2niix_available,
-        "dcm2niix_path": dcm2niix_info.get("executable_path"),
-        "dcm2niix_version": dcm2niix_info.get("version"),
-        "dcm2niix_sha256": dcm2niix_info.get("sha256"),
-        "dcm2niix_strategy": dcm2niix_info.get("strategy"),
+        "conversion_backend": "medimage-native",
+        "native_converter_available": native_converter_available,
+        "native_converter_version": native_converter_info.get("version"),
+        "native_dependency_versions": native_converter_info.get("versions", {}),
+        "dcm2niix_available": False,
+        "dcm2niix_path": None,
+        "dcm2niix_version": None,
+        "dcm2niix_sha256": None,
+        "dcm2niix_strategy": "not_used",
         "mapping_count": mapping_count,
         "output_root": output_root,
         "output_root_safe": output_root_safe,
@@ -467,7 +471,7 @@ def run_dicom_conversion_prepare(
 
     technical_ready = (
         preflight_ok
-        and dcm2niix_available
+        and native_converter_available
         and mappings_complete
         and output_root_safe
         and disk_ok
@@ -483,7 +487,7 @@ def run_dicom_conversion_prepare(
     )
     execution_ready = approval_ready
 
-    if not env_gates_ok or not dcm2niix_available:
+    if not env_gates_ok or not native_converter_available:
         status = "disabled"
     elif blocking:
         status = "blocked"
@@ -498,7 +502,7 @@ def run_dicom_conversion_prepare(
         technical_ready=technical_ready,
         approval_ready=approval_ready,
         execution_ready=execution_ready,
-        dcm2niix_available=dcm2niix_available,
+        dcm2niix_available=native_converter_available,
         mapping_count=mapping_count,
         output_root_safe=output_root_safe,
         env_gates_ok=env_gates_ok,
@@ -506,11 +510,14 @@ def run_dicom_conversion_prepare(
 
     system_checks = DicomConversionPrepareSystemChecks(
         preflight_ok=preflight_ok,
-        dcm2niix_available=dcm2niix_available,
-        dcm2niix_path=dcm2niix_info.get("executable_path"),
-        dcm2niix_version=dcm2niix_info.get("version"),
-        dcm2niix_sha256=dcm2niix_info.get("sha256"),
-        dcm2niix_strategy=dcm2niix_info.get("strategy"),
+        native_converter_available=native_converter_available,
+        native_converter_version=native_converter_info.get("version"),
+        native_dependency_versions=native_converter_info.get("versions", {}),
+        dcm2niix_available=False,
+        dcm2niix_path=None,
+        dcm2niix_version=None,
+        dcm2niix_sha256=None,
+        dcm2niix_strategy="not_used",
         mappings_complete=mappings_complete,
         mapping_count=mapping_count,
         output_root_safe=output_root_safe,

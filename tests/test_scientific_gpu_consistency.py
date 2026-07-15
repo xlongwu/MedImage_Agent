@@ -4,9 +4,8 @@ Skip behavior follows the project convention: ``pytest.ini`` declares the
 ``gpu`` marker for CUDA-only tests. Each test marks itself accordingly and
 skips gracefully when the required backend is not installed.
 
-Environment at test time (2026-06-20):
-- CuPy: NOT installed → FC/ReHo CuPy consistency tests are skipped.
-- PyTorch 2.7.0 + CUDA: available → ALFF torch-consistency test runs.
+Each backend-specific test invokes that backend directly so installing another
+GPU implementation cannot change which kernel is under test.
 """
 from __future__ import annotations
 
@@ -49,19 +48,18 @@ def test_alff_cpu_torch_consistency():
     if not _torch_cuda_available():
         pytest.skip("torch CUDA not available")
 
-    from src.backend.app.tools.alff_compute import compute_alff_numpy, compute_alff_backend
+    from src.backend.app.tools.alff_compute import compute_alff_numpy, compute_alff_torch
 
     bold = np.load(INPUT_DIR / "tiny_bold.npy").astype(np.float32)
     alff_cpu, falff_cpu, _ = compute_alff_numpy(bold, tr=TR, freq_band=FREQ_BAND)
 
-    # Backend selector will pick torch over numpy because prefer_gpu=True and
-    # torch is available.
-    res = compute_alff_backend(bold, tr=TR, freq_band=FREQ_BAND, prefer_gpu=True)
-    assert res["ok"], res.get("errors")
-    assert res["backend"] == "gpu-torch", f"Expected gpu-torch, got {res['backend']}"
-
-    alff_gpu = np.asarray(res["alff"]).astype(np.float32)
-    falff_gpu = np.asarray(res["falff"]).astype(np.float32)
+    alff_gpu, falff_gpu, _ = compute_alff_torch(
+        bold,
+        tr=TR,
+        freq_band=FREQ_BAND,
+    )
+    alff_gpu = np.asarray(alff_gpu).astype(np.float32)
+    falff_gpu = np.asarray(falff_gpu).astype(np.float32)
 
     assert np.allclose(alff_cpu, alff_gpu, atol=GPU_ATOL), (
         f"ALFF CPU/torch mismatch max={np.max(np.abs(alff_cpu - alff_gpu))}")

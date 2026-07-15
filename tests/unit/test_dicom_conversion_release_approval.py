@@ -423,20 +423,16 @@ def test_run_conversion_execute_still_blocked():
 
 
 def test_no_public_conversion_execute_endpoint():
-    """Gate 17: Public /conversion/execute route exists but is blocked by default.
-
-    In Phase 4L-2 the endpoint exists behind env flags and approval gates.
-    Without env flags, it returns 200 with status=disabled/blocked.
-    """
+    """Phase 7 retires this weak execution path in favor of reviewed tickets."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from src.backend.app.main import app
     client = TestClient(app)
     resp = client.post("/api/projects/test/conversion/execute", json={})
-    assert resp.status_code == 200, f"Expected 200 blocked, got {resp.status_code}"
-    data = resp.json()
-    assert data["ok"] is False
-    assert data["status"] in ("disabled", "blocked")
+    assert resp.status_code == 410
+    detail = resp.json()["detail"]
+    assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+    assert detail["replacement"] == "/api/plans/execute-reviewed"
 
 
 def test_no_frontend_execute_button():

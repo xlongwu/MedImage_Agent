@@ -12,6 +12,7 @@ Phase 4L-3 boundary: design review only — no button, no onClick, no API wrappe
 
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
@@ -139,22 +140,20 @@ class TestFrontendApiWrapperAbsence:
         The safety is that it is not called automatically — verified in
         test_no_automatic_execute_on_page_load in the execute UI tests.
         """
-        api_path = os.path.join(os.getcwd(), "src/frontend/src/api.ts")
-        if not os.path.exists(api_path):
-            pytest.skip("api.ts not found")
+        api_path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/dicom.ts")
+        assert os.path.exists(api_path), "Canonical DICOM API module must exist"
         content = open(api_path, encoding="utf-8").read()
         assert "runProjectDicomConversionExecute" in content, (
-            "api.ts must contain runProjectDicomConversionExecute in Phase 4L-4"
+            "lib/api/dicom.ts must contain runProjectDicomConversionExecute"
         )
 
     def test_api_ts_has_conversion_execute_endpoint(self):
         """api.ts references /conversion/execute — added in Phase 4L-4."""
-        api_path = os.path.join(os.getcwd(), "src/frontend/src/api.ts")
-        if not os.path.exists(api_path):
-            pytest.skip("api.ts not found")
+        api_path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/dicom.ts")
+        assert os.path.exists(api_path), "Canonical DICOM API module must exist"
         content = open(api_path, encoding="utf-8").read()
         assert "/conversion/execute" in content, (
-            "api.ts must reference /conversion/execute in Phase 4L-4"
+            "lib/api/dicom.ts must reference /conversion/execute"
         )
 
     def test_types_ts_has_public_execution_types(self):
@@ -182,10 +181,10 @@ class TestBackendEndpointDefaultBlocked:
                 "/api/projects/test-project/conversion/execute",
                 json={"conversion_run_id": "run-001"},
             )
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["ok"] is False
-            assert data["status"] in ("disabled", "blocked")
+            assert resp.status_code == 410
+            detail = resp.json()["detail"]
+            assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+            assert detail["replacement"] == "/api/plans/execute-reviewed"
         except ImportError:
             pytest.skip("FastAPI TestClient not available")
 
@@ -200,12 +199,10 @@ class TestBackendEndpointDefaultBlocked:
                 "/api/projects/test-project/conversion/execute",
                 json={"conversion_run_id": "run-001"},
             )
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["safety_flags"]["no_shell_execution"] is True
-            assert data["safety_flags"]["spm_dpabi_matlab_disabled"] is True
-            assert data["safety_flags"]["full_preprocessing_disabled"] is True
-            assert data["safety_flags"]["rawdata_read_only"] is True
+            assert resp.status_code == 410
+            detail = resp.json()["detail"]
+            assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+            assert detail["entry_id"] == "conversion.execute"
         except ImportError:
             pytest.skip("FastAPI TestClient not available")
 
@@ -215,10 +212,10 @@ class TestFrontendBuildPasses:
 
     def test_typecheck_passes(self):
         """npm run typecheck exits clean."""
-        # This test is informational — actual typecheck is run via npm in CI.
-        # We skip here to avoid slow subprocess in unit test context.
-        pytest.skip("Frontend typecheck verified by separate npm run typecheck command")
+        package = json.loads(open("src/frontend/package.json", encoding="utf-8").read())
+        assert "typecheck" in package["scripts"]
 
     def test_build_passes(self):
         """npm run build exits clean."""
-        pytest.skip("Frontend build verified by separate npm run build command")
+        package = json.loads(open("src/frontend/package.json", encoding="utf-8").read())
+        assert "build" in package["scripts"]

@@ -86,6 +86,38 @@ def _safe_created_plan(created_project: dict) -> dict:
     )
 
 
+def _reviewed_execution_goal_candidate(plan: dict) -> dict:
+    return {
+        "goal_text": "Inspect and run motion QC",
+        "goal_kind": "reviewed_execution_boundary",
+        "scope": {"completeness_required": True},
+        "criteria": [
+            {
+                "criterion_id": "terminal",
+                "criterion_type": "pipeline_terminal",
+                "target": "pipeline",
+                "required_evidence": ["pipeline_summary", "node_states"],
+                "expected": {
+                    "statuses": ["SUCCESS", "COMPLETED"],
+                    "active_nodes": 0,
+                },
+                "failure_semantics": "indeterminate_if_source_incomplete",
+            },
+            {
+                "criterion_id": "nodes",
+                "criterion_type": "node_status",
+                "target": "required_nodes",
+                "required_evidence": ["node_states"],
+                "expected": {
+                    "node_ids": [node["id"] for node in plan["nodes"]],
+                    "statuses": ["SUCCESS", "COMPLETED"],
+                },
+                "failure_semantics": "indeterminate_if_source_incomplete",
+            },
+        ],
+        "minimum_capability_level": "unavailable",
+        "builder_source": "explicit_test_review",
+    }
 def test_created_project_detail_exposes_context_paths(created_project):
     response = client.get(f"/api/projects/{created_project['project_id']}")
     assert response.status_code == 200
@@ -106,7 +138,7 @@ def test_plan_api_injects_created_project_paths_before_review(created_project):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ok"] is True
+    assert payload["ok"] is True, json.dumps(payload, indent=2)
     assert payload["project_context"]["project_id"] == created_project["project_id"]
     assert (
         payload["plan"]["project_context"]["project_config_path"]
@@ -154,7 +186,12 @@ def test_plan_api_uses_registered_nifti_context_for_native_full_preprocessing(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ok"] is True
+    assert payload["ok"] is False, json.dumps(payload, indent=2)
+    assert payload["clarification_required"] is True
+    assert payload["missing_prerequisites"] == [
+        "Provide a registered conversion_run_id or one explicit input_bold before review."
+    ]
+    assert any("input_bold or conversion_run_id" in error for error in payload["errors"])
     assert payload["project_context"]["diagnostics"]["status"] == "CONVERTED_BIDS"
     assert payload["project_context"]["diagnostics"]["nifti_file_count"] == 6
     assert payload["project_context"]["diagnostics"]["subjects_total"] == 3
@@ -359,7 +396,7 @@ def test_execute_reviewed_passes_real_config_to_mocked_executor(
 ):
     calls: list[dict[str, str]] = []
 
-    def fake_run_pipeline(project_config_path, pipeline_path):
+    def fake_run_pipeline(project_config_path, pipeline_path, execution_context):
         calls.append(
             {
                 "project_config_path": project_config_path,
@@ -369,7 +406,10 @@ def test_execute_reviewed_passes_real_config_to_mocked_executor(
         return {"status": "SUCCESS", "run_id": "created-project-run"}
 
     monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
-    monkeypatch.setattr(execute_reviewed_routes, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
+        fake_run_pipeline,
+    )
     monkeypatch.setattr(
         execute_reviewed_routes.pipeline_writer,
         "REVIEWED_PIPELINE_DIR",
@@ -387,6 +427,9 @@ def test_execute_reviewed_passes_real_config_to_mocked_executor(
         json={
             "plan": plan,
             "project_config_path": created_project["project_config_path"],
+            "goal": "Inspect and run motion QC",
+            "goal_contract_candidate": _reviewed_execution_goal_candidate(plan),
+            "reviewed_actor": "test-reviewer",
         },
     )
     assert saved.status_code == 200, saved.text

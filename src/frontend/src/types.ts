@@ -1052,6 +1052,12 @@ export type DicomConversionPreflightResponse = {
   project_id: string;
   status: string;
   conversion_disabled_by_default: boolean;
+  conversion_backend: string;
+  native_converter_available: boolean;
+  native_converter_status: string;
+  native_converter_version?: string | null;
+  native_dependency_versions: Record<string, string>;
+  /** @deprecated external converter is not used */
   dcm2niix_available: boolean;
   dcm2niix_status: string;
   dcm2niix_path?: string | null;
@@ -1233,7 +1239,8 @@ export type DicomConversionPrepareConfirmations = {
   rawdata_readonly: boolean;
   research_use_only: boolean;
   no_clinical_use: boolean;
-  external_converter: boolean;
+  native_converter: boolean;
+  external_converter?: boolean;
   rollback_policy: boolean;
   risk_acknowledgement: boolean;
   approval_audit: boolean;
@@ -1245,6 +1252,10 @@ export type DicomConversionPrepareConfirmations = {
 
 export type DicomConversionPrepareSystemChecks = {
   preflight_ok: boolean;
+  conversion_backend: string;
+  native_converter_available: boolean;
+  native_converter_version: string | null;
+  native_dependency_versions: Record<string, string>;
   dcm2niix_available: boolean;
   dcm2niix_path: string | null;
   dcm2niix_version: string | null;

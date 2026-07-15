@@ -18,6 +18,7 @@ from src.backend.app.planner.reviewed_plan_store import (
     snapshot_warnings,
 )
 from src.backend.app.schemas.desktop import ProjectDetail, ReviewedPlanRecord, RunLinkRecord
+from src.backend.app.schemas.goal_contract import GoalContractCandidate
 from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.run_artifact_discovery import (
     discover_run_artifacts,
@@ -47,6 +48,8 @@ class ReviewedPlanSaveRequest(BaseModel):
     provider: str | None = None
     status: str = "REVIEWED"
     warnings: list[str] = Field(default_factory=list)
+    goal_contract_candidate: GoalContractCandidate | None = None
+    reviewed_actor: str | None = None
 
 
 def _ensure_project(project_id: str, store: ProjectStore) -> None:
@@ -94,6 +97,8 @@ def save_project_reviewed_plan(
             provider=request.provider,
             status=request.status,
             warnings=request.warnings,
+            goal_contract_candidate=request.goal_contract_candidate,
+            reviewed_actor=request.reviewed_actor,
         )
     except ReviewedPlanStoreError as exc:
         raise_api_error(exc)

@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from src.backend.app.api._errors import raise_api_error
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.api.models import (
     PlannerDraftRequest,
     PlannerExecuteRequest,
@@ -12,7 +13,6 @@ from src.backend.app.api.models import (
 )
 from src.backend.app.planner import (
     draft_pipeline_plan,
-    execute_pipeline_plan,
     get_planner_history,
     validate_pipeline_plan,
 )
@@ -41,15 +41,7 @@ def api_planner_validate(request: PlannerValidateRequest) -> dict[str, Any]:
 
 @router.post("/api/planner/execute")
 def api_planner_execute(request: PlannerExecuteRequest) -> dict[str, Any]:
-    try:
-        result = execute_pipeline_plan(request.model_dump())
-    except Exception as exc:
-        raise_api_error(exc)
-    if result.get("status") == "APPROVAL_REQUIRED":
-        raise HTTPException(status_code=403, detail=result)
-    if not result.get("ok"):
-        raise HTTPException(status_code=400, detail=result)
-    return result
+    reject_execution_contract("planner.execute")
 
 
 @router.get("/api/planner/history")

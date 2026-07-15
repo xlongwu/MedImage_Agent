@@ -12,10 +12,19 @@ MATLAB/SPM/DPABI, and never writes files.
 from __future__ import annotations
 
 from collections import deque
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
+import re
 
+from src.backend.app.planner.audit_record import stable_hash
+from src.backend.app.core.exceptions import SafetyError
+from src.backend.app.runtime.node_contract_registry import (
+    get_node_contract,
+    validate_and_normalize_parameters,
+)
 from src.backend.app.services.spm_realign_params import validate_spm_realign_params
+from src.backend.app.schemas.goal_contract import GoalContract
 
 
 # ── Output dataclasses ────────────────────────────────────────────────────────
@@ -44,6 +53,10 @@ class PlanValidationResult:
     unknown_nodes: list[str] = field(default_factory=list)
     topological_order: list[str] = field(default_factory=list)
     risk_summary: dict[str, Any] = field(default_factory=dict)
+    normalized_plan: dict[str, Any] = field(default_factory=dict)
+    normalized_params_hash: str = ""
+    contract_versions: dict[str, str] = field(default_factory=dict)
+    validation_evidence: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -66,6 +79,10 @@ class PlanValidationResult:
             "unknown_nodes": self.unknown_nodes,
             "topological_order": self.topological_order,
             "risk_summary": self.risk_summary,
+            "normalized_plan": self.normalized_plan,
+            "normalized_params_hash": self.normalized_params_hash,
+            "contract_versions": self.contract_versions,
+            "validation_evidence": self.validation_evidence,
         }
 
 
@@ -207,6 +224,10 @@ def validate_plan(plan: dict[str, Any]) -> PlanValidationResult:
     manual_required: list[str] = []
     high_risk: list[str] = []
     uncataloged_count = 0
+    normalized_plan = deepcopy(plan)
+    normalized_nodes = normalized_plan.get("nodes", [])
+    contract_versions: dict[str, str] = {}
+    validation_evidence: list[dict[str, Any]] = []
 
     for node in nodes:
         if not isinstance(node, dict):
@@ -217,6 +238,33 @@ def validate_plan(plan: dict[str, Any]) -> PlanValidationResult:
         item = catalog.get(nid)
         if item is None:
             continue
+
+        try:
+            contract = get_node_contract(nid)
+        except KeyError:
+            errors.append(PlanValidationIssue(
+                code="NODE_CONTRACT_MISSING",
+                message=f"Node '{nid}' has no registered execution contract.",
+                node_id=nid,
+            ))
+            continue
+        contract_versions[nid] = contract.contract_version
+        if not contract.executable and contract.capability_level == "unavailable":
+            errors.append(PlanValidationIssue(
+                code="NODE_CONTRACT_NOT_EXECUTABLE",
+                message=f"Node '{nid}' is not an executable contract candidate.",
+                node_id=nid,
+            ))
+        elif not contract.executable:
+            warnings.append(PlanValidationIssue(
+                code="NODE_CONTRACT_SCAFFOLDED",
+                message=(
+                    f"Node '{nid}' is reviewable under contract "
+                    f"'{contract.contract_version}' but is excluded from runtime authority."
+                ),
+                node_id=nid,
+                severity="warning",
+            ))
 
         if item.requires_approval:
             approval_required.append(nid)
@@ -244,15 +292,61 @@ def validate_plan(plan: dict[str, Any]) -> PlanValidationResult:
                 severity="warning",
             ))
 
-        # Backend mismatch
+        # Backend mismatches are contract violations, not advisory warnings.
         node_backend = node.get("backend")
-        if node_backend and node_backend != item.backend and item.backend != "unknown":
-            warnings.append(PlanValidationIssue(
+        if (
+            node_backend
+            and contract.validation_policy.enforce_backend
+            and node_backend != contract.backend
+            and contract.backend != "unknown"
+        ):
+            errors.append(PlanValidationIssue(
                 code="BACKEND_MISMATCH",
-                message=f"Node '{nid}' declares backend '{node_backend}' but catalog says '{item.backend}'.",
+                message=f"Node '{nid}' declares backend '{node_backend}' but contract requires '{contract.backend}'.",
                 node_id=nid,
-                severity="warning",
             ))
+
+        params = node.get("params", {}) or {}
+        if isinstance(params, dict):
+            normalized_params, evidence, parameter_errors = (
+                validate_and_normalize_parameters(contract, params)
+            )
+            for message in parameter_errors:
+                errors.append(PlanValidationIssue(
+                    code="NODE_PARAMETER_INVALID",
+                    message=message,
+                    node_id=nid,
+                ))
+            if evidence is not None:
+                validation_evidence.append(evidence.model_dump(mode="json"))
+                for normalized_node in normalized_nodes:
+                    if isinstance(normalized_node, dict) and normalized_node.get("id") == nid:
+                        normalized_node["params"] = normalized_params
+                        normalized_node["contract_version"] = contract.contract_version
+                        break
+
+        for field_name, schema in (
+            ("input_types", contract.input_schema),
+            ("output_types", contract.output_schema),
+        ):
+            declared = node.get(field_name)
+            if declared is None:
+                continue
+            if not isinstance(declared, list) or not all(isinstance(v, str) for v in declared):
+                errors.append(PlanValidationIssue(
+                    code="NODE_ARTIFACT_TYPE_INVALID",
+                    message=f"Node '{nid}' field '{field_name}' must be a list of strings.",
+                    node_id=nid,
+                ))
+                continue
+            allowed = {value.artifact_type for value in schema}
+            invalid = sorted(set(declared) - allowed)
+            if invalid:
+                errors.append(PlanValidationIssue(
+                    code="NODE_ARTIFACT_TYPE_INVALID",
+                    message=f"Node '{nid}' declares unsupported {field_name}: {invalid}.",
+                    node_id=nid,
+                ))
 
         # SPM realign specific: warn about non-executable status
         if nid == "spm_realign_subject":
@@ -305,6 +399,26 @@ def validate_plan(plan: dict[str, Any]) -> PlanValidationResult:
         "has_uncataloged_metadata": uncataloged_count > 0,
     }
 
+    normalized_bindings = {
+        node_id: {
+            "contract_version": contract_versions[node_id],
+            "params": next(
+                (
+                    item.get("params", {})
+                    for item in normalized_nodes
+                    if isinstance(item, dict) and item.get("id") == node_id
+                ),
+                {},
+            ),
+        }
+        for node_id in sorted(contract_versions)
+    }
+    normalized_params_hash = stable_hash(normalized_bindings) if normalized_bindings else ""
+    metadata = normalized_plan.setdefault("metadata", {})
+    if isinstance(metadata, dict):
+        metadata["contract_versions"] = dict(sorted(contract_versions.items()))
+        metadata["normalized_params_hash"] = normalized_params_hash
+
     return PlanValidationResult(
         ok=len(errors) == 0,
         errors=errors,
@@ -316,7 +430,88 @@ def validate_plan(plan: dict[str, Any]) -> PlanValidationResult:
         unknown_nodes=unknown_nodes,
         topological_order=topo_order if len(topo_order) == len(node_ids) else [],
         risk_summary=risk_summary,
+        normalized_plan=normalized_plan,
+        normalized_params_hash=normalized_params_hash,
+        contract_versions=dict(sorted(contract_versions.items())),
+        validation_evidence=validation_evidence,
     )
+
+
+def validate_goal_contract_reachability(
+    plan: dict[str, Any],
+    goal_contract: GoalContract,
+) -> list[PlanValidationIssue]:
+    """Verify that reviewed criteria can be produced by the normalized plan."""
+    issues: list[PlanValidationIssue] = []
+    nodes = [node for node in plan.get("nodes", []) if isinstance(node, dict)]
+    node_ids = {str(node.get("id")) for node in nodes if node.get("id")}
+    output_types: set[str] = set()
+    capability_levels: list[str] = []
+    for node_id in sorted(node_ids):
+        try:
+            contract = get_node_contract(node_id)
+        except (KeyError, SafetyError):
+            issues.append(
+                PlanValidationIssue(
+                    code="GOAL_NODE_CONTRACT_MISSING",
+                    message=f"Goal Contract references node '{node_id}' without a contract.",
+                    node_id=node_id,
+                )
+            )
+            continue
+        output_types.update(
+            re.sub(r"[^a-z0-9]+", "_", artifact.artifact_type.lower()).strip("_")
+            for artifact in contract.output_schema
+        )
+        capability_levels.append(contract.capability_level)
+    aliases = {
+        "functional_connectivity_matrix": "fc_matrix",
+    }
+    output_types = {aliases.get(value, value) for value in output_types}
+    for criterion in goal_contract.criteria:
+        if criterion.criterion_type in {
+            "artifact_present",
+            "artifact_reloadable",
+            "artifact_registered",
+        }:
+            target = aliases.get(criterion.target, criterion.target)
+            if target not in output_types:
+                issues.append(
+                    PlanValidationIssue(
+                        code="GOAL_ARTIFACT_UNREACHABLE",
+                        message=f"Goal artifact '{criterion.target}' is not declared by the plan's node contracts.",
+                    )
+                )
+        if criterion.criterion_type == "node_status":
+            required_nodes = {
+                str(item) for item in criterion.expected.get("node_ids", [])
+            }
+            missing = sorted(required_nodes - node_ids)
+            if missing:
+                issues.append(
+                    PlanValidationIssue(
+                        code="GOAL_NODE_UNREACHABLE",
+                        message=f"Goal Contract requires nodes not present in the plan: {missing}.",
+                    )
+                )
+    order = ["unavailable", "scaffolded", "metadata_only", "computed", "validated"]
+    if capability_levels:
+        # Auxiliary metadata nodes do not lower a scientific output node's
+        # defensible capability. Artifact criteria above already prove that a
+        # declared producer exists, so use the strongest reachable contract
+        # rather than the weakest node in a mixed pipeline.
+        reachable = max(capability_levels, key=order.index)
+        if order.index(reachable) < order.index(goal_contract.minimum_capability_level):
+            issues.append(
+                PlanValidationIssue(
+                    code="GOAL_CAPABILITY_UNREACHABLE",
+                    message=(
+                        f"Goal requires '{goal_contract.minimum_capability_level}' but the "
+                        f"plan can defend at most '{reachable}'."
+                    ),
+                )
+            )
+    return issues
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from src.backend.app.native_preproc.io.dicom_to_nifti import ALGORITHM_VERSION
 from src.backend.app.schemas.dicom_conversion_execution import (
     Dcm2niixCommandTemplate,
     DicomConversionExecutionRequest,
@@ -31,6 +32,7 @@ from src.backend.app.schemas.dicom_conversion_execution import (
     DicomConversionMapping,
     DicomConversionPreflight,
     DicomConversionSafetyFlags,
+    build_native_dicom_conversion_template,
     build_dcm2niix_command_template,
     build_disabled_conversion_response,
     is_conversion_execution_enabled,
@@ -44,6 +46,31 @@ from src.backend.app.services.mock_store import mock_store
 
 # ── dcm2niix configuration ──
 _DCM2NIIX_EXPECTED_VERSION = "v1.0.20260416"
+
+
+def check_native_dicom_converter_availability() -> dict[str, Any]:
+    """Check the in-project Python conversion dependencies without subprocesses."""
+
+    versions: dict[str, str] = {}
+    errors: list[str] = []
+    for package in ("pydicom", "nibabel", "numpy"):
+        try:
+            module = __import__(package)
+            versions[package] = str(getattr(module, "__version__", "unknown"))
+        except ImportError:
+            errors.append(f"Missing optional dependency: {package}")
+    return {
+        "found": not errors,
+        "status": "available" if not errors else "missing",
+        "backend": "medimage-native",
+        "executable_path": None,
+        "version": ALGORITHM_VERSION if not errors else None,
+        "versions": versions,
+        "sha256": None,
+        "strategy": "in_project_python",
+        "error": "; ".join(errors) if errors else None,
+        "warnings": [],
+    }
 
 
 def _now_iso() -> str:
@@ -477,14 +504,14 @@ def run_conversion_preflight(
         )
 
     # ── 2. Tool detection ──
-    dcm2niix_info = _detect_dcm2niix_runtime(env=env_flags)
-    warnings.extend(dcm2niix_info.get("warnings", []))
-    tool_available = dcm2niix_info["found"]
-    exe_path = dcm2niix_info["executable_path"]
+    converter_info = check_native_dicom_converter_availability()
+    warnings.extend(converter_info.get("warnings", []))
+    tool_available = converter_info["found"]
+    exe_path = None
     if not tool_available:
         blocking.append(
-            dcm2niix_info["error"]
-            or "dcm2niix was not found. Install dcm2niix or add it to PATH before conversion."
+            converter_info["error"]
+            or "Native DICOM conversion dependencies are unavailable."
         )
 
     # ── 3. Dry-run mappings ──
@@ -564,7 +591,7 @@ def run_conversion_preflight(
         out_dir = _mapping_output_dir(output_root, mapping.suggested_relative_path)
         filename = _mapping_filename(mapping, i)
 
-        template = build_dcm2niix_command_template(
+        template = build_native_dicom_conversion_template(
             input_dir=input_dir,
             output_dir=out_dir,
             filename_pattern=filename,
@@ -600,6 +627,7 @@ def run_conversion_preflight(
         conversion_disabled_by_default=not env_ok,
         tool_available=tool_available,
         executable_path=exe_path,
+        tool_version=converter_info.get("version"),
         env_enabled=env_ok,
         missing_env_flags=missing_env,
         approval_required=True,
@@ -2069,17 +2097,40 @@ def run_internal_user_dicom_conversion_from_persisted_package(
         checksum_before = build_pre_conversion_rawdata_snapshot([rawdata_dir])
 
     # ── 7. dcm2niix availability ──
-    avail = check_dcm2niix_availability(env=effective_env, executable=executable)
-    if avail.status != "available":
-        details = [f"dcm2niix not available: {avail.status}"]
-        details.extend(avail.errors)
-        details.extend(avail.warnings)
+    tmpl_path = next((f.path for f in pkg.files if f.kind == "command_templates"), "")
+    try:
+        tmpl_data = json.loads(Path(tmpl_path).read_text(encoding="utf-8")) if tmpl_path else {}
+    except Exception as exc:
         return DicomConversionSandboxResult(
-            ok=False, status="blocked", mode="disabled", project_id=project_id,
-            blocking_issues=details,
+            ok=False,
+            status="blocked",
+            mode="disabled",
+            project_id=project_id,
+            blocking_issues=[f"Failed to read native conversion templates: {exc}"],
             safety_flags=DicomConversionSafetyFlags(conversion_disabled_by_default=True),
         )
-    resolved_executable = avail.executable_path or executable
+    from src.backend.app.services.native_dicom_conversion_execution import (
+        execute_native_persisted_conversion,
+    )
+
+    return execute_native_persisted_conversion(
+        project_id=project_id,
+        conversion_run_id=conversion_run_id,
+        project_dir=project_dir,
+        rawdata_dir=rawdata_dir,
+        evidence_root=pkg.run_dir or "",
+        approval=approval,
+        approval_record_path=approval_path,
+        gate=gate,
+        audit_preview_path=audit_path,
+        mapping_snapshot_path=mapping_path,
+        template_snapshot_path=tmpl_path,
+        mappings=mappings_data.get("mappings", []),
+        templates=tmpl_data.get("templates", []),
+        checksum_before=checksum_before,
+        checksum_before_path=checksum_before_path,
+        rollback_plan_path=rollback_plan_path,
+    )
 
     # ── 7b. Write audit execution start record ──
     output_path = Path(output_root)

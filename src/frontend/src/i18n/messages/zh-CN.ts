@@ -2023,7 +2023,7 @@ export const messagesZhCn = {
   "technical.DicomConversionExecute.failed.rawdataUnchanged":
     "原始数据保持不变。重试前请检查上方回滚证据。",
   "technical.DicomConversionExecute.submitting.description":
-    "后端正在执行 dcm2niix。大型数据集可能需要数分钟，请勿关闭此页面。",
+    "后端正在执行项目内置 DICOM 转换。大型数据集可能需要数分钟，请勿关闭此页面。",
   "technical.DicomConversionExecute.submitting.requesting": "正在请求执行…",
   "technical.DicomConversionExecute.result.partialTitle": "转换部分完成",
   "technical.DicomConversionExecute.result.completeTitle": "转换完成",
@@ -2041,7 +2041,7 @@ export const messagesZhCn = {
   "technical.DicomConversionExecute.path.provenance": "溯源记录",
   "technical.DicomConversionExecute.confirm.title": "批准并执行 DICOM 转换",
   "technical.DicomConversionExecute.confirm.description":
-    "即将使用 dcm2niix 执行 DICOM 到 NIfTI 转换。这是一项单向操作，继续前请逐项确认下方声明。",
+    "即将使用项目内置转换器执行 DICOM 到 NIfTI 转换，继续前请逐项确认下方声明。",
   "technical.DicomConversionExecute.confirm.researchDisclaimer":
     "MedImage Agent 仅用于科研，不得用于临床或医疗决策。原始数据保持只读；不会执行 SPM/DPABI/MATLAB，也不会触发完整预处理。",
   "technical.DicomConversionReleaseReadiness.001": "发布就绪状态",
@@ -2096,7 +2096,7 @@ export const messagesZhCn = {
   "technical.DicomConversionReview.label.auditRequired": "需要审计",
   "technical.DicomConversionReview.blocked.prerequisites": "缺失 {count} 个前置条件。",
   "technical.DicomConversionReview.action.showTechnicalDetails": "显示技术详情",
-  "technical.DicomConversionReview.dcm2niix.title": "dcm2niix 可用性",
+  "technical.DicomConversionReview.dcm2niix.title": "内置转换器可用性",
   "technical.DicomConversionReview.dcm2niix.envEnabled": "环境已启用",
   "technical.DicomConversionReview.dcm2niix.missingFlags": "缺失标志",
   "technical.DicomConversionReview.templates.title": "命令模板",
@@ -2121,7 +2121,7 @@ export const messagesZhCn = {
   "technical.DicomConversionReview.template.createBids": "创建 BIDS",
   "technical.DicomConversionReview.approval.item.userApproval": "包含全部必填字段的用户审批记录",
   "technical.DicomConversionReview.approval.item.auditBeforeExecution":
-    "调用 dcm2niix 前已持久化审计记录",
+    "启动内置转换前已持久化审计记录",
   "technical.DicomConversionReview.approval.item.confirmExecution": "confirm_execution=true",
   "technical.DicomConversionReview.approval.item.approvalId": "转换专用审批 ID",
   "technical.DicomConversionReview.approval.item.mappingsReviewed":
@@ -2135,7 +2135,7 @@ export const messagesZhCn = {
   "technical.DicomConversionReview.approval.item.templatesReviewed": "已审查命令模板",
   "technical.DicomConversionReview.approval.item.noShellString": "已确认不使用 shell 字符串",
   "technical.DicomConversionReview.approval.item.dcm2niixAvailable":
-    "已验证 dcm2niix 可用性（位于 PATH，已记录版本）",
+    "已验证项目内置转换依赖并记录版本",
   "technical.DicomConversionReview.approval.item.environmentFlags": "所需环境标志均已设置",
   "technical.DicomConversionReview.approval.item.artifactPaths": "已规划清单与溯源路径",
   "technical.DicomConversionReview.approval.item.logPaths": "已规划 stdout/stderr 日志路径",
@@ -2364,7 +2364,7 @@ export const messagesZhCn = {
   "technical.DicomConversionExecute.confirm.rawdata_readonly": "我确认原始数据必须保持只读。",
   "technical.DicomConversionExecute.confirm.research_use_only": "我了解此功能仅用于科研。",
   "technical.DicomConversionExecute.confirm.no_clinical_use": "我了解此功能不得用于临床。",
-  "technical.DicomConversionExecute.confirm.external_converter": "我知悉 dcm2niix 是外部转换器。",
+  "technical.DicomConversionExecute.confirm.external_converter": "我知悉项目内置转换器及其支持的 DICOM 范围。",
   "technical.DicomConversionExecute.confirm.rollback_policy": "我知悉回滚策略。",
   "technical.DicomConversionExecute.confirm.risk_acknowledgement": "我知悉转换风险。",
   "technical.DicomConversionExecute.confirm.approval_audit": "我知悉审批与审计包要求。",

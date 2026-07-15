@@ -420,7 +420,7 @@ def _gui_preflight_body(monkeypatch, tmp_path, **overrides):
         tmp_path,
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "mock-run-gui"},
     )
     cfg = tmp_path / "project_config.yaml"
@@ -618,15 +618,14 @@ def test_gui_spm_realign_sandbox_still_works(monkeypatch, tmp_path):
 
 # ── C.11: DPABI metadata still allowed through reviewed execution ──
 
-def test_gui_dpabi_metadata_still_works(monkeypatch, tmp_path):
-    """Verify DPABI metadata allowlist was not broken."""
+def test_gui_dpabi_metadata_requires_persisted_review(monkeypatch, tmp_path):
     monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
     monkeypatch.setattr(
         "src.backend.app.api.execute_reviewed_routes.pipeline_writer.REVIEWED_PIPELINE_DIR",
         tmp_path,
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "mock-run-dpabi"},
     )
     cfg = tmp_path / "project_config.yaml"
@@ -651,24 +650,20 @@ def test_gui_dpabi_metadata_still_works(monkeypatch, tmp_path):
     }
     resp = client.post("/api/plans/execute-reviewed", json=body)
     data = resp.json()
-    # Should be submitted or policy-level (not falsely blocked as GUI)
-    assert data["status"] != "EXECUTION_POLICY_BLOCKED"
-    # Should reach executor
-    assert data["status"] == "EXECUTION_SUBMITTED"
-    assert data["execution"]["executor_called"] is True
+    assert data["status"] == "REVIEWED_PLAN_REQUIRED"
+    assert data["execution"]["executor_called"] is False
 
 
 # ── C.12: GPU contract still allowed through reviewed execution ──
 
-def test_gui_gpu_contract_still_works(monkeypatch, tmp_path):
-    """Verify GPU contract allowlist was not broken."""
+def test_gui_gpu_contract_requires_persisted_review(monkeypatch, tmp_path):
     monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
     monkeypatch.setattr(
         "src.backend.app.api.execute_reviewed_routes.pipeline_writer.REVIEWED_PIPELINE_DIR",
         tmp_path,
     )
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         lambda **kw: {"status": "SUCCESS", "run_id": "mock-run-gpu"},
     )
     cfg = tmp_path / "project_config.yaml"
@@ -693,10 +688,8 @@ def test_gui_gpu_contract_still_works(monkeypatch, tmp_path):
     }
     resp = client.post("/api/plans/execute-reviewed", json=body)
     data = resp.json()
-    # Should not be falsely blocked as a GUI node
-    assert data["status"] != "EXECUTION_POLICY_BLOCKED"
-    assert data["status"] == "EXECUTION_SUBMITTED"
-    assert data["execution"]["executor_called"] is True
+    assert data["status"] == "REVIEWED_PLAN_REQUIRED"
+    assert data["execution"]["executor_called"] is False
 
 
 # ══════════════════════════════════════════════════════════════════════════════

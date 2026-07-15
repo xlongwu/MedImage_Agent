@@ -47,7 +47,7 @@ def test_full_run_lifecycle_smoke(real_project_smoke, monkeypatch, tmp_path):
 
     # ── Patch the real pipeline executor ────────────────────────────────
     monkeypatch.setattr(
-        "src.backend.app.api.execute_reviewed_routes.run_pipeline",
+        "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR",
         real_run_pipeline,
     )
 

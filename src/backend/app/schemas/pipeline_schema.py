@@ -15,6 +15,7 @@ class PipelineNode:
     name: str
     agent: str
     backend: str
+    contract_version: str | None = None
     depends_on: list[str] = field(default_factory=list)
     inputs: list[str] = field(default_factory=list)
     outputs: list[str] = field(default_factory=list)
@@ -73,6 +74,7 @@ def validate_pipeline_dict(data: dict[str, Any]) -> PipelineSpec:
     for node_data in nodes_data:
         node = PipelineNode(
             id=node_data["id"],
+            contract_version=node_data.get("contract_version"),
             name=node_data.get("name", node_data["id"]),
             agent=node_data.get("agent", "system"),
             backend=node_data["backend"],

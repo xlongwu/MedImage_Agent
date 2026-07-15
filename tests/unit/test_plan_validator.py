@@ -199,15 +199,15 @@ def test_approval_warning_when_approved_missing():
 
 # ── 15. backend mismatch → warning ──
 
-def test_backend_mismatch_warning():
+def test_backend_mismatch_is_rejected():
     result = validate_plan({
         "pipeline_id": "p",
         "nodes": [
             {"id": "data_inspection", "depends_on": [], "backend": "matlab-spm"},  # catalog says python
         ],
     })
-    assert result.ok is True  # warning only, not error
-    assert any(w.code == "BACKEND_MISMATCH" for w in result.warnings)
+    assert result.ok is False
+    assert any(error.code == "BACKEND_MISMATCH" for error in result.errors)
 
 
 # ── 16. uncataloged metadata → warning ──
@@ -223,8 +223,9 @@ def test_uncataloged_warning():
             {"id": "dpabi_alff_falff_contract", "depends_on": []},
         ],
     })
-    assert result.ok is True  # node IS in catalog (via fallback), no structural error
+    assert result.ok is False
     assert any(w.code == "UNCATALOGED_METADATA" for w in result.warnings)
+    assert any(error.code == "NODE_CONTRACT_NOT_EXECUTABLE" for error in result.errors)
 
 
 # ── 17. risk_summary ──

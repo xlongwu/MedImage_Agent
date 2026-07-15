@@ -33,19 +33,10 @@ class TestPublicExecuteEndpointAbsence:
                 "/api/projects/test-project/conversion/execute",
                 json={"conversion_run_id": "run-001"},
             )
-            # In Phase 4L-2: endpoint exists, returns 200 with blocked status,
-            # OR returns 404 if the route registration is conditional.
-            if resp.status_code == 200:
-                data = resp.json()
-                assert data["ok"] is False
-                assert data["status"] in ("disabled", "blocked")
-            elif resp.status_code == 404:
-                pass  # Route conditionally absent — also safe
-            else:
-                pytest.fail(
-                    f"Unexpected status {resp.status_code} for "
-                    f"POST /conversion/execute with missing env flags"
-                )
+            assert resp.status_code == 410
+            detail = resp.json()["detail"]
+            assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+            assert detail["replacement"] == "/api/plans/execute-reviewed"
         except ImportError:
             pytest.skip("FastAPI TestClient not available")
 
@@ -82,11 +73,10 @@ class TestPublicExecuteEndpointAbsence:
                 "/api/projects/test-project/conversion/execute",
                 json={"conversion_run_id": "run-001"},
             )
-            # Endpoint exists but returns blocked — status 200 with ok=false
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["ok"] is False
-            assert data["status"] in ("disabled", "blocked")
+            assert resp.status_code == 410
+            detail = resp.json()["detail"]
+            assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+            assert detail["entry_id"] == "conversion.execute"
         except ImportError:
             pytest.skip("FastAPI TestClient not available")
 
@@ -102,17 +92,10 @@ class TestFrontendExecuteAbsence:
         """
         import os
 
-        api_path = os.path.join(os.getcwd(), "src/frontend/src/api.ts")
-        if os.path.exists(api_path):
-            content = open(api_path, encoding="utf-8").read()
-            assert "runProjectDicomConversionExecute" in content, (
-                "Frontend api.ts must contain runProjectDicomConversionExecute in Phase 4L-4"
-            )
-        else:
-            api_path_js = os.path.join(os.getcwd(), "src/frontend/src/api.js")
-            if os.path.exists(api_path_js):
-                content = open(api_path_js, encoding="utf-8").read()
-                assert "runProjectDicomConversionExecute" not in content
+        api_path = os.path.join(os.getcwd(), "src/frontend/src/lib/api/dicom.ts")
+        assert os.path.exists(api_path)
+        content = open(api_path, encoding="utf-8").read()
+        assert "runProjectDicomConversionExecute" in content
 
     def test_no_run_conversion_button_text(self):
         """Verify no frontend text 'Run Conversion' appears as a button label."""

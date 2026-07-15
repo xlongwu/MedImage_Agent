@@ -123,7 +123,7 @@ def test_dependency_cycle_returns_200():
 
 # ── 9. backend mismatch → warning ──
 
-def test_backend_mismatch_warning():
+def test_backend_mismatch_rejected():
     resp = client.post("/api/plans/validate", json={
         "plan": {
             "pipeline_id": "p",
@@ -133,8 +133,8 @@ def test_backend_mismatch_warning():
         }
     })
     data = resp.json()
-    assert data["ok"] is True  # warning, not error
-    assert any(w["code"] == "BACKEND_MISMATCH" for w in data["warnings"])
+    assert data["ok"] is False
+    assert any(error["code"] == "BACKEND_MISMATCH" for error in data["errors"])
 
 
 # ── 10. missing plan field → 422 ──

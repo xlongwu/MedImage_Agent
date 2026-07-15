@@ -244,11 +244,8 @@ class TestConversionExecuteSafetyGates:
             f"/api/projects/{project_id}/conversion/execute",
             json={"conversion_run_id": "run-001"},
         )
-        assert resp.status_code == 200  # endpoint exists, returns blocked dict
-        data = resp.json()
-        assert data["ok"] is False
-        assert data["status"] in ("disabled", "blocked")
-        assert "blocking_issues" in data
+        assert resp.status_code == 410
+        assert resp.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
     def test_missing_confirmations_returns_blocked(self, tmp_path, monkeypatch):
         flags = {
@@ -263,11 +260,8 @@ class TestConversionExecuteSafetyGates:
             f"/api/projects/{project_id}/conversion/execute",
             json={"conversion_run_id": "run-001"},
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["ok"] is False
-        assert data["status"] == "blocked"
-        assert "blocking_issues" in data
+        assert resp.status_code == 410
+        assert resp.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
     def test_nonexistent_project_returns_blocked(self, tmp_path, monkeypatch):
         flags = {
@@ -284,11 +278,8 @@ class TestConversionExecuteSafetyGates:
         )
         # Both 200 (old behavior: blocked dict) and 404 (new router: HTTPException)
         # are accepted as valid "project not found" signals.
-        assert resp.status_code in (200, 404)
-        if resp.status_code == 200:
-            data = resp.json()
-            assert data["ok"] is False
-            assert data["status"] in ("blocked", "disabled", "failed")
+        assert resp.status_code == 410
+        assert resp.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
     def test_response_contains_safety_flags(self, tmp_path, monkeypatch):
         client, project_id, _ = _client(tmp_path, monkeypatch)
@@ -296,7 +287,5 @@ class TestConversionExecuteSafetyGates:
             f"/api/projects/{project_id}/conversion/execute",
             json={"conversion_run_id": "run-001"},
         )
-        assert resp.status_code == 200
-        data = resp.json()
-        assert "safety_flags" in data
-        assert isinstance(data["safety_flags"], dict)
+        assert resp.status_code == 410
+        assert resp.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"

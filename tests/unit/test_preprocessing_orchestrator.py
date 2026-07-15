@@ -318,7 +318,7 @@ def test_reviewed_endpoint_is_registered(tmp_path):
     finally:
         app.dependency_overrides.pop(get_project_store, None)
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["ok"] is False
-    assert payload["status"] == "blocked"
+    assert response.status_code == 410
+    payload = response.json()["detail"]
+    assert payload["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+    assert payload["replacement"] == "/api/plans/execute-reviewed"

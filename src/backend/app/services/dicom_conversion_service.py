@@ -245,21 +245,27 @@ def run_conversion_preflight(
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     from src.backend.app.services.dicom_conversion_execution import (
-        check_dcm2niix_availability,
+        check_native_dicom_converter_availability,
         run_conversion_preflight,
     )
     _project_dirs(store, project_id)  # validate project exists
     preflight = run_conversion_preflight(project_id)
-    availability = check_dcm2niix_availability(env=env or dict(os.environ))
+    availability = check_native_dicom_converter_availability()
     return {
         "ok": preflight.ok,
         "project_id": project_id,
         "status": preflight.status,
         "conversion_disabled_by_default": preflight.conversion_disabled_by_default,
-        "dcm2niix_available": availability.status == "available",
-        "dcm2niix_status": availability.status,
-        "dcm2niix_path": availability.executable_path,
-        "dcm2niix_version": availability.version,
+        "conversion_backend": "medimage-native",
+        "native_converter_available": availability["found"],
+        "native_converter_status": availability["status"],
+        "native_converter_version": availability["version"],
+        "native_dependency_versions": availability["versions"],
+        # Deprecated compatibility fields: the external converter is not used.
+        "dcm2niix_available": False,
+        "dcm2niix_status": "not_used",
+        "dcm2niix_path": None,
+        "dcm2niix_version": None,
         "env_enabled": preflight.env_enabled,
         "missing_env_flags": preflight.missing_env_flags,
         "approval_required": preflight.approval_required,

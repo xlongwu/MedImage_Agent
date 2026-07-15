@@ -32,6 +32,8 @@ from src.backend.app.api.external_smoke_routes import router as external_smoke_r
 from src.backend.app.api.approval_gate_routes import router as approval_gate_router
 from src.backend.app.api.audit_record_routes import router as audit_record_router
 from src.backend.app.api.execute_reviewed_routes import router as execute_reviewed_router
+from src.backend.app.api.execution_ticket_routes import router as execution_ticket_router
+from src.backend.app.api.agent_lifecycle_routes import router as agent_lifecycle_router
 from src.backend.app.api.gui_agent_routes import router as gui_agent_router
 from src.backend.app.api.llm_planner_routes import router as llm_planner_router
 from src.backend.app.api.plan_validator_routes import router as plan_validator_router
@@ -94,6 +96,8 @@ def create_app() -> FastAPI:
     app.include_router(llm_planner_router)
     app.include_router(approval_gate_router)
     app.include_router(execute_reviewed_router)
+    app.include_router(execution_ticket_router)
+    app.include_router(agent_lifecycle_router)
     app.include_router(audit_record_router)
     app.include_router(gui_agent_router)
     app.include_router(desktop_router)

@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from src.backend.app.api.dependencies import ProjectStore, get_project_store
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.schemas.desktop import (
     ConversionDryRunRequest,
     ConversionDryRunResponse,
@@ -246,6 +247,4 @@ def post_conversion_execute(
     request_raw: dict[str, Any] | None = None,
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
-    # Missing-project is handled inside the service as a blocked response so
-    # callers can distinguish "endpoint exists but gated" from "no such route".
-    return run_conversion_execute(store, project_id, request_raw)
+    reject_execution_contract("conversion.execute", project_id=project_id)

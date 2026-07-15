@@ -72,14 +72,8 @@ def test_external_smoke_manual_package_api_does_not_launch_matlab(tmp_path: Path
         json={"target": "all", "mode": "manual_package", "config_path": str(config)},
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["ok"] is True
-    assert Path(payload["artifacts"]["report_md"]).exists()
-
-    status = client.get("/api/external-smoke/status").json()
-    assert status["checklist_text"]
-    assert status["commands_text"]
+    assert response.status_code == 410
+    assert response.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
 def test_external_smoke_approved_mode_without_approval_is_blocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -97,10 +91,8 @@ def test_external_smoke_approved_mode_without_approval_is_blocked(tmp_path: Path
         json={"target": "spm", "mode": "approved_smoke", "config_path": str(config), "approved": False},
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["ok"] is False
-    assert "approved_smoke requires --approve" in " ".join(payload["errors"])
+    assert response.status_code == 410
+    assert response.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
 def test_external_smoke_rejects_non_allowlisted_dpabi_function(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -118,10 +110,8 @@ def test_external_smoke_rejects_non_allowlisted_dpabi_function(tmp_path: Path, m
         },
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["ok"] is False
-    assert "Invalid DPABI function" in " ".join(payload["errors"])
+    assert response.status_code == 410
+    assert response.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
 def test_external_smoke_approved_mode_fake_runner_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -150,7 +140,5 @@ def test_external_smoke_approved_mode_fake_runner_success(tmp_path: Path, monkey
         json={"target": "spm", "mode": "approved_smoke", "config_path": str(config), "approved": True},
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["ok"] is True
-    assert any(item.get("tool_name") == "spm.smoke_test" for item in payload["external_tool_results"])
+    assert response.status_code == 410
+    assert response.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"

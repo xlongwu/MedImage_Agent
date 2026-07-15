@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 
 from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.dependencies import ProjectStore, get_project_store
+from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.core.exceptions import NotFoundError, PipelineError, SafetyError
 from src.backend.app.schemas.preprocessing_handoff import (
     PreprocessingInputRegistrationRequest,
@@ -162,24 +163,7 @@ def execute_reviewed_preprocessing_pipeline(
     body: PreprocessingPipelineExecuteRequest,
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
-    try:
-        project = store.get_project(project_id)
-        if not project:
-            raise NotFoundError(f"Project not found: {project_id}")
-        from src.backend.app.services.preprocessing_orchestrator import (
-            execute_reviewed_preprocessing_pipeline as _execute,
-        )
-
-        metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
-        return _execute(
-            project_id=project_id,
-            preprocessing_run_id=preprocessing_run_id,
-            request=body,
-            project_dir=str(metadata.get("project_dir") or ""),
-            store=store,
-        ).model_dump()
-    except Exception as exc:
-        raise_api_error(exc, error_cls=PipelineError)
+    reject_execution_contract("preprocessing.execute", project_id=project_id)
 
 
 @router.get(
@@ -240,6 +224,7 @@ def spm_synthetic_smoke(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.spm_synthetic_smoke", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -309,6 +294,7 @@ def slice_timing_realign_sandbox(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.slice_timing_realign", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -387,6 +373,7 @@ def coreg_norm_sandbox(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.coreg_normalize", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -464,6 +451,7 @@ def smoothing_sandbox(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.smoothing", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -646,6 +634,7 @@ def nuisance_sandbox(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.nuisance_regression", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -752,6 +741,7 @@ def filtering_sandbox(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.temporal_filtering", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -860,6 +850,7 @@ def alff_reho_sandbox(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.alff_reho", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -969,6 +960,7 @@ def fc_sandbox(
     body: dict[str, Any],
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.functional_connectivity", project_id=project_id)
     if not store.get_project(project_id):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -1217,6 +1209,7 @@ def native_full_preprocessing_execute(
     body: NativeFullPreprocRequest,
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
+    reject_execution_contract("preprocessing.native_full", project_id=project_id)
     try:
         project = store.get_project(project_id)
         if not project:
@@ -1244,6 +1237,7 @@ def submit_native_full_preprocessing_execute(
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, Any]:
     """Queue a reviewed native run; inspect its persisted progress separately."""
+    reject_execution_contract("preprocessing.native_full_async", project_id=project_id)
     try:
         project = store.get_project(project_id)
         if not project:

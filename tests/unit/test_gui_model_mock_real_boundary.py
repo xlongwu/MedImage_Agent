@@ -7,6 +7,8 @@ Mock provider path remains unchanged.
 
 from __future__ import annotations
 
+import ast
+import inspect
 import pytest
 from fastapi.testclient import TestClient
 
@@ -23,6 +25,17 @@ from src.backend.app.runtime.gui_model_source_policy import (
     allowed_fixture_model_source_declaration,
     validate_model_source_policy,
 )
+
+
+def _assert_module_has_no_forbidden_imports(module) -> None:
+    forbidden = {"pywinauto", "torch", "transformers", "safetensors"}
+    imported: set[str] = set()
+    for node in ast.walk(ast.parse(inspect.getsource(module))):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".", 1)[0])
+    assert imported.isdisjoint(forbidden), imported & forbidden
 from src.backend.app.runtime.gui_model_input_redaction import (
     allowed_minimal_prompt_input_declaration,
     validate_and_build_model_prompt_envelope,
@@ -404,23 +417,27 @@ def test_audit_derivatives_root_blocked():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_no_pywinauto_import():
-    import sys
-    assert "pywinauto" not in sys.modules
+    from src.backend.app.runtime import gui_model_provider_policy
+
+    _assert_module_has_no_forbidden_imports(gui_model_provider_policy)
 
 
 def test_no_torch_import():
-    import sys
-    assert "torch" not in sys.modules
+    from src.backend.app.runtime import gui_model_runtime_isolation
+
+    _assert_module_has_no_forbidden_imports(gui_model_runtime_isolation)
 
 
 def test_no_transformers_import():
-    import sys
-    assert "transformers" not in sys.modules
+    from src.backend.app.runtime import gui_model_input_redaction
+
+    _assert_module_has_no_forbidden_imports(gui_model_input_redaction)
 
 
 def test_no_safetensors_import():
-    import sys
-    assert "safetensors" not in sys.modules
+    from src.backend.app.runtime import gui_model_audit_contract
+
+    _assert_module_has_no_forbidden_imports(gui_model_audit_contract)
 
 
 def test_provider_module_no_side_effects():

@@ -958,7 +958,40 @@ python -m pytest --tb=short --basetemp=.pytest_tmp
 If the current environment requires a different launcher, preserve the command
 semantics and report the exact command used.
 
-### 14.4 Frontend commands
+### 14.4 Mandatory pytest cleanup
+
+After every local `pytest` invocation, including collection, focused tests,
+full-suite tests, failed runs, interrupted runs, and timed-out runs, clean the
+pytest-generated workspace-root artifacts before handing control back or
+starting unrelated work.
+
+The cleanup scope is limited to direct children of the current repository root
+whose names are exactly:
+
+```text
+.pytest_cache/
+.pytest_tmp*
+```
+
+Cleanup requirements:
+
+1. capture and preserve the pytest exit status and validation output first;
+2. wait until the pytest process has exited before deleting its artifacts;
+3. resolve the repository root and every candidate target to absolute paths;
+4. verify each target is a direct child of the repository root and its name
+   matches `.pytest_cache` or `.pytest_tmp*` before recursive deletion;
+5. use one shell end-to-end and native filesystem operations for deletion;
+6. if a target is permission-restricted or locked, retry only with explicitly
+   approved elevation and report any artifact that still cannot be removed;
+7. verify that zero matching pytest artifact directories remain;
+8. inspect `git status --short` after cleanup and preserve unrelated changes.
+
+Do not use this rule to delete generic `tmp` directories, `__pycache__`
+directories, tracked test fixtures, user datasets, runtime outputs, or any path
+outside the repository root. Cleanup must never hide or replace reporting of a
+pytest failure.
+
+### 14.5 Frontend commands
 
 When frontend source or configuration changes, run:
 
@@ -971,7 +1004,7 @@ npm --prefix src/frontend run build
 Do not claim lint or formatting validation unless the configured toolchain was
 actually installed and executed.
 
-### 14.5 Validation matrix
+### 14.6 Validation matrix
 
 #### Documentation-only task
 
@@ -1038,7 +1071,7 @@ Required as applicable:
 
 A successful build must not be reported as a successful GUI workflow test.
 
-### 14.6 Validation failures
+### 14.7 Validation failures
 
 Never hide a failed validation command.
 

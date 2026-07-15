@@ -81,8 +81,10 @@ def test_preflight_endpoint_returns_dcm2niix_status():
     assert "dcm2niix_available" in payload
     # Without env flags, dcm2niix check reports disabled
     assert payload["dcm2niix_status"] in {
-        "disabled", "missing", "available", "version_failed", "unknown",
+        "disabled", "missing", "available", "version_failed", "unknown", "not_used",
     }
+    assert payload["conversion_backend"] == "medimage-native"
+    assert "native_converter_available" in payload
 
 
 def test_preflight_endpoint_404_for_missing_project():
@@ -92,27 +94,10 @@ def test_preflight_endpoint_404_for_missing_project():
 
 
 def test_user_data_conversion_execute_endpoint_default_blocked():
-    """The conversion execute endpoint exists but MUST remain default-blocked.
-
-    Phase 4L-2 added the /conversion/execute endpoint behind env gates.
-    Without env flags, it must return disabled/blocked and never execute.
-    """
+    """The old conversion endpoint delegates authority only by audited refusal."""
     client = TestClient(app)
     resp = client.post("/api/projects/brain-tumor-study/conversion/execute")
-    assert resp.status_code == 200, f"Expected 200 (blocked), got {resp.status_code}"
-    payload = resp.json()
-    # Must be disabled/blocked by default (status field)
-    assert payload.get("status") in ("disabled", "blocked"), \
-        f"Expected status=disabled or blocked, got {payload.get('status')}"
-    # Safety flags must confirm no execution allowed
-    sf = payload.get("safety_flags", {})
-    assert sf.get("conversion_disabled_by_default") is True, \
-        "conversion_disabled_by_default must be True"
-    assert sf.get("public_execution_allowed") is False, \
-        "public_execution_allowed must be False"
-    assert sf.get("rawdata_read_only") is True, \
-        "rawdata_read_only must be True"
-    # Blocking issues must report missing env flags
-    blocking = payload.get("blocking_issues", [])
-    assert any("env flag" in b.lower() for b in blocking), \
-        f"Blocking issues must mention missing env flags, got: {blocking}"
+    assert resp.status_code == 410
+    detail = resp.json()["detail"]
+    assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
+    assert detail["replacement"] == "/api/plans/execute-reviewed"

@@ -37,7 +37,7 @@ def test_prompt_contains_real_catalog():
     """Prompt built with real catalog contains known node IDs."""
     prompt = build_planner_prompt("motion")
     assert "data_inspection" in prompt
-    assert "spm_realign_subject" in prompt
+    assert "spm_realign_subject" not in prompt
 
 
 # ── JSON parser ──
@@ -54,7 +54,7 @@ def test_parse_code_fence_json():
 
 
 def test_parse_code_fence_no_lang():
-    content = '```\n{"pipeline_id": "p"}\n```'
+    content = '```\n{"pipeline_id": "p", "nodes": []}\n```'
     plan = parse_llm_plan_json(content)
     assert plan["pipeline_id"] == "p"
 
@@ -67,6 +67,11 @@ def test_parse_invalid_json_raises():
 def test_parse_empty_string_raises():
     with pytest.raises(ValueError, match="LLM_PLAN_JSON_PARSE_ERROR"):
         parse_llm_plan_json("")
+
+
+def test_parse_unknown_fields_raises():
+    with pytest.raises(ValueError, match="LLM_PLAN_SCHEMA_ERROR"):
+        parse_llm_plan_json('{"pipeline_id":"p","nodes":[],"execute":true}')
 
 
 # ── Provider without API key ──
@@ -124,8 +129,30 @@ def test_fake_http_invalid_json_returns_error(monkeypatch):
     def fake_post(url, headers, body, timeout):
         return FakeResponse({"choices": [{"message": {"content": "not json"}}]})
     result = call_openai_compatible_provider("motion", http_post=fake_post)
-    assert result.ok is True  # provider returns ok, but parsing will fail later
-    assert result.content == "not json"
+    assert result.ok is False
+    assert result.content == ""
+    assert any("LLM_PLAN_JSON_PARSE_ERROR" in error for error in result.errors)
+
+
+def test_fake_http_unknown_node_returns_error(monkeypatch):
+    monkeypatch.setenv("MEDIMAGE_LLM_API_KEY", "sk-test-key")
+
+    def fake_post(url, headers, body, timeout):
+        return FakeResponse({
+            "choices": [{"message": {"content": json.dumps({
+                "pipeline_id": "bad",
+                "nodes": [{
+                    "id": "invented_node",
+                    "backend": "python",
+                    "depends_on": [],
+                    "params": {},
+                }],
+            })}}]
+        })
+
+    result = call_openai_compatible_provider("motion", http_post=fake_post)
+    assert result.ok is False
+    assert any("UNKNOWN_NODE_ID" in error for error in result.errors)
 
 
 # ── Integration with Planner ──

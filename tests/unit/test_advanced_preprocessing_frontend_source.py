@@ -62,7 +62,8 @@ def _read_project_switcher_styles():
     return _read("src/frontend/src/features/dashboard/ProjectSwitcher.module.css")
 
 def _read_project_overview_header():
-    return _read("src/frontend/src/features/projects/ProjectOverviewHeader.tsx")
+    # ProjectOverviewHeader was folded into the workspace architecture.
+    return _read("src/frontend/src/features/workspaces/OverviewWorkspace.tsx") + _read_en_messages()
 
 def _read_dicom_series_table():
     return _read("src/frontend/src/features/workspaces/DicomSeriesTable.tsx")

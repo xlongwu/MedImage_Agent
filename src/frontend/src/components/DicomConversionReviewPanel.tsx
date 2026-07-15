@@ -338,21 +338,20 @@ export default function DicomConversionReviewPanel({
 
           {showTechDetails && (
             <>
-              {/* B. dcm2niix availability */}
+              {/* B. In-project native converter availability */}
               <div className={styles.style020}>
                 <h4 style={subH}>{t("technical.DicomConversionReview.dcm2niix.title")}</h4>
                 <div className={styles.style021}>
                   <span
                     style={{
                       ...pill,
-                      ...(dcm2niixStatusBadge[data.dcm2niix_status] || dcm2niixStatusBadge.unknown),
+                      ...(dcm2niixStatusBadge[data.native_converter_status] || dcm2niixStatusBadge.unknown),
                     }}
                   >
-                    {data.dcm2niix_status}
+                    {data.native_converter_status}
                   </span>
-                  {data.dcm2niix_path && <span style={mono}>{data.dcm2niix_path}</span>}
-                  {data.dcm2niix_version && (
-                    <span className={styles.style022}>v{data.dcm2niix_version}</span>
+                  {data.native_converter_version && (
+                    <span className={styles.style022}>v{data.native_converter_version}</span>
                   )}
                 </div>
                 <div className={styles.style023}>

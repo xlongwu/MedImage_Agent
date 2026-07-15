@@ -30,6 +30,7 @@ from src.backend.app.services import (
     motion_qc_readiness,
 )
 from src.backend.app.services.mock_store import SQLiteDesktopStore
+from tests.goal_contract_helpers import reviewed_goal_candidate
 from src.backend.app.services.run_state_timeline import (
     NodeStateTimelineRecord,
     ProjectRunStateTimelineResponse,
@@ -99,14 +100,17 @@ def _make_plan(created: dict) -> dict:
 
 
 def _save_plan(client: TestClient, created: dict, plan: dict) -> str:
+    goal = "Timeline test"
     resp = client.post(
         f"/api/projects/{created['project_id']}/plans",
         json={
             "plan": plan,
             "project_config_path": created["project_config_path"],
             "validation": {"ok": True},
-            "goal": "Timeline test",
+            "goal": goal,
             "provider": "mock",
+            "goal_contract_candidate": reviewed_goal_candidate(plan, goal),
+            "reviewed_actor": "test-reviewer",
         },
     )
     assert resp.status_code == 200, resp.text

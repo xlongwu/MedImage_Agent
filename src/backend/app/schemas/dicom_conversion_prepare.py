@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── 1. Literal type aliases ────────────────────────────────────────────────
@@ -47,6 +47,8 @@ class DicomConversionPrepareConfirmations(BaseModel):
     rawdata_readonly: bool = False
     research_use_only: bool = False
     no_clinical_use: bool = False
+    native_converter: bool = False
+    # Deprecated request compatibility; normalized to native_converter.
     external_converter: bool = False
     rollback_policy: bool = False
     risk_acknowledgement: bool = False
@@ -55,6 +57,12 @@ class DicomConversionPrepareConfirmations(BaseModel):
     frontend_execute: bool = False
     spm_dpabi_matlab_disabled: bool = False
     confirm_execution: bool = False
+
+    @model_validator(mode="after")
+    def _normalize_legacy_converter_acknowledgement(self) -> "DicomConversionPrepareConfirmations":
+        if self.external_converter and not self.native_converter:
+            self.native_converter = True
+        return self
 
 
 # ── 3. Prepare request ─────────────────────────────────────────────────────
@@ -84,6 +92,11 @@ class DicomConversionPrepareSystemChecks(BaseModel):
     """
 
     preflight_ok: bool = False
+    conversion_backend: str = "medimage-native"
+    native_converter_available: bool = False
+    native_converter_version: str | None = None
+    native_dependency_versions: dict[str, str] = Field(default_factory=dict)
+    # Deprecated compatibility fields. The external converter is not used.
     dcm2niix_available: bool = False
     dcm2niix_path: str | None = None
     dcm2niix_version: str | None = None
@@ -154,7 +167,7 @@ _CONFIRMATION_LABELS: dict[str, str] = {
     "rawdata_readonly": "Rawdata read-only acknowledgement",
     "research_use_only": "Research-use-only acknowledgement",
     "no_clinical_use": "No-clinical-use acknowledgement",
-    "external_converter": "External converter acknowledgement",
+    "native_converter": "In-project native converter acknowledgement",
     "rollback_policy": "Rollback policy acknowledgement",
     "risk_acknowledgement": "Risk acknowledgement",
     "approval_audit": "Approval/audit acknowledgement",
@@ -169,7 +182,7 @@ _REQUIRED_CONFIRMATIONS: frozenset[str] = frozenset({
     "rawdata_readonly",
     "research_use_only",
     "no_clinical_use",
-    "external_converter",
+    "native_converter",
     "rollback_policy",
     "risk_acknowledgement",
     "approval_audit",

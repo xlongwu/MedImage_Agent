@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
 import json
 
 import pytest
@@ -9,6 +11,19 @@ from src.backend.app.runtime.gui_model_source_policy import (
     allowed_fixture_model_source_declaration,
     validate_model_source_policy,
 )
+
+
+def _assert_source_policy_has_no_forbidden_imports() -> None:
+    from src.backend.app.runtime import gui_model_source_policy
+
+    forbidden = {"pywinauto", "torch", "transformers", "safetensors"}
+    imported: set[str] = set()
+    for node in ast.walk(ast.parse(inspect.getsource(gui_model_source_policy))):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".", 1)[0])
+    assert imported.isdisjoint(forbidden), imported & forbidden
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -280,23 +295,19 @@ def test_weights_file_derivatives_blocked():
 # ══════════════════════════════════════════════════════════════════════════════
 
 def test_no_torch_import():
-    import sys
-    assert "torch" not in sys.modules
+    _assert_source_policy_has_no_forbidden_imports()
 
 
 def test_no_transformers_import():
-    import sys
-    assert "transformers" not in sys.modules
+    _assert_source_policy_has_no_forbidden_imports()
 
 
 def test_no_safetensors_import():
-    import sys
-    assert "safetensors" not in sys.modules
+    _assert_source_policy_has_no_forbidden_imports()
 
 
 def test_no_pywinauto_import():
-    import sys
-    assert "pywinauto" not in sys.modules
+    _assert_source_policy_has_no_forbidden_imports()
 
 
 def test_blocked_all_flags_false():
