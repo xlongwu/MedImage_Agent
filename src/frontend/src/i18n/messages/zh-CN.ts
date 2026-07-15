@@ -2364,7 +2364,8 @@ export const messagesZhCn = {
   "technical.DicomConversionExecute.confirm.rawdata_readonly": "我确认原始数据必须保持只读。",
   "technical.DicomConversionExecute.confirm.research_use_only": "我了解此功能仅用于科研。",
   "technical.DicomConversionExecute.confirm.no_clinical_use": "我了解此功能不得用于临床。",
-  "technical.DicomConversionExecute.confirm.external_converter": "我知悉项目内置转换器及其支持的 DICOM 范围。",
+  "technical.DicomConversionExecute.confirm.external_converter":
+    "我知悉项目内置转换器及其支持的 DICOM 范围。",
   "technical.DicomConversionExecute.confirm.rollback_policy": "我知悉回滚策略。",
   "technical.DicomConversionExecute.confirm.risk_acknowledgement": "我知悉转换风险。",
   "technical.DicomConversionExecute.confirm.approval_audit": "我知悉审批与审计包要求。",

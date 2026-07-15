@@ -128,13 +128,17 @@ def test_prepare_persists_release_approval_decision_for_execute_gate(tmp_path, m
     )
     monkeypatch.setattr(
         execution_module,
-        "_detect_dcm2niix_runtime",
+        "check_native_dicom_converter_availability",
         lambda: {
             "found": True,
-            "executable_path": "dcm2niix",
-            "version": "test-version",
-            "sha256": "abc123",
-            "strategy": "test",
+            "backend": "medimage-native",
+            "version": "test-native-version",
+            "versions": {
+                "numpy": "test",
+                "nibabel": "test",
+                "pydicom": "test",
+            },
+            "error": None,
         },
     )
 

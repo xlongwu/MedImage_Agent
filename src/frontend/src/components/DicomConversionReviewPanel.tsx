@@ -345,7 +345,8 @@ export default function DicomConversionReviewPanel({
                   <span
                     style={{
                       ...pill,
-                      ...(dcm2niixStatusBadge[data.native_converter_status] || dcm2niixStatusBadge.unknown),
+                      ...(dcm2niixStatusBadge[data.native_converter_status] ||
+                        dcm2niixStatusBadge.unknown),
                     }}
                   >
                     {data.native_converter_status}

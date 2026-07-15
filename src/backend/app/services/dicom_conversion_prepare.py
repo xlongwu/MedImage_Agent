@@ -4,7 +4,7 @@ Single-call orchestration that performs all preparation steps for DICOM
 conversion execution:
 
   1. Re-run preflight
-  2. Validate dcm2niix
+  2. Validate the in-project native DICOM converter
   3. Validate mappings unchanged
   4. Validate output paths
   5. Validate disk space
@@ -210,7 +210,7 @@ def run_dicom_conversion_prepare(
     if not preflight_ok:
         blocking.extend(preflight.blocking_issues or ["Preflight not ready."])
 
-    # ── 2. Validate dcm2niix ───────────────────────────────────────────
+    # ── 2. Validate native converter ───────────────────────────────────
     native_converter_info = check_native_dicom_converter_availability()
     native_converter_available = bool(native_converter_info.get("found"))
     if not native_converter_available:
