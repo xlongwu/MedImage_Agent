@@ -5,6 +5,9 @@ Current as of 2026-07-15.
 ## Version and Branch
 
 - Current source/release line: `v0.6.0-rc1`.
+- Release convergence target: `v0.6.0-rc2`. This is a stabilization release;
+  `v0.7.0-rc1` is reserved for a separately approved capability or contract
+  expansion.
 - Backend `APP_VERSION` (`src/backend/app/version.py`) is `0.6.0-rc1`.
   All package surface versions (frontend, desktop/electron, pyproject.toml)
   aligned to `0.6.0-rc1` as of 2026-06-20 architecture audit.
@@ -47,6 +50,17 @@ their tag state.
   input, submit the reviewed gate, show stage status, and expose FC artifact
   metadata handoff links.
 - Frontend API wrappers under `src/frontend/src/lib/api/` with a shared client.
+- A server-issued Execution Ticket and single Execution Gateway bind reviewed
+  plans, approvals, project identity, allowlists, paths, audit context, expiry,
+  and retry policy before Pipeline Runtime dispatch.
+- Runner dispatch enforces node, backend, input-root, output-root, rawdata,
+  allowlist-fingerprint, and ticket constraints before invoking registered
+  execution code.
+- A persistent Agent lifecycle now separates execution status, observations,
+  goal evaluation, recovery proposals, approvals, attempts, and human handoff.
+- Observation, deterministic Goal Evaluation, side-effect-free recovery
+  proposals, and controlled retry/resume/local-replan services are implemented
+  and covered by source-level regression tests.
 
 ## Current Execution Boundaries
 
@@ -64,6 +78,10 @@ their tag state.
 - Full DICOM-to-reviewed-FC GUI E2E on real multi-subject data, true
   multi-subject workflow validation, group statistics, classification,
   clinical diagnosis, report editing, and auto-update are not current capabilities.
+- During the `v0.6.0-rc2` convergence window, `main` is frozen for new execution
+  paths, scientific algorithms, capability-level upgrades, public API expansion,
+  and dependency expansion. Only release-blocking fixes, tests, evidence, and
+  documentation corrections may enter without reopening capability review.
 
 ## Validation Baseline
 
@@ -77,8 +95,13 @@ their tag state.
   pytest temp entries.
 - Expected optional skips commonly include missing `pydicom`, missing `cupy`,
   and missing `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
-- The latest committed source-level frontend refactor fix
-  (`904c3ec`, 2026-06-13) recorded `109 passed, 4 skipped`.
+- Source commit `52f183bc` was validated on Windows with a CI-like Python
+  environment: backend `4060 passed, 26 skipped`; frontend format check,
+  typecheck, `238` tests, and production build passed. The phase 7/8 execution
+  and recovery subset additionally recorded `103 passed, 1 skipped`; the skip
+  is the Windows symlink-privilege case.
+- These are local source-level results. A green remote GitHub Actions run for
+  the release candidate commit must be captured before release.
 - Current task-level validation is recorded in the final Completion Report and
   the local phase execution record rather than appended here as a development
   diary.
@@ -97,6 +120,9 @@ their tag state.
   entry point.
 - Packaging output directories are generated artifacts unless explicitly
   promoted through a release artifact process.
+- Existing unpacked artifacts predate the current release-candidate source and
+  are not release evidence. RC2 requires a clean rebuild and packaged-app smoke
+  against the exact candidate commit.
 
 ## Known Limitations and Risks
 
@@ -125,19 +151,23 @@ their tag state.
 - Full DICOM-to-preprocessing-to-report GUI E2E remains unproven.
   Preview/subset runs and synthetic-atlas FC remain labeled `preview_only` or
   `partial`.
+- The controlled recovery implementation is source-tested, but packaged-app
+  exit, forced termination, restart recovery, failed-subject isolation, and
+  local retry have not yet been demonstrated on the three-subject DemoData set.
 
 ## Next Work
 
-1. Keep public DICOM conversion execution default-blocked unless a maintainer
-   explicitly approves a release enablement path.
-2. Validate the reviewed preprocessing UI against a real project with a
-   prepared preprocessing run, real atlas artifact, and recorded backend
-   report/validation outputs.
-3. Continue splitting large legacy route and frontend modules only through
-   focused, tested changes.
-4. Validate desktop packaging and GUI smoke in an interactive Windows session.
-5. Keep documentation lifecycle clean: completed task handoffs and temporary
-   reports should not become long-term state.
+1. Synchronize project state, capability truth, and phase status, then freeze
+   the `main` execution/scientific boundary for RC convergence.
+2. Rebuild the Windows packaged app from the candidate commit and run the real
+   three-subject DemoData workflow through conversion, reviewed preprocessing,
+   artifact reload, validation, and report handoff.
+3. Validate graceful exit, forced termination, restart recovery, failed-subject
+   isolation, and approved local retry without modifying rawdata.
+4. Capture green remote CI evidence for the exact candidate commit and close
+   every release-blocking failure without expanding capability scope.
+5. Align version surfaces and release documentation, inventory/checksum the
+   Windows artifacts, and publish `v0.6.0-rc2` only after all release gates pass.
 
 ## Reference Documents
 
@@ -151,3 +181,4 @@ their tag state.
 - Release notes: `docs/发布记录/`
 - Safety boundaries: `docs/安全与审批/安全边界.md`
 - Run lifecycle: `docs/安全与审批/真实项目运行生命周期.md`
+- RC2 release convergence: `specs/阶段记录/阶段九/README.md`

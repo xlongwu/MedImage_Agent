@@ -1,6 +1,6 @@
 # 阶段八总体计划：Observation、Goal Evaluation 与 Recovery 闭环
 
-> **Status：Ready for Implementation（维护者直接授权；G8-0 已验证）**
+> **Status：Implemented / Source Verified（2026-07-15）；发布级真实 E2E 由阶段九验收**
 > **Task Mode：Feature Bundle Mode；涉及生命周期迁移、Pipeline Runtime 或恢复执行时叠加 Architecture and Refactor Mode / Protected Change。**
 > 前置条件：阶段七 7A–7D 完成验收，Execution Gateway、Execution Ticket、Agent Lifecycle 与 Node Contract 形成稳定基线。
 > 非临床声明：本阶段只服务于非临床研究工作流，不产生诊断或治疗建议。
@@ -52,7 +52,7 @@ Reviewed Goal Contract + Reviewed Plan
 - 不把全量日志、原始截图、PHI、凭据或机器私有绝对路径发送给模型。
 - 不以“文件存在”替代数值产物可重载、形状/dtype/校验和及 provenance 验证。
 
-## 2. 当前实现与差距
+## 2. 实施前实现与差距（历史基线）
 
 | 当前事实 | 当前锚点 | 阶段八差距 |
 |---|---|---|
@@ -162,7 +162,7 @@ Reviewed Goal Contract + Reviewed Plan
 | G8-4 Controlled Recovery | G8-3 | child ticket、审批分支、retry/resume/replan 与回评 E2E 通过 |
 | G8-5 阶段完成 | G8-4 | 文档、API、状态迁移、前端（若有）和安全审查完成；无未分类执行旁路 |
 
-## 9. 进入实施前的决策门
+## 9. 完成状态与发布移交
 
 - [x] 阶段七当前工作树基线已通过任务 7A–7D 的 focused/integration 验证，允许在其 schema 上做显式 v2 兼容迁移。
 - [x] `Goal Contract` 第一批支持 `contract_smoke`、原生完整预处理、ALFF/fALFF、ReHo、FC。
@@ -170,6 +170,6 @@ Reviewed Goal Contract + Reviewed Plan
 - [x] 阶段八先稳定 backend API 和只读状态，不在本轮修改前端。
 - [x] 旧 `SUCCEEDED` 仅兼容读取并标记 `needs_review`；没有可复核 Goal Evaluation 时不得迁移为 `GOAL_SATISFIED`。
 
-G8-0 还必须把每个子任务中“ProjectStore/SQLite 实现”“consistency binding”“API/store/frontend（若纳入）”等初步范围替换为精确文件清单、最终 frontend scope、计划新增测试文件和可直接运行的验证命令，然后将对应 handoff 状态改为 `Ready for Codex` 或 `Ready for Implementation`。在此之前不得把 8A–8D 当作可直接编码的任务单。
+8A–8D 已在 `17e3ebac` 实施，Observation、Goal Evaluation、Recovery Proposal、Recovery Approval/Attempt、child ticket、retry/resume/replan 与回评链路均已有代码和回归测试。`52f183bc` 基线上的阶段七/八联合验证结果为 `103 passed, 1 skipped`；跳过项是本机缺少 Windows 符号链接权限。
 
-在上述决策未确认前，本文和 8A–8D 均不授权代码实施。
+该结果只证明源码级契约，不证明打包应用真实多受试者恢复。阶段八因此移交阶段九完成 Windows packaged E2E、退出/强制终止/重启、失败被试隔离、局部重试和 rawdata 不变性验证。

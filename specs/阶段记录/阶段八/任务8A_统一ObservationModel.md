@@ -2,7 +2,7 @@
 
 ## Handoff
 
-- **Status**：Ready for Codex（维护者直接授权；G8-0 已验证）
+- **Status**：Implemented / Source Verified（2026-07-15）
 - **Task Mode**：Feature Bundle Mode；若修改 lifecycle/store schema，叠加 Architecture and Refactor Mode
 - **Goal**：建立一个版本化、项目隔离、来源可追溯的 Observation Model 和采集服务，统一 Pipeline Summary、Node State、Artifact、Validation、Logs、Capability Level 与 Scientific Status。
 - **Background**：当前信息分散在 runtime state、项目历史 read models、原生预处理 artifact registry 和 validation report 中；`LifecycleObservation` 只有少量布尔值，无法证明具体目标是否完成。

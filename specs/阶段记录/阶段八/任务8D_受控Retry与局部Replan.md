@@ -2,7 +2,7 @@
 
 ## Handoff
 
-- **Status**：Ready for Codex（前置：8A–8C 验收通过）
+- **Status**：Implemented / Source Verified（2026-07-15）
 - **Task Mode**：Feature Bundle Mode + Protected Change；涉及 Pipeline Executor、Execution Gateway、Approval Gate、票据和状态迁移
 - **Goal**：将 8C 的无副作用 Recovery Proposal 转换为经策略、审批、配额和一次性能力约束的 retry/resume/replan，并在执行后自动回到 Observation 与 Goal Evaluation。
 - **Background**：原 ticket 一次消费；legacy retry runtime 已拒绝无执行契约调用；当前尚无 child ticket、recovery attempt ledger、failed-subject/resume 执行适配或新 plan 审批分支。

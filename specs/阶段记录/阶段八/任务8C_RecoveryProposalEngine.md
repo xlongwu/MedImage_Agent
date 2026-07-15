@@ -2,7 +2,7 @@
 
 ## Handoff
 
-- **Status**：Ready for Codex（前置：8A、8B 验收通过）
+- **Status**：Implemented / Source Verified（2026-07-15）
 - **Task Mode**：Feature Bundle Mode
 - **Goal**：根据 Observation、Goal Evaluation gaps、结构化诊断、Node Contract、原 Reviewed Plan/Ticket、checkpoint 和配额生成无副作用的 Recovery Proposal。
 - **Background**：当前 error diagnoser 根据状态和日志模式生成 advisory retry plan；orchestrator 的 `RetryProposal` 主要判断 node/backend/root 和粗粒度 risk，尚不能表达失败被试、resume、参数修改、backend switch、局部 replan 与人工接管。

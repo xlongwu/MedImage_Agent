@@ -1,6 +1,6 @@
 # 阶段八：Observation、Goal Evaluation 与 Recovery 闭环
 
-> 状态：已由维护者直接授权实施；G8-0 基线验证完成。
+> 状态：8A–8D 源码实施完成并通过回归验证；发布级打包真实 E2E 转入阶段九。
 > 规划日期：2026-07-14
 > 基线：当前工作树中的阶段七 Execution Gateway、Execution Ticket、Agent Lifecycle 与 Node Contract 实现；阶段七 focused 与 integration 基线已于 2026-07-14 验证，Windows symlink 用例因本机权限跳过并保留为环境风险。
 
@@ -17,6 +17,6 @@
 
 ## 实施顺序
 
-阶段八主链必须按 `8A → 8B → 8C → 8D` 串行推进。8B 不得直接读取零散文件绕过 8A；8C 只能提出建议，不得执行；8D 只能通过 Execution Gateway 和服务端签发的执行能力执行恢复。每次恢复结束后必须重新生成 Observation 并重新运行 Goal Evaluator，直到目标满足、配额耗尽或进入人工接管。
+8A–8D 已随 `17e3ebac` 落地，并在 `52f183bc` 基线上完成相关回归验证。Observation、Goal Evaluation、Recovery Proposal 与受控 Retry/Resume/Replan 的源码契约已冻结；阶段九负责在 Windows 打包应用和真实多受试者数据上验证退出、崩溃、恢复与局部重试。
 
 GUI Agent 是独立受控轨道，不属于本闭环的默认执行后端，也不能因阶段八主链实施而自动启用。

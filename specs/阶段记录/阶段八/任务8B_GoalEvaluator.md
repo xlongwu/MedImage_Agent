@@ -2,7 +2,7 @@
 
 ## Handoff
 
-- **Status**：Ready for Codex（前置：8A 验收通过）
+- **Status**：Implemented / Source Verified（2026-07-15）
 - **Task Mode**：Feature Bundle Mode
 - **Goal**：将用户目标表达为与 Reviewed Plan 一同审批的结构化 Goal Contract，并用确定性 evaluator 判断 `satisfied / not_satisfied / indeterminate`。
 - **Background**：当前 reviewed plan 只保存自然语言 `goal`；lifecycle 主要依据 Runtime summary、artifact reload 布尔值和 capability level 判定成功。
