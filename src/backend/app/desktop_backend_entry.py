@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,29 +23,25 @@ class DesktopBackendConfig:
 def ensure_packaged_windows_runtime_dirs() -> tuple[Path, ...]:
     """Create frozen-runtime probe directories inside the desktop workspace.
 
-    CuPy's Windows loader probes ``sys.prefix/bin`` during its lazy import.
-    For a PyInstaller one-file sidecar, ``sys.prefix`` is the launch working
-    directory and the directory is absent in a fresh desktop workspace.  The
-    probe raises ``WinError 2`` before CuPy can load bundled DLLs unless the
-    empty directory exists.
+    CuPy's Windows loader probes ``<launch workspace>/bin`` during its lazy
+    import.  The directory is absent in a fresh desktop workspace, so the probe
+    raises ``WinError 2`` before CuPy can load bundled DLLs unless the empty
+    directory exists.
 
-    The helper is a no-op outside a frozen Windows process and refuses to
-    create anything outside the explicitly selected desktop workspace.
+    The helper is a no-op outside a Windows desktop process and creates only a
+    direct child of the explicitly selected desktop workspace.
     """
-    if os.name != "nt" or not bool(getattr(sys, "frozen", False)):
+    workspace_value = os.environ.get("MEDIMAGE_DESKTOP_WORKSPACE")
+    if os.name != "nt" or not workspace_value:
         return ()
-    workspace = Path(
-        os.environ.get("MEDIMAGE_DESKTOP_WORKSPACE") or Path.cwd()
-    ).expanduser().resolve()
-    prefix_bin = (Path(sys.prefix).expanduser().resolve() / "bin").resolve()
-    try:
-        prefix_bin.relative_to(workspace)
-    except ValueError as exc:
+    workspace = Path(workspace_value).expanduser().resolve()
+    runtime_bin = (workspace / "bin").resolve()
+    if runtime_bin.parent != workspace:
         raise RuntimeError(
-            f"Frozen runtime bin directory escapes desktop workspace: {prefix_bin}"
-        ) from exc
-    prefix_bin.mkdir(parents=True, exist_ok=True)
-    return (prefix_bin,)
+            f"Frozen runtime bin directory escapes desktop workspace: {runtime_bin}"
+        )
+    runtime_bin.mkdir(parents=True, exist_ok=True)
+    return (runtime_bin,)
 
 
 def validate_host(host: str) -> str:
