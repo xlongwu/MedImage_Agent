@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
+from pathlib import Path
 
 import uvicorn
-
 
 DEFAULT_DESKTOP_HOST = "127.0.0.1"
 DEFAULT_DESKTOP_PORT = 8765
@@ -18,6 +19,34 @@ class DesktopBackendConfig:
     host: str
     port: int
     log_level: str
+
+
+def ensure_packaged_windows_runtime_dirs() -> tuple[Path, ...]:
+    """Create frozen-runtime probe directories inside the desktop workspace.
+
+    CuPy's Windows loader probes ``sys.prefix/bin`` during its lazy import.
+    For a PyInstaller one-file sidecar, ``sys.prefix`` is the launch working
+    directory and the directory is absent in a fresh desktop workspace.  The
+    probe raises ``WinError 2`` before CuPy can load bundled DLLs unless the
+    empty directory exists.
+
+    The helper is a no-op outside a frozen Windows process and refuses to
+    create anything outside the explicitly selected desktop workspace.
+    """
+    if os.name != "nt" or not bool(getattr(sys, "frozen", False)):
+        return ()
+    workspace = Path(
+        os.environ.get("MEDIMAGE_DESKTOP_WORKSPACE") or Path.cwd()
+    ).expanduser().resolve()
+    prefix_bin = (Path(sys.prefix).expanduser().resolve() / "bin").resolve()
+    try:
+        prefix_bin.relative_to(workspace)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Frozen runtime bin directory escapes desktop workspace: {prefix_bin}"
+        ) from exc
+    prefix_bin.mkdir(parents=True, exist_ok=True)
+    return (prefix_bin,)
 
 
 def validate_host(host: str) -> str:
@@ -71,6 +100,7 @@ def parse_args(argv: Sequence[str] | None = None) -> DesktopBackendConfig:
 
 
 def run_backend(config: DesktopBackendConfig) -> None:
+    ensure_packaged_windows_runtime_dirs()
     os.environ.setdefault("MEDIMAGE_DESKTOP", "1")
     os.environ["MEDIMAGE_DESKTOP_BACKEND_HOST"] = config.host
     os.environ["MEDIMAGE_DESKTOP_BACKEND_PORT"] = str(config.port)

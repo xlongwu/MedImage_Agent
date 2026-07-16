@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -23,6 +22,7 @@ def test_desktop_packaging_files_exist():
         "desktop/packaging/pyinstaller_desktop_launcher.spec",
         "desktop/packaging/build_backend.ps1",
         "desktop/packaging/write_gpu_runtime_manifest.py",
+        "desktop/packaging/probe_backend_gpu_runtime.py",
         "desktop/packaging/build_launcher.ps1",
         "desktop/packaging/build_frontend.ps1",
         "desktop/packaging/build_desktop.ps1",
@@ -143,6 +143,7 @@ def test_pyinstaller_spec_excludes_blocked_gui_and_model_modules():
     assert 'collect_submodules("cupy")' in spec
     assert 'collect_data_files("cupy", includes=["_core/include/**/*"])' in spec
     assert 'collect_submodules("fastrlock")' in spec
+    assert '"graphlib"' in spec
     assert "dcm2niix" not in spec.lower()
     assert "resources/tools" not in spec
     assert '"pywinauto"' in spec
@@ -192,13 +193,17 @@ def test_backend_build_checks_native_scientific_dependencies():
 
     assert "scipy.ndimage" in build_backend
     assert "scipy.signal" in build_backend
+    assert "graphlib" in build_backend
     assert "Scientific packaging dependency check failed" in build_backend
     assert "GpuManifestScript" in build_backend
+    assert "GpuRuntimeProbeScript" in build_backend
     assert "AnalysisTocPath" in build_backend
     assert "GPU runtime manifest" in build_backend
     assert "CUPY_CACHE_DIR" in build_backend
     assert "cupy_cache" in build_backend
     assert "Remove-Item Env:CUPY_CACHE_DIR" in build_backend
+    assert "gpu_runtime_probe.json" in build_backend
+    assert "--expect-cupy" in build_backend
 
 
 def test_gpu_runtime_manifest_is_portable_and_inventory_based():
@@ -209,6 +214,16 @@ def test_gpu_runtime_manifest_is_portable_and_inventory_based():
     assert "cuda_driver_requirement" in manifest_writer
     assert "rglob(\"*.dll\")" in manifest_writer
     assert "analysis_toc" in manifest_writer
+
+
+def test_packaged_gpu_probe_launches_frozen_backend_and_checks_lazy_import():
+    probe = read("desktop/packaging/probe_backend_gpu_runtime.py")
+
+    assert "/api/health" in probe
+    assert "/api/gpu/detect" in probe
+    assert "MEDIMAGE_DESKTOP_WORKSPACE" in probe
+    assert "CUPY_CACHE_DIR" in probe
+    assert "cupy_available" in probe
 
 
 def test_desktop_dist_wrapper_uses_workspace_caches():

@@ -107,6 +107,10 @@ a = Analysis(
         "uvicorn.lifespan",
         "uvicorn.lifespan.on",
         "src.backend.app.main",
+        # CuPy imports the stdlib graphlib module lazily while building its
+        # CUDA compiler dependency graph.  PyInstaller cannot discover that
+        # import from the frozen backend entry point.
+        "graphlib",
         "ssl",
         "_ssl",
     ] + _scipy_hiddenimports + _cupy_hiddenimports,

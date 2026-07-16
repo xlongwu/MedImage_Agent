@@ -7,6 +7,7 @@ from src.backend.app.desktop_backend_entry import (
     APP_IMPORT_STRING,
     DEFAULT_DESKTOP_HOST,
     DesktopBackendConfig,
+    ensure_packaged_windows_runtime_dirs,
     parse_args,
     run_backend,
     validate_host,
@@ -50,6 +51,44 @@ def test_desktop_backend_entry_runs_uvicorn_without_reload(monkeypatch: pytest.M
     assert captured["port"] == 8765
     assert captured["reload"] is False
     assert captured["factory"] is False
+
+
+def test_frozen_windows_runtime_bin_stays_inside_workspace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+):
+    monkeypatch.setattr("src.backend.app.desktop_backend_entry.os.name", "nt")
+    monkeypatch.setattr(
+        "src.backend.app.desktop_backend_entry.sys.frozen", True, raising=False
+    )
+    monkeypatch.setattr(
+        "src.backend.app.desktop_backend_entry.sys.prefix", str(tmp_path)
+    )
+    monkeypatch.setenv("MEDIMAGE_DESKTOP_WORKSPACE", str(tmp_path))
+
+    created = ensure_packaged_windows_runtime_dirs()
+
+    assert created == (tmp_path / "bin",)
+    assert (tmp_path / "bin").is_dir()
+
+
+def test_frozen_windows_runtime_bin_refuses_external_prefix(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+):
+    workspace = tmp_path / "workspace"
+    external = tmp_path / "external"
+    workspace.mkdir()
+    external.mkdir()
+    monkeypatch.setattr("src.backend.app.desktop_backend_entry.os.name", "nt")
+    monkeypatch.setattr(
+        "src.backend.app.desktop_backend_entry.sys.frozen", True, raising=False
+    )
+    monkeypatch.setattr(
+        "src.backend.app.desktop_backend_entry.sys.prefix", str(external)
+    )
+    monkeypatch.setenv("MEDIMAGE_DESKTOP_WORKSPACE", str(workspace))
+
+    with pytest.raises(RuntimeError, match="escapes desktop workspace"):
+        ensure_packaged_windows_runtime_dirs()
 
 
 def test_backend_health_endpoints_available_for_desktop_shell():
