@@ -56,7 +56,9 @@ def test_desktop_backend_entry_runs_uvicorn_without_reload(monkeypatch: pytest.M
 def test_frozen_windows_runtime_bin_stays_inside_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    monkeypatch.setattr("src.backend.app.desktop_backend_entry.os.name", "nt")
+    monkeypatch.setattr(
+        "src.backend.app.desktop_backend_entry._is_windows_runtime", lambda: True
+    )
     monkeypatch.setenv("MEDIMAGE_DESKTOP_WORKSPACE", str(tmp_path))
 
     created = ensure_packaged_windows_runtime_dirs()
@@ -68,7 +70,9 @@ def test_frozen_windows_runtime_bin_stays_inside_workspace(
 def test_windows_runtime_bin_is_noop_without_desktop_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    monkeypatch.setattr("src.backend.app.desktop_backend_entry.os.name", "nt")
+    monkeypatch.setattr(
+        "src.backend.app.desktop_backend_entry._is_windows_runtime", lambda: True
+    )
     monkeypatch.delenv("MEDIMAGE_DESKTOP_WORKSPACE", raising=False)
 
     assert ensure_packaged_windows_runtime_dirs() == ()

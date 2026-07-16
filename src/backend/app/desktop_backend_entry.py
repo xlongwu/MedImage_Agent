@@ -20,6 +20,10 @@ class DesktopBackendConfig:
     log_level: str
 
 
+def _is_windows_runtime() -> bool:
+    return os.name == "nt"
+
+
 def ensure_packaged_windows_runtime_dirs() -> tuple[Path, ...]:
     """Create frozen-runtime probe directories inside the desktop workspace.
 
@@ -32,7 +36,7 @@ def ensure_packaged_windows_runtime_dirs() -> tuple[Path, ...]:
     direct child of the explicitly selected desktop workspace.
     """
     workspace_value = os.environ.get("MEDIMAGE_DESKTOP_WORKSPACE")
-    if os.name != "nt" or not workspace_value:
+    if not _is_windows_runtime() or not workspace_value:
         return ()
     workspace = Path(workspace_value).expanduser().resolve()
     runtime_bin = (workspace / "bin").resolve()
