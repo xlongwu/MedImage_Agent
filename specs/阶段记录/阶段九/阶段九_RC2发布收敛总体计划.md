@@ -3,7 +3,7 @@
 > **Status：Ready for Implementation**
 > **Task Mode：Release and Packaging Mode + Scientific Validation Mode**
 > **Target：v0.6.0-rc2**
-> **Runtime candidate baseline：`bedfa51b26a1c5e29588e81ac5e3ed148d5510fe`；后续运行时相关修复将产生新的候选提交并使旧构建证据失效。**
+> **Packaging candidate baseline：`6a392c15079f51c16a8e3c2a035915972aabd9ff`；后续运行时或打包配置修复将产生新的候选提交并使旧构建证据失效。**
 
 ## 1. Scope Anchor
 
@@ -34,12 +34,12 @@
 |---|---|---|
 | 当前版本面均为 `0.6.0-rc1` | `src/backend/app/version.py`、frontend/electron `package.json`、`pyproject.toml` | 通过发布关卡后统一升级 `rc2` |
 | 阶段七/八执行与恢复源码已落地 | commit `17e3ebac`；Execution Gateway/Ticket、Observation、Goal Evaluation、Recovery services | 冻结其契约，只做发布阻塞修复 |
-| 当前运行时源码候选 | commit `bedfa51b` | 已完成源码、unpacked 构建、packaged smoke、打包 sidecar/API 三被试 E2E 和远端 CI 取证 |
+| 当前打包候选 | commit `6a392c15` | 已完成源码、unpacked/portable/NSIS 构建与 smoke、打包 sidecar/API 三被试 E2E 和远端 CI 取证 |
 | 本地源码级全量后端验证 | `4108 passed, 16 skipped` | 证明源码回归，不证明打包真实数据工作流 |
 | 阶段七/八 focused 验证 | `103 passed, 1 skipped` | symlink 用例因 Windows 权限跳过，保留风险 |
 | 本地前端验证 | format、typecheck、`238` tests、build 通过 | exact-SHA 远端 frontend job 同样通过 |
 | DemoData 有三名成对被试 | `Sub_001`、`Sub_002`、`Sub_003` 同时存在于 FunRaw/T1Raw | RC2 多受试者 E2E 固定使用三名被试 |
-| exact-SHA unpacked EXE 已重建 | `desktop/electron/dist/win-unpacked/MedImage Agent.exe` 来自 `bedfa51b` | 目录构建和 smoke 通过；打包 sidecar/API 工作流通过，不替代 NSIS 或 UI 驱动证据 |
+| exact-SHA Windows 产物已重建 | unpacked、portable、NSIS 来自 `6a392c15` | 三类产物 smoke/安装验证通过；打包 sidecar/API 工作流通过，不替代 UI 驱动证据 |
 | 正式 atlas-grounded FC 仍需项目内已登记 atlas | `docs/项目概览/能力矩阵.md` | 没有合格 atlas 时不得把 synthetic FC 记为正式通过 |
 
 候选构建、smoke、产物 hash 和 CI job URL 见
@@ -164,10 +164,10 @@
 |---|---|---|
 | G9-0 状态同步 | PROJECT_STATE、能力矩阵、阶段状态一致 | 通过；状态和边界已同步到当前候选 |
 | G9-1 功能冻结 | 冻结基线和变更准入生效 | 生效；仅接受发布阻塞修复与证据 |
-| G9-2 候选构建 | exact-SHA Windows build/launch/smoke 通过 | 通过；`bedfa51b` unpacked build/launch/smoke 成功，NSIS 留在 G9-6 |
+| G9-2 候选构建 | exact-SHA Windows build/launch/smoke 通过 | 通过；`6a392c15` unpacked、portable 和 NSIS 构建/启动/安装验证成功 |
 | G9-3 真实 E2E | 三被试科学链路与 rawdata 不变性通过 | 源码级及 exact-candidate 打包 sidecar/API 级通过；Electron UI 驱动仍待验证 |
 | G9-4 恢复 E2E | 退出、崩溃、恢复、局部重试和 replay 测试通过 | 已证明正常退出与转换登记复用；运行中退出/强杀/恢复/隔离/局部重试待执行 |
-| G9-5 CI | exact-SHA 远端 backend/frontend/desktop 全绿 | 通过；run `29467806554` 的三个 job 全部成功 |
-| G9-6 RC2 | 版本、说明、产物、checksum、已知限制全部一致 | 未开始；由前述关卡阻塞 |
+| G9-5 CI | exact-SHA 远端 backend/frontend/desktop 全绿 | 通过；run `29469529639` 的三个 job 全部成功 |
+| G9-6 RC2 | 版本、说明、产物、checksum、已知限制全部一致 | 部分通过；安装包/portable/checksum 已验证，版本升级和正式发布仍由 G9-4 阻塞 |
 
 任何 gate 失败都阻止 RC2 发布。只有出现明确的新能力或破坏性契约变更时才改走 `v0.7.0-rc1`；不得用版本升级掩盖未完成的 RC2 验证。

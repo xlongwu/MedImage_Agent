@@ -101,8 +101,8 @@ their tag state.
   tests, and production build passed. The only backend skip caused by Windows
   privilege rather than an intentionally disabled optional/external path was
   the symlink-escape case.
-- Exact runtime source candidate `bedfa51b26a1c5e29588e81ac5e3ed148d5510fe`
-  completed GitHub Actions run `29467806554` successfully. Its `backend`,
+- Exact packaging candidate `6a392c15079f51c16a8e3c2a035915972aabd9ff`
+  completed GitHub Actions run `29469529639` successfully. Its `backend`,
   `frontend`, and `desktop` jobs all passed. This closes the remote-CI evidence
   gate for that source candidate; later runtime-affecting commits require new
   CI and packaging evidence.
@@ -135,14 +135,17 @@ their tag state.
   entry point.
 - Packaging output directories are generated artifacts unless explicitly
   promoted through a release artifact process.
-- Runtime source candidate `bedfa51b26a1c5e29588e81ac5e3ed148d5510fe` was rebuilt
+- Packaging candidate `6a392c15079f51c16a8e3c2a035915972aabd9ff` was rebuilt
   with the `mamba` Python 3.11.15 environment into a PyInstaller backend
   sidecar, launcher, and Electron unpacked directory. Packaged smoke confirmed
   backend readiness, a mounted React renderer, no renderer console errors, and
   sidecar cleanup after application exit. The same packaged backend binary also
   completed the governed three-subject DemoData API workflow with CuPy. The
-  directory build is exact-SHA evidence; an NSIS installer and a visible-UI-
-  driven real-data workflow are still pending.
+  directory build is exact-SHA evidence. The portable EXE also passed the same
+  shell smoke. After replacing the unstable assisted per-user NSIS mode with a
+  non-elevated one-click per-user mode, isolated install, installed-app smoke,
+  and silent uninstall passed. A visible-UI-driven real-data workflow remains
+  pending.
 
 ## Known Limitations and Risks
 
@@ -183,9 +186,7 @@ their tag state.
 2. Drive the three-subject workflow through the visible Electron UI if a safe,
    project-native UI harness is approved; retain the packaged-sidecar/API result
    as the current non-UI workflow evidence.
-3. Build the NSIS release artifact when required packaging caches are available,
-   then repeat the exact-candidate launch smoke for that artifact.
-4. Align version surfaces and release documentation, inventory/checksum the
+3. Align version surfaces and release documentation, inventory/checksum the
    Windows artifacts, and publish `v0.6.0-rc2` only after all release gates pass.
 
 ## Reference Documents

@@ -1,6 +1,6 @@
 # 阶段九：RC2 功能冻结、证据收敛与 Windows 发布验证
 
-> 状态：In Progress — G9-0/G9-1/G9-2/G9-5 已通过，G9-3/G9-4 部分通过
+> 状态：In Progress — G9-0/G9-1/G9-2/G9-5 已通过，G9-3/G9-4/G9-6 部分通过
 > 任务模式：Release and Packaging Mode；真实数据链路同时适用 Scientific Validation Mode。
 > 目标版本：`v0.6.0-rc2`。
 
@@ -22,15 +22,17 @@
   1,104 个文件、总大小和指纹前后不变。
 - reviewed gateway 源码 E2E：三被试产生 21 个原生空间预处理 NIfTI，
   ALFF/fALFF 使用 `gpu-cupy`；恢复复跑复用转换登记，转换审计未重写。
-- exact-SHA `bedfa51b26a1c5e29588e81ac5e3ed148d5510fe`：Windows backend
+- exact-SHA `6a392c15079f51c16a8e3c2a035915972aabd9ff`：Windows backend
   sidecar、launcher 和 Electron unpacked 构建通过；真实 packaged smoke
   证明 backend ready、React mount、零 renderer console error 和退出后 sidecar 回收。
 - 同一 exact-SHA 的打包 sidecar/API 三被试 E2E 生成 21 个 float32 NIfTI，
   ALFF/fALFF 实际使用 `gpu-cupy`，validation/final report 已持久化，rawdata 指纹不变。
-- 同一 exact-SHA 的 GitHub Actions run `29467806554` 中 backend、frontend、
+- portable EXE 启动 smoke 通过；NSIS 安装包在修复 assisted/per-user
+  `System.dll` 崩溃后完成隔离安装、已安装应用 smoke 和静默卸载。
+- 同一 exact-SHA 的 GitHub Actions run `29469529639` 中 backend、frontend、
   desktop 三个 job 全部通过。
 - 上述证据不替代 Electron UI 驱动的真实三被试科学 E2E、运行中退出/强杀/重启、
-  失败被试隔离与局部重试，也不等于 NSIS 安装包已通过。
+  失败被试隔离与局部重试；版本面也仍保持 `0.6.0-rc1`。
 
 详细候选证据见[RC2 候选证据](RC2候选证据_2026-07-16.md)。
 
