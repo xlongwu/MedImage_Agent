@@ -1,6 +1,6 @@
 # 阶段九：RC2 功能冻结、证据收敛与 Windows 发布验证
 
-> 状态：In Progress — G9-0/G9-1 收敛中，G9-3 已有源码级证据
+> 状态：In Progress — G9-0/G9-1/G9-2/G9-5 已通过，G9-3/G9-4 部分通过
 > 任务模式：Release and Packaging Mode；真实数据链路同时适用 Scientific Validation Mode。
 > 目标版本：`v0.6.0-rc2`。
 
@@ -22,8 +22,15 @@
   1,104 个文件、总大小和指纹前后不变。
 - reviewed gateway 源码 E2E：三被试产生 21 个原生空间预处理 NIfTI，
   ALFF/fALFF 使用 `gpu-cupy`；恢复复跑复用转换登记，转换审计未重写。
-- 上述证据不替代 G9-2 打包应用、G9-4 完整退出/崩溃/恢复矩阵或 G9-5
-  exact-SHA 远端 CI。
+- exact-SHA `1d93922c302dfbd8557ad3495594e9cc5b37d479`：Windows backend
+  sidecar、launcher 和 Electron unpacked 构建通过；真实 packaged smoke
+  证明 backend ready、React mount、零 renderer console error 和退出后 sidecar 回收。
+- 同一 exact-SHA 的 GitHub Actions run `29464470010` 中 backend、frontend、
+  desktop 三个 job 全部通过。
+- 上述证据不替代打包应用内的真实三被试科学 E2E、运行中退出/强杀/重启、
+  失败被试隔离与局部重试，也不等于 NSIS 安装包已通过。
+
+详细候选证据见[RC2 候选证据](RC2候选证据_2026-07-16.md)。
 
 详细范围、风险、证据与关卡见[阶段九总体计划](阶段九_RC2发布收敛总体计划.md)。
 

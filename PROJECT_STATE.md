@@ -101,8 +101,11 @@ their tag state.
   tests, and production build passed. The only backend skip caused by Windows
   privilege rather than an intentionally disabled optional/external path was
   the symlink-escape case.
-- These are local source-level results. A green remote GitHub Actions run for
-  the release candidate commit must be captured before release.
+- Exact source candidate `1d93922c302dfbd8557ad3495594e9cc5b37d479`
+  completed GitHub Actions run `29464470010` successfully. Its `backend`,
+  `frontend`, and `desktop` jobs all passed. This closes the remote-CI evidence
+  gate for that source candidate; later runtime-affecting commits require new
+  CI and packaging evidence.
 - Current task-level validation is recorded in the final Completion Report and
   the local phase execution record rather than appended here as a development
   diary.
@@ -126,9 +129,12 @@ their tag state.
   entry point.
 - Packaging output directories are generated artifacts unless explicitly
   promoted through a release artifact process.
-- Existing unpacked artifacts predate the current release-candidate source and
-  are not release evidence. RC2 requires a clean rebuild and packaged-app smoke
-  against the exact candidate commit.
+- Source candidate `1d93922c302dfbd8557ad3495594e9cc5b37d479` was rebuilt
+  with the `mamba` Python 3.11.15 environment into a PyInstaller backend
+  sidecar, launcher, and Electron unpacked directory. Packaged smoke confirmed
+  backend readiness, a mounted React renderer, no renderer console errors, and
+  sidecar cleanup after application exit. The directory build is exact-SHA
+  evidence; an NSIS installer and packaged real-data workflow are still pending.
 
 ## Known Limitations and Risks
 
@@ -164,13 +170,13 @@ their tag state.
 
 ## Next Work
 
-1. Rebuild the Windows packaged app from the candidate commit and run the real
-   three-subject DemoData workflow through conversion, reviewed preprocessing,
+1. Run the real three-subject DemoData workflow through the exact-candidate
+   packaged application, including conversion, reviewed preprocessing,
    artifact reload, validation, and report handoff.
-2. Validate graceful exit, forced termination, restart recovery, failed-subject
-   isolation, and approved local retry without modifying rawdata.
-3. Capture green remote CI evidence for the exact candidate commit and close
-   every release-blocking failure without expanding capability scope.
+2. Validate running-state graceful exit, forced termination, restart recovery,
+   failed-subject isolation, and approved local retry without modifying rawdata.
+3. Build the NSIS release artifact when required packaging caches are available,
+   then repeat the exact-candidate launch smoke for that artifact.
 4. Align version surfaces and release documentation, inventory/checksum the
    Windows artifacts, and publish `v0.6.0-rc2` only after all release gates pass.
 
