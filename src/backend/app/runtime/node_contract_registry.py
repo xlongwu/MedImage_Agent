@@ -98,9 +98,12 @@ _STRICT_PARAMETERS: dict[str, dict[str, ParameterContract]] = {
         "t1w": _parameter("string", nullable=True, path_access="read"),
         "template": _parameter("string", nullable=True, path_access="read"),
         "atlas": _parameter("string", nullable=True, path_access="read"),
+        "atlas_labels": _parameter("string", nullable=True, path_access="read"),
         "output_dir": _parameter("string", nullable=True, path_access="write"),
         "confirmations": _parameter("object", required=True),
         "stage_overrides": _parameter("object", default={}),
+        "cpu_policy": _parameter("object", default={}),
+        "compute_policy": _parameter("object", default={}),
     },
     "native_preproc_full_dry_run": {
         "input_bold": _parameter("string", nullable=True, path_access="read"),
@@ -261,7 +264,13 @@ def _build_contracts() -> dict[str, NodeContract]:
         )
         contracts[node_id] = NodeContract(
             node_id=node_id,
-            contract_version="1.0.0" if strict else "0.9.0-legacy",
+            contract_version=(
+                "1.1.0"
+                if node_id == "native_preproc_full_execute"
+                else "1.0.0"
+                if strict
+                else "0.9.0-legacy"
+            ),
             backend=item.backend,
             input_schema=_artifact_schema(item.inputs, output=False),
             parameter_schema=deepcopy(_STRICT_PARAMETERS.get(node_id, {})),

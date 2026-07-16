@@ -1,6 +1,6 @@
 # Project State
 
-Current as of 2026-07-15.
+Current as of 2026-07-16.
 
 ## Version and Branch
 
@@ -35,12 +35,13 @@ their tag state.
   run summaries, and artifact previews.
 - DICOM/FunRaw/T1Raw detection, DICOM conversion dry-run, conversion review
   packages, release readiness, release approval metadata, rollback support, and
-  a public conversion endpoint that is default-blocked by environment flags and
-  approval/readiness gates.
+  a default-blocked native conversion handoff inside the sole reviewed execution
+  gateway.
 - The in-project Python DICOM converter supports classic single-frame MR and
-  Siemens single-frame mosaic MR. One DemoData subject (240 functional mosaic
-  instances and 128 structural slices) was converted and reload-checked on
-  Windows with exact pre/post rawdata hashes, sizes, and mtimes unchanged.
+  Siemens single-frame mosaic MR. All three DemoData subjects were converted on
+  Windows into six reloadable NIfTI/JSON pairs with the 1,104-file rawdata
+  snapshot unchanged. The reviewed native handoff can reuse this verified
+  conversion registry without rerunning conversion.
 - Feature-flagged frontend execute UI for DICOM conversion; hidden by default.
 - Reviewed rs-fMRI preprocessing workflow for converted inputs, including a
   unified stage catalog, artifact registry and lineage, Minimal FC backend
@@ -95,11 +96,11 @@ their tag state.
   pytest temp entries.
 - Expected optional skips commonly include missing `pydicom`, missing `cupy`,
   and missing `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
-- Source commit `52f183bc` was validated on Windows with a CI-like Python
-  environment: backend `4060 passed, 26 skipped`; frontend format check,
-  typecheck, `238` tests, and production build passed. The phase 7/8 execution
-  and recovery subset additionally recorded `103 passed, 1 skipped`; the skip
-  is the Windows symlink-privilege case.
+- The current RC2 working tree was validated on Windows with Python 3.11.15:
+  backend `4108 passed, 16 skipped`; frontend format check, typecheck, `238`
+  tests, and production build passed. The only backend skip caused by Windows
+  privilege rather than an intentionally disabled optional/external path was
+  the symlink-escape case.
 - These are local source-level results. A green remote GitHub Actions run for
   the release candidate commit must be captured before release.
 - Current task-level validation is recorded in the final Completion Report and
@@ -107,7 +108,12 @@ their tag state.
   diary.
 - Native DICOM validation includes synthetic geometry/affine/error tests,
   guarded approval/audit/artifact/provenance execution tests, and an opt-in
-  one-subject DemoData reload comparison.
+  three-subject DemoData conversion test that prohibits subprocess execution.
+- A source-level reviewed gateway E2E converted all three DemoData subjects and
+  produced 21 native-space preprocessing NIfTI artifacts, including ALFF and
+  fALFF maps. A second reviewed run reused the verified conversion registry,
+  required the GPU scheduler, executed with CuPy, and recorded a non-zero
+  55.23-second pipeline duration. These results are not packaged-GUI evidence.
 
 ## Packaging State
 
@@ -148,7 +154,8 @@ their tag state.
   active project interpreter and `--basetemp=.pytest_tmp`.
 - The desktop SQLite state store is ignored runtime state and can accumulate
   stale local paths.
-- Full DICOM-to-preprocessing-to-report GUI E2E remains unproven.
+- Full DICOM-to-preprocessing-to-report packaged GUI E2E remains unproven;
+  the corresponding source-level reviewed gateway path is now demonstrated.
   Preview/subset runs and synthetic-atlas FC remain labeled `preview_only` or
   `partial`.
 - The controlled recovery implementation is source-tested, but packaged-app
@@ -157,16 +164,14 @@ their tag state.
 
 ## Next Work
 
-1. Synchronize project state, capability truth, and phase status, then freeze
-   the `main` execution/scientific boundary for RC convergence.
-2. Rebuild the Windows packaged app from the candidate commit and run the real
+1. Rebuild the Windows packaged app from the candidate commit and run the real
    three-subject DemoData workflow through conversion, reviewed preprocessing,
    artifact reload, validation, and report handoff.
-3. Validate graceful exit, forced termination, restart recovery, failed-subject
+2. Validate graceful exit, forced termination, restart recovery, failed-subject
    isolation, and approved local retry without modifying rawdata.
-4. Capture green remote CI evidence for the exact candidate commit and close
+3. Capture green remote CI evidence for the exact candidate commit and close
    every release-blocking failure without expanding capability scope.
-5. Align version surfaces and release documentation, inventory/checksum the
+4. Align version surfaces and release documentation, inventory/checksum the
    Windows artifacts, and publish `v0.6.0-rc2` only after all release gates pass.
 
 ## Reference Documents

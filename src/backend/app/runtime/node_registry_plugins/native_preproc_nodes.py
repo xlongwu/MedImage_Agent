@@ -1,65 +1,35 @@
 """Native preprocessing node registry plugin."""
+
 from __future__ import annotations
 
 from typing import Any
 
 from src.backend.app.native_preproc.orchestrator.stage_graph import iter_native_full_stage_specs
 from src.backend.app.runtime.node_registry_plugins.base import NodeExecutionContext, NodeRunner
-from src.backend.app.schemas.native_preproc_api import (
-    NativeFullPreprocConfirmations,
-    NativeFullPreprocRequest,
-)
+from src.backend.app.schemas.native_preproc_api import NativeFullPreprocRequest
 from src.backend.app.schemas.pipeline_schema import PipelineNode
 from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.native_preproc_full import (
     run_native_full_dry_run,
     run_native_full_execute,
 )
+from src.backend.app.services.native_preproc_request import build_native_full_request
+from src.backend.app.services.reviewed_native_conversion_handoff import (
+    ensure_reviewed_native_conversion_handoff,
+)
 
 
-def _request_from_node(context: NodeExecutionContext, node: PipelineNode) -> NativeFullPreprocRequest:
-    params = dict(node.params or {})
-    confirmations = params.get("confirmations") if isinstance(params.get("confirmations"), dict) else {}
-    return NativeFullPreprocRequest(
-        run_id=str(params.get("run_id") or context.run_id),
-        subject_id=str(params.get("subject_id") or ""),
-        session_id=str(params.get("session_id") or ""),
-        output_dir=str(params.get("output_dir") or ""),
-        input_bold=str(params.get("input_bold") or ""),
-        sidecar_json=str(params.get("sidecar_json") or ""),
-        t1w=str(params.get("t1w") or ""),
-        template=str(params.get("template") or ""),
-        atlas=str(params.get("atlas") or ""),
-        atlas_labels=str(params.get("atlas_labels") or ""),
-        conversion_run_id=str(params.get("conversion_run_id") or ""),
-        dparsf_config=dict(params.get("dparsf_config") or {}),
-        stage_overrides=dict(params.get("stage_overrides") or {}),
-        remove_first=int(params.get("remove_first") or 0),
-        enable_slice_timing=bool(params.get("enable_slice_timing", True)),
-        tr=float(params["tr"]) if params.get("tr") is not None else None,
-        confirmations=NativeFullPreprocConfirmations(
-            confirm_reviewed_native_execution=bool(
-                confirmations.get("confirm_reviewed_native_execution")
-                or params.get("confirm_reviewed_native_execution", False)
-            ),
-            confirm_rawdata_readonly=bool(
-                confirmations.get("confirm_rawdata_readonly")
-                or params.get("confirm_rawdata_readonly", False)
-            ),
-            confirm_no_external_tools=bool(
-                confirmations.get("confirm_no_external_tools")
-                or params.get("confirm_no_external_tools", False)
-            ),
-            confirm_research_use_only=bool(
-                confirmations.get("confirm_research_use_only")
-                or params.get("confirm_research_use_only", False)
-            ),
-            confirm_no_clinical_use=bool(
-                confirmations.get("confirm_no_clinical_use")
-                or params.get("confirm_no_clinical_use", False)
-            ),
-        ),
-    )
+def _project_store(context: NodeExecutionContext) -> Any:
+    tool_context = context.tool_execution_context
+    if tool_context is not None:
+        return tool_context.ticket_service.store
+    return mock_store
+
+
+def _request_from_node(
+    context: NodeExecutionContext, node: PipelineNode
+) -> NativeFullPreprocRequest:
+    return build_native_full_request(node.params, fallback_run_id=context.run_id)
 
 
 def run_native_full_dry_run_node(
@@ -67,8 +37,11 @@ def run_native_full_dry_run_node(
     node: PipelineNode,
 ) -> dict[str, Any]:
     request = _request_from_node(context, node)
-    project_id = str(node.params.get("project_id") or context.project_config.get("project_id") or "")
-    project = mock_store.get_project(project_id) if project_id else None
+    store = _project_store(context)
+    project_id = str(
+        node.params.get("project_id") or context.project_config.get("project_id") or ""
+    )
+    project = store.get_project(project_id) if project_id else None
     project_metadata = project.metadata if project is not None else {}
     project_dir = str(
         node.params.get("project_dir")
@@ -92,8 +65,33 @@ def run_native_full_execute_node(
     node: PipelineNode,
 ) -> dict[str, Any]:
     request = _request_from_node(context, node)
-    project_id = str(node.params.get("project_id") or context.project_config.get("project_id") or "")
-    project = mock_store.get_project(project_id) if project_id else None
+    scheduler = context.project_config.get("scheduler")
+    scheduler_gpu_mode = (
+        str(scheduler.get("gpu_mode") or "prefer") if isinstance(scheduler, dict) else "prefer"
+    )
+    requires_gpu = request.compute_policy.backend == "gpu" or any(
+        backend == "gpu" for backend in request.compute_policy.stage_backends.values()
+    )
+    if requires_gpu and scheduler_gpu_mode == "off":
+        return {
+            "ok": False,
+            "status": "blocked",
+            "backend": "native_python",
+            "node_id": node.id,
+            "errors": [
+                "GPU_POLICY_CONFLICT: reviewed compute policy requires GPU while project scheduler gpu_mode is off."
+            ],
+            "safety_flags": {
+                "rawdata_not_modified": True,
+                "no_external_tools_executed": True,
+                "no_matlab_spm_dpabi": True,
+            },
+        }
+    store = _project_store(context)
+    project_id = str(
+        node.params.get("project_id") or context.project_config.get("project_id") or ""
+    )
+    project = store.get_project(project_id) if project_id else None
     project_metadata = project.metadata if project is not None else {}
     project_dir = str(
         node.params.get("project_dir")
@@ -101,6 +99,54 @@ def run_native_full_execute_node(
         or context.project_config.get("project_dir")
         or ""
     )
+    conversion_handoff: dict[str, Any] | None = None
+    if request.conversion_run_id:
+        if context.tool_execution_context is None:
+            return {
+                "ok": False,
+                "status": "blocked",
+                "backend": "native_python",
+                "node_id": node.id,
+                "errors": [
+                    "VERIFIED_EXECUTION_CONTEXT_REQUIRED: conversion handoff must execute through the reviewed gateway."
+                ],
+                "safety_flags": {
+                    "rawdata_not_modified": True,
+                    "no_external_tools_executed": True,
+                    "no_matlab_spm_dpabi": True,
+                },
+            }
+        rawdata_dir = str(
+            node.params.get("rawdata_dir")
+            or project_metadata.get("rawdata_dir")
+            or context.project_config.get("rawdata_dir")
+            or ""
+        )
+        conversion_handoff = ensure_reviewed_native_conversion_handoff(
+            store,
+            project_id=project_id,
+            conversion_run_id=request.conversion_run_id,
+            project_dir=project_dir,
+            rawdata_dir=rawdata_dir,
+            execution_context=context.tool_execution_context,
+        )
+        if not conversion_handoff.get("ok") and conversion_handoff.get("status") != "partial":
+            return {
+                "ok": False,
+                "status": str(conversion_handoff.get("status") or "blocked"),
+                "backend": "native_python",
+                "node_id": node.id,
+                "conversion_handoff": conversion_handoff,
+                "errors": list(conversion_handoff.get("errors") or []),
+                "blocking_issues": list(conversion_handoff.get("blocking_issues") or []),
+                "safety_flags": {
+                    "rawdata_not_modified": True,
+                    "no_external_tools_executed": True,
+                    "no_matlab_spm_dpabi": True,
+                },
+            }
+        project = store.get_project(project_id) if project_id else None
+        project_metadata = project.metadata if project is not None else project_metadata
     result = run_native_full_execute(
         project_id,
         request,
@@ -109,6 +155,11 @@ def run_native_full_execute_node(
     )
     payload = result.model_dump(mode="json")
     payload["node_id"] = node.id
+    if conversion_handoff is not None:
+        payload["conversion_handoff"] = conversion_handoff
+        if not conversion_handoff.get("ok"):
+            payload["ok"] = False
+            payload["status"] = "partial"
     return payload
 
 

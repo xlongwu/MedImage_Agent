@@ -20,6 +20,9 @@ os.environ.setdefault(
     "MEDIMAGE_DESKTOP_STORE_PATH",
     str(_DESKTOP_STORE_PATH),
 )
+_CUPY_CACHE_ROOT = _DESKTOP_STORE_ROOT / f"cupy_cache_{os.getpid()}_{uuid4().hex}"
+_CUPY_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("CUPY_CACHE_DIR", str(_CUPY_CACHE_ROOT))
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -27,6 +30,7 @@ def cleanup_desktop_store() -> None:
     yield
     for suffix in ("", "-wal", "-shm"):
         Path(f"{_DESKTOP_STORE_PATH}{suffix}").unlink(missing_ok=True)
+    shutil.rmtree(_CUPY_CACHE_ROOT, ignore_errors=True)
     try:
         _DESKTOP_STORE_ROOT.rmdir()
     except OSError:

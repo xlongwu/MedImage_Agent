@@ -157,14 +157,14 @@
 
 ## 9. Release Gates
 
-| Gate | 退出条件 |
-|---|---|
-| G9-0 状态同步 | PROJECT_STATE、能力矩阵、阶段状态一致 |
-| G9-1 功能冻结 | 冻结基线和变更准入生效 |
-| G9-2 候选构建 | exact-SHA Windows build/launch/smoke 通过 |
-| G9-3 真实 E2E | 三被试科学链路与 rawdata 不变性通过 |
-| G9-4 恢复 E2E | 退出、崩溃、恢复、局部重试和 replay 测试通过 |
-| G9-5 CI | exact-SHA 远端 backend/frontend/desktop 全绿 |
-| G9-6 RC2 | 版本、说明、产物、checksum、已知限制全部一致 |
+| Gate | 退出条件 | 2026-07-16 状态 |
+|---|---|---|
+| G9-0 状态同步 | PROJECT_STATE、能力矩阵、阶段状态一致 | 本次同步完成，待候选提交审计 |
+| G9-1 功能冻结 | 冻结基线和变更准入生效 | 生效；仅接受发布阻塞修复与证据 |
+| G9-2 候选构建 | exact-SHA Windows build/launch/smoke 通过 | 待当前候选提交后重建 |
+| G9-3 真实 E2E | 三被试科学链路与 rawdata 不变性通过 | 源码级通过；打包应用级仍待验证 |
+| G9-4 恢复 E2E | 退出、崩溃、恢复、局部重试和 replay 测试通过 | 已证明转换登记复用；完整场景矩阵待执行 |
+| G9-5 CI | exact-SHA 远端 backend/frontend/desktop 全绿 | 待候选提交推送后取证 |
+| G9-6 RC2 | 版本、说明、产物、checksum、已知限制全部一致 | 未开始；由前述关卡阻塞 |
 
 任何 gate 失败都阻止 RC2 发布。只有出现明确的新能力或破坏性契约变更时才改走 `v0.7.0-rc1`；不得用版本升级掩盖未完成的 RC2 验证。

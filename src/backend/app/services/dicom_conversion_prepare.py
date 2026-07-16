@@ -393,6 +393,8 @@ def run_dicom_conversion_prepare(
             rawdata_dir=rawdata_dir,
             overwrite_policy=request.overwrite_policy,
             preflight_ok=preflight_ok,
+            conversion_run_id=conversion_run_id,
+            reuse_prepared_run=True,
         )
         if persist_result.ok and persist_result.conversion_run_id:
             conversion_run_id = persist_result.conversion_run_id

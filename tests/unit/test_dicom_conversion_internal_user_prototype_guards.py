@@ -25,6 +25,25 @@ def test_missing_internal_flag_returns_blocked():
     assert result.safety_flags.conversion_disabled_by_default is True
 
 
+def test_native_internal_conversion_uses_only_dicom_specific_flags():
+    from src.backend.app.services.dicom_conversion_execution import (
+        _is_internal_conversion_enabled,
+    )
+
+    minimal = {
+        "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
+        "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
+        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
+    }
+    assert _is_internal_conversion_enabled(minimal) == (True, [])
+    for flag in minimal:
+        candidate = dict(minimal)
+        candidate.pop(flag)
+        enabled, missing = _is_internal_conversion_enabled(candidate)
+        assert enabled is False
+        assert missing == [flag]
+
+
 def test_missing_flags_no_subprocess(monkeypatch):
     """Ensure no subprocess when flags are missing."""
     from src.backend.app.services.dicom_conversion_execution import (

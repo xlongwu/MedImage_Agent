@@ -173,8 +173,15 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
             )
         )
     )
+    from src.backend.app.services.dicom_conversion_safety import (
+        build_pre_conversion_rawdata_snapshot,
+    )
+
+    checksum_before = build_pre_conversion_rawdata_snapshot(
+        [str(project_dir / "rawdata")]
+    )
     (run_dir / "rawdata_checksum_before.json").write_text(
-        json.dumps(_make_checksum_snapshot())
+        json.dumps(checksum_before.model_dump(mode="json"))
     )
     (run_dir / "rollback_plan_dry_run.json").write_text(
         json.dumps(_make_rollback_plan())
@@ -245,7 +252,9 @@ def _patch_subprocess_with(monkeypatch, runner):
 def _set_missing_mapping_source(run_dir: Path) -> None:
     path = run_dir / "mapping_snapshot.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["mappings"][0]["source_path"] = str(run_dir / "missing-dicom-series")
+    payload["mappings"][0]["source_path"] = str(
+        run_dir.parents[1] / "rawdata" / "missing-dicom-series"
+    )
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
@@ -354,6 +363,34 @@ def test_missing_checksum_snapshot_blocks_execution(tmp_path, monkeypatch):
     )
     assert result.status == "blocked", f"Expected blocked, got {result.status}"
     assert len(called) == 0
+
+
+def test_rawdata_change_after_review_blocks_before_native_conversion(tmp_path, monkeypatch):
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_internal_user_dicom_conversion_from_persisted_package,
+    )
+
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    _setup_complete_review_package(project_dir, "conv-test")
+    rawdata_dir = project_dir / "rawdata"
+    (rawdata_dir / "changed-after-review.dcm").write_bytes(b"changed")
+
+    import subprocess as sp
+
+    called = []
+    monkeypatch.setattr(sp, "run", lambda *args, **kwargs: called.append(args))
+    result = run_internal_user_dicom_conversion_from_persisted_package(
+        "test-project",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
+        rawdata_dir=str(rawdata_dir),
+    )
+
+    assert result.status == "blocked"
+    assert "Rawdata changed after conversion review" in " ".join(result.blocking_issues)
+    assert called == []
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -158,6 +158,13 @@ def test_prepare_persists_release_approval_decision_for_execute_gate(tmp_path, m
     assert response.release_approval_id.startswith("release-approval-")
     assert response.release_approval_decision_path
     assert Path(response.release_approval_decision_path).exists()
+    run_dirs = list((project_dir / "conversion_runs").iterdir())
+    assert [path.name for path in run_dirs] == [response.conversion_run_id]
+    checksum = json.loads(
+        (run_dirs[0] / "rawdata_checksum_before.json").read_text(encoding="utf-8")
+    )
+    assert checksum["file_count"] == 1
+    assert checksum["fingerprint"]
 
     decision = json.loads(Path(response.release_approval_decision_path).read_text())
     assert decision["approved"] is True

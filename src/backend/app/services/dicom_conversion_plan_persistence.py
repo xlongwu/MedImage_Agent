@@ -11,6 +11,7 @@ Reference:
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,8 @@ def persist_conversion_plan(
     rawdata_dir: str = "",
     overwrite_policy: DicomConversionOverwritePolicy = "fail_if_exists",
     preflight_ok: bool = True,
+    conversion_run_id: str | None = None,
+    reuse_prepared_run: bool = False,
 ) -> DicomConversionPlanPersistenceResponse:
     """Persist a DICOM conversion approval plan and reserve a run directory.
 
@@ -95,11 +98,49 @@ def persist_conversion_plan(
     mapping_hash = str(hash(tuple(sorted(m.get("subject_id", "") for m in (mappings or [])))))
 
     # Check for existing run directory
-    conversion_run_id = build_conversion_run_id(project_id, mapping_hash)
+    if conversion_run_id is not None and not re.fullmatch(
+        r"conv-[A-Za-z0-9][A-Za-z0-9_-]{0,63}", conversion_run_id
+    ):
+        return DicomConversionPlanPersistenceResponse(
+            ok=False,
+            status="invalid",
+            project_id=project_id,
+            errors=["conversion_run_id contains unsafe characters."],
+            safety_flags=safety_flags or {},
+        )
+    conversion_run_id = conversion_run_id or build_conversion_run_id(
+        project_id, mapping_hash
+    )
     paths = build_conversion_run_paths(project_dir, conversion_run_id)
     run_dir = Path(paths["run_dir"])
 
-    if run_dir.exists():
+    if run_dir.exists() and reuse_prepared_run:
+        try:
+            prepared_approval = json.loads(
+                Path(paths["approval_record_path"]).read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            return DicomConversionPlanPersistenceResponse(
+                ok=False,
+                status="invalid",
+                project_id=project_id,
+                conversion_run_id=conversion_run_id,
+                errors=[f"Prepared conversion run cannot be verified: {exc}"],
+                safety_flags=safety_flags or {},
+            )
+        if (
+            prepared_approval.get("project_id") != project_id
+            or prepared_approval.get("approval_id") != approval_record.approval_id
+        ):
+            return DicomConversionPlanPersistenceResponse(
+                ok=False,
+                status="invalid",
+                project_id=project_id,
+                conversion_run_id=conversion_run_id,
+                errors=["Prepared conversion run approval identity does not match."],
+                safety_flags=safety_flags or {},
+            )
+    elif run_dir.exists():
         if overwrite_policy == "fail_if_exists":
             return DicomConversionPlanPersistenceResponse(
                 ok=False,

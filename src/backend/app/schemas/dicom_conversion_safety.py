@@ -85,7 +85,11 @@ def build_rawdata_checksum_snapshot(
     rawdata_fingerprint: Any,
 ) -> RawdataChecksumSnapshot:
     """Build a checksum snapshot from a RawdataFingerprint result."""
-    fp = getattr(rawdata_fingerprint, "fingerprint", None) or rawdata_fingerprint.get("fingerprint") if isinstance(rawdata_fingerprint, dict) else None
+    fp = getattr(rawdata_fingerprint, "fingerprint", None) or (
+        rawdata_fingerprint.get("fingerprint")
+        if isinstance(rawdata_fingerprint, dict)
+        else None
+    )
     fc = getattr(rawdata_fingerprint, "file_count", 0) or (rawdata_fingerprint.get("file_count", 0) if isinstance(rawdata_fingerprint, dict) else 0)
     ts = getattr(rawdata_fingerprint, "total_size_bytes", 0) or (rawdata_fingerprint.get("total_size_bytes", 0) if isinstance(rawdata_fingerprint, dict) else 0)
     mt = getattr(rawdata_fingerprint, "newest_mtime_iso", None) or (rawdata_fingerprint.get("newest_mtime_iso") if isinstance(rawdata_fingerprint, dict) else None)

@@ -1,31 +1,45 @@
 from __future__ import annotations
 
 import json
-import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from src.backend.app.runtime.node_registry import NodeExecutionContext, get_node_runner
-from src.backend.app.runtime.execution_gateway import (
-    VerifiedExecutionContext,
-    assert_verified_execution_context,
-)
 from src.backend.app.core.exceptions import SafetyError
-from src.backend.app.runtime.scheduler import get_scheduler_config
 from src.backend.app.runtime.capability_enforcement import (
     enforce_node_capabilities,
     enforce_recovery_pipeline_scope,
     filter_recovery_subjects,
 )
-from src.backend.app.runtime.tool_execution_context import ToolExecutionContext
+from src.backend.app.runtime.execution_gateway import (
+    VerifiedExecutionContext,
+    assert_verified_execution_context,
+)
+from src.backend.app.runtime.node_registry import NodeExecutionContext, get_node_runner
+from src.backend.app.runtime.scheduler import get_scheduler_config
 from src.backend.app.runtime.state_store import (
     determine_status_from_result,
     now_iso,
     write_node_state,
     write_pipeline_summary,
 )
-from src.backend.app.schemas.pipeline_schema import PipelineValidationError, load_pipeline_yaml
+from src.backend.app.runtime.tool_execution_context import ToolExecutionContext
+from src.backend.app.schemas.pipeline_schema import (
+    PipelineNode,
+    PipelineValidationError,
+    load_pipeline_yaml,
+)
+
+
+def _elapsed_seconds(started_at: str, ended_at: str) -> float:
+    try:
+        return max(
+            0.0,
+            (datetime.fromisoformat(ended_at) - datetime.fromisoformat(started_at)).total_seconds(),
+        )
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def load_project_config(path: str | Path) -> dict[str, Any]:
@@ -44,8 +58,10 @@ def load_project_config(path: str | Path) -> dict[str, Any]:
     # ── return raw dict for backward compat ──
     try:
         import yaml
-    except ImportError:
-        raise ImportError("Missing dependency: PyYAML. Install with: pip install pyyaml")
+    except ImportError as exc:
+        raise ImportError(
+            "Missing dependency: PyYAML. Install with: pip install pyyaml"
+        ) from exc
 
     path = Path(path)
     if not path.exists():
@@ -61,15 +77,12 @@ def load_dataset_index(path: str | Path) -> dict[str, Any]:
         return {"subjects": []}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, IOError):
+    except (OSError, json.JSONDecodeError):
         return {"subjects": []}
 
 
 def get_complete_subjects(dataset_index: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        s for s in dataset_index.get("subjects", [])
-        if s.get("status") == "COMPLETE"
-    ]
+    return [s for s in dataset_index.get("subjects", []) if s.get("status") == "COMPLETE"]
 
 
 def run_pipeline(
@@ -198,9 +211,15 @@ def run_pipeline(
     if gpu_mode != "off":
         try:
             from src.backend.app.tools.gpu_utils import detect_gpu
+
             gpu_info = detect_gpu()
         except ImportError:
-            gpu_info = {"ok": True, "gpu_available": False, "warnings": ["Cannot import GPU detection."], "errors": []}
+            gpu_info = {
+                "ok": True,
+                "gpu_available": False,
+                "warnings": ["Cannot import GPU detection."],
+                "errors": [],
+            }
 
     for node in pipeline.nodes:
         node_started_at = now_iso()
@@ -208,9 +227,7 @@ def run_pipeline(
         assert context.tool_execution_context is not None
         enforce_node_capabilities(context.tool_execution_context, node)
 
-        deps_satisfied = all(
-            node_status_map.get(dep) == "SUCCESS" for dep in node.depends_on
-        )
+        deps_satisfied = all(node_status_map.get(dep) == "SUCCESS" for dep in node.depends_on)
 
         if not deps_satisfied:
             error_msg = f"Node '{node.id}' dependencies not satisfied"
@@ -278,10 +295,11 @@ def run_pipeline(
                 try:
                     dataset_index = json.loads(Path(dataset_index_path).read_text(encoding="utf-8"))
                     subjects = [
-                        s for s in dataset_index.get("subjects", [])
+                        s
+                        for s in dataset_index.get("subjects", [])
                         if s.get("status") == "COMPLETE"
                     ]
-                except (json.JSONDecodeError, IOError):
+                except (OSError, json.JSONDecodeError):
                     pass
 
             if not subjects:
@@ -341,7 +359,9 @@ def run_pipeline(
                 node.params["_gpu_info"] = gpu_info
                 node.params["_gpu_mode"] = gpu_mode
 
-                if gpu_mode == "require" and (gpu_info is None or not gpu_info.get("gpu_available")):
+                if gpu_mode == "require" and (
+                    gpu_info is None or not gpu_info.get("gpu_available")
+                ):
                     error_msg = f"Node '{node.id}' requires GPU but no GPU is available."
                     errors.append(error_msg)
                     node_result = {"ok": False, "errors": [error_msg]}
@@ -349,9 +369,14 @@ def run_pipeline(
                     status = "FAILED"
                     node_status_map[node.id] = status
                     state_path = write_node_state(
-                        run_id=run_id, node_id=node.id, subject="project",
-                        status=status, started_at=node_started_at, ended_at=now_iso(),
-                        result=node_result, work_dir=work_dir,
+                        run_id=run_id,
+                        node_id=node.id,
+                        subject="project",
+                        status=status,
+                        started_at=node_started_at,
+                        ended_at=now_iso(),
+                        result=node_result,
+                        work_dir=work_dir,
                     )
                     node_states.append(str(state_path))
                     if stop_on_failure:
@@ -359,10 +384,7 @@ def run_pipeline(
                     continue
 
             # Filter out subjects that have failed in previous subject-level nodes
-            eligible_subjects = [
-                s for s in subjects
-                if s.get("subject_id") not in failed_subjects
-            ]
+            eligible_subjects = [s for s in subjects if s.get("subject_id") not in failed_subjects]
 
             if worker_count <= 1 or len(eligible_subjects) <= 1:
                 # Sequential execution
@@ -422,12 +444,19 @@ def run_pipeline(
                 all_subject_success = True
                 subject_results: list[dict[str, Any]] = []
 
-                def run_one_subject(subject_record: dict[str, Any]) -> dict[str, Any]:
+                def run_one_subject(
+                    subject_record: dict[str, Any],
+                    *,
+                    current_node: PipelineNode = node,
+                    current_runner: Any = runner,
+                ) -> dict[str, Any]:
                     subject_id = subject_record.get("subject_id", "unknown")
                     subject_started_at = now_iso()
 
                     try:
-                        result = runner(context, node, subject_record, subject_id)
+                        result = current_runner(
+                            context, current_node, subject_record, subject_id
+                        )
                         result["subject_id"] = subject_id
                         result["started_at"] = subject_started_at
                         result["ended_at"] = now_iso()
@@ -436,15 +465,17 @@ def run_pipeline(
                         return {
                             "ok": False,
                             "subject_id": subject_id,
-                            "errors": [f"Node '{node.id}' execution failed for {subject_id}: {exc}"],
+                            "errors": [
+                                f"Node '{current_node.id}' execution failed for "
+                                f"{subject_id}: {exc}"
+                            ],
                             "started_at": subject_started_at,
                             "ended_at": now_iso(),
                         }
 
                 with ThreadPoolExecutor(max_workers=worker_count) as executor:
                     futures = {
-                        executor.submit(run_one_subject, subj): subj
-                        for subj in eligible_subjects
+                        executor.submit(run_one_subject, subj): subj for subj in eligible_subjects
                     }
 
                     for future in as_completed(futures):
@@ -541,12 +572,7 @@ def run_pipeline(
         pipeline_status = "FAILED"
 
     # Calculate duration
-    try:
-        started_ts = time.mktime(time.strptime(started_at, "%Y-%m-%dT%H:%M:%S"))
-        ended_ts = time.mktime(time.strptime(ended_at, "%Y-%m-%dT%H:%M:%S"))
-        duration_seconds = ended_ts - started_ts
-    except Exception:
-        duration_seconds = 0.0
+    duration_seconds = _elapsed_seconds(started_at, ended_at)
 
     summary_path = write_pipeline_summary(
         run_id=run_id,

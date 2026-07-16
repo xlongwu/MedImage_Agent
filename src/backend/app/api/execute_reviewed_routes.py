@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from src.backend.app.config.settings import ProjectSettings
 from src.backend.app.core.exceptions import SafetyError
+from src.backend.app.planner import pipeline_writer  # imported as module for monkeypatch
 from src.backend.app.planner.approval_gate import check_approval_gate
 from src.backend.app.planner.audit_record import (
     build_review_audit_record,
@@ -43,7 +44,6 @@ from src.backend.app.planner.reviewed_plan_store import (
     new_run_identity,
     resolve_reviewed_plan_for_execution,
 )
-from src.backend.app.planner import pipeline_writer  # imported as module for monkeypatch
 from src.backend.app.runtime.execution_gateway import (
     ExecutionGateway,
     current_safe_allowlist_fingerprint,
@@ -53,14 +53,12 @@ from src.backend.app.schemas.execution_consistency import (
     ExecutionConsistencyInput,
     verify_execution_consistency,
 )
-from src.backend.app.schemas.native_preproc_api import (
-    NativeFullPreprocConfirmations,
-    NativeFullPreprocRequest,
-)
-from src.backend.app.services.mock_store import mock_store
-from src.backend.app.services.execution_ticket_service import ExecutionTicketService
+from src.backend.app.schemas.native_preproc_api import NativeFullPreprocRequest
 from src.backend.app.services.agent_orchestrator import AgentOrchestrator
+from src.backend.app.services.execution_ticket_service import ExecutionTicketService
+from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.native_preproc_full import run_native_full_dry_run
+from src.backend.app.services.native_preproc_request import build_native_full_request
 
 router = APIRouter()
 
@@ -81,6 +79,7 @@ class ExecuteReviewedRequest(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _pipeline_yaml_default() -> dict[str, Any]:
     return {
@@ -134,7 +133,13 @@ def _no_audit() -> dict[str, Any]:
 
 def _adapter_summary(adapter_result: Any) -> dict[str, Any]:
     if adapter_result is None:
-        return {"ok": False, "errors": [], "warnings": [], "policy": {}, "pipeline": {"available": False}}
+        return {
+            "ok": False,
+            "errors": [],
+            "warnings": [],
+            "policy": {},
+            "pipeline": {"available": False},
+        }
     pipeline = adapter_result.pipeline
     return {
         "ok": adapter_result.ok,
@@ -146,17 +151,21 @@ def _adapter_summary(adapter_result: Any) -> dict[str, Any]:
             "name": pipeline.get("pipeline_id", "unknown") if pipeline else "unknown",
             "nodes_total": len(pipeline.get("nodes", [])) if pipeline else 0,
             "modality": pipeline.get("modality", "rsfmri") if pipeline else "rsfmri",
-        } if adapter_result.ok and pipeline else {"available": False},
+        }
+        if adapter_result.ok and pipeline
+        else {"available": False},
     }
 
 
 def _is_policy_blocked(policy: dict[str, list[str]]) -> bool:
-    blocked = (policy.get("blocked_spm_nodes", []) +
-               policy.get("blocked_dpabi_execution_nodes", []) +
-               policy.get("blocked_gui_nodes", []) +
-               policy.get("blocked_manual_required_nodes", []) +
-               policy.get("blocked_unknown_nodes", []) +
-               policy.get("blocked_uncataloged_nodes", []))
+    blocked = (
+        policy.get("blocked_spm_nodes", [])
+        + policy.get("blocked_dpabi_execution_nodes", [])
+        + policy.get("blocked_gui_nodes", [])
+        + policy.get("blocked_manual_required_nodes", [])
+        + policy.get("blocked_unknown_nodes", [])
+        + policy.get("blocked_uncataloged_nodes", [])
+    )
     return len(blocked) > 0
 
 
@@ -179,18 +188,30 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
     spm_smooth_sandbox_nodes = policy.get("allowed_spm_smooth_sandbox_nodes", [])
     dpabi_metadata_nodes = policy.get("allowed_dpabi_metadata_nodes", [])
     dpabi_sandbox_smoke_nodes = policy.get("allowed_dpabi_sandbox_smoke_nodes", [])
-    dpabi_single_function_sandbox_nodes = policy.get("allowed_dpabi_single_function_sandbox_nodes", [])
-    dpabi_subject_smooth_sandbox_nodes = policy.get("allowed_dpabi_subject_smooth_sandbox_nodes", [])
-    dpabi_subject_wrapper_report_nodes = policy.get("allowed_dpabi_subject_wrapper_report_nodes", [])
+    dpabi_single_function_sandbox_nodes = policy.get(
+        "allowed_dpabi_single_function_sandbox_nodes", []
+    )
+    dpabi_subject_smooth_sandbox_nodes = policy.get(
+        "allowed_dpabi_subject_smooth_sandbox_nodes", []
+    )
+    dpabi_subject_wrapper_report_nodes = policy.get(
+        "allowed_dpabi_subject_wrapper_report_nodes", []
+    )
     dpabi_validation_matrix_nodes = policy.get("allowed_dpabi_validation_matrix_nodes", [])
 
     contract_nodes = policy.get("allowed_contract_nodes", [])
     gpu_synthetic_smoke_nodes = policy.get("allowed_gpu_synthetic_smoke_nodes", [])
     gpu_alff_sandbox_nodes = policy.get("allowed_gpu_alff_sandbox_nodes", [])
     gpu_reho_sandbox_nodes = policy.get("allowed_gpu_reho_sandbox_nodes", [])
-    gpu_temporal_filtering_sandbox_nodes = policy.get("allowed_gpu_temporal_filtering_sandbox_nodes", [])
-    gpu_functional_connectivity_sandbox_nodes = policy.get("allowed_gpu_functional_connectivity_sandbox_nodes", [])
-    gpu_nuisance_regression_sandbox_nodes = policy.get("allowed_gpu_nuisance_regression_sandbox_nodes", [])
+    gpu_temporal_filtering_sandbox_nodes = policy.get(
+        "allowed_gpu_temporal_filtering_sandbox_nodes", []
+    )
+    gpu_functional_connectivity_sandbox_nodes = policy.get(
+        "allowed_gpu_functional_connectivity_sandbox_nodes", []
+    )
+    gpu_nuisance_regression_sandbox_nodes = policy.get(
+        "allowed_gpu_nuisance_regression_sandbox_nodes", []
+    )
     native_preproc_nodes = policy.get("allowed_native_preproc_nodes", [])
     unsafe = gpu_nodes  # contract_nodes are Python-only metadata, now allowed; gpu_synthetic_smoke sandbox-gated
     if unsafe:
@@ -198,7 +219,30 @@ def _check_safe_allowlist(policy: dict[str, list[str]]) -> str | None:
 
     # Must have at least one allowed node
     python_nodes = policy.get("allowed_python_nodes", [])
-    total_allowed = python_nodes + spm_smoke_nodes + spm_realign_sandbox_nodes + spm_slice_timing_sandbox_nodes + spm_coregister_sandbox_nodes + spm_segment_sandbox_nodes + spm_normalize_sandbox_nodes + spm_smooth_sandbox_nodes + dpabi_metadata_nodes + dpabi_sandbox_smoke_nodes + dpabi_single_function_sandbox_nodes + dpabi_subject_smooth_sandbox_nodes + dpabi_subject_wrapper_report_nodes + dpabi_validation_matrix_nodes + contract_nodes + gpu_synthetic_smoke_nodes + gpu_alff_sandbox_nodes + gpu_reho_sandbox_nodes + gpu_temporal_filtering_sandbox_nodes + gpu_functional_connectivity_sandbox_nodes + gpu_nuisance_regression_sandbox_nodes + native_preproc_nodes
+    total_allowed = (
+        python_nodes
+        + spm_smoke_nodes
+        + spm_realign_sandbox_nodes
+        + spm_slice_timing_sandbox_nodes
+        + spm_coregister_sandbox_nodes
+        + spm_segment_sandbox_nodes
+        + spm_normalize_sandbox_nodes
+        + spm_smooth_sandbox_nodes
+        + dpabi_metadata_nodes
+        + dpabi_sandbox_smoke_nodes
+        + dpabi_single_function_sandbox_nodes
+        + dpabi_subject_smooth_sandbox_nodes
+        + dpabi_subject_wrapper_report_nodes
+        + dpabi_validation_matrix_nodes
+        + contract_nodes
+        + gpu_synthetic_smoke_nodes
+        + gpu_alff_sandbox_nodes
+        + gpu_reho_sandbox_nodes
+        + gpu_temporal_filtering_sandbox_nodes
+        + gpu_functional_connectivity_sandbox_nodes
+        + gpu_nuisance_regression_sandbox_nodes
+        + native_preproc_nodes
+    )
     if not total_allowed:
         return "SAFE_EXECUTION_POLICY_BLOCKED"
     return None
@@ -260,8 +304,14 @@ def _blocked_result(
         "execution": _execution_meta(),
     }
     result["audit"] = _write_audit(
-        "execution_blocked", plan, validation, request.approval,
-        gate, result, request.actor, request,
+        "execution_blocked",
+        plan,
+        validation,
+        request.approval,
+        gate,
+        result,
+        request.actor,
+        request,
     )
     return result
 
@@ -297,27 +347,49 @@ def _try_write_pipeline_yaml(
         return _pipeline_yaml_summary(would_write=True, written=False), None, None
 
     if not request.persist_audit:
-        return _pipeline_yaml_summary(
-            would_write=True, written=False, requires_audit=True,
-        ), "PIPELINE_WRITE_REQUIRES_AUDIT", None
+        return (
+            _pipeline_yaml_summary(
+                would_write=True,
+                written=False,
+                requires_audit=True,
+            ),
+            "PIPELINE_WRITE_REQUIRES_AUDIT",
+            None,
+        )
 
     try:
         pipeline_dict = adapter.pipeline if adapter else None
         if pipeline_dict is None:
-            return _pipeline_yaml_summary(
-                would_write=True, written=False,
-            ), "PIPELINE_WRITE_FAILED", None
+            return (
+                _pipeline_yaml_summary(
+                    would_write=True,
+                    written=False,
+                ),
+                "PIPELINE_WRITE_FAILED",
+                None,
+            )
         path = pipeline_writer.write_reviewed_pipeline_yaml(
             pipeline_dict,
             plan_hash=plan_hash,
         )
-        return _pipeline_yaml_summary(
-            would_write=True, written=True, path=str(path),
-        ), None, path
+        return (
+            _pipeline_yaml_summary(
+                would_write=True,
+                written=True,
+                path=str(path),
+            ),
+            None,
+            path,
+        )
     except Exception:
-        return _pipeline_yaml_summary(
-            would_write=True, written=False,
-        ), "PIPELINE_WRITE_FAILED", None
+        return (
+            _pipeline_yaml_summary(
+                would_write=True,
+                written=False,
+            ),
+            "PIPELINE_WRITE_FAILED",
+            None,
+        )
 
 
 def _validate_project_config(project_config_path: str | None) -> tuple[Any, str | None]:
@@ -408,51 +480,9 @@ def _native_preproc_request_from_node(
     *,
     fallback_run_id: str = "",
 ) -> NativeFullPreprocRequest:
-    params = dict(node.get("params") or {})
-    confirmations = (
-        params.get("confirmations")
-        if isinstance(params.get("confirmations"), dict)
-        else {}
-    )
-    return NativeFullPreprocRequest(
-        run_id=str(params.get("run_id") or fallback_run_id),
-        subject_id=str(params.get("subject_id") or ""),
-        session_id=str(params.get("session_id") or ""),
-        output_dir=str(params.get("output_dir") or ""),
-        input_bold=str(params.get("input_bold") or ""),
-        sidecar_json=str(params.get("sidecar_json") or ""),
-        t1w=str(params.get("t1w") or ""),
-        template=str(params.get("template") or ""),
-        atlas=str(params.get("atlas") or ""),
-        atlas_labels=str(params.get("atlas_labels") or ""),
-        conversion_run_id=str(params.get("conversion_run_id") or ""),
-        dparsf_config=dict(params.get("dparsf_config") or {}),
-        stage_overrides=dict(params.get("stage_overrides") or {}),
-        remove_first=int(params.get("remove_first") or 0),
-        enable_slice_timing=bool(params.get("enable_slice_timing", True)),
-        tr=float(params["tr"]) if params.get("tr") is not None else None,
-        confirmations=NativeFullPreprocConfirmations(
-            confirm_reviewed_native_execution=bool(
-                confirmations.get("confirm_reviewed_native_execution")
-                or params.get("confirm_reviewed_native_execution", False)
-            ),
-            confirm_rawdata_readonly=bool(
-                confirmations.get("confirm_rawdata_readonly")
-                or params.get("confirm_rawdata_readonly", False)
-            ),
-            confirm_no_external_tools=bool(
-                confirmations.get("confirm_no_external_tools")
-                or params.get("confirm_no_external_tools", False)
-            ),
-            confirm_research_use_only=bool(
-                confirmations.get("confirm_research_use_only")
-                or params.get("confirm_research_use_only", False)
-            ),
-            confirm_no_clinical_use=bool(
-                confirmations.get("confirm_no_clinical_use")
-                or params.get("confirm_no_clinical_use", False)
-            ),
-        ),
+    return build_native_full_request(
+        node.get("params") if isinstance(node.get("params"), dict) else {},
+        fallback_run_id=fallback_run_id,
     )
 
 
@@ -485,11 +515,7 @@ def _native_project_id(
         params.get("project_id")
         or request.project_id
         or (context.project_id if context else "")
-        or (
-            project_context.get("project_id")
-            if isinstance(project_context, dict)
-            else ""
-        )
+        or (project_context.get("project_id") if isinstance(project_context, dict) else "")
         or ""
     )
 
@@ -540,6 +566,77 @@ def _check_native_preproc_readiness(
             node,
             fallback_run_id=f"preflight-native-{index}",
         )
+        registry_path = Path(str(metadata.get("preprocessing_input_registry_path") or ""))
+        registered_run = str(metadata.get("preprocessing_conversion_run_id") or "")
+        needs_conversion = bool(
+            native_request.conversion_run_id
+            and not (registry_path.is_file() and registered_run == native_request.conversion_run_id)
+        )
+        if needs_conversion:
+            from src.backend.app.services.dicom_conversion_execution import (
+                run_internal_user_dicom_conversion_from_persisted_package,
+            )
+
+            rawdata_dir = str(
+                metadata.get("rawdata_dir")
+                or (context.rawdata_dir if context and context.rawdata_dir else "")
+                or ""
+            )
+            conversion_readiness = run_internal_user_dicom_conversion_from_persisted_package(
+                project_id,
+                native_request.conversion_run_id,
+                project_dir=project_dir,
+                rawdata_dir=rawdata_dir,
+                validate_only=True,
+                input_roots=tuple(value for value in (project_dir, rawdata_dir) if value),
+                output_roots=(project_dir,) if project_dir else (),
+                readonly_roots=(rawdata_dir,) if rawdata_dir else (),
+            )
+            payload = conversion_readiness.model_dump(mode="json")
+            payload["node_id"] = node.get("id")
+            payload["readiness_scope"] = "reviewed_native_conversion_handoff"
+            results.append(payload)
+            if not conversion_readiness.ok:
+                errors.extend(conversion_readiness.blocking_issues)
+                errors.extend(conversion_readiness.errors)
+            else:
+                overrides = dict(native_request.stage_overrides or {})
+
+                def _resource_available(
+                    explicit: str,
+                    folder: str,
+                    project_root: str = project_dir,
+                ) -> bool:
+                    if explicit and Path(explicit).is_file():
+                        return True
+                    resource_dir = Path(project_root) / "resources" / folder
+                    return resource_dir.is_dir() and any(
+                        path.is_file() and path.name.lower().endswith((".nii", ".nii.gz"))
+                        for path in resource_dir.iterdir()
+                    )
+
+                if overrides.get("normalization", True) is not False and not _resource_available(
+                    native_request.template,
+                    "templates",
+                ):
+                    errors.append(
+                        "normalization: a project-owned template is required or the stage must be explicitly disabled."
+                    )
+                atlas_stages = (
+                    "atlas_resampling",
+                    "roi_timeseries",
+                    "functional_connectivity",
+                )
+                if any(
+                    overrides.get(stage, True) is not False for stage in atlas_stages
+                ) and not _resource_available(
+                    native_request.atlas,
+                    "atlases",
+                ):
+                    errors.append(
+                        "functional connectivity: a project-owned atlas is required or all atlas-dependent stages must be explicitly disabled."
+                    )
+            continue
         response = run_native_full_dry_run(
             project_id,
             native_request,
@@ -607,6 +704,7 @@ def _native_preproc_readiness_blocked_result(
 
 # ── Consistency preflight (Phase 3) ──────────────────────────────────────────
 
+
 def _run_consistency_preflight(
     *,
     plan: dict[str, Any],
@@ -627,8 +725,12 @@ def _run_consistency_preflight(
         project_id=project_id,
         reviewed_plan_id=reviewed_plan.reviewed_plan_id if reviewed_plan else None,
         plan_hash=reviewed_plan.plan_hash if reviewed_plan else None,
-        project_config_path=reviewed_plan.project_config_path if reviewed_plan else request.project_config_path,
-        project_context_path=reviewed_plan.project_config_path if reviewed_plan else request.project_config_path,
+        project_config_path=reviewed_plan.project_config_path
+        if reviewed_plan
+        else request.project_config_path,
+        project_context_path=reviewed_plan.project_config_path
+        if reviewed_plan
+        else request.project_config_path,
         node_ids=node_ids,
     )
 
@@ -654,7 +756,7 @@ def _run_consistency_preflight(
         dry_run=dry_run_input,
         execution=execution_input,
         require_approval=True,
-        require_audit=False,           # audit available after write
+        require_audit=False,  # audit available after write
         require_output_manifest=False,  # manifest generated during execution
     )
 
@@ -697,9 +799,7 @@ def _ticket_roots(
     if context.rawdata_dir is not None:
         input_roots.add(str(context.rawdata_dir.resolve()))
         rawdata = context.rawdata_dir.resolve()
-        output_roots = {
-            root for root in output_roots if Path(root).resolve() != rawdata
-        }
+        output_roots = {root for root in output_roots if Path(root).resolve() != rawdata}
     if context.dataset_index_path is not None:
         input_roots.add(str(context.dataset_index_path.resolve().parent))
     return sorted(input_roots), sorted(output_roots)
@@ -711,17 +811,21 @@ def _approval_context_id(
     approval: dict[str, Any] | None,
     gate: dict[str, Any],
 ) -> str:
-    return "approval_" + stable_hash(
-        {
-            "reviewed_plan_id": reviewed_plan.reviewed_plan_id,
-            "plan_hash": reviewed_plan.plan_hash,
-            "approval": approval or {},
-            "gate": gate,
-        }
-    )[:24]
+    return (
+        "approval_"
+        + stable_hash(
+            {
+                "reviewed_plan_id": reviewed_plan.reviewed_plan_id,
+                "plan_hash": reviewed_plan.plan_hash,
+                "approval": approval or {},
+                "gate": gate,
+            }
+        )[:24]
+    )
 
 
 # ── Main endpoint ────────────────────────────────────────────────────────────
+
 
 @router.post("/api/plans/execute-reviewed")
 def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
@@ -818,8 +922,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "execution": _execution_meta(),
             }
             result["audit"] = _write_audit(
-                "execution_blocked", plan, validation, request.approval,
-                None, result, request.actor, request,
+                "execution_blocked",
+                plan,
+                validation,
+                request.approval,
+                None,
+                result,
+                request.actor,
+                request,
             )
             return result
 
@@ -841,8 +951,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "execution": _execution_meta(),
             }
             result["audit"] = _write_audit(
-                "execution_blocked", plan, validation, request.approval,
-                gate, result, request.actor, request,
+                "execution_blocked",
+                plan,
+                validation,
+                request.approval,
+                gate,
+                result,
+                request.actor,
+                request,
             )
             return result
 
@@ -851,7 +967,9 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
         if not adapter.ok:
             return _blocked_result("PLAN_ADAPTER_FAILED", plan, validation, gate, adapter, request)
         if _is_policy_blocked(adapter.policy):
-            return _blocked_result("EXECUTION_POLICY_BLOCKED", plan, validation, gate, adapter, request)
+            return _blocked_result(
+                "EXECUTION_POLICY_BLOCKED", plan, validation, gate, adapter, request
+            )
 
         # 8. Safe allowlist check (M5-T016)
         allowlist_error = _check_safe_allowlist(adapter.policy)
@@ -871,8 +989,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "execution": _execution_meta(),
             }
             result["audit"] = _write_audit(
-                "execution_blocked", plan, validation, request.approval,
-                gate, result, request.actor, request,
+                "execution_blocked",
+                plan,
+                validation,
+                request.approval,
+                gate,
+                result,
+                request.actor,
+                request,
             )
             return result
         plan = validation_result.normalized_plan
@@ -927,8 +1051,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "execution": _execution_meta(),
             }
             result["audit"] = _write_audit(
-                "execution_blocked", plan, validation, request.approval,
-                gate, result, request.actor, request,
+                "execution_blocked",
+                plan,
+                validation,
+                request.approval,
+                gate,
+                result,
+                request.actor,
+                request,
             )
             return _with_link_fields(
                 result,
@@ -959,8 +1089,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "execution": _execution_meta(),
             }
             result["audit"] = _write_audit(
-                "execution_blocked", plan, validation, request.approval,
-                gate, result, request.actor, request,
+                "execution_blocked",
+                plan,
+                validation,
+                request.approval,
+                gate,
+                result,
+                request.actor,
+                request,
             )
             return _with_link_fields(
                 result,
@@ -1023,8 +1159,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "execution": _execution_meta(),
         }
         audit_info = _write_audit(
-            "execution_requested", plan, validation, request.approval,
-            gate, preflight_result, request.actor, request,
+            "execution_requested",
+            plan,
+            validation,
+            request.approval,
+            gate,
+            preflight_result,
+            request.actor,
+            request,
         )
         if not audit_info.get("persisted"):
             result = dict(preflight_result)
@@ -1128,9 +1270,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 settings=settings,
                 written_path=written_path,
             )
-            nodes = [
-                node for node in plan.get("nodes", []) if isinstance(node, dict)
-            ]
+            nodes = [node for node in plan.get("nodes", []) if isinstance(node, dict)]
             goal_contract = reviewed_plan.payload.get("goal_contract")
             if not isinstance(goal_contract, dict):
                 raise SafetyError(
@@ -1138,9 +1278,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                     code="REVIEWED_PLAN_NEEDS_GOAL_REVIEW",
                 )
             goal_contract_hash = str(goal_contract.get("goal_contract_hash") or "")
-            evaluation_policy_version = str(
-                goal_contract.get("evaluation_policy_version") or ""
-            )
+            evaluation_policy_version = str(goal_contract.get("evaluation_policy_version") or "")
             if not goal_contract_hash or not evaluation_policy_version:
                 raise SafetyError(
                     "GOAL_CONTRACT_BINDING_REQUIRED",
@@ -1153,20 +1291,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 plan_hash=reviewed_plan.plan_hash,
                 approval_context_id=approval_context_id,
                 approved_actor=str(
-                    (request.approval or {}).get("approved_by")
-                    or request.actor
-                    or "local-user"
+                    (request.approval or {}).get("approved_by") or request.actor or "local-user"
                 ),
                 approved_node_ids=[str(node.get("id") or "") for node in nodes],
-                approved_backend_ids=[
-                    str(node.get("backend") or "unknown") for node in nodes
-                ],
+                approved_backend_ids=[str(node.get("backend") or "unknown") for node in nodes],
                 input_roots=input_roots,
                 output_roots=output_roots,
                 readonly_roots=(
-                    [str(context.rawdata_dir.resolve())]
-                    if context.rawdata_dir is not None
-                    else []
+                    [str(context.rawdata_dir.resolve())] if context.rawdata_dir is not None else []
                 ),
                 project_config_path=str(request.project_config_path),
                 pipeline_path=str(written_path),
@@ -1232,14 +1364,10 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 "project_config_path": request.project_config_path,
                 "execution": _execution_meta(executor_called=True),
                 "execution_ticket": (
-                    issued_ticket.model_dump(mode="json")
-                    if "issued_ticket" in locals()
-                    else None
+                    issued_ticket.model_dump(mode="json") if "issued_ticket" in locals() else None
                 ),
                 "lifecycle": (
-                    lifecycle.model_dump(mode="json")
-                    if "lifecycle" in locals()
-                    else None
+                    lifecycle.model_dump(mode="json") if "lifecycle" in locals() else None
                 ),
                 "audit": audit_info,
                 "errors": [str(exc)],
@@ -1253,11 +1381,11 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             )
 
         # 13. Executor returned — success
-        executor_run_id = executor_result.get("run_id") if isinstance(executor_result, dict) else None
+        executor_run_id = (
+            executor_result.get("run_id") if isinstance(executor_result, dict) else None
+        )
         summary_path = (
-            executor_result.get("summary_path")
-            if isinstance(executor_result, dict)
-            else None
+            executor_result.get("summary_path") if isinstance(executor_result, dict) else None
         )
         response_warnings: list[str] = []
         if linked_run_id and executor_run_id and executor_run_id != linked_run_id:
@@ -1289,7 +1417,9 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
         executor_errors: list[str] = []
         if isinstance(executor_result, dict):
             raw_status = str(executor_result.get("status") or "").upper()
-            executor_failed = raw_status in {"FAILED", "FAILURE", "ERROR"} or executor_result.get("ok") is False
+            executor_failed = (
+                raw_status in {"FAILED", "FAILURE", "ERROR"} or executor_result.get("ok") is False
+            )
             raw_errors = executor_result.get("errors")
             if isinstance(raw_errors, list):
                 executor_errors = [str(item) for item in raw_errors]
@@ -1298,7 +1428,11 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             if executor_failed and not executor_errors:
                 executor_errors = [f"Executor returned failure status: {raw_status or 'UNKNOWN'}"]
         if executor_failed:
-            if "orchestrator" in locals() and "lifecycle" in locals() and lifecycle.state == "RUNNING":
+            if (
+                "orchestrator" in locals()
+                and "lifecycle" in locals()
+                and lifecycle.state == "RUNNING"
+            ):
                 lifecycle = orchestrator.transition(
                     project_id=lifecycle.project_id,
                     lifecycle_id=lifecycle.lifecycle_id,
@@ -1413,8 +1547,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "execution": _execution_meta(),
         }
         result["audit"] = _write_audit(
-            "execution_blocked", plan, validation, request.approval,
-            None, result, request.actor, request,
+            "execution_blocked",
+            plan,
+            validation,
+            request.approval,
+            None,
+            result,
+            request.actor,
+            request,
         )
         return result
     plan = validation_result.normalized_plan
@@ -1438,8 +1578,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "execution": _execution_meta(),
         }
         result["audit"] = _write_audit(
-            "execution_blocked", plan, validation, request.approval,
-            gate, result, request.actor, request,
+            "execution_blocked",
+            plan,
+            validation,
+            request.approval,
+            gate,
+            result,
+            request.actor,
+            request,
         )
         return result
 
@@ -1481,8 +1627,14 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
             "execution": _execution_meta(),
         }
         result["audit"] = _write_audit(
-            "execution_blocked", plan, validation, request.approval,
-            gate, result, request.actor, request,
+            "execution_blocked",
+            plan,
+            validation,
+            request.approval,
+            gate,
+            result,
+            request.actor,
+            request,
         )
         return result
 
@@ -1502,7 +1654,13 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
         "execution": _execution_meta(),
     }
     result["audit"] = _write_audit(
-        "dry_run_checked", plan, validation, request.approval,
-        gate, result, request.actor, request,
+        "dry_run_checked",
+        plan,
+        validation,
+        request.approval,
+        gate,
+        result,
+        request.actor,
+        request,
     )
     return result

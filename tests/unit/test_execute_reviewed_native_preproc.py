@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 from fastapi.testclient import TestClient
@@ -380,5 +382,130 @@ def test_native_full_preprocessing_persisted_plan_dispatches_with_contract_ticke
     assert payload["execution"]["executor_called"] is True
     assert payload["execution_ticket"]["normalized_params_hash"]
     assert payload["execution_ticket"]["contract_versions"] == [
-        ["native_preproc_full_execute", "1.0.0"]
+        ["native_preproc_full_execute", "1.1.0"]
     ]
+
+
+def test_conversion_handoff_readiness_allows_explicit_metric_only_scope(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from src.backend.app.api import execute_reviewed_routes
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        DicomConversionSafetyFlags,
+        DicomConversionSandboxResult,
+    )
+    from src.backend.app.services import dicom_conversion_execution
+
+    plan = _native_execute_plan()
+    params = plan["nodes"][0]["params"]  # type: ignore[index]
+    params.update(  # type: ignore[union-attr]
+        {
+            "input_bold": "",
+            "sidecar_json": "",
+            "conversion_run_id": "conv-001",
+            "project_id": "project-1",
+            "project_dir": str(tmp_path),
+            "stage_overrides": {
+                "normalization": False,
+                "atlas_resampling": False,
+                "roi_timeseries": False,
+                "functional_connectivity": False,
+            },
+        }
+    )
+    rawdata = tmp_path / "rawdata"
+    rawdata.mkdir()
+    project = SimpleNamespace(
+        metadata={"project_dir": str(tmp_path), "rawdata_dir": str(rawdata)}
+    )
+    monkeypatch.setattr(
+        execute_reviewed_routes,
+        "mock_store",
+        SimpleNamespace(get_project=lambda project_id: project),
+    )
+    monkeypatch.setattr(
+        dicom_conversion_execution,
+        "run_internal_user_dicom_conversion_from_persisted_package",
+        lambda *args, **kwargs: DicomConversionSandboxResult(
+            ok=True,
+            status="ready",
+            mode="native",
+            project_id="project-1",
+            safety_flags=DicomConversionSafetyFlags(),
+        ),
+    )
+    context = SimpleNamespace(
+        project_id="project-1",
+        project_dir=Path(tmp_path),
+        rawdata_dir=rawdata,
+        diagnostics={},
+    )
+
+    readiness = execute_reviewed_routes._check_native_preproc_readiness(
+        plan,
+        SimpleNamespace(project_id="project-1"),
+        context,
+    )
+
+    assert readiness["ok"] is True
+    assert readiness["results"][0]["readiness_scope"] == "reviewed_native_conversion_handoff"
+
+
+def test_conversion_handoff_readiness_blocks_unavailable_template_and_atlas(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from src.backend.app.api import execute_reviewed_routes
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        DicomConversionSandboxResult,
+    )
+    from src.backend.app.services import dicom_conversion_execution
+
+    plan = _native_execute_plan()
+    params = plan["nodes"][0]["params"]  # type: ignore[index]
+    params.update(  # type: ignore[union-attr]
+        {
+            "input_bold": "",
+            "sidecar_json": "",
+            "conversion_run_id": "conv-001",
+            "project_id": "project-1",
+            "project_dir": str(tmp_path),
+        }
+    )
+    rawdata = tmp_path / "rawdata"
+    rawdata.mkdir()
+    project = SimpleNamespace(
+        metadata={"project_dir": str(tmp_path), "rawdata_dir": str(rawdata)}
+    )
+    monkeypatch.setattr(
+        execute_reviewed_routes,
+        "mock_store",
+        SimpleNamespace(get_project=lambda project_id: project),
+    )
+    monkeypatch.setattr(
+        dicom_conversion_execution,
+        "run_internal_user_dicom_conversion_from_persisted_package",
+        lambda *args, **kwargs: DicomConversionSandboxResult(
+            ok=True,
+            status="ready",
+            mode="native",
+            project_id="project-1",
+        ),
+    )
+    context = SimpleNamespace(
+        project_id="project-1",
+        project_dir=Path(tmp_path),
+        rawdata_dir=rawdata,
+        diagnostics={},
+    )
+
+    readiness = execute_reviewed_routes._check_native_preproc_readiness(
+        plan,
+        SimpleNamespace(project_id="project-1"),
+        context,
+    )
+
+    assert readiness["ok"] is False
+    assert "template" in " ".join(readiness["errors"])
+    assert "atlas" in " ".join(readiness["errors"])

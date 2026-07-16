@@ -15,11 +15,6 @@ pytest.importorskip("nibabel")
 
 _FLAGS = {
     "MEDIMAGE_ENABLE_DICOM_CONVERSION": "1",
-    "MEDIMAGE_ENABLE_SYNTHETIC_DICOM_SMOKE": "1",
-    "MEDIMAGE_ALLOW_EXTERNAL_TOOL_SMOKE": "1",
-    "MEDIMAGE_ALLOW_PERSISTED_SYNTHETIC_CONVERSION": "1",
-    "MEDIMAGE_ALLOW_REAL_DCM2NIIX_SMOKE": "1",
-    "MEDIMAGE_ALLOW_INTERNAL_USER_DICOM_CONVERSION_PROTOTYPE": "1",
     "MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
     "MEDIMAGE_ALLOW_USER_DATA_CONVERSION": "1",
 }
@@ -89,13 +84,18 @@ def test_guarded_persisted_execution_uses_native_backend_and_preserves_rawdata(
         "bids_sidecar": True,
         "create_bids": True,
     }
+    from src.backend.app.services.dicom_conversion_safety import (
+        build_pre_conversion_rawdata_snapshot,
+    )
+
+    checksum_before = build_pre_conversion_rawdata_snapshot([str(rawdata)])
     files = {
         "approval_record.json": approval,
         "audit_preview.json": {"audit_id": "audit-native", "project_id": "project-native"},
         "preflight_snapshot.json": {"ok": True, "status": "ready"},
         "mapping_snapshot.json": {"mappings": [mapping]},
         "command_templates.json": {"templates": [template]},
-        "rawdata_checksum_before.json": {"file_count": 3},
+        "rawdata_checksum_before.json": checksum_before.model_dump(mode="json"),
         "rollback_plan_dry_run.json": {"rollback_allowed": True},
     }
     for name, payload in files.items():
@@ -109,6 +109,20 @@ def test_guarded_persisted_execution_uses_native_backend_and_preserves_rawdata(
         "run",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("subprocess must not be called")),
     )
+    denied = run_internal_user_dicom_conversion_from_persisted_package(
+        "project-native",
+        run_id,
+        env=_FLAGS,
+        project_dir=str(project),
+        rawdata_dir=str(rawdata),
+        validate_only=True,
+        input_roots=(str(rawdata),),
+        output_roots=(str(tmp_path / "different-project"),),
+        readonly_roots=(str(rawdata),),
+    )
+    assert denied.status == "blocked"
+    assert "execution-ticket output roots" in " ".join(denied.blocking_issues)
+
     result = run_internal_user_dicom_conversion_from_persisted_package(
         "project-native",
         run_id,
