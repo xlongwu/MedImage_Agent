@@ -101,8 +101,8 @@ their tag state.
   tests, and production build passed. The only backend skip caused by Windows
   privilege rather than an intentionally disabled optional/external path was
   the symlink-escape case.
-- Exact source candidate `1d93922c302dfbd8557ad3495594e9cc5b37d479`
-  completed GitHub Actions run `29464470010` successfully. Its `backend`,
+- Exact runtime source candidate `bedfa51b26a1c5e29588e81ac5e3ed148d5510fe`
+  completed GitHub Actions run `29467806554` successfully. Its `backend`,
   `frontend`, and `desktop` jobs all passed. This closes the remote-CI evidence
   gate for that source candidate; later runtime-affecting commits require new
   CI and packaging evidence.
@@ -117,6 +117,12 @@ their tag state.
   fALFF maps. A second reviewed run reused the verified conversion registry,
   required the GPU scheduler, executed with CuPy, and recorded a non-zero
   55.23-second pipeline duration. These results are not packaged-GUI evidence.
+- The exact-candidate packaged backend sidecar completed the same governed
+  three-subject workflow through its HTTP API: all subjects succeeded, 21
+  float32 NIfTI artifacts were reloadable, ALFF/fALFF recorded `gpu-cupy`, the
+  validation and final reports were persisted, and the 1,104-file rawdata
+  content/size/mtime fingerprint was unchanged. This is packaged-sidecar/API
+  evidence, not a claim that the visible Electron UI drove the workflow.
 
 ## Packaging State
 
@@ -129,12 +135,14 @@ their tag state.
   entry point.
 - Packaging output directories are generated artifacts unless explicitly
   promoted through a release artifact process.
-- Source candidate `1d93922c302dfbd8557ad3495594e9cc5b37d479` was rebuilt
+- Runtime source candidate `bedfa51b26a1c5e29588e81ac5e3ed148d5510fe` was rebuilt
   with the `mamba` Python 3.11.15 environment into a PyInstaller backend
   sidecar, launcher, and Electron unpacked directory. Packaged smoke confirmed
   backend readiness, a mounted React renderer, no renderer console errors, and
-  sidecar cleanup after application exit. The directory build is exact-SHA
-  evidence; an NSIS installer and packaged real-data workflow are still pending.
+  sidecar cleanup after application exit. The same packaged backend binary also
+  completed the governed three-subject DemoData API workflow with CuPy. The
+  directory build is exact-SHA evidence; an NSIS installer and a visible-UI-
+  driven real-data workflow are still pending.
 
 ## Known Limitations and Risks
 
@@ -160,8 +168,8 @@ their tag state.
   active project interpreter and `--basetemp=.pytest_tmp`.
 - The desktop SQLite state store is ignored runtime state and can accumulate
   stale local paths.
-- Full DICOM-to-preprocessing-to-report packaged GUI E2E remains unproven;
-  the corresponding source-level reviewed gateway path is now demonstrated.
+- Full DICOM-to-preprocessing-to-report Electron-UI-driven E2E remains unproven;
+  the corresponding source-level and packaged-sidecar/API paths are demonstrated.
   Preview/subset runs and synthetic-atlas FC remain labeled `preview_only` or
   `partial`.
 - The controlled recovery implementation is source-tested, but packaged-app
@@ -170,11 +178,11 @@ their tag state.
 
 ## Next Work
 
-1. Run the real three-subject DemoData workflow through the exact-candidate
-   packaged application, including conversion, reviewed preprocessing,
-   artifact reload, validation, and report handoff.
-2. Validate running-state graceful exit, forced termination, restart recovery,
+1. Validate running-state graceful exit, forced termination, restart recovery,
    failed-subject isolation, and approved local retry without modifying rawdata.
+2. Drive the three-subject workflow through the visible Electron UI if a safe,
+   project-native UI harness is approved; retain the packaged-sidecar/API result
+   as the current non-UI workflow evidence.
 3. Build the NSIS release artifact when required packaging caches are available,
    then repeat the exact-candidate launch smoke for that artifact.
 4. Align version surfaces and release documentation, inventory/checksum the

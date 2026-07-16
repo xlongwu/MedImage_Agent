@@ -22,12 +22,14 @@
   1,104 个文件、总大小和指纹前后不变。
 - reviewed gateway 源码 E2E：三被试产生 21 个原生空间预处理 NIfTI，
   ALFF/fALFF 使用 `gpu-cupy`；恢复复跑复用转换登记，转换审计未重写。
-- exact-SHA `1d93922c302dfbd8557ad3495594e9cc5b37d479`：Windows backend
+- exact-SHA `bedfa51b26a1c5e29588e81ac5e3ed148d5510fe`：Windows backend
   sidecar、launcher 和 Electron unpacked 构建通过；真实 packaged smoke
   证明 backend ready、React mount、零 renderer console error 和退出后 sidecar 回收。
-- 同一 exact-SHA 的 GitHub Actions run `29464470010` 中 backend、frontend、
+- 同一 exact-SHA 的打包 sidecar/API 三被试 E2E 生成 21 个 float32 NIfTI，
+  ALFF/fALFF 实际使用 `gpu-cupy`，validation/final report 已持久化，rawdata 指纹不变。
+- 同一 exact-SHA 的 GitHub Actions run `29467806554` 中 backend、frontend、
   desktop 三个 job 全部通过。
-- 上述证据不替代打包应用内的真实三被试科学 E2E、运行中退出/强杀/重启、
+- 上述证据不替代 Electron UI 驱动的真实三被试科学 E2E、运行中退出/强杀/重启、
   失败被试隔离与局部重试，也不等于 NSIS 安装包已通过。
 
 详细候选证据见[RC2 候选证据](RC2候选证据_2026-07-16.md)。
