@@ -252,6 +252,10 @@ def test_desktop_dist_wrapper_uses_workspace_caches():
     assert "Processes that may hold locks" in build_all
     assert "Unable to inspect local process list" in build_all
     assert "Close running pytest, Python, PyInstaller, or MedImage Agent processes" in build_all
+    assert "$TestPython = if ($PythonExe)" in build_all
+    assert "Invoke-PytestChecked" in build_all
+    assert "--basetemp=.pytest_tmp_packaging_focused" in build_all
+    assert "Focused packaging tests" in build_all
     assert "DirOnly" in build_desktop
     assert "DirOnly" in build_all
     assert "LASTEXITCODE" in build_desktop

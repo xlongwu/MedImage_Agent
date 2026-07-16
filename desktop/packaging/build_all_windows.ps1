@@ -55,18 +55,52 @@ function Clear-PackagingResiduals {
     }
 }
 
+function Invoke-PytestChecked {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Interpreter,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+        [Parameter(Mandatory = $true)]
+        [string]$Root,
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    & $Interpreter -m pytest @Arguments
+    $ExitCode = $LASTEXITCODE
+    Clear-PackagingResiduals -Root $Root
+    if ($ExitCode -ne 0) {
+        throw "$Description failed with exit code $ExitCode."
+    }
+}
+
 Push-Location $RepoRoot
 try {
     Clear-PackagingResiduals -Root $RepoRoot
+    $TestPython = if ($PythonExe) { $PythonExe } else { "python" }
 
-    python -m pytest tests/unit/test_desktop_backend_entry.py -v
-    python -m pytest tests/unit/test_desktop_packaging_contract.py -v
-    python -m pytest tests/unit/test_gui_reviewed_execution_blocklist.py -v
-    python -m pytest tests/unit/test_gui_model_mock_real_boundary.py -v
-    python -m pytest tests/unit/test_execute_reviewed_api.py -v
+    $FocusedTests = @(
+        "tests/unit/test_desktop_backend_entry.py",
+        "tests/unit/test_desktop_packaging_contract.py",
+        "tests/unit/test_gui_reviewed_execution_blocklist.py",
+        "tests/unit/test_gui_model_mock_real_boundary.py",
+        "tests/unit/test_execute_reviewed_api.py",
+        "-v",
+        "--basetemp=.pytest_tmp_packaging_focused"
+    )
+    Invoke-PytestChecked `
+        -Interpreter $TestPython `
+        -Arguments $FocusedTests `
+        -Root $RepoRoot `
+        -Description "Focused packaging tests"
 
     if (-not $SkipFullPytest) {
-        python -m pytest --tb=short
+        Invoke-PytestChecked `
+            -Interpreter $TestPython `
+            -Arguments @("--tb=short", "--basetemp=.pytest_tmp_packaging_full") `
+            -Root $RepoRoot `
+            -Description "Full backend test suite"
     }
 
     & (Join-Path $RepoRoot "desktop\packaging\build_frontend.ps1")
