@@ -110,6 +110,10 @@ def test_electron_builder_contract():
     assert "target: nsis" in builder
     assert "target: portable" in builder
     assert "signAndEditExecutable: false" in builder
+    assert "oneClick: true" in builder
+    assert "perMachine: false" in builder
+    assert "runAfterFinish: false" in builder
+    assert "allowToChangeInstallationDirectory" not in builder
     assert "rawdata" not in builder
     assert "data/DemoData" not in builder
 

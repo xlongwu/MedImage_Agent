@@ -25,9 +25,12 @@ win:
       arch:
         - x64
 nsis:
-  oneClick: false
+  # electron-builder 24.13.3 assisted per-user installers can crash inside
+  # NSIS System.dll on current Windows builds. The one-click per-user path
+  # avoids that unstable multi-user selection code without requiring elevation.
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
+  runAfterFinish: false
   artifactName: "${productName} Setup.${ext}"
 portable:
   artifactName: "${productName}.${ext}"
