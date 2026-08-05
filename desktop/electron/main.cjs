@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
@@ -10,6 +11,17 @@ const DEFAULT_API_PORT = Number(process.env.MEDIMAGE_DESKTOP_BACKEND_PORT || "87
 const BACKEND_EXE_NAME = "medimage-backend.exe";
 const BACKEND_PAYLOAD_NAME = "medimage-backend.bin";
 const HEALTH_PATH = "/api/health";
+const DESKTOP_HEALTH_NONCE_HEADER = "X-MedImage-Desktop-Health-Nonce";
+const DESKTOP_HEALTH_PROOF_HEADER = "x-medimage-desktop-health-proof";
+const DEFAULT_BACKEND_STARTUP_TIMEOUT_MS = 120_000;
+const configuredBackendStartupTimeoutMs = Number(
+  process.env.MEDIMAGE_DESKTOP_BACKEND_STARTUP_TIMEOUT_MS
+);
+const BACKEND_STARTUP_TIMEOUT_MS =
+  Number.isFinite(configuredBackendStartupTimeoutMs) && configuredBackendStartupTimeoutMs > 0
+    ? configuredBackendStartupTimeoutMs
+    : DEFAULT_BACKEND_STARTUP_TIMEOUT_MS;
+const BACKEND_HEALTH_POLL_INTERVAL_MS = 500;
 const IS_SMOKE_TEST = process.env.MEDIMAGE_DESKTOP_SMOKE === "1";
 
 function findRepositoryRoot(startPath) {
@@ -47,7 +59,11 @@ app.setPath(
 );
 
 let backendProcess = null;
+let backendStartPromise = null;
 let backendStopping = false;
+let mainWindow = null;
+let agentApprovalToken = null;
+let backendSessionToken = null;
 let backendState = {
   apiBaseUrl: `http://${API_HOST}:${DEFAULT_API_PORT}`,
   managed: false,
@@ -138,19 +154,45 @@ function syncRuntimeEnv() {
   process.env.MEDIMAGE_DESKTOP_BACKEND_PORT = String(backendState.port || DEFAULT_API_PORT);
 }
 
+function hasExpectedHealthProof(proof, nonce) {
+  if (!backendSessionToken || typeof proof !== "string") {
+    return false;
+  }
+  const expected = crypto
+    .createHmac("sha256", backendSessionToken)
+    .update(nonce, "utf8")
+    .digest("hex");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const proofBuffer = Buffer.from(proof, "utf8");
+  return (
+    expectedBuffer.length === proofBuffer.length &&
+    crypto.timingSafeEqual(expectedBuffer, proofBuffer)
+  );
+}
+
 function requestHealth(apiBaseUrl = backendState.apiBaseUrl, timeoutMs = 600) {
   return new Promise((resolve) => {
+    if (!backendSessionToken) {
+      resolve({ ok: false, error: "missing desktop sidecar session token" });
+      return;
+    }
     let done = false;
+    const nonce = crypto.randomBytes(32).toString("hex");
     const finish = (result) => {
       if (!done) {
         done = true;
         resolve(result);
       }
     };
-    const req = http.get(`${apiBaseUrl}${HEALTH_PATH}`, (res) => {
+    const req = http.get(`${apiBaseUrl}${HEALTH_PATH}`, {
+      headers: { [DESKTOP_HEALTH_NONCE_HEADER]: nonce },
+    }, (res) => {
       res.resume();
       finish({
-        ok: res.statusCode >= 200 && res.statusCode < 300,
+        ok:
+          res.statusCode >= 200 &&
+          res.statusCode < 300 &&
+          hasExpectedHealthProof(res.headers[DESKTOP_HEALTH_PROOF_HEADER], nonce),
         statusCode: res.statusCode,
       });
     });
@@ -189,6 +231,26 @@ function resolveFrontendIndex() {
     : path.join(getRepoRoot(), "src", "frontend", "dist", "index.html");
 }
 
+function cleanupStaleBackendPayloads(destinationRoot, keepDir) {
+  if (!fs.existsSync(destinationRoot)) {
+    return;
+  }
+  for (const entry of fs.readdirSync(destinationRoot, { withFileTypes: true })) {
+    const candidate = path.join(destinationRoot, entry.name);
+    if (candidate === keepDir) {
+      continue;
+    }
+    try {
+      fs.rmSync(candidate, { recursive: entry.isDirectory(), force: true });
+    } catch (error) {
+      appendBackendLog(
+        "desktop",
+        `deferred stale sidecar cleanup: ${candidate} (${error.code || error.message})\n`
+      );
+    }
+  }
+}
+
 function ensureBackendFromPayload(backendResourceDir) {
   const payloadPath = path.join(backendResourceDir, BACKEND_PAYLOAD_NAME);
   if (!fs.existsSync(payloadPath)) {
@@ -196,11 +258,18 @@ function ensureBackendFromPayload(backendResourceDir) {
   }
 
   const payloadStat = fs.statSync(payloadPath);
-  const destinationDir = path.join(getUserWorkspace(), ".runtime", "backend-sidecar");
+  const destinationRoot = path.join(getUserWorkspace(), ".runtime", "backend-sidecar");
+  const payloadKey = [
+    app.getVersion().replace(/[^a-zA-Z0-9._-]/g, "_"),
+    String(payloadStat.size),
+    String(Math.trunc(payloadStat.mtimeMs)),
+  ].join("-");
+  let destinationDir = path.join(destinationRoot, payloadKey);
   const executablePath = path.join(destinationDir, BACKEND_EXE_NAME);
   const stampPath = path.join(destinationDir, ".backend-payload.json");
   const stamp = JSON.stringify({
     payload: BACKEND_PAYLOAD_NAME,
+    appVersion: app.getVersion(),
     size: payloadStat.size,
     mtimeMs: payloadStat.mtimeMs,
   });
@@ -208,6 +277,7 @@ function ensureBackendFromPayload(backendResourceDir) {
   if (fs.existsSync(executablePath) && fs.existsSync(stampPath)) {
     try {
       if (fs.readFileSync(stampPath, "utf8") === stamp) {
+        cleanupStaleBackendPayloads(destinationRoot, destinationDir);
         return executablePath;
       }
     } catch {
@@ -215,16 +285,21 @@ function ensureBackendFromPayload(backendResourceDir) {
     }
   }
 
-  fs.rmSync(destinationDir, { recursive: true, force: true });
+  if (fs.existsSync(destinationDir)) {
+    destinationDir = path.join(destinationRoot, `${payloadKey}-${process.pid}-${Date.now()}`);
+  }
+  const preparedExecutablePath = path.join(destinationDir, BACKEND_EXE_NAME);
+  const preparedStampPath = path.join(destinationDir, ".backend-payload.json");
   fs.mkdirSync(destinationDir, { recursive: true });
   appendBackendLog("desktop", `preparing backend sidecar payload: ${payloadPath}\n`);
-  fs.copyFileSync(payloadPath, executablePath);
-  if (!fs.existsSync(executablePath)) {
-    throw new Error(`Backend payload could not be copied to ${executablePath}.`);
+  fs.copyFileSync(payloadPath, preparedExecutablePath);
+  if (!fs.existsSync(preparedExecutablePath)) {
+    throw new Error(`Backend payload could not be copied to ${preparedExecutablePath}.`);
   }
 
-  fs.writeFileSync(stampPath, stamp, "utf8");
-  return executablePath;
+  fs.writeFileSync(preparedStampPath, stamp, "utf8");
+  cleanupStaleBackendPayloads(destinationRoot, destinationDir);
+  return preparedExecutablePath;
 }
 
 function resolveBackendCommand(port) {
@@ -264,18 +339,28 @@ function resolveBackendCommand(port) {
   };
 }
 
-async function waitForBackend(apiBaseUrl = backendState.apiBaseUrl, attempts = 60) {
-  for (let index = 0; index < attempts; index += 1) {
+async function waitForBackend(
+  apiBaseUrl = backendState.apiBaseUrl,
+  timeoutMs = BACKEND_STARTUP_TIMEOUT_MS
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     const result = await requestHealth(apiBaseUrl);
     if (result.ok) {
       return true;
     }
-    await delay(500);
+    if (["error", "stopped"].includes(backendState.status)) {
+      return false;
+    }
+    const remainingMs = deadline - Date.now();
+    if (remainingMs > 0) {
+      await delay(Math.min(BACKEND_HEALTH_POLL_INTERVAL_MS, remainingMs));
+    }
   }
   return false;
 }
 
-async function startBackend() {
+async function startBackendOnce() {
   backendState = { ...backendState, logPath: getLogPath() };
 
   if (process.env.MEDIMAGE_DESKTOP_SKIP_BACKEND === "true") {
@@ -287,6 +372,10 @@ async function startBackend() {
   const port = await findAvailablePort(DEFAULT_API_PORT);
   const apiBaseUrl = `http://${API_HOST}:${port}`;
   const backend = resolveBackendCommand(port);
+  backendSessionToken = crypto.randomBytes(32).toString("hex");
+  agentApprovalToken = crypto.randomBytes(32).toString("hex");
+  const agentApprovalActor =
+    process.env.USERNAME || process.env.USER || "desktop-local-user";
   backendState = {
     ...backendState,
     apiBaseUrl,
@@ -301,17 +390,23 @@ async function startBackend() {
   syncRuntimeEnv();
   appendBackendLog("desktop", `backend executable: ${backend.executablePath}\n`);
   appendBackendLog("desktop", `backend port: ${port}\n`);
+  appendBackendLog("desktop", `backend startup timeout: ${BACKEND_STARTUP_TIMEOUT_MS} ms\n`);
   appendBackendLog("desktop", `frontend path: ${resolveFrontendIndex()}\n`);
   backendProcess = spawn(backend.command, backend.args, {
     cwd: backend.cwd,
     env: {
       ...process.env,
       MEDIMAGE_DESKTOP: "1",
+      MEDIMAGE_DESKTOP_PARENT_PID: String(process.pid),
       MEDIMAGE_DESKTOP_BACKEND_HOST: API_HOST,
       MEDIMAGE_DESKTOP_BACKEND_PORT: String(port),
       MEDIMAGE_BACKEND_HOST: API_HOST,
       MEDIMAGE_BACKEND_PORT: String(port),
+      MEDIMAGE_DESKTOP_SESSION_TOKEN: backendSessionToken,
       MEDIMAGE_GUI_AGENT_PROVIDER: "mock",
+      MEDIMAGE_AGENT_STARTUP_RECONCILE: "1",
+      MEDIMAGE_AGENT_APPROVAL_TOKEN: agentApprovalToken,
+      MEDIMAGE_AGENT_APPROVAL_ACTOR: agentApprovalActor,
       // Execution gates are never enabled by the desktop shell. Explicit
       // operator/test environment configuration remains authoritative.
     },
@@ -339,6 +434,8 @@ async function startBackend() {
       pid: null,
       error: expectedStop || code === 0 ? null : `backend exited code=${code} signal=${signal}`,
     };
+    backendSessionToken = null;
+    agentApprovalToken = null;
     syncRuntimeEnv();
     appendBackendLog("exit", `code=${code} signal=${signal}\n`);
   });
@@ -352,6 +449,18 @@ async function startBackend() {
   syncRuntimeEnv();
   appendBackendLog("desktop", `backend health status: ${backendState.status}\n`);
   return ready;
+}
+
+async function startBackend() {
+  if (backendProcess && backendState.ready) {
+    return true;
+  }
+  if (!backendStartPromise) {
+    backendStartPromise = startBackendOnce().finally(() => {
+      backendStartPromise = null;
+    });
+  }
+  return backendStartPromise;
 }
 
 function stopBackend() {
@@ -382,6 +491,8 @@ function stopBackend() {
     syncRuntimeEnv();
     backendProcess = null;
   }
+  agentApprovalToken = null;
+  backendSessionToken = null;
 }
 
 function runtimeSnapshot() {
@@ -416,6 +527,9 @@ function writeSmokeResult(payload) {
 function registerIpcHandlers() {
   ipcMain.handle("medimage:get-api-base-url", () => backendState.apiBaseUrl);
   ipcMain.handle("medimage:get-runtime", () => runtimeSnapshot());
+  ipcMain.handle("medimage:get-agent-approval-token", () =>
+    backendState.ready && agentApprovalToken ? agentApprovalToken : null
+  );
   ipcMain.handle("medimage:select-directory", async (event) => {
     const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
       properties: ["openDirectory"],
@@ -499,15 +613,35 @@ async function loadFrontend(win) {
 
 async function verifyFrontendRenderer(win, attempts = 40) {
   for (let index = 0; index < attempts; index += 1) {
-    const snapshot = await win.webContents.executeJavaScript(`(() => {
+    const snapshot = await win.webContents.executeJavaScript(`(async () => {
       const root = document.getElementById("root");
       const main = document.querySelector("main, [role=main]");
+      const backendBaseUrl =
+        window.__MEDIMAGE_DESKTOP_CONFIG__?.backendBaseUrl ||
+        window.MEDIMAGE_API_BASE_URL ||
+        window.MEDIMAGE_DESKTOP_RUNTIME?.apiBaseUrl ||
+        "";
+      let rendererBackendHealthOk = false;
+      let rendererBackendHealthStatus = null;
+      if (backendBaseUrl) {
+        try {
+          const response = await fetch(backendBaseUrl + "/api/health");
+          rendererBackendHealthStatus = response.status;
+          rendererBackendHealthOk = response.ok;
+        } catch {
+          rendererBackendHealthOk = false;
+        }
+      }
       return {
+        backendConfigPresent: Boolean(backendBaseUrl),
         documentReadyState: document.readyState,
         documentTitle: document.title,
         locationProtocol: window.location.protocol,
+        navigationLandmarkCount: document.querySelectorAll("nav").length,
         reactRootChildCount: root?.childElementCount ?? 0,
         reactRootTextLength: root?.textContent?.trim().length ?? 0,
+        rendererBackendHealthOk,
+        rendererBackendHealthStatus,
         mainLandmarkPresent: Boolean(main),
       };
     })()`, true);
@@ -515,7 +649,9 @@ async function verifyFrontendRenderer(win, attempts = 40) {
       snapshot.documentReadyState === "complete" &&
       snapshot.reactRootChildCount > 0 &&
       snapshot.reactRootTextLength > 0 &&
-      snapshot.mainLandmarkPresent
+      snapshot.mainLandmarkPresent &&
+      snapshot.backendConfigPresent &&
+      snapshot.rendererBackendHealthOk
     ) {
       return snapshot;
     }
@@ -525,6 +661,15 @@ async function verifyFrontendRenderer(win, attempts = 40) {
 }
 
 async function createWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    return mainWindow;
+  }
+
   await startBackend();
 
   const win = new BrowserWindow({
@@ -541,6 +686,12 @@ async function createWindow() {
       sandbox: true,
       webSecurity: true,
     },
+  });
+  mainWindow = win;
+  win.on("closed", () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
   });
 
   const rendererConsoleErrors = [];
@@ -583,34 +734,56 @@ async function createWindow() {
     });
     app.quit();
   }
+
+  return win;
 }
 
-app.whenReady().then(() => {
-  registerIpcHandlers();
-  createWindow().catch((error) => {
-    backendState = { ...backendState, ready: false, status: "error", error: error.message };
-    syncRuntimeEnv();
-    appendBackendLog("desktop", `fatal startup error: ${error.stack || error.message}\n`);
-    if (IS_SMOKE_TEST) {
-      writeSmokeResult({ frontendLoaded: false, rendererVerified: false, error: error.message });
-      app.quit();
-      return;
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
     }
-    dialog.showErrorBox("MedImage Agent startup failed", error.message);
   });
-});
 
-app.on("before-quit", stopBackend);
+  app.whenReady().then(() => {
+    registerIpcHandlers();
+    createWindow().catch((error) => {
+      stopBackend();
+      backendState = { ...backendState, ready: false, status: "error", error: error.message };
+      syncRuntimeEnv();
+      appendBackendLog("desktop", `fatal startup error: ${error.stack || error.message}\n`);
+      if (IS_SMOKE_TEST) {
+        writeSmokeResult({ frontendLoaded: false, rendererVerified: false, error: error.message });
+        app.quit();
+        return;
+      }
+      dialog.showErrorBox("MedImage Agent startup failed", error.message);
+    });
+  });
 
-app.on("window-all-closed", () => {
-  stopBackend();
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
+  app.on("before-quit", stopBackend);
 
-app.on("activate", () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
+  app.on("window-all-closed", () => {
+    stopBackend();
+    if (process.platform !== "darwin") {
+      app.quit();
+    }
+  });
+
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow().catch((error) => {
+        stopBackend();
+        appendBackendLog("desktop", `activate error: ${error.stack || error.message}\n`);
+      });
+    }
+  });
+}

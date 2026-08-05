@@ -50,7 +50,11 @@ def test_native_preproc_run_validator_flags_roi_timepoint_mismatch(tmp_path: Pat
 
     validation = validate_native_preproc_run(result.run_dir, require_fc_numerics=True)
 
-    check = next(item for item in validation["checks"] if item["name"] == "roi_timeseries_rows_match_timepoints")
+    check = next(
+        item
+        for item in validation["checks"]
+        if item["name"] == "roi_timeseries_rows_match_timepoints"
+    )
     assert validation["ok"] is False
     assert check["status"] == "FAIL"
     assert check["metrics"]["roi_rows"] == check["metrics"]["expected_timepoints"] - 1
@@ -68,7 +72,9 @@ def test_native_preproc_run_validator_flags_unknown_subject_when_required(tmp_pa
 
     validation = validate_native_preproc_run(result.run_dir, require_subject_ids=True)
 
-    subject_check = next(check for check in validation["checks"] if check["name"] == "subject_ids_resolved")
+    subject_check = next(
+        check for check in validation["checks"] if check["name"] == "subject_ids_resolved"
+    )
     assert validation["ok"] is False
     assert subject_check["status"] == "FAIL"
     assert subject_check["severity"] == "error"
@@ -99,10 +105,14 @@ def test_native_preproc_run_validator_accepts_report_export_bridge(tmp_path: Pat
     )
 
     bridge_check = next(
-        check for check in validation["checks"] if check["name"] == "report_exporter_group_summary_source"
+        check
+        for check in validation["checks"]
+        if check["name"] == "report_exporter_group_summary_source"
     )
     probe_check = next(
-        check for check in validation["checks"] if check["name"] == "report_exporter_probe_uses_native_outputs"
+        check
+        for check in validation["checks"]
+        if check["name"] == "report_exporter_probe_uses_native_outputs"
     )
     assert validation["ok"] is True
     assert bridge_check["status"] == "PASS"

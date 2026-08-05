@@ -64,11 +64,7 @@ def compute_smoothing_qc_for_subject(
     input_path = Path(input_nii)
     smoothed_path = Path(smoothed_nii)
 
-    missing = [
-        str(path)
-        for path in [input_path, smoothed_path]
-        if not path.exists()
-    ]
+    missing = [str(path) for path in [input_path, smoothed_path] if not path.exists()]
 
     if missing:
         result = {
@@ -183,9 +179,12 @@ def compute_smoothing_qc_for_subject(
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
-    if not path.exists(): return None
-    try: return json.loads(path.read_text(encoding="utf-8"))
-    except Exception: return None
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
 
 
 def write_smoothing_qc_dataset_report(derivatives_dir: str, report_dir: str) -> dict[str, Any]:
@@ -211,8 +210,16 @@ def write_smoothing_qc_dataset_report(derivatives_dir: str, report_dir: str) -> 
     warning_count = sum(1 for item in subjects if item.get("smoothing_qc_status") == "WARNING")
     fail_count = sum(1 for item in subjects if item.get("smoothing_qc_status") == "FAIL")
 
-    finite_fractions = [float(item["finite_fraction"]) for item in subjects if item.get("finite_fraction") is not None]
-    variance_ratios = [float(item["variance_reduction_ratio"]) for item in subjects if item.get("variance_reduction_ratio") is not None]
+    finite_fractions = [
+        float(item["finite_fraction"])
+        for item in subjects
+        if item.get("finite_fraction") is not None
+    ]
+    variance_ratios = [
+        float(item["variance_reduction_ratio"])
+        for item in subjects
+        if item.get("variance_reduction_ratio") is not None
+    ]
 
     summary = {
         "ok": subjects_total > 0 and fail_count == 0,
@@ -240,15 +247,23 @@ def write_smoothing_qc_dataset_report(derivatives_dir: str, report_dir: str) -> 
     lines.append(f"- FAIL: {fail_count}")
     lines.append(f"- Mean finite fraction: {summary['mean_finite_fraction']}")
     lines.append(f"- Mean variance reduction ratio: {summary['mean_variance_reduction_ratio']}")
-    lines.append(""); lines.append("## Subjects"); lines.append("")
+    lines.append("")
+    lines.append("## Subjects")
+    lines.append("")
     lines.append("| Subject | Status | FWHM | Shape | Finite Fraction | Variance Ratio |")
     lines.append("|---|---|---|---|---:|---:|")
 
     for item in subjects:
-        lines.append(f"| {item.get('subject_id')} | {item.get('smoothing_qc_status')} | {item.get('fwhm')} | {item.get('smoothed_shape')} | {item.get('finite_fraction')} | {item.get('variance_reduction_ratio')} |")
+        lines.append(
+            f"| {item.get('subject_id')} | {item.get('smoothing_qc_status')} | {item.get('fwhm')} | {item.get('smoothed_shape')} | {item.get('finite_fraction')} | {item.get('variance_reduction_ratio')} |"
+        )
 
-    lines.append(""); lines.append("## Safety Note"); lines.append("")
-    lines.append("This report summarizes derivative smoothing QC outputs only. It does not modify rawdata.")
+    lines.append("")
+    lines.append("## Safety Note")
+    lines.append("")
+    lines.append(
+        "This report summarizes derivative smoothing QC outputs only. It does not modify rawdata."
+    )
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     return {
@@ -256,7 +271,12 @@ def write_smoothing_qc_dataset_report(derivatives_dir: str, report_dir: str) -> 
         "node_id": "smoothing_qc_dataset_report",
         "backend": "python",
         "outputs": [str(summary_path), str(report_path)],
-        "metrics": {"subjects_total": subjects_total, "subjects_pass": pass_count, "subjects_warning": warning_count, "subjects_fail": fail_count},
+        "metrics": {
+            "subjects_total": subjects_total,
+            "subjects_pass": pass_count,
+            "subjects_warning": warning_count,
+            "subjects_fail": fail_count,
+        },
         "warnings": warnings,
         "errors": errors,
     }

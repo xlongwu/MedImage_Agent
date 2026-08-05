@@ -8,8 +8,12 @@ import pytest
 nib = pytest.importorskip("nibabel")
 pytest.importorskip("scipy")
 
-from src.backend.app.native_preproc.orchestrator.validation import validate_stage_result_artifacts
-from src.backend.app.native_preproc.stages.atlas_resampling import run_atlas_resampling
+from src.backend.app.native_preproc.orchestrator.validation import (  # noqa: E402
+    validate_stage_result_artifacts,  # noqa: E402
+)
+from src.backend.app.native_preproc.stages.atlas_resampling import (  # noqa: E402
+    run_atlas_resampling,  # noqa: E402
+)
 
 
 def _save(path: Path, data: np.ndarray, affine: np.ndarray) -> Path:
@@ -25,7 +29,9 @@ def test_atlas_resampling_uses_nearest_neighbor_and_preserves_labels(tmp_path: P
     reference = np.zeros((8, 8, 8, 2), dtype=np.float32)
     reference_affine = np.eye(4)
     atlas_path = _save(tmp_path / "synthetic_atlas.nii.gz", atlas, atlas_affine)
-    reference_path = _save(tmp_path / "sub-01_space-template_bold.nii.gz", reference, reference_affine)
+    reference_path = _save(
+        tmp_path / "sub-01_space-template_bold.nii.gz", reference, reference_affine
+    )
 
     result = run_atlas_resampling(atlas_path, reference_path, tmp_path / "native")
 
@@ -40,8 +46,14 @@ def test_atlas_resampling_uses_nearest_neighbor_and_preserves_labels(tmp_path: P
 
 
 def test_atlas_resampling_blocks_4d_atlas(tmp_path: Path) -> None:
-    atlas_path = _save(tmp_path / "bad_atlas.nii.gz", np.zeros((2, 2, 2, 2), dtype=np.int16), np.eye(4))
-    reference_path = _save(tmp_path / "sub-01_space-template_bold.nii.gz", np.zeros((2, 2, 2), dtype=np.float32), np.eye(4))
+    atlas_path = _save(
+        tmp_path / "bad_atlas.nii.gz", np.zeros((2, 2, 2, 2), dtype=np.int16), np.eye(4)
+    )
+    reference_path = _save(
+        tmp_path / "sub-01_space-template_bold.nii.gz",
+        np.zeros((2, 2, 2), dtype=np.float32),
+        np.eye(4),
+    )
 
     result = run_atlas_resampling(atlas_path, reference_path, tmp_path / "native")
 

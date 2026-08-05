@@ -63,7 +63,7 @@ def validate_pipeline_dict(data: dict[str, Any]) -> PipelineSpec:
             raise PipelineValidationError(f"Duplicate node id: {node_id}")
         node_ids.add(node_id)
 
-    for i, node_data in enumerate(nodes_data):
+    for _i, node_data in enumerate(nodes_data):
         for dep in node_data.get("depends_on", []):
             if dep not in node_ids:
                 raise PipelineValidationError(
@@ -101,8 +101,10 @@ def validate_pipeline_dict(data: dict[str, Any]) -> PipelineSpec:
 def load_pipeline_yaml(path: str | Path) -> PipelineSpec:
     try:
         import yaml
-    except ImportError:
-        raise ImportError("Missing dependency: PyYAML. Install with: pip install pyyaml")
+    except ImportError as exc:
+        raise ImportError(
+            "Missing dependency: PyYAML. Install with: pip install pyyaml"
+        ) from exc
 
     path = Path(path)
     if not path.exists():

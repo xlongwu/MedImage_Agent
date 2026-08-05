@@ -83,7 +83,7 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
       if (id === reqRef.current) {
         const msg = e instanceof Error ? e.message : String(e);
         if (msg.includes("404") || msg.includes("not been generated")) {
-          setError("No saved QC Dashboard report exists yet. Generate one first.");
+          setError(t("technical.QcDashboardSummary.noSavedReport"));
         } else {
           setError(msg);
         }
@@ -124,7 +124,7 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
           {loading ? t("technical.MotionMetricsDraft.004") : t("technical.QcDashboardSummary.004")}
         </button>
         <button onClick={handleLoadLatest} disabled={loading} className={styles.style004}>
-          Load Latest
+          {t("technical.QcDashboardSummary.loadLatest")}
         </button>
         <select
           value={cacheMode}
@@ -158,7 +158,7 @@ export default function QcDashboardSummaryPanel({ baseUrl, projectId }: Props) {
             fontSize: 12,
           }}
         >
-          {fpLoading ? "..." : "Inspect Fingerprint"}
+          {fpLoading ? "..." : t("technical.QcDashboardSummary.inspectFingerprint")}
         </button>
       </div>
 

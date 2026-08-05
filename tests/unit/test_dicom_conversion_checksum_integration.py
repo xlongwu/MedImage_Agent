@@ -10,16 +10,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 
 def _make_persisted_package(tmp_path: Path) -> str:
     """Create a fake project with rawdata and persist a plan."""
-    from src.backend.app.services.dicom_conversion_plan_persistence import (
-        persist_conversion_plan,
-    )
     from src.backend.app.schemas.dicom_conversion_approval import (
         DicomConversionApprovalRecord,
+    )
+    from src.backend.app.services.dicom_conversion_plan_persistence import (
+        persist_conversion_plan,
     )
 
     project_dir = str(tmp_path / "project")
@@ -94,6 +92,7 @@ def test_review_package_lists_checksum_file(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     project_dir = _make_persisted_package(tmp_path)
     run_dir = list(Path(project_dir).glob("conversion_runs/*"))
     run_id = run_dir[0].name
@@ -108,6 +107,7 @@ def test_review_package_checksum_summary(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     project_dir = _make_persisted_package(tmp_path)
     run_dir = list(Path(project_dir).glob("conversion_runs/*"))
     run_id = run_dir[0].name
@@ -125,12 +125,14 @@ def test_export_excludes_dcm(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir = _make_persisted_package(tmp_path)
     run_dir = list(Path(project_dir).glob("conversion_runs/*"))
     run_id = run_dir[0].name
 
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     import zipfile
+
     with zipfile.ZipFile(result.export_path) as zf:
         names = zf.namelist()
     for name in names:
@@ -141,6 +143,7 @@ def test_export_excludes_nifti(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir = _make_persisted_package(tmp_path)
     run_dir = list(Path(project_dir).glob("conversion_runs/*"))
     run_id = run_dir[0].name
@@ -148,6 +151,7 @@ def test_export_excludes_nifti(tmp_path):
 
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     import zipfile
+
     with zipfile.ZipFile(result.export_path) as zf:
         names = zf.namelist()
     assert "fake.nii.gz" not in names
@@ -157,12 +161,14 @@ def test_export_includes_checksum_metadata(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir = _make_persisted_package(tmp_path)
     run_dir = list(Path(project_dir).glob("conversion_runs/*"))
     run_id = run_dir[0].name
 
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     import zipfile
+
     with zipfile.ZipFile(result.export_path) as zf:
         names = zf.namelist()
     assert "rawdata_checksum_before.json" in names
@@ -178,11 +184,14 @@ def test_rollback_protects_rawdata_paths(tmp_path):
     from src.backend.app.schemas.dicom_conversion_safety import (
         build_conversion_rollback_plan,
     )
+
     rawdata = str(tmp_path / "rawdata")
     Path(rawdata).mkdir()
     (Path(rawdata) / "test.dcm").write_text("x")
 
-    plan = build_conversion_rollback_plan(rawdata, project_dir=str(tmp_path), rawdata_roots=[rawdata])
+    plan = build_conversion_rollback_plan(
+        rawdata, project_dir=str(tmp_path), rawdata_roots=[rawdata]
+    )
     assert len(plan.removable_paths) == 0
     assert len(plan.protected_paths) >= 1
 
@@ -192,6 +201,7 @@ def test_rollback_dry_run_deletes_nothing(tmp_path):
         build_conversion_rollback_plan,
         run_conversion_rollback_dry_run,
     )
+
     output = tmp_path / "output"
     output.mkdir()
     test_file = output / "data.json"
@@ -212,6 +222,7 @@ def test_approval_record_has_checksum_fields():
     from src.backend.app.schemas.dicom_conversion_approval import (
         DicomConversionApprovalRecord,
     )
+
     record = DicomConversionApprovalRecord()
     d = record.model_dump()
     assert "rawdata_checksum_confirmed" in d
@@ -224,6 +235,7 @@ def test_approval_checksum_defaults():
     from src.backend.app.schemas.dicom_conversion_approval import (
         DicomConversionApprovalRecord,
     )
+
     record = DicomConversionApprovalRecord()
     assert record.rawdata_checksum_confirmed is False
     assert record.pre_conversion_checksum_required is True
@@ -236,18 +248,20 @@ def test_approval_checksum_defaults():
 
 
 def test_user_conversion_still_disabled():
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+
     result = run_conversion_execute("test", DicomConversionExecutionRequest())
     assert result.conversion_disabled is True
 
 
 def test_no_subprocess_in_safety_schema():
     import src.backend.app.schemas.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -256,6 +270,7 @@ def test_no_subprocess_in_safety_schema():
 
 def test_spm_dpabi_matlab_still_disabled():
     import src.backend.app.schemas.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()

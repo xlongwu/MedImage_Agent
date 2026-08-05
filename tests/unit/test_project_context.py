@@ -17,9 +17,9 @@ from src.backend.app.api import (
 from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.planner.llm_planner import PlannerResponse
+from src.backend.app.planner.plan_adapter import adapt_reviewed_plan
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-
 
 client = TestClient(app)
 
@@ -118,6 +118,8 @@ def _reviewed_execution_goal_candidate(plan: dict) -> dict:
         "minimum_capability_level": "unavailable",
         "builder_source": "explicit_test_review",
     }
+
+
 def test_created_project_detail_exposes_context_paths(created_project):
     response = client.get(f"/api/projects/{created_project['project_id']}")
     assert response.status_code == 200
@@ -186,12 +188,10 @@ def test_plan_api_uses_registered_nifti_context_for_native_full_preprocessing(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["ok"] is False, json.dumps(payload, indent=2)
-    assert payload["clarification_required"] is True
-    assert payload["missing_prerequisites"] == [
-        "Provide a registered conversion_run_id or one explicit input_bold before review."
-    ]
-    assert any("input_bold or conversion_run_id" in error for error in payload["errors"])
+    assert payload["ok"] is True, json.dumps(payload, indent=2)
+    assert payload["clarification_required"] is False
+    assert payload["missing_prerequisites"] == []
+    assert payload["errors"] == []
     assert payload["project_context"]["diagnostics"]["status"] == "CONVERTED_BIDS"
     assert payload["project_context"]["diagnostics"]["nifti_file_count"] == 6
     assert payload["project_context"]["diagnostics"]["subjects_total"] == 3
@@ -204,6 +204,35 @@ def test_plan_api_uses_registered_nifti_context_for_native_full_preprocessing(
     node_ids = [node["id"] for node in payload["plan"]["nodes"]]
     assert node_ids == ["native_preproc_full_execute"]
     assert "spm_realign_subject" not in node_ids
+
+
+def test_plan_api_uses_registered_rawdata_bids_for_native_reho(created_project):
+    response = client.post(
+        "/api/planner/plan-from-goal",
+        json={
+            "goal": "对已登记的静息态 fMRI 数据执行完整预处理并计算 ReHo，生成质量控制报告。",
+            "project_id": created_project["project_id"],
+            "project_config_path": created_project["project_config_path"],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True, json.dumps(payload, indent=2)
+    assert payload["project_context"]["diagnostics"]["status"] == "BIDS"
+    assert (
+        payload["project_context"]["diagnostics"]["preprocessing_input_dir"]
+        == created_project["rawdata_dir"]
+    )
+    assert payload["plan"]["pipeline_id"] == "native_reho"
+    native = _node(payload["plan"], "native_preproc_full_execute")
+    assert native["params"]["input_bids_dir"] == created_project["rawdata_dir"]
+    assert native["params"]["stage_overrides"]["realignment"] is True
+    assert native["params"]["stage_overrides"]["temporal_filtering"] is True
+    assert native["params"]["stage_overrides"]["reho"] is True
+    adapter = adapt_reviewed_plan(payload["plan"])
+    assert adapter.ok is True, adapter.errors
+    assert adapter.policy["allowed_native_preproc_nodes"] == ["native_preproc_full_execute"]
 
 
 def test_plan_api_rejects_synthetic_node_for_created_project(
@@ -283,9 +312,7 @@ def test_explicit_example_project_config_remains_available():
         "/api/planner/plan-from-goal",
         json={
             "goal": "motion correction",
-            "project_config_path": str(
-                Path("examples/project_config_dataset.yaml").resolve()
-            ),
+            "project_config_path": str(Path("examples/project_config_dataset.yaml").resolve()),
         },
     )
     payload = response.json()
@@ -453,9 +480,7 @@ def test_execute_reviewed_passes_real_config_to_mocked_executor(
     payload = response.json()
     assert payload["status"] == "EXECUTION_SUBMITTED"
     assert calls[0]["project_config_path"] == created_project["project_config_path"]
-    written_pipeline = yaml.safe_load(
-        Path(calls[0]["pipeline_path"]).read_text(encoding="utf-8")
-    )
+    written_pipeline = yaml.safe_load(Path(calls[0]["pipeline_path"]).read_text(encoding="utf-8"))
     assert (
         _node(written_pipeline, "motion_qc_subject")["params"]["dataset_index"]
         == created_project["dataset_index_path"]

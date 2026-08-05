@@ -9,10 +9,11 @@ prerequisites are present.
 """
 from __future__ import annotations
 
-import os
-import time
 import hashlib
 import json
+import os
+import time
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,6 @@ from src.backend.app.services.preprocessing_artifact_registry import (
     append_stage_output_artifacts,
     load_artifact_registry,
 )
-
 
 _FC_MINIMAL_STAGES = {
     "input_validation",
@@ -111,9 +111,9 @@ _EXTERNAL_BACKENDS = {"spm12", "matlab-spm", "matlab_spm", "dpabi", "matlab-dpab
 
 
 def _now_iso() -> str:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _truthy_env(value: str | None) -> bool:
@@ -813,7 +813,9 @@ def _execute_reviewed_native_full(
     effective_project_dir: str,
     execution_scope: dict[str, Any],
 ) -> PreprocessingPipelineExecuteResponse:
-    from src.backend.app.native_preproc.orchestrator.runner import execute_native_full_preproc  # noqa: E402
+    from src.backend.app.native_preproc.orchestrator.runner import (
+        execute_native_full_preproc,  # noqa: E402
+    )
 
     native_request = _native_full_request_from_reviewed(
         request=request,
@@ -952,7 +954,7 @@ def execute_reviewed_preprocessing_pipeline(
         )
 
     execution_id = "pprev-" + hashlib.sha256(
-        f"{project_id}:{preprocessing_run_id}:{_now_iso()}".encode("utf-8")
+        f"{project_id}:{preprocessing_run_id}:{_now_iso()}".encode()
     ).hexdigest()[:12]
     execution_dir = run_dir / "reviewed_execution" / execution_id
     execution_dir.mkdir(parents=True, exist_ok=True)
@@ -1208,31 +1210,33 @@ def execute_reviewed_preprocessing_pipeline(
     validation_status = ""
     if request.generate_report:
         try:
-            from src.backend.app.services.preprocessing_pipeline_report import generate_pipeline_report
+            from src.backend.app.services.preprocessing_pipeline_report import (
+                generate_pipeline_report,
+            )
 
             report = generate_pipeline_report(project_id, preprocessing_run_id, project_dir=effective_pd)
             report_path = report.report_path
             if report_path:
                 json_report = Path(report_path) / "preprocessing_pipeline_report.json"
                 if json_report.exists():
-                    appended = append_stage_output_artifacts(
+                    append_stage_output_artifacts(
                         registry_path=registry_path,
                         project_id=project_id,
                         preprocessing_run_id=preprocessing_run_id,
-                        stage_id="group_summary",
+                        stage_id="final_report",
                         output_paths_by_type={"pipeline_report": [json_report]},
                         project_dir=effective_pd,
                         source_execution_id=execution_id,
                         backend="python",
                         metadata={"reviewed_orchestrator": True},
                     )
-                    if appended.get("appended_artifact_ids") and "group_summary" not in completed:
-                        completed.append("group_summary")
         except Exception as exc:  # pragma: no cover - defensive report isolation
             warnings.append(f"Pipeline report generation failed: {exc}")
     if request.run_validation:
         try:
-            from src.backend.app.services.preprocessing_pipeline_validation import validate_preprocessing_pipeline
+            from src.backend.app.services.preprocessing_pipeline_validation import (
+                validate_preprocessing_pipeline,
+            )
 
             validation = validate_preprocessing_pipeline(project_id, preprocessing_run_id, project_dir=effective_pd)
             validation_status = validation.status

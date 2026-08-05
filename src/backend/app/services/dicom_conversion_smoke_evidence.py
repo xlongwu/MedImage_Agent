@@ -18,19 +18,20 @@ import json
 import os
 import shutil
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-from src.backend.app.services.dicom_conversion_execution import (
+from src.backend.app.services.dicom_conversion_execution import (  # noqa: E402
     REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
 )
+
 
 def _all_flags_present() -> bool:
     return all(os.environ.get(f) == "1" for f in REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)
@@ -43,6 +44,7 @@ def _dcm2niix_available() -> bool:
 def _pydicom_available() -> bool:
     try:
         import pydicom  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -85,7 +87,9 @@ def capture_synthetic_smoke_evidence() -> dict[str, Any]:
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             input_dir = create_minimal_dicom_series(
-                tmp_path, subject_id="sub-smoke", num_slices=5,
+                tmp_path,
+                subject_id="sub-smoke",
+                num_slices=5,
             )
             output_root = tmp_path / "output"
             output_root.mkdir()
@@ -95,17 +99,29 @@ def capture_synthetic_smoke_evidence() -> dict[str, Any]:
 
             # Capture dcm2niix version
             ver_result = subprocess.run(
-                ["dcm2niix", "--version"], capture_output=True, text=True,
+                ["dcm2niix", "--version"],
+                capture_output=True,
+                text=True,
             )
-            evidence["dcm2niix_version"] = ver_result.stdout.strip().split("\n")[0] if ver_result.stdout else "unknown"
+            evidence["dcm2niix_version"] = (
+                ver_result.stdout.strip().split("\n")[0] if ver_result.stdout else "unknown"
+            )
 
             # Run conversion
             logs_dir = output_root / "logs"
             logs_dir.mkdir(parents=True)
 
             argv = [
-                "dcm2niix", "-z", "y", "-f", "smoke_%p_%s", "-b", "-ba",
-                "-o", str(output_root), str(input_dir),
+                "dcm2niix",
+                "-z",
+                "y",
+                "-f",
+                "smoke_%p_%s",
+                "-b",
+                "-ba",
+                "-o",
+                str(output_root),
+                str(input_dir),
             ]
 
             result = subprocess.run(argv, capture_output=True, text=True)

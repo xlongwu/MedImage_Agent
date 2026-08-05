@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -12,7 +12,7 @@ class JsonLogFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -42,5 +42,5 @@ def setup_logging(level: str | None = None) -> None:
     handler = logging.StreamHandler()
     handler.setLevel(log_level)
     handler.setFormatter(JsonLogFormatter())
-    setattr(handler, "_medimage_json_handler", True)
+    handler._medimage_json_handler = True
     logger.addHandler(handler)

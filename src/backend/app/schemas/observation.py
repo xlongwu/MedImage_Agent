@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.backend.app.schemas.node_contract import CapabilityLevel
 
-
 SourceReadStatus = Literal["ok", "missing", "invalid", "rejected"]
 FreshnessStatus = Literal["fresh", "stale", "unknown"]
 CompletenessStatus = Literal["complete", "partial", "invalid"]

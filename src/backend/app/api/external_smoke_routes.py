@@ -4,10 +4,9 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.api.models import ExternalSmokeRunRequest
-from src.backend.app.tools.external_smoke import get_external_smoke_status, run_external_smoke
+from src.backend.app.tools.external_smoke import get_external_smoke_status
 
 router = APIRouter()
 

@@ -7,28 +7,11 @@ Old routes remain registered in ``dashboard_routes.py`` with ``deprecated=True``
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, Query
 
 from src.backend.app.api.dependencies import ProjectStore
-from src.backend.app.schemas.desktop import (
-    BidsValidationResponse,
-    BoldReferenceReadinessResponse,
-    DataReadinessResponse,
-    ImagePlane,
-    ImagePreviewResponse,
-    ImageSourcesResponse,
-    ImageValidationReport,
-    MotionMetricsDraftResponse,
-    MotionQcReadinessResponse,
-    NiftiQcSnapshotResponse,
-    NiftiThumbnailResponse,
-    QcDashboardFingerprintResponse,
-    QcDashboardReportResponse,
-    RsfmriQcPlanningReportResponse,
-    SpmRealignDryRunResponse,
-    SpmRealignWrapperSkeletonResponse,
+from src.backend.app.services.artifact_adapter import (
+    build_nifti_thumbnail,
 )
 from src.backend.app.services.qc_adapter import (
     build_bold_reference_readiness,
@@ -43,12 +26,6 @@ from src.backend.app.services.qc_adapter import (
     build_spm_realign_wrapper_skeleton,
     load_latest_qc_dashboard_report,
     validate_bids,
-)
-from src.backend.app.services.artifact_adapter import (
-    build_image_preview,
-    build_image_validation_report,
-    build_nifti_thumbnail,
-    list_image_sources,
 )
 
 router = APIRouter()

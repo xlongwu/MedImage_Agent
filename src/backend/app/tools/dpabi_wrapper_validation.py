@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 BLOCKED_CLASSES = {"GUI_BLOCKED", "FULL_PIPELINE_BLOCKED"}
 
 
@@ -21,11 +20,7 @@ def _read_json(path: Path) -> dict[str, Any] | None:
 def _signature_by_name(signatures: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
     if not signatures:
         return {}
-    return {
-        item.get("name"): item
-        for item in signatures.get("functions", [])
-        if item.get("name")
-    }
+    return {item.get("name"): item for item in signatures.get("functions", []) if item.get("name")}
 
 
 def _sandbox_status_by_function(sandbox: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
@@ -70,7 +65,7 @@ def _subject_status_by_function(summary: dict[str, Any] | None) -> dict[str, dic
         else:
             item["subjects_failed"] += 1
 
-    for fn, item in out.items():
+    for _fn, item in out.items():
         item["passed"] = item["subjects_total"] > 0 and item["subjects_failed"] == 0
 
     return out
@@ -128,15 +123,27 @@ def write_dpabi_wrapper_validation_matrix(
     con_path = Path(contracts_path)
     sandbox_path = Path(sandbox_result_path)
     subject_path = Path(subject_wrapper_summary_path)
-    for path_val, label in [(sig_path, "signatures"), (con_path, "contracts"),
-                            (sandbox_path, "sandbox_results"), (subject_path, "subject_summary")]:
+    for path_val, label in [
+        (sig_path, "signatures"),
+        (con_path, "contracts"),
+        (sandbox_path, "sandbox_results"),
+        (subject_path, "subject_summary"),
+    ]:
         rstr = str(path_val.resolve()).replace("\\", "/")
         if ".." in rstr:
-            return {"ok": False, "node_id": "dpabi_wrapper_validation_matrix",
-                    "errors": [f"Path traversal rejected: {label}"], "outputs": []}
+            return {
+                "ok": False,
+                "node_id": "dpabi_wrapper_validation_matrix",
+                "errors": [f"Path traversal rejected: {label}"],
+                "outputs": [],
+            }
         if any(seg in ("rawdata", "data") for seg in path_val.resolve().parts):
-            return {"ok": False, "node_id": "dpabi_wrapper_validation_matrix",
-                    "errors": [f"{label} path must not point to rawdata"], "outputs": []}
+            return {
+                "ok": False,
+                "node_id": "dpabi_wrapper_validation_matrix",
+                "errors": [f"{label} path must not point to rawdata"],
+                "outputs": [],
+            }
 
     signatures = _read_json(sig_path)
     contracts = _read_json(con_path)
@@ -176,7 +183,9 @@ def write_dpabi_wrapper_validation_matrix(
         subject_status = subject_map.get(function_name, {"tested": False, "passed": False})
 
         exists = bool(contract.get("exists"))
-        safety_classification = str(contract.get("safety_classification", "UNKNOWN_REVIEW_REQUIRED"))
+        safety_classification = str(
+            contract.get("safety_classification", "UNKNOWN_REVIEW_REQUIRED")
+        )
         wrapper_candidate = bool(contract.get("wrapper_candidate"))
 
         readiness, recommended_next_step = _determine_readiness(
@@ -189,26 +198,28 @@ def write_dpabi_wrapper_validation_matrix(
             subject_passed=bool(subject_status.get("passed")),
         )
 
-        rows.append({
-            "function_name": function_name,
-            "category": contract.get("category"),
-            "exists": exists,
-            "which_path": contract.get("which_path"),
-            "nargin": contract.get("nargin", signature.get("nargin")),
-            "nargout": contract.get("nargout", signature.get("nargout")),
-            "safety_classification": safety_classification,
-            "wrapper_candidate": wrapper_candidate,
-            "blocked_reason": contract.get("blocked_reason", ""),
-            "sandbox_tested": bool(sandbox_status.get("tested")),
-            "sandbox_passed": bool(sandbox_status.get("passed")),
-            "subject_tested": bool(subject_status.get("tested")),
-            "subject_passed": bool(subject_status.get("passed")),
-            "subjects_total": subject_status.get("subjects_total"),
-            "subjects_success": subject_status.get("subjects_success"),
-            "subjects_failed": subject_status.get("subjects_failed"),
-            "readiness": readiness,
-            "recommended_next_step": recommended_next_step,
-        })
+        rows.append(
+            {
+                "function_name": function_name,
+                "category": contract.get("category"),
+                "exists": exists,
+                "which_path": contract.get("which_path"),
+                "nargin": contract.get("nargin", signature.get("nargin")),
+                "nargout": contract.get("nargout", signature.get("nargout")),
+                "safety_classification": safety_classification,
+                "wrapper_candidate": wrapper_candidate,
+                "blocked_reason": contract.get("blocked_reason", ""),
+                "sandbox_tested": bool(sandbox_status.get("tested")),
+                "sandbox_passed": bool(sandbox_status.get("passed")),
+                "subject_tested": bool(subject_status.get("tested")),
+                "subject_passed": bool(subject_status.get("passed")),
+                "subjects_total": subject_status.get("subjects_total"),
+                "subjects_success": subject_status.get("subjects_success"),
+                "subjects_failed": subject_status.get("subjects_failed"),
+                "readiness": readiness,
+                "recommended_next_step": recommended_next_step,
+            }
+        )
 
     out_dir = Path(work_dir) / "dpabi"
     report_out = Path(report_dir) / "dpabi"
@@ -226,7 +237,9 @@ def write_dpabi_wrapper_validation_matrix(
         "matrix_total": len(rows),
         "promotable_total": sum(1 for row in rows if row["readiness"] == "PROMOTABLE_TO_TEMPLATE"),
         "blocked_total": sum(1 for row in rows if row["readiness"] == "BLOCKED"),
-        "manual_review_total": sum(1 for row in rows if row["readiness"] == "MANUAL_REVIEW_REQUIRED"),
+        "manual_review_total": sum(
+            1 for row in rows if row["readiness"] == "MANUAL_REVIEW_REQUIRED"
+        ),
         "rows": rows,
         "warnings": warnings,
         "errors": errors,
@@ -288,7 +301,9 @@ def write_dpabi_wrapper_validation_matrix(
     lines.append("")
     lines.append("## Safety Note")
     lines.append("")
-    lines.append("This validation matrix does not execute DPABI. It only summarizes existing wrapper evidence.")
+    lines.append(
+        "This validation matrix does not execute DPABI. It only summarizes existing wrapper evidence."
+    )
 
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

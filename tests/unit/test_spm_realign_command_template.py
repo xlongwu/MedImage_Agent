@@ -12,8 +12,8 @@ from src.backend.app.services.spm_realign_wrapper_skeleton import (
     build_spm_realign_batch_preview_result,
 )
 
-
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+
 
 def _dummy_inputs() -> list[dict]:
     return [
@@ -31,6 +31,7 @@ def _dummy_outputs() -> list[dict]:
 
 # ── Safety content tests ─────────────────────────────────────────────────────
 
+
 def test_template_includes_preview_only():
     batch = build_spm_realign_batch_preview()
     assert "PREVIEW ONLY" in batch
@@ -43,8 +44,12 @@ def test_template_includes_command_template_id():
 
 def test_template_includes_validated_params():
     params = {
-        "quality": 0.95, "separation_mm": 3, "fwhm_mm": 4,
-        "register_to_mean": False, "interpolation": 4, "wrap": [1, 0, 1],
+        "quality": 0.95,
+        "separation_mm": 3,
+        "fwhm_mm": 4,
+        "register_to_mean": False,
+        "interpolation": 4,
+        "wrap": [1, 0, 1],
     }
     batch = build_spm_realign_batch_preview(params=params)
     assert "quality = 0.95" in batch
@@ -87,15 +92,17 @@ def test_template_no_shell_command():
 
 def test_unknown_unsafe_params_ignored():
     """Unsafe param names appear in error comments, but their values do not render as code."""
-    batch = build_spm_realign_batch_preview(params={"matlab_script": "evil()", "shell_command": "rm"})
+    batch = build_spm_realign_batch_preview(
+        params={"matlab_script": "evil()", "shell_command": "rm"}
+    )
     # Values are never rendered
     assert "evil()" not in batch
     # Param names appear only in ERROR comments (not as executable code)
     lines = batch.splitlines()
-    error_lines = [l for l in lines if "ERROR" in l and "matlab_script" in l]
+    error_lines = [line for line in lines if "ERROR" in line and "matlab_script" in line]
     assert len(error_lines) >= 1, "matlab_script should appear in error comment"
-    non_comment_lines = [l for l in lines if not l.strip().startswith("%")]
-    assert not any("matlab_script" in l for l in non_comment_lines)
+    non_comment_lines = [line for line in lines if not line.strip().startswith("%")]
+    assert not any("matlab_script" in line for line in non_comment_lines)
 
 
 def test_invalid_params_still_produce_safe_template():
@@ -108,11 +115,13 @@ def test_invalid_params_still_produce_safe_template():
 
 def test_deterministic_output():
     batch1 = build_spm_realign_batch_preview(
-        inputs=_dummy_inputs(), params=default_spm_realign_params(),
+        inputs=_dummy_inputs(),
+        params=default_spm_realign_params(),
         predicted_outputs=_dummy_outputs(),
     )
     batch2 = build_spm_realign_batch_preview(
-        inputs=_dummy_inputs(), params=default_spm_realign_params(),
+        inputs=_dummy_inputs(),
+        params=default_spm_realign_params(),
         predicted_outputs=_dummy_outputs(),
     )
     assert batch1 == batch2
@@ -120,11 +129,12 @@ def test_deterministic_output():
 
 def test_no_file_writes(tmp_path):
     """Pure function must not write files."""
-    before = set(p.name for p in tmp_path.iterdir()) if tmp_path.exists() else set()
+    before = {p.name for p in tmp_path.iterdir()} if tmp_path.exists() else set()
     build_spm_realign_batch_preview(
-        inputs=_dummy_inputs(), params=default_spm_realign_params(),
+        inputs=_dummy_inputs(),
+        params=default_spm_realign_params(),
     )
-    after = set(p.name for p in tmp_path.iterdir()) if tmp_path.exists() else set()
+    after = {p.name for p in tmp_path.iterdir()} if tmp_path.exists() else set()
     assert after == before
 
 
@@ -171,11 +181,13 @@ def test_valid_params_have_no_errors():
 
 def test_deterministic_output_stills_holds():
     result1 = build_spm_realign_batch_preview_result(
-        inputs=_dummy_inputs(), params={"quality": 0.8},
+        inputs=_dummy_inputs(),
+        params={"quality": 0.8},
         predicted_outputs=_dummy_outputs(),
     )
     result2 = build_spm_realign_batch_preview_result(
-        inputs=_dummy_inputs(), params={"quality": 0.8},
+        inputs=_dummy_inputs(),
+        params={"quality": 0.8},
         predicted_outputs=_dummy_outputs(),
     )
     assert result1["preview"] == result2["preview"]
@@ -185,7 +197,8 @@ def test_deterministic_output_stills_holds():
 
 def test_backward_compatible_string_function_still_works():
     batch = build_spm_realign_batch_preview(
-        inputs=_dummy_inputs(), params=default_spm_realign_params(),
+        inputs=_dummy_inputs(),
+        params=default_spm_realign_params(),
     )
     assert "PREVIEW ONLY" in batch
     assert isinstance(batch, str)

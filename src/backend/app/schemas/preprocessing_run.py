@@ -3,14 +3,16 @@
 Models for creating and executing preprocessing run workspaces with full
 stage state machine shared with preprocessing_stage_catalog.
 """
+
 from __future__ import annotations
+
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 from src.backend.app.schemas.preprocessing_stage_catalog import (
     PREPROCESSING_STAGE_STATUS_VALUES,
 )
-
 
 # ── Phase 6C stage statuses ──
 STAGE_STATUS_VALUES = list(PREPROCESSING_STAGE_STATUS_VALUES)
@@ -30,13 +32,18 @@ class PreprocessingRunCreateRequest(BaseModel):
 
 
 class PreprocessingRunCreateResponse(BaseModel):
-    ok: bool = False; status: str = "blocked"; project_id: str = ""
-    preprocessing_run_id: str = ""; run_dir: str = ""
+    ok: bool = False
+    status: str = "blocked"
+    project_id: str = ""
+    preprocessing_run_id: str = ""
+    run_dir: str = ""
     preprocessing_input_dir: str = ""
     artifact_registry_path: str = ""
     input_inventory: dict[str, Any] = Field(default_factory=dict)
-    stage_count: int = 0; python_stage_count: int = 0
-    external_blocked_count: int = 0; planned_stage_count: int = 0
+    stage_count: int = 0
+    python_stage_count: int = 0
+    external_blocked_count: int = 0
+    planned_stage_count: int = 0
     disabled_external_stage_count: int = 0
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
@@ -46,15 +53,21 @@ class PreprocessingRunCreateResponse(BaseModel):
 
 
 class PreprocessingStageStatus(BaseModel):
-    stage_id: str = ""; name: str = ""; status: str = "not_started"
-    backend: str = "python"; requires_external_tool: bool = False
-    enabled: bool = True; optional: bool = False
-    category: str = ""; default_enabled: bool = True
+    stage_id: str = ""
+    name: str = ""
+    status: str = "not_started"
+    backend: str = "python"
+    requires_external_tool: bool = False
+    enabled: bool = True
+    optional: bool = False
+    category: str = ""
+    default_enabled: bool = True
     required_for_fc: bool = False
     input_artifact_types: list[str] = Field(default_factory=list)
     output_artifact_types: list[str] = Field(default_factory=list)
     supported_backends: list[str] = Field(default_factory=list)
-    default_backend: str = "python"; requires_approval: bool = False
+    default_backend: str = "python"
+    requires_approval: bool = False
     requires_env_flags: list[str] = Field(default_factory=list)
     can_run_in_ci: bool = True
     scientific_status: str = "metadata_only"
@@ -68,7 +81,9 @@ class PreprocessingStageStatus(BaseModel):
 
 
 class PreprocessingRunExecuteResponse(BaseModel):
-    ok: bool = False; status: str = "blocked"; project_id: str = ""
+    ok: bool = False
+    status: str = "blocked"
+    project_id: str = ""
     preprocessing_run_id: str = ""
     completed_stages: list[str] = Field(default_factory=list)
     blocked_stages: list[str] = Field(default_factory=list)
@@ -78,7 +93,8 @@ class PreprocessingRunExecuteResponse(BaseModel):
     preview_only_stages: list[str] = Field(default_factory=list)
     stage_statuses: list[PreprocessingStageStatus] = Field(default_factory=list)
     overall_progress: float = 0.0  # 0.0-1.0
-    input_inventory_path: str = ""; qc_preflight_summary_path: str = ""
+    input_inventory_path: str = ""
+    qc_preflight_summary_path: str = ""
     manifest_path: str = ""
     artifact_registry_path: str = ""
     warnings: list[str] = Field(default_factory=list)
@@ -88,9 +104,13 @@ class PreprocessingRunExecuteResponse(BaseModel):
 
 
 class PreprocessingRunStatusResponse(BaseModel):
-    ok: bool = False; project_id: str = ""; preprocessing_run_id: str = ""
-    run_dir: str = ""; preprocessing_input_dir: str = ""
-    status: str = "unknown"; created_at: str = ""
+    ok: bool = False
+    project_id: str = ""
+    preprocessing_run_id: str = ""
+    run_dir: str = ""
+    preprocessing_input_dir: str = ""
+    status: str = "unknown"
+    created_at: str = ""
     stage_statuses: list[PreprocessingStageStatus] = Field(default_factory=list)
     artifacts: dict[str, str] = Field(default_factory=dict)
     artifact_registry_path: str = ""

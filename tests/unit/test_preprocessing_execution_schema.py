@@ -7,14 +7,10 @@ imports, no SPM/DPABI/MATLAB execution.
 
 from __future__ import annotations
 
-import pytest
-
 from src.backend.app.schemas.preprocessing_execution import (
     ALL_PREPROCESSING_STAGES,
-    ExternalToolKind,
     PreprocessingExecutionPreview,
     PreprocessingExecutionRequest,
-    PreprocessingPlan,
     PreprocessingSafetyFlags,
     PreprocessingStage,
     PreprocessingStageConfig,
@@ -428,6 +424,7 @@ def test_subject_plan_defaults() -> None:
 def test_schema_module_has_no_subprocess_import() -> None:
     """Schema module must not import subprocess."""
     import src.backend.app.schemas.preprocessing_execution as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -440,6 +437,7 @@ def test_schema_module_has_no_subprocess_import() -> None:
 def test_schema_module_has_no_executor_import() -> None:
     """Schema module must not import pipeline_executor or node_registry."""
     import src.backend.app.schemas.preprocessing_execution as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -450,6 +448,7 @@ def test_schema_module_has_no_executor_import() -> None:
 def test_schema_module_has_no_spm_dpabi_matlab_import() -> None:
     """Schema module must not import SPM/DPABI/MATLAB modules."""
     import src.backend.app.schemas.preprocessing_execution as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()

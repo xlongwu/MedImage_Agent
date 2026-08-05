@@ -9,11 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 # ── Dataclass ────────────────────────────────────────────────────────────────
 
@@ -98,7 +97,7 @@ def build_review_audit_record(
 
     return ReviewAuditRecord(
         audit_id=f"audit_{uuid.uuid4().hex[:16]}",
-        created_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
         event_type=event_type,
         plan_hash=stable_hash(plan),
         validation_hash=stable_hash(validation),

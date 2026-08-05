@@ -11,7 +11,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 NativePreprocStageId = Literal[
     "input_validation",
     "dicom_to_nifti",
@@ -118,6 +117,7 @@ NativePreprocArtifactType = Literal[
     "qc_md",
     "manifest",
     "provenance",
+    "group_summary",
     "validation_report",
     "final_report",
 ]
@@ -216,6 +216,7 @@ NATIVE_PREPROC_ARTIFACT_TYPES: tuple[NativePreprocArtifactType, ...] = (
     "qc_md",
     "manifest",
     "provenance",
+    "group_summary",
     "validation_report",
     "final_report",
 )
@@ -316,7 +317,7 @@ class NativePreprocStageResult(BaseModel):
     qc: NativePreprocQC = Field(default_factory=NativePreprocQC)
 
     @model_validator(mode="after")
-    def _check_truthfulness(self) -> "NativePreprocStageResult":
+    def _check_truthfulness(self) -> NativePreprocStageResult:
         numeric_levels = {
             "computed",
             "numerically_implemented",

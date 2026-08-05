@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from src.backend.app.schemas.desktop import DicomPreflightResponse, DicomSeriesSummary
-
 
 DICOM_SUFFIXES = {".dcm", ".ima"}
 
@@ -269,4 +269,4 @@ def _md_cell(value: str) -> str:
 
 
 def _utc_now() -> str:
-    return datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")

@@ -5,7 +5,6 @@ from typing import Any
 
 import yaml
 
-
 DEFAULT_SPM_DIR = "./third_party/spm12"
 DEFAULT_DPABI_DIR = "./third_party/DPABI_V8.2_240510"
 

@@ -7,12 +7,12 @@ from typing import Any
 
 import numpy as np
 
-from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.core.compute_backend import (
     GpuComputeError,
     compute_functional_connectivity_gpu,
     cpu_compute_provenance,
 )
+from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
 from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.stages._common import context_from_output_dir, stage_result

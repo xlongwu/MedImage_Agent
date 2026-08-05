@@ -45,7 +45,7 @@ def _load_nifti_stats(path: Path) -> dict[str, Any]:
 def _voxel_size_close(actual: list[float], target: list[float], tolerance: float = 0.2) -> bool:
     if len(actual) < 3 or len(target) < 3:
         return False
-    return all(abs(float(a) - float(t)) <= tolerance for a, t in zip(actual[:3], target[:3]))
+    return all(abs(float(a) - float(t)) <= tolerance for a, t in zip(actual[:3], target[:3], strict=False))
 
 
 def compute_normalization_qc_for_subject(
@@ -73,9 +73,7 @@ def compute_normalization_qc_for_subject(
     normalized_path = Path(normalized_nii)
 
     missing = [
-        str(path)
-        for path in [input_path, deformation_path, normalized_path]
-        if not path.exists()
+        str(path) for path in [input_path, deformation_path, normalized_path] if not path.exists()
     ]
 
     if missing:
@@ -259,7 +257,9 @@ def write_normalization_qc_dataset_report(
     lines.append("")
     lines.append("## Safety Note")
     lines.append("")
-    lines.append("This report summarizes derivative normalization QC outputs only. It does not modify rawdata.")
+    lines.append(
+        "This report summarizes derivative normalization QC outputs only. It does not modify rawdata."
+    )
 
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

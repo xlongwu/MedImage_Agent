@@ -11,9 +11,9 @@ Two layers of protection against silent numeric drift:
 Plus edge-case property tests: constant/identical/anti-correlated series,
 empty / zero-variance ROI, boundary voxels, and NaN handling.
 """
+
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +33,7 @@ def _load(name: str) -> np.ndarray:
 
 
 # ── Independent references (no shared code path with the kernels) ──
+
 
 def _ref_alff(data: np.ndarray, tr: float, band: tuple[float, float]):
     n_t = data.shape[-1]
@@ -88,9 +89,9 @@ def _ref_kendall_w(mat: np.ndarray) -> float:
                 e += 1
             t_i = e - s
             if t_i > 1:
-                T_corr += t_i ** 3 - t_i
+                T_corr += t_i**3 - t_i
             s = e
-    den = K ** 2 * (T ** 3 - T) - K * T_corr
+    den = K**2 * (T**3 - T) - K * T_corr
     return float(12.0 * S / den) if den != 0 else 0.0
 
 
@@ -108,8 +109,10 @@ def _ref_pearson(ts: np.ndarray) -> np.ndarray:
 
 # ── ALFF / fALFF ──
 
+
 def test_alff_matches_golden():
     from src.backend.app.tools.alff_compute import compute_alff_numpy
+
     bold = np.load(INPUT_DIR / "tiny_bold.npy")
     alff, falff, _ = compute_alff_numpy(bold, tr=TR, freq_band=FREQ_BAND)
     assert np.allclose(alff, _load("alff_golden.npy"), atol=ATOL)
@@ -118,6 +121,7 @@ def test_alff_matches_golden():
 
 def test_alff_matches_independent_reference():
     from src.backend.app.tools.alff_compute import compute_alff_numpy
+
     bold = np.load(INPUT_DIR / "tiny_bold.npy")
     alff, falff, _ = compute_alff_numpy(bold, tr=TR, freq_band=FREQ_BAND)
     r_alff, r_falff = _ref_alff(bold, TR, FREQ_BAND)
@@ -129,6 +133,7 @@ def test_alff_constant_series_is_finite():
     """A constant time-series has zero power everywhere → ALFF/fALFF must be
     finite and fALFF in [0,1], never NaN/Inf."""
     from src.backend.app.tools.alff_compute import compute_alff_numpy
+
     bold = np.full((6, 6, 6, 50), 3.14, dtype=np.float32)
     alff, falff, _ = compute_alff_numpy(bold, tr=TR, freq_band=FREQ_BAND)
     assert np.all(np.isfinite(alff)) and np.all(np.isfinite(falff))
@@ -138,9 +143,11 @@ def test_alff_constant_series_is_finite():
 
 # ── ReHo ──
 
+
 @pytest.mark.parametrize("neighborhood", [7, 19, 27])
 def test_reho_matches_golden(neighborhood):
     from src.backend.app.tools.reho_compute import compute_reho_numpy
+
     bold = np.load(INPUT_DIR / "tiny_reho_bold.npy")
     res = compute_reho_numpy(bold, neighborhood=neighborhood)
     assert res["ok"]
@@ -150,7 +157,8 @@ def test_reho_matches_golden(neighborhood):
 
 def test_reho_matches_independent_reference():
     """ReHo kernel must agree with an independent scipy-based Kendall's W."""
-    from src.backend.app.tools.reho_compute import compute_reho_numpy, _offsets
+    from src.backend.app.tools.reho_compute import _offsets, compute_reho_numpy
+
     bold = np.load(INPUT_DIR / "tiny_reho_bold.npy")
     res = compute_reho_numpy(bold, neighborhood=27)
     assert res["ok"]
@@ -164,7 +172,7 @@ def test_reho_matches_independent_reference():
         for y in range(1, ny - 1):
             for z in range(1, nz - 1):
                 series = []
-                ok = True
+                _ok = True
                 for dx, dy, dz in off:
                     xx, yy, zz = x + dx, y + dy, z + dz
                     series.append(bold[xx, yy, zz, :])
@@ -183,18 +191,21 @@ def test_reho_identical_voxels_kcc_one():
     KCC (Kendall's W) = 1. This is the definition of W: all judges agree
     completely means W = 1."""
     from src.backend.app.tools.reho_compute import compute_reho_numpy
+
     ts = np.sin(np.linspace(0, 2 * np.pi, 30)).astype(np.float32)
     # Make sure timepoints vary (not constant) so ranks differ across time
     vol = np.broadcast_to(ts, (5, 5, 5, 30)).copy()
     res = compute_reho_numpy(vol, neighborhood=27)
     interior = res["reho"][2, 2, 2]
-    assert interior == pytest.approx(1.0, abs=1e-5), \
+    assert interior == pytest.approx(1.0, abs=1e-5), (
         f"Identical time-series should yield W=1 (perfect concordance), got {interior}"
+    )
 
 
 def test_reho_gm_mask_zeros_masked_voxels():
     """Voxels where the GM mask is 0 must have ReHo 0."""
     from src.backend.app.tools.reho_compute import compute_reho_numpy
+
     bold = np.load(INPUT_DIR / "tiny_reho_bold.npy")
     # Build mask matching the ReHo data spatial shape (8,8,8).
     mask = np.ones(bold.shape[:3], dtype=bool)
@@ -207,6 +218,7 @@ def test_reho_gm_mask_zeros_masked_voxels():
 def test_reho_boundary_voxels_left_zero():
     """The KCC kernel only writes interior voxels; the 1-voxel border stays 0."""
     from src.backend.app.tools.reho_compute import compute_reho_numpy
+
     bold = np.load(INPUT_DIR / "tiny_reho_bold.npy")
     res = compute_reho_numpy(bold, neighborhood=27)
     reho = np.asarray(res["reho"])
@@ -219,6 +231,7 @@ def test_reho_nan_neighborhood_skipped():
     """A neighborhood containing NaN must be skipped (ReHo 0), not propagate NaN.
     With nb=27 the 27-neighbors of (2,2,2) include (1,1,1)."""
     from src.backend.app.tools.reho_compute import compute_reho_numpy
+
     rng = np.random.default_rng(1)
     bold = rng.normal(0, 1, (5, 5, 5, 20)).astype(np.float32)
     bold[1, 1, 1, :] = np.nan  # inside the 27-neighborhood of (2,2,2)
@@ -230,10 +243,13 @@ def test_reho_nan_neighborhood_skipped():
 
 # ── FC ──
 
+
 def test_fc_matches_golden():
     from src.backend.app.tools.functional_connectivity_compute import (
-        compute_fc_numpy, _generate_atlas,
+        _generate_atlas,
+        compute_fc_numpy,
     )
+
     bold = np.load(INPUT_DIR / "tiny_fc_bold.npy")
     atlas, _ = _generate_atlas(bold.shape[:3], roi_count=5)
     res = compute_fc_numpy(bold, atlas)
@@ -243,8 +259,10 @@ def test_fc_matches_golden():
 
 def test_fc_matches_independent_pearson():
     from src.backend.app.tools.functional_connectivity_compute import (
-        compute_fc_numpy, _generate_atlas,
+        _generate_atlas,
+        compute_fc_numpy,
     )
+
     bold = np.load(INPUT_DIR / "tiny_fc_bold.npy")
     atlas, _ = _generate_atlas(bold.shape[:3], roi_count=5)
     res = compute_fc_numpy(bold, atlas)
@@ -262,12 +280,13 @@ def test_fc_identical_roi_perfect_correlation():
     Floating-point Pearson on identical rows may exceed 1.0 by ~1e-2, so
     use the same tolerance the kernel uses (clip to ±0.999999)."""
     from src.backend.app.tools.functional_connectivity_compute import compute_fc_numpy
+
     rng = np.random.default_rng(10)
     ts = rng.normal(0, 1, 40).astype(np.float32)
     vol = np.broadcast_to(ts, (4, 4, 2, 40)).copy()
     atlas = np.zeros((4, 4, 2), dtype=np.int16)
-    atlas[:2] = 1   # ROI 1
-    atlas[2:] = 2   # ROI 2 (identical signal → r≈1)
+    atlas[:2] = 1  # ROI 1
+    atlas[2:] = 2  # ROI 2 (identical signal → r≈1)
     res = compute_fc_numpy(vol, atlas)
     corr = res["correlation_matrix"]
     assert abs(corr[0, 1] - 1.0) < 0.02, f"Expected ≈1.0, got {corr[0, 1]}"
@@ -277,11 +296,12 @@ def test_fc_identical_roi_perfect_correlation():
 def test_fc_zero_variance_roi_handled():
     """A zero-variance ROI must not produce NaN/Inf; kernel fills with 0."""
     from src.backend.app.tools.functional_connectivity_compute import compute_fc_numpy
+
     rng = np.random.default_rng(2)
     bold = rng.normal(0, 1, (6, 6, 2, 40)).astype(np.float32)
     atlas = np.zeros((6, 6, 2), dtype=np.int16)
-    atlas[:3] = 1            # varying signal
-    atlas[3:] = 2            # constant signal (zero variance)
+    atlas[:3] = 1  # varying signal
+    atlas[3:] = 2  # constant signal (zero variance)
     bold[3:] = 5.0
     res = compute_fc_numpy(bold, atlas)
     corr = res["correlation_matrix"]
@@ -292,6 +312,7 @@ def test_fc_empty_roi_flagged():
     """A label present in the atlas but covering no voxels is reported as a
     warning and yields a zero time-series (not a crash)."""
     from src.backend.app.tools.functional_connectivity_compute import compute_fc_numpy
+
     bold = np.random.default_rng(3).normal(0, 1, (5, 5, 2, 30)).astype(np.float32)
     atlas = np.zeros((5, 5, 2), dtype=np.int16)
     atlas[:2] = 1

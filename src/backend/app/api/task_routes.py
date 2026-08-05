@@ -7,8 +7,6 @@ Old routes remain registered in ``dashboard_routes.py`` with ``deprecated=True``
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends
 
 from src.backend.app.api.dependencies import ProjectStore
@@ -17,16 +15,9 @@ from src.backend.app.schemas.desktop import (
     AssistantChatRequest,
     AssistantChatResponse,
     PipelineRunRequest,
-    PipelineRunResponse,
     TaskApprovalRequest,
-    TaskApprovalResponse,
-    TaskArtifactsResponse,
-    TaskAuditPackageResponse,
-    TaskDiagnosticsResponse,
-    TaskDetail,
-    TaskEvent,
-    TaskLogEntry,
 )
+from src.backend.app.services.assistant_service import build_assistant_reply
 from src.backend.app.services.task_adapter import (
     approve_task,
     generate_task_audit_package,
@@ -42,6 +33,7 @@ router = APIRouter()
 
 def get_project_store() -> ProjectStore:
     from src.backend.app.services.mock_store import mock_store
+
     return mock_store  # type: ignore[return-value]
 
 
@@ -144,7 +136,9 @@ async def run_pipeline(
     store: ProjectStore = Depends(get_project_store),
 ) -> dict[str, object]:
     import asyncio
+
     from fastapi import HTTPException
+
     from src.backend.app.services.mock_store import mock_store
     from src.backend.app.services.pipeline_runner import run_pipeline_task
     from src.backend.app.services.task_manager import task_manager
@@ -155,18 +149,30 @@ async def run_pipeline(
     if not request.input_sequences:
         raise HTTPException(status_code=400, detail="input_sequences must not be empty")
 
-    if request.execution_mode == "external_smoke" and request.external_smoke_mode == "approved_smoke":
+    if (
+        request.execution_mode == "external_smoke"
+        and request.external_smoke_mode == "approved_smoke"
+    ):
         if not request.approved:
-            raise HTTPException(status_code=403, detail="approved=true is required for approved_smoke")
+            raise HTTPException(
+                status_code=403, detail="approved=true is required for approved_smoke"
+            )
         if not (request.approved_by or "").strip():
-            raise HTTPException(status_code=400, detail="approved_by is required for approved_smoke")
+            raise HTTPException(
+                status_code=400, detail="approved_by is required for approved_smoke"
+            )
 
     try:
         task = task_manager.create_pipeline_task(request)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Project not found: {request.project_id}")  # type: ignore[return-value]
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Project not found: {request.project_id}"
+        ) from exc  # type: ignore[return-value]
 
-    if request.execution_mode == "external_smoke" and request.external_smoke_mode == "approved_smoke":
+    if (
+        request.execution_mode == "external_smoke"
+        and request.external_smoke_mode == "approved_smoke"
+    ):
         approval = mock_store.add_approval(
             task.id,
             approved=True,
@@ -194,42 +200,19 @@ async def run_pipeline(
 
 @router.post(
     "/api/assistant/chat",
-    response_model=dict[str, object],
+    response_model=AssistantChatResponse,
 )
 def assistant_chat(
     request: AssistantChatRequest,
     store: ProjectStore = Depends(get_project_store),
-) -> dict[str, object]:
-    from src.backend.app.services.mock_store import mock_store
-
-    project = mock_store.get_project(request.project_id)
-    if not project:
+) -> AssistantChatResponse:
+    reply = build_assistant_reply(
+        store=store,
+        project_id=request.project_id,
+        message=request.message,
+    )
+    if reply is None:
         from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail=f"Project not found: {request.project_id}")
 
-    message = request.message.lower()
-    dataset = mock_store.get_dataset_summary(request.project_id)
-    if "pipeline" in message or "workflow" in message:
-        reply = (
-            f"Current pipeline is {project.current_pipeline_id}. Use approved runs for SPM/DPABI "
-            "steps and keep rawdata read-only. The UI can start a simulated run now; real runners "
-            "should plug into the same task event stream."
-        )
-    elif "failed" in message or "error" in message or "log" in message:
-        reply = (
-            "For failed tasks, open the latest task detail and inspect logs/result_path first. "
-            "If it is an external SPM/DPABI smoke failure, verify the MATLAB stdout/stderr and "
-            "expected result JSON path."
-        )
-    elif "dataset" in message or "data" in message:
-        reply = (
-            f"{project.name} currently has {dataset.subjects if dataset else project.subjects_count} subjects, "
-            f"{dataset.scans if dataset else project.scans_count} scans, and health status "
-            f"{dataset.health_status if dataset else 'Unknown'}."
-        )
-    else:
-        reply = (
-            "I can help review dataset readiness, explain pipeline settings, summarize task failures, "
-            "or prepare the next auditable SPM/DPABI smoke run. TODO: connect this panel to a real LLM provider."
-        )
-    return {"reply": reply}
+        raise HTTPException(status_code=404, detail=f"Project not found: {request.project_id}")
+    return AssistantChatResponse(reply=reply)

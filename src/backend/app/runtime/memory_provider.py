@@ -1,4 +1,4 @@
-"""MemoryProvider protocol -- pluggable memory backends."""
+"""Deprecated provider protocol for legacy run-history compatibility only."""
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
@@ -6,11 +6,15 @@ from typing import Any, Protocol, runtime_checkable
 
 @runtime_checkable
 class MemoryProvider(Protocol):
-    """Protocol for memory storage backends.
+    """Protocol for legacy run-history storage backends.
 
     Concrete implementations:
       - FileMemoryProvider (current behavior, file-system based)
       - SQLiteMemoryProvider (SessionDB-backed)
+
+    This protocol is not the long-term Memory Domain authority. Production
+    planner code must not use it, and new consumers must use project history or
+    ``MemoryRepository`` according to their data ownership.
     """
 
     def initialize(self) -> None:

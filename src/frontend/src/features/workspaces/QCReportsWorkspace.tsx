@@ -15,7 +15,7 @@ import { RsfmriRehoPanel } from "../../components/RsfmriRehoPanel";
 import { RsfmriTemporalFilteringPanel } from "../../components/RsfmriTemporalFilteringPanel";
 import { TechnicalModuleSection } from "../../components/domain/TechnicalModuleSection";
 import { EvidenceBadge } from "../../components/domain/EvidenceBadge";
-import { Badge, Card, EmptyState, Table, TableEmpty } from "../../components/ui";
+import { Badge, Button, Card, EmptyState, Table, TableEmpty } from "../../components/ui";
 import { useQcEvidence, type QcOverviewEvidence } from "./useQcEvidence";
 import type { EvidenceLevel } from "../../lib/evidence";
 import type { MotionQcReadinessResponse, NativeFullPreprocResponse } from "../../types";
@@ -92,7 +92,7 @@ export function QCReportsWorkspace({ baseUrl, projectId }: QCReportsWorkspacePro
       </TechnicalModuleSection>
 
       <TechnicalModuleSection
-        actionDisabled={!hasProject}
+        actionDisabled
         ariaLabel={t("qc.derivedModules")}
         description={t("qc.derivedDescription")}
         disabledReason={t("qc.derivedDisabled")}
@@ -102,13 +102,7 @@ export function QCReportsWorkspace({ baseUrl, projectId }: QCReportsWorkspacePro
         onToggle={() => setShowDerivedModules((value) => !value)}
         openLabel={t("qc.openDerived")}
         safetyNote={t("qc.derivedSafety")}
-        status={
-          hasProject
-            ? showDerivedModules
-              ? t("qc.open")
-              : t("qc.onDemand")
-            : t("qc.selectProject")
-        }
+        status={hasProject ? t("common.unavailable") : t("qc.selectProject")}
         statusTone={hasProject ? "info" : "warning"}
         title={t("qc.derivedModules")}
       >
@@ -153,6 +147,20 @@ function QcDashboardOverview({ baseUrl, projectId }: { baseUrl: string; projectI
           </div>
           <EvidenceBadge level={model.evidenceLevel} />
         </div>
+        {evidence.errorMessages.length > 0 ? (
+          <div role="alert">
+            <strong>{t("qc.evidenceLoadError")}</strong>
+            <p>{evidence.errorMessages.join("; ")}</p>
+            <Button
+              disabled={evidence.loading}
+              onClick={evidence.reload}
+              size="sm"
+              variant="secondary"
+            >
+              {t("common.retry")}
+            </Button>
+          </div>
+        ) : null}
         <div className={styles.statusStrip} aria-label={t("qc.summaryStates")}>
           {model.evidenceStates.map((item) => (
             <div data-tone={item.tone} key={item.label}>
@@ -238,7 +246,18 @@ function QcDashboardOverview({ baseUrl, projectId }: { baseUrl: string; projectI
               </tr>
             </thead>
             <tbody>
-              <TableEmpty colSpan={4}>{t("qc.drilldownEmpty")}</TableEmpty>
+              {model.drilldownRows.length ? (
+                model.drilldownRows.map((row) => (
+                  <tr key={`${row.subjectRun}:${row.metric}:${row.evidence}`}>
+                    <td>{row.subjectRun}</td>
+                    <td>{row.metric}</td>
+                    <td>{row.threshold}</td>
+                    <td>{row.evidence}</td>
+                  </tr>
+                ))
+              ) : (
+                <TableEmpty colSpan={4}>{t("qc.drilldownEmpty")}</TableEmpty>
+              )}
             </tbody>
           </Table>
         </details>
@@ -339,6 +358,12 @@ type QcOverviewModel = {
     title: string;
     tone: BadgeTone;
   };
+  drilldownRows: {
+    evidence: string;
+    metric: string;
+    subjectRun: string;
+    threshold: string;
+  }[];
   evidenceLevel: EvidenceLevel;
   evidenceStates: QcEvidenceState[];
   outlierAreas: QcOutlierArea[];
@@ -374,6 +399,7 @@ function buildQcOverviewModel(
   return {
     chartContracts: buildChartContracts(evidence, t),
     comparison: buildComparisonModel(evidence, t),
+    drilldownRows: buildDrilldownRows(evidence, t),
     evidenceLevel,
     evidenceStates: [
       {
@@ -419,6 +445,48 @@ function buildQcOverviewModel(
         ? t("qc.model.summaryLoading")
         : t("qc.model.summaryPending"),
   };
+}
+
+function buildDrilldownRows(
+  evidence: QcOverviewEvidence,
+  t: I18nContextValue["t"],
+): QcOverviewModel["drilldownRows"] {
+  const rows: QcOverviewModel["drilldownRows"] = [];
+  for (const candidate of evidence.motionReadiness?.candidates ?? []) {
+    const subjectId = normalizeSubjectId(candidate.subject_id, candidate.bold_path);
+    if (!subjectId) continue;
+    rows.push({
+      subjectRun: candidate.session_id ? `${subjectId}/${candidate.session_id}` : subjectId,
+      metric: candidate.has_fd_column ? "FD / DVARS" : t("qc.model.motionOutliers"),
+      threshold: candidate.has_fd_column
+        ? t("qc.model.backendSupplied")
+        : t("qc.model.pendingMetadata"),
+      evidence:
+        candidate.fd_source_path ??
+        candidate.motion_param_paths[0] ??
+        candidate.relative_path ??
+        candidate.bold_path,
+    });
+  }
+  for (const stage of evidence.nativeRun?.stage_results ?? []) {
+    if (
+      !["alff", "falff", "functional_connectivity", "motion_qc", "reho"].includes(stage.stage_id)
+    ) {
+      continue;
+    }
+    const subjectId = nativeStageSubjectId(stage) ?? evidence.nativeRun?.run_id ?? "—";
+    for (const artifact of stage.output_artifacts) {
+      const artifactPath = typeof artifact.path === "string" ? artifact.path : "";
+      if (!artifactPath) continue;
+      rows.push({
+        subjectRun: subjectId,
+        metric: stage.display_name || stage.stage_id,
+        threshold: stage.validation_status || t("qc.model.backendSupplied"),
+        evidence: artifactPath,
+      });
+    }
+  }
+  return rows;
 }
 
 function collectEvidenceSources(evidence: QcOverviewEvidence, t: I18nContextValue["t"]): string[] {

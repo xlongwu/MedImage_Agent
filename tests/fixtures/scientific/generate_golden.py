@@ -15,6 +15,7 @@ Design rules:
   that an independent reference also agrees (catching silent kernel drift).
 - Small + fast: shapes are intentionally tiny so the suite runs in CI seconds.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,12 +30,12 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from src.backend.app.tools.alff_compute import compute_alff_numpy
-from src.backend.app.tools.functional_connectivity_compute import (
-    compute_fc_numpy,
+from src.backend.app.tools.alff_compute import compute_alff_numpy  # noqa: E402
+from src.backend.app.tools.functional_connectivity_compute import (  # noqa: E402
     _generate_atlas,
+    compute_fc_numpy,
 )
-from src.backend.app.tools.reho_compute import compute_reho_numpy
+from src.backend.app.tools.reho_compute import compute_reho_numpy  # noqa: E402
 
 FIXTURE_DIR = Path(__file__).resolve().parent
 INPUT_DIR = FIXTURE_DIR / "input"
@@ -43,7 +44,7 @@ GOLDEN_DIR = FIXTURE_DIR / "golden"
 # Fixed parameters shared by generator and tests.
 TR = 2.0
 FREQ_BAND = (0.01, 0.08)
-BOLD_SHAPE = (10, 10, 8, 50)   # x,y,z,t
+BOLD_SHAPE = (10, 10, 8, 50)  # x,y,z,t
 ATLAS_ROI = 5
 REHO_SHAPE = (8, 8, 8, 40)
 FC_SHAPE = (16, 16, 12, 60)
@@ -75,12 +76,23 @@ def main() -> None:
     np.save(INPUT_DIR / "tiny_reho_bold.npy", reho_bold)
     fc_bold = _make_bold(FC_SHAPE, SEED + 2)
     np.save(INPUT_DIR / "tiny_fc_bold.npy", fc_bold)
-    (INPUT_DIR / "sidecar.json").write_text(json.dumps({
-        "RepetitionTime": TR, "TaskName": "rest",
-        "freq_band": list(FREQ_BAND), "seed": SEED,
-        "shapes": {"bold": list(BOLD_SHAPE), "reho": list(REHO_SHAPE),
-                   "fc": list(FC_SHAPE), "atlas_roi": ATLAS_ROI},
-    }, indent=2))
+    (INPUT_DIR / "sidecar.json").write_text(
+        json.dumps(
+            {
+                "RepetitionTime": TR,
+                "TaskName": "rest",
+                "freq_band": list(FREQ_BAND),
+                "seed": SEED,
+                "shapes": {
+                    "bold": list(BOLD_SHAPE),
+                    "reho": list(REHO_SHAPE),
+                    "fc": list(FC_SHAPE),
+                    "atlas_roi": ATLAS_ROI,
+                },
+            },
+            indent=2,
+        )
+    )
 
     # ── ALFF / fALFF golden ──
     alff, falff, _ = compute_alff_numpy(bold, tr=TR, freq_band=FREQ_BAND)
@@ -90,16 +102,18 @@ def main() -> None:
     # ── ReHo golden (7/19/27 neighborhoods) ──
     for nb in (7, 19, 27):
         res = compute_reho_numpy(reho_bold, neighborhood=nb)
-        np.save(GOLDEN_DIR / f"reho_{nb}_golden.npy",
-                np.asarray(res["reho"]).astype(np.float32))
+        np.save(GOLDEN_DIR / f"reho_{nb}_golden.npy", np.asarray(res["reho"]).astype(np.float32))
 
     # ── FC golden (atlas matches the FC BOLD spatial shape, not BOLD_SHAPE) ──
     fc_atlas, _ = _generate_atlas(FC_SHAPE[:3], roi_count=ATLAS_ROI)
     fc_res = compute_fc_numpy(fc_bold, fc_atlas)
-    np.save(GOLDEN_DIR / "fc_matrix_golden.npy",
-            np.asarray(fc_res["correlation_matrix"]).astype(np.float32))
-    np.save(GOLDEN_DIR / "fisherz_golden.npy",
-            np.asarray(fc_res["fisher_z_matrix"]).astype(np.float32))
+    np.save(
+        GOLDEN_DIR / "fc_matrix_golden.npy",
+        np.asarray(fc_res["correlation_matrix"]).astype(np.float32),
+    )
+    np.save(
+        GOLDEN_DIR / "fisherz_golden.npy", np.asarray(fc_res["fisher_z_matrix"]).astype(np.float32)
+    )
 
     # ── Edge-case golden (constant series -> finite, bounded output) ──
     const_bold = np.full((6, 6, 6, 50), 3.14, dtype=np.float32)
@@ -108,16 +122,23 @@ def main() -> None:
     np.save(GOLDEN_DIR / "falff_constant_golden.npy", cfalff.astype(np.float32))
 
     # Manifest describing what was generated.
-    (GOLDEN_DIR / "manifest.json").write_text(json.dumps({
-        "generator": "tests/fixtures/scientific/generate_golden.py",
-        "tr": TR, "freq_band": list(FREQ_BAND), "seed": SEED,
-        "files": sorted(p.name for p in GOLDEN_DIR.iterdir() if p.suffix == ".npy"),
-        "kernels": {
-            "alff": "tools/alff_compute.py::compute_alff_numpy",
-            "reho": "tools/reho_compute.py::compute_reho_numpy",
-            "fc": "tools/functional_connectivity_compute.py::compute_fc_numpy",
-        },
-    }, indent=2))
+    (GOLDEN_DIR / "manifest.json").write_text(
+        json.dumps(
+            {
+                "generator": "tests/fixtures/scientific/generate_golden.py",
+                "tr": TR,
+                "freq_band": list(FREQ_BAND),
+                "seed": SEED,
+                "files": sorted(p.name for p in GOLDEN_DIR.iterdir() if p.suffix == ".npy"),
+                "kernels": {
+                    "alff": "tools/alff_compute.py::compute_alff_numpy",
+                    "reho": "tools/reho_compute.py::compute_reho_numpy",
+                    "fc": "tools/functional_connectivity_compute.py::compute_fc_numpy",
+                },
+            },
+            indent=2,
+        )
+    )
     print(f"Golden fixtures written to {GOLDEN_DIR}")
 
 

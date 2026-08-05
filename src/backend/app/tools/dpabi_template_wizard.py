@@ -9,7 +9,6 @@ from src.backend.app.tools.dpabi_template_instantiator import (
     list_dpabi_templates,
 )
 
-
 # Template wizard is intentionally restricted to smoothing-only for safety.
 # See dpabi_safety.ALLOWED_FUNCTIONS for the full function whitelist.
 ALLOWLISTED_FUNCTIONS = {"y_Smooth", "rest_Smooth"}

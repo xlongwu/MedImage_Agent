@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ExecutionMode } from "../../lib/types/pipeline";
 import type { ChatMessage } from "../../lib/types/assistant";
 import type {
@@ -28,21 +28,28 @@ import type {
 import { TopBar, WorkspaceSuspenseFallback } from "../dashboard/DashboardChrome";
 import { ProjectCreateSheet } from "../projects/ProjectCreateSheet";
 import { ProjectsPage } from "../projects/ProjectsPage";
+import { ProjectSidebar } from "../projects/ProjectSidebar";
 import { DataConversionWorkspace } from "../workspaces/DataConversionWorkspace";
+import type { BidsValidationViewState } from "../../components/BidsValidationPanel";
 import { PlanWorkspace } from "../workspaces/PlanWorkspace";
 import { PreprocessingWorkspace } from "../workspaces/PreprocessingWorkspace";
 import { RunsWorkspace } from "../workspaces/RunsWorkspace";
 import { OverviewWorkspace } from "../workspaces/OverviewWorkspace";
 import { ProjectCreateResultPanel } from "./ProjectCreateResultPanel";
 import { RunActivityBar } from "../tasks/RunActivityBar";
+import { useProjectRunTasks } from "../runs/useProjectRunTasks";
 import { MedicalImageViewer } from "./MedicalImageViewer";
 import { AssistantSheet } from "../tools/AssistantSheet";
+import { AssistantDock } from "../tools/AssistantDock";
 import { ContextInspector } from "../tools/ContextInspector";
 import { AppShell } from "../../layouts/AppShell";
 import { ProjectShell } from "../../layouts/ProjectShell";
-import { LifecycleRail } from "../navigation/LifecycleRail";
-import { buildLifecycleItems, isPrimaryWorkspace } from "../navigation/workspaceModel";
-import type { AppLocation, ProjectWorkspace } from "../navigation/workspaceModel";
+import { GlobalNavigationRail } from "../navigation/GlobalNavigationRail";
+import type { AppLocation, LegacyWorkspace, ProjectWorkspace } from "../navigation/workspaceModel";
+import { buildLifecycleItems } from "../navigation/workspaceModel";
+import { workspaceChromePresetForLocation } from "../../lib/workspaceChromeModel";
+import { AgentWorkspace } from "../agent/AgentWorkspace";
+import type { AgentTaskController } from "../agent/useAgentTaskController";
 import { useI18n } from "../../i18n/useI18n";
 import styles from "./AppShellView.module.css";
 
@@ -61,6 +68,7 @@ const SettingsEnvironmentWorkspace = lazy(() =>
 );
 
 export type AppShellViewProps = {
+  agentTaskController: AgentTaskController;
   baseUrl: string;
   drawerOpen: boolean;
   health: boolean | null;
@@ -68,6 +76,7 @@ export type AppShellViewProps = {
   onSelectProject: (id: string) => void;
   project: { data: ProjectDetail; reload: () => Promise<ProjectDetail | null> };
   projectInventory: ProjectInventory | null;
+  bidsValidation: BidsValidationViewState & { reload: () => Promise<unknown> };
   projectController: Pick<
     ProjectController,
     | "projectCreateResult"
@@ -121,12 +130,15 @@ export type AppShellViewProps = {
     setThemePreference: (themePreference: ThemePreference) => void;
     localePreference: LocalePreference;
     setLocalePreference: (localePreference: LocalePreference) => void;
+    advancedMode: boolean;
+    setAdvancedMode: (enabled: boolean) => void;
   };
   navigation: {
     location: AppLocation;
     openProject: (projectId: string) => void;
     openProjects: () => void;
     openWorkspace: (projectId: string, workspace: ProjectWorkspace) => void;
+    openLegacyWorkspace: (projectId: string, workspace: LegacyWorkspace) => void;
   };
   image: {
     sequence: string;
@@ -170,8 +182,8 @@ export type AppShellViewProps = {
   handleReconnectTaskStream: () => void;
   handleAssistantSubmit: (event: React.FormEvent) => Promise<void>;
   onNewChat: () => void;
-  selectedTaskId: string | null;
-  setSelectedTaskId: (id: string | null) => void;
+  selectedRunId: string | null;
+  setSelectedRunId: (id: string | null) => void;
   selectionContext: WorkspaceSelectionContext;
   onSelectedArtifactChange: (artifact: ArtifactSelection | null) => void;
   onSelectedDataSeriesChange: (selection: DataSeriesSelection | null) => void;
@@ -179,6 +191,7 @@ export type AppShellViewProps = {
 };
 
 export function AppShellView({
+  agentTaskController,
   baseUrl,
   drawerOpen,
   health,
@@ -186,6 +199,7 @@ export function AppShellView({
   onSelectProject,
   project,
   projectInventory,
+  bidsValidation,
   projectController,
   taskController,
   taskStream,
@@ -194,20 +208,20 @@ export function AppShellView({
   navigation,
   image,
   assistant,
-  approval,
+  approval: _approval,
   executionMode,
   externalSmokeApprovedRun,
   externalSmokeApprovedBy,
   model,
   dataset,
   onToggleDrawer,
-  handleApproveSelectedTask,
-  handleGenerateAuditPackage,
+  handleApproveSelectedTask: _handleApproveSelectedTask,
+  handleGenerateAuditPackage: _handleGenerateAuditPackage,
   handleReconnectTaskStream,
   handleAssistantSubmit,
   onNewChat,
-  selectedTaskId,
-  setSelectedTaskId,
+  selectedRunId,
+  setSelectedRunId,
   selectionContext,
   onSelectedArtifactChange,
   onSelectedDataSeriesChange,
@@ -215,19 +229,48 @@ export function AppShellView({
 }: AppShellViewProps) {
   const { t } = useI18n();
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [wideWorkspace, setWideWorkspace] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(min-width: 1440px)").matches,
+  );
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
+  const [reviewedPlanSelection, setReviewedPlanSelection] = useState<{
+    projectId: string;
+    reviewedPlanId: string;
+  } | null>(null);
   const [nativeRunState, setNativeRunState] = useState<{
     projectId: string;
     run: NativeFullPreprocResponse | null;
   }>({ projectId: "", run: null });
   const latestNativePreprocessingRun =
     nativeRunState.projectId === selectedProjectId ? nativeRunState.run : null;
+  const {
+    error: projectRunError,
+    loading: projectRunLoading,
+    reload: reloadProjectRuns,
+    tasks: runTasks,
+    historyTasks: runHistoryTasks,
+  } = useProjectRunTasks(baseUrl, selectedProjectId);
+  const selectedRunTask = useMemo(
+    () => runHistoryTasks.find((task) => task.id === selectedRunId) ?? null,
+    [runHistoryTasks, selectedRunId],
+  );
+  const reloadRunTasks = useCallback(async () => {
+    await reloadProjectRuns();
+  }, [reloadProjectRuns]);
   const selectedProject = selectedProjectId ? project : null;
+  const selectedReviewedPlanId =
+    reviewedPlanSelection?.projectId === selectedProjectId
+      ? reviewedPlanSelection.reviewedPlanId
+      : null;
   const projectDir =
     typeof selectedProject?.data.metadata?.project_dir === "string"
       ? selectedProject.data.metadata.project_dir
       : null;
-  const workflowLabels: Record<ProjectWorkspace, string> = {
+  const workflowLabels: Record<ProjectWorkspace | LegacyWorkspace, string> = {
+    agent: t("nav.agent"),
     overview: t("nav.overview"),
     data: t("nav.data"),
     plan: t("nav.plan"),
@@ -238,7 +281,8 @@ export function AppShellView({
     settings: t("nav.settings"),
   };
   const activeWorkspace =
-    navigation.location.kind === "project" ? navigation.location.workspace : null;
+    navigation.location.kind !== "projects" ? navigation.location.workspace : null;
+  const chromePreset = workspaceChromePresetForLocation(navigation.location);
   const activePageLabel = activeWorkspace ? workflowLabels[activeWorkspace] : t("nav.projects");
   const topBarProjectName =
     navigation.location.kind === "projects"
@@ -246,11 +290,17 @@ export function AppShellView({
       : (projectInventory?.projectName ?? project.data.name);
   const showImageViewer =
     activeWorkspace === "results" && Boolean(projectInventory?.hasConvertedData);
+  const persistedPreprocessingRunId =
+    typeof selectedProject?.data.metadata?.latest_preprocessing_run_id === "string"
+      ? selectedProject.data.metadata.latest_preprocessing_run_id
+      : null;
   const hasPreprocessingRun =
     taskController.hasPreprocessingRun ||
+    Boolean(persistedPreprocessingRunId) ||
     hasNativePreprocessingRunEvidence(latestNativePreprocessingRun);
   const latestPreprocessingRunId =
     taskController.latestPreprocessingRunId ||
+    persistedPreprocessingRunId ||
     (hasNativePreprocessingRunEvidence(latestNativePreprocessingRun)
       ? (latestNativePreprocessingRun?.run_id ?? null)
       : null);
@@ -270,6 +320,7 @@ export function AppShellView({
     projectController.projectCreateError ||
     taskStream.error,
   );
+  const assistantDocked = wideWorkspace && activeWorkspace === "overview";
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -281,6 +332,15 @@ export function AppShellView({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia("(min-width: 1440px)");
+    const sync = () => setWideWorkspace(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
   }, []);
 
   useEffect(() => {
@@ -310,6 +370,26 @@ export function AppShellView({
 
   return (
     <AppShell
+      preset={chromePreset}
+      rail={
+        <GlobalNavigationRail
+          location={navigation.location}
+          onOpenLegacyWorkspace={navigation.openLegacyWorkspace}
+          onOpenProjects={navigation.openProjects}
+          onOpenWorkspace={navigation.openWorkspace}
+          projectId={selectedProjectId}
+        />
+      }
+      contextSidebar={
+        selectedProjectId && (activeWorkspace === "overview" || activeWorkspace === "agent") ? (
+          <ProjectSidebar
+            onCreateProject={() => setProjectCreateOpen(true)}
+            onSelectProject={onSelectProject}
+            projects={projectController.projects.data}
+            selectedProjectId={selectedProjectId}
+          />
+        ) : undefined
+      }
       topBar={
         <TopBar
           health={health}
@@ -320,30 +400,11 @@ export function AppShellView({
           onOpenAssistant={() => setAssistantOpen(true)}
           onOpenInspector={() => app.setDrawerOpen(true)}
           onBackToProjects={navigation.openProjects}
-          onOpenRuns={() => {
-            if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
-          }}
-          onOpenSettings={() => {
-            if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "settings");
-          }}
           locale={appState.localePreference}
           onLocaleChange={appState.setLocalePreference}
           version={app.version}
           versionFromBackend={app.versionFromBackend}
         />
-      }
-      lifecycle={
-        navigation.location.kind === "project" ? (
-          <LifecycleRail
-            activeWorkspace={
-              activeWorkspace && isPrimaryWorkspace(activeWorkspace) ? activeWorkspace : null
-            }
-            items={lifecycleItems}
-            onNavigate={(workspace) => {
-              if (selectedProjectId) navigation.openWorkspace(selectedProjectId, workspace);
-            }}
-          />
-        ) : undefined
       }
       systemMessages={
         hasSystemMessages ? (
@@ -374,7 +435,20 @@ export function AppShellView({
       }
       mainClassName={styles.workflowMain}
       inspector={
-        drawerOpen ? (
+        assistantDocked && assistantOpen ? (
+          <AssistantDock
+            activePageLabel={activePageLabel}
+            error={assistant.error}
+            input={assistant.input}
+            loading={assistant.loading}
+            messages={assistant.messages}
+            onClose={() => setAssistantOpen(false)}
+            onInput={assistant.setInput}
+            onNewChat={onNewChat}
+            onSubmit={handleAssistantSubmit}
+            projectName={projectInventory?.projectName ?? project.data.name}
+          />
+        ) : drawerOpen ? (
           <ContextInspector
             activePageLabel={activePageLabel}
             inventory={projectInventory}
@@ -393,13 +467,13 @@ export function AppShellView({
           />
         ) : null
       }
-      inspectorOpen={drawerOpen}
+      inspectorOpen={drawerOpen || (assistantDocked && assistantOpen)}
       runActivity={
         <RunActivityBar
-          tasks={taskController.tasks}
-          selectedTaskId={selectedTaskId}
+          tasks={runTasks}
+          selectedTaskId={selectedRunId}
           onSelectTask={(taskId) => {
-            setSelectedTaskId(taskId);
+            setSelectedRunId(taskId);
             if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
           }}
           onOpenRuns={() => {
@@ -418,7 +492,7 @@ export function AppShellView({
         onNewChat={onNewChat}
         onOpenChange={setAssistantOpen}
         onSubmit={handleAssistantSubmit}
-        open={assistantOpen}
+        open={assistantOpen && !assistantDocked}
         projectName={projectInventory?.projectName ?? project.data.name}
         selectionContext={selectionContext}
       />
@@ -451,12 +525,43 @@ export function AppShellView({
           workspaceLabel={`${activePageLabel} workspace`}
         >
           <Suspense fallback={<WorkspaceSuspenseFallback label="Loading workspace..." />}>
-            {activeWorkspace === "overview" ? (
-              <OverviewWorkspace
+            {activeWorkspace === "agent" ? (
+              <AgentWorkspace
+                advancedMode={appState.advancedMode}
+                controller={agentTaskController}
                 inventory={projectInventory}
-                tasks={taskController.tasks}
+                onOpenLegacyWorkspace={(workspace) => {
+                  if (selectedProjectId) {
+                    navigation.openLegacyWorkspace(selectedProjectId, workspace);
+                  }
+                }}
+                onOpenReviewedPlan={(reviewedPlanId) => {
+                  if (!selectedProjectId) return;
+                  setReviewedPlanSelection({ projectId: selectedProjectId, reviewedPlanId });
+                  navigation.openLegacyWorkspace(selectedProjectId, "plan");
+                }}
+                onOpenRuns={() => {
+                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
+                }}
+                projectName={projectInventory?.projectName ?? project.data.name}
+              />
+            ) : activeWorkspace === "overview" ? (
+              <OverviewWorkspace
+                agentTask={agentTaskController.task}
+                dataset={dataset}
+                inventory={projectInventory}
+                lifecycleItems={lifecycleItems}
+                model={model}
+                onSelectedPlanNodeChange={onSelectedPlanNodeChange}
+                project={project.data}
+                tasks={runTasks}
                 onNavigate={(workspace) => {
-                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, workspace);
+                  if (!selectedProjectId) return;
+                  if (workspace === "runs" || workspace === "settings" || workspace === "agent") {
+                    navigation.openWorkspace(selectedProjectId, workspace);
+                  } else {
+                    navigation.openLegacyWorkspace(selectedProjectId, workspace);
+                  }
                 }}
               />
             ) : activeWorkspace === "data" ? (
@@ -464,9 +569,10 @@ export function AppShellView({
                 baseUrl={baseUrl}
                 projectId={selectedProjectId}
                 inventory={projectInventory}
+                bidsValidation={bidsValidation}
                 onSelectedDataSeriesChange={onSelectedDataSeriesChange}
                 onConversionRegistered={async () => {
-                  await project.reload();
+                  await Promise.all([project.reload(), bidsValidation.reload()]);
                 }}
               />
             ) : activeWorkspace === "plan" ? (
@@ -479,9 +585,10 @@ export function AppShellView({
                 rawdataDir={selectedProject?.data.metadata?.rawdata_dir}
                 projectDir={projectDir}
                 initialPresetDraft={app.presetPlanDraft}
+                reviewedPlanId={selectedReviewedPlanId}
                 onSelectedNodeChange={onSelectedPlanNodeChange}
                 onOpenDataConversion={() =>
-                  selectedProjectId && navigation.openWorkspace(selectedProjectId, "data")
+                  selectedProjectId && navigation.openLegacyWorkspace(selectedProjectId, "data")
                 }
                 onOpenEnvironment={() =>
                   selectedProjectId && navigation.openWorkspace(selectedProjectId, "settings")
@@ -496,39 +603,26 @@ export function AppShellView({
                 hasPreprocessingRun={hasPreprocessingRun}
                 preprocessingRunId={latestPreprocessingRunId}
                 onOpenDataConversion={() =>
-                  selectedProjectId && navigation.openWorkspace(selectedProjectId, "data")
+                  selectedProjectId && navigation.openLegacyWorkspace(selectedProjectId, "data")
                 }
                 onOpenToolsDrawer={() => app.setDrawerOpen(true)}
-                onOpenRuns={(runId) => {
-                  setSelectedTaskId(runId ?? null);
-                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "runs");
-                }}
               />
             ) : activeWorkspace === "runs" ? (
               <RunsWorkspace
+                agentTask={agentTaskController.task}
+                baseUrl={baseUrl}
                 projectId={selectedProjectId}
-                tasks={taskController.tasks}
-                loading={taskController.tasksLoading}
-                error={taskController.tasksError}
-                onRetryTasks={taskController.reloadTasks}
-                selectedTaskId={selectedTaskId}
-                onSelectTask={setSelectedTaskId}
-                selectedTask={taskController.selectedTask}
-                events={taskController.taskEvents}
-                eventsLoading={taskController.taskEventsLoading}
-                eventsError={taskController.taskEventsError}
-                diagnostics={taskController.taskDiagnosticsData}
-                streamConnected={taskController.taskStreamConnected}
-                taskApprovalName={approval.taskApprovalName}
-                auditPackage={
-                  approval.auditPackage as import("../../lib/types/task").TaskAuditPackage | null
-                }
-                auditLoading={approval.auditLoading}
-                onApprovalNameChange={approval.setTaskApprovalName}
-                onApprove={handleApproveSelectedTask}
-                onGenerateAudit={handleGenerateAuditPackage}
-                onRetryEvents={taskController.reloadTaskEvents}
-                onReconnect={handleReconnectTaskStream}
+                tasks={runTasks}
+                historyTasks={runHistoryTasks}
+                loading={projectRunLoading}
+                error={projectRunError}
+                onRetryTasks={reloadRunTasks}
+                selectedTaskId={selectedRunId}
+                onSelectTask={setSelectedRunId}
+                selectedTask={selectedRunTask}
+                onOpenAgent={() => {
+                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "agent");
+                }}
               />
             ) : activeWorkspace === "qc" ? (
               <QCReportsWorkspace baseUrl={baseUrl} projectId={selectedProjectId} />
@@ -568,8 +662,10 @@ export function AppShellView({
                 onThemePreferenceChange={appState.setThemePreference}
                 localePreference={appState.localePreference}
                 onLocalePreferenceChange={appState.setLocalePreference}
+                advancedMode={appState.advancedMode}
+                onAdvancedModeChange={appState.setAdvancedMode}
                 onReviewDraft={() => {
-                  if (selectedProjectId) navigation.openWorkspace(selectedProjectId, "plan");
+                  if (selectedProjectId) navigation.openLegacyWorkspace(selectedProjectId, "plan");
                   app.setNotice(
                     "Preset draft loaded into the Plan workspace. Review and save before dry-run.",
                   );

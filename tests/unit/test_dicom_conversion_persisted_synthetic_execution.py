@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 
 class _FakeCompletedProcess:
     def __init__(self, stdout="", stderr="", returncode=0):
@@ -73,12 +71,35 @@ def _make_persisted_package(tmp_path: Path, run_id: str = "conv-test") -> str:
     }
     (run_dir / "approval_record.json").write_text(json.dumps(approval))
     (run_dir / "preflight_snapshot.json").write_text(json.dumps({"status": "ready"}))
-    (run_dir / "mapping_snapshot.json").write_text(json.dumps({
-        "mappings": [{"subject_id": "sub-001", "source_path": str(tmp_path / "synth_input"), "modality": "func"}]
-    }))
-    (run_dir / "command_templates.json").write_text(json.dumps({
-        "templates": [{"executable": "dcm2niix", "compress": "y", "bids_sidecar": True, "input_dir": str(tmp_path / "synth_input"), "output_dir": str(run_dir), "filename_pattern": "test"}]
-    }))
+    (run_dir / "mapping_snapshot.json").write_text(
+        json.dumps(
+            {
+                "mappings": [
+                    {
+                        "subject_id": "sub-001",
+                        "source_path": str(tmp_path / "synth_input"),
+                        "modality": "func",
+                    }
+                ]
+            }
+        )
+    )
+    (run_dir / "command_templates.json").write_text(
+        json.dumps(
+            {
+                "templates": [
+                    {
+                        "executable": "dcm2niix",
+                        "compress": "y",
+                        "bids_sidecar": True,
+                        "input_dir": str(tmp_path / "synth_input"),
+                        "output_dir": str(run_dir),
+                        "filename_pattern": "test",
+                    }
+                ]
+            }
+        )
+    )
     (run_dir / "planned_output_manifest.json").write_text("{}")
     (run_dir / "planned_execution_provenance.json").write_text("{}")
     (run_dir / "logs" / "stdout.log").write_text("")
@@ -96,6 +117,7 @@ def test_disabled_without_env_flags(tmp_path):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     result = run_synthetic_conversion_from_persisted_package("test", "any", env={})
     assert result.status == "disabled"
     assert result.safety_flags.conversion_disabled_by_default is True
@@ -105,6 +127,7 @@ def test_disabled_with_partial_env_flags(tmp_path):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     env = {"MEDIMAGE_ENABLE_DICOM_CONVERSION": "1"}
     result = run_synthetic_conversion_from_persisted_package("test", "any", env=env)
     assert result.status == "disabled"
@@ -119,6 +142,7 @@ def test_missing_approval_record_blocks(tmp_path):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     project_dir = str(tmp_path / "project")
     run_dir = Path(project_dir) / "conversion_runs" / "conv-test"
     run_dir.mkdir(parents=True)
@@ -133,6 +157,7 @@ def test_incomplete_approval_blocks(tmp_path):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     project_dir = str(tmp_path / "project")
     run_dir = Path(project_dir) / "conversion_runs" / "conv-test"
     run_dir.mkdir(parents=True)
@@ -155,12 +180,13 @@ def test_refuses_real_rawdata_path(tmp_path):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     project_dir = _make_persisted_package(tmp_path, "conv-raw")
     # Inject a mapping with a rawdata-like source path
     run_dir = Path(project_dir) / "conversion_runs" / "conv-raw"
-    (run_dir / "mapping_snapshot.json").write_text(json.dumps({
-        "mappings": [{"source_path": "/data/DemoData/FunRaw/Sub_001"}]
-    }))
+    (run_dir / "mapping_snapshot.json").write_text(
+        json.dumps({"mappings": [{"source_path": "/data/DemoData/FunRaw/Sub_001"}]})
+    )
 
     env = {**_ALL_FLAGS, "MEDIMAGE_PROJECT_DIR": project_dir}
     result = run_synthetic_conversion_from_persisted_package("test", "conv-raw", env=env)
@@ -179,12 +205,16 @@ def test_fake_runner_succeeds(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     monkeypatch.setattr("shutil.which", lambda x: "/fake/dcm2niix")
 
     project_dir = _make_persisted_package(tmp_path)
     env = {**_ALL_FLAGS, "MEDIMAGE_PROJECT_DIR": project_dir}
     result = run_synthetic_conversion_from_persisted_package(
-        "test", "conv-test", env=env, runner=_fake_runner,
+        "test",
+        "conv-test",
+        env=env,
+        runner=_fake_runner,
     )
     # With fake runner + env flags, should succeed or at minimum not be blocked/disabled
     assert result.status in {"succeeded", "warning"}
@@ -195,17 +225,24 @@ def test_fake_runner_writes_manifest(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     monkeypatch.setattr("shutil.which", lambda x: "/fake/dcm2niix")
 
     project_dir = _make_persisted_package(tmp_path)
     env = {**_ALL_FLAGS, "MEDIMAGE_PROJECT_DIR": project_dir}
     result = run_synthetic_conversion_from_persisted_package(
-        "test", "conv-test", env=env, runner=_fake_runner,
+        "test",
+        "conv-test",
+        env=env,
+        runner=_fake_runner,
     )
-    assert result.status in {"succeeded", "warning"}, f"status={result.status} blocking={result.blocking_issues}"
+    assert result.status in {"succeeded", "warning"}, (
+        f"status={result.status} blocking={result.blocking_issues}"
+    )
     assert result.manifest_path is not None
     assert Path(result.manifest_path).exists()
     from src.backend.app.schemas.execution_manifest import OutputManifest
+
     manifest = OutputManifest.model_validate_json(Path(result.manifest_path).read_text())
     assert manifest.project_id == "test"
 
@@ -214,17 +251,22 @@ def test_fake_runner_writes_provenance(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     monkeypatch.setattr("shutil.which", lambda x: "/fake/dcm2niix")
 
     project_dir = _make_persisted_package(tmp_path)
     env = {**_ALL_FLAGS, "MEDIMAGE_PROJECT_DIR": project_dir}
     result = run_synthetic_conversion_from_persisted_package(
-        "test", "conv-test", env=env, runner=_fake_runner,
+        "test",
+        "conv-test",
+        env=env,
+        runner=_fake_runner,
     )
     assert result.status in {"succeeded", "warning"}, f"status={result.status}"
     assert result.provenance_path is not None
     assert Path(result.provenance_path).exists()
     from src.backend.app.schemas.execution_manifest import ExecutionProvenance
+
     prov = ExecutionProvenance.model_validate_json(Path(result.provenance_path).read_text())
     assert prov.backend == "external"
 
@@ -233,12 +275,16 @@ def test_fake_runner_writes_logs(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     monkeypatch.setattr("shutil.which", lambda x: "/fake/dcm2niix")
 
     project_dir = _make_persisted_package(tmp_path)
     env = {**_ALL_FLAGS, "MEDIMAGE_PROJECT_DIR": project_dir}
     result = run_synthetic_conversion_from_persisted_package(
-        "test", "conv-test", env=env, runner=_fake_runner,
+        "test",
+        "conv-test",
+        env=env,
+        runner=_fake_runner,
     )
     assert result.status in {"succeeded", "warning"}, f"status={result.status}"
     assert result.stdout_log_path is not None
@@ -250,6 +296,7 @@ def test_fake_runner_uses_argv_list(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
+
     monkeypatch.setattr("shutil.which", lambda x: "/fake/dcm2niix")
 
     def check_argv(argv):
@@ -262,9 +309,14 @@ def test_fake_runner_uses_argv_list(tmp_path, monkeypatch):
     project_dir = _make_persisted_package(tmp_path)
     env = {**_ALL_FLAGS, "MEDIMAGE_PROJECT_DIR": project_dir}
     result = run_synthetic_conversion_from_persisted_package(
-        "test", "conv-test", env=env, runner=check_argv,
+        "test",
+        "conv-test",
+        env=env,
+        runner=check_argv,
     )
-    assert result.status in {"succeeded", "warning"}, f"status={result.status} blocking={result.blocking_issues}"
+    assert result.status in {"succeeded", "warning"}, (
+        f"status={result.status} blocking={result.blocking_issues}"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -273,10 +325,12 @@ def test_fake_runner_uses_argv_list(tmp_path, monkeypatch):
 
 
 def test_no_shell_used():
+    import inspect
+
     from src.backend.app.services.dicom_conversion_execution import (
         run_synthetic_conversion_from_persisted_package,
     )
-    import inspect
+
     source = inspect.getsource(run_synthetic_conversion_from_persisted_package)
     # Check no actual subprocess imports or usage patterns
     assert "import subprocess" not in source
@@ -284,12 +338,13 @@ def test_no_shell_used():
 
 
 def test_user_conversion_still_disabled():
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+
     result = run_conversion_execute("test", DicomConversionExecutionRequest())
     assert result.conversion_disabled is True
     assert result.execution_blocked is True

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { I18nContextValue } from "../i18n/context";
 import { useI18n } from "../i18n/useI18n";
 import { DEFAULT_API_BASE } from "../lib/api/client";
 import { getProjectMotionQcReadiness } from "../lib/api/preprocessing";
@@ -96,7 +97,9 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
           <H3>{t("technical.MotionQcReadiness.001")}</H3>
           <Sub>{t("technical.MotionQcReadiness.002")}</Sub>
         </div>
-        <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
+        <span style={{ ...pill, ...statusBadge[data.status] }}>
+          {t(`technical.readiness.status.${data.status}` as Parameters<typeof t>[0])}
+        </span>
       </div>
       <div
         style={{
@@ -120,9 +123,12 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
           marginBottom: 12,
         }}
       >
-        <M label="candidates" value={data.candidate_count} />
-        <M label="missing motion" value={data.missing_motion_param_count} />
-        <M label="FD available" value={data.fd_available_count} />
+        <M label={t("technical.MotionQcReadiness.candidates")} value={data.candidate_count} />
+        <M
+          label={t("technical.MotionQcReadiness.missingMotion")}
+          value={data.missing_motion_param_count}
+        />
+        <M label={t("technical.MotionQcReadiness.fdAvailable")} value={data.fd_available_count} />
       </div>
 
       {data.safety_flags && (
@@ -181,7 +187,7 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
                   fontSize: 12,
                 }}
               >
-                {i + 1}. {a}
+                {i + 1}. {localizeMotionNextAction(a, t)}
               </div>
             ))}
           </div>
@@ -189,6 +195,24 @@ export default function MotionQcReadinessPanel({ baseUrl, projectId }: Props) {
       )}
     </Sec>
   );
+}
+
+function localizeMotionNextAction(action: string, t: I18nContextValue["t"]): string {
+  const fdReady = action.match(
+    /^FD column available for (\d+) BOLD candidate\(s\) across (\d+) subject\(s\)\. Motion QC computation can proceed\.$/,
+  );
+  if (fdReady) {
+    return t("technical.MotionQcReadiness.fdReadyAction", {
+      candidates: fdReady[1],
+      subjects: fdReady[2],
+    });
+  }
+  if (
+    action === "Motion QC data is ready. Generate a preprocessing plan in the Plan Review Console."
+  ) {
+    return t("technical.MotionQcReadiness.planAction");
+  }
+  return action;
 }
 
 function CandidateRow({ candidate }: { candidate: MotionQcInputCandidate }) {

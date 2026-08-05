@@ -1,8 +1,7 @@
 from src.backend.app.tools.dpabi_safety import (
+    ALLOWED_FUNCTIONS,
     check_dpabi_call,
     list_allowed_functions,
-    FORBIDDEN_FUNCTIONS,
-    ALLOWED_FUNCTIONS,
 )
 
 

@@ -1,18 +1,37 @@
 # 阶段十：Agent-first 前端与交互收敛
 
-> 状态：Proposed — Blocked by Phase 9 `G9-6`
+> 状态：Source implemented — packaged/release acceptance deferred
 >
-> 目标版本：`v0.7.0-rc1` 候选能力线，不得并入 `v0.6.0-rc2` 冻结主线。
+> 版本边界：当前版本面仍为 `v0.6.0-rc1`；阶段十尚无 exact-SHA、打包或发布版本声明。
 >
 > 主任务模式：Feature Bundle Mode + Architecture and Refactor Mode。
 >
 > 涉及受控执行、DICOM 转换或真实科学链路时，叠加 Scientific Validation Mode 与受保护模块规则。
 
+> 2026-07-16 实施记录：维护者明确授权开展源码实现。10A–10E 与 10F 的 source/docs
+> 子范围已经实现并通过当时的源码验证；exact-SHA 打包、可见 Electron 工作流、安装器和
+> 发布对齐按维护者指示延期。当前工作树位于 `main` 且包含大量未提交改动，不能继续引用
+> 原 feature branch 名称或把当时测试结果当作当前 clean-SHA 证据。
+
 本阶段把项目内默认操作模式从“用户逐页驱动流水线”收敛为“用户描述目标，Agent 生成受控计划并在一次集中审批后推进”。Agent Task 只是既有 Agent Lifecycle、Reviewed Plan、Execution Ticket、Observation、Goal Evaluation、Recovery 和 Artifact Evidence 的前端投影，不保存第二份流程状态。
 
-## 启动前置条件
+## 当前完成边界
 
-只有同时满足以下条件，维护者才可把任务状态改为 `Ready for Implementation`：
+| 子任务 | 当前状态 | 仍未完成的证据 |
+|---|---|---|
+| 10A Agent Task 投影 | 源码与自动化测试已实现 | packaged UI 复验 |
+| 10B 目标、决策与集中审批 | 源码与自动化测试已实现 | clean-SHA 发布候选复验 |
+| 10C Agent Workspace | 源码与前端自动化已实现 | 可见 Electron 人工流程 |
+| 10D 自动观察与恢复建议 | 源码与自动化测试已实现 | 打包退出、强杀、重启 smoke |
+| 10E DICOM 网关收敛 | 受控源码合同已实现 | 打包可见 UI 与新 rawdata manifest |
+| 10F E2E | source/docs 验收完成 | exact-SHA、packaged UI、installer、发布对齐 |
+
+详细事实见[阶段十验收记录](evidence/阶段十_E2E验收记录.md)。各任务文档保留的是实施前
+要求和验收设计；其顶部当前状态覆盖正文中的历史 `Current Gap`、阻塞条件和启动关卡。
+
+## 历史启动前置条件
+
+以下是实施启动时的关卡，现作为历史决策记录保留：
 
 1. 阶段九 `G9-6` 已关闭，RC2 已发布或维护者明确终止 RC2 主线；
 2. 为阶段十创建独立 `codex/` 分支或 worktree；
@@ -30,7 +49,7 @@
 6. [任务 10E：DICOM 执行入口收敛](任务10E_DICOM执行入口收敛.md)
 7. [任务 10F：真实 E2E 与交互验收](任务10F_真实E2E与交互验收.md)
 
-## 推荐实施顺序
+## 已执行的实施顺序
 
 ```text
 阶段九 G9-6
@@ -44,8 +63,8 @@
 
 10C 可以在 10B API 契约冻结后开始，但同一任务仍遵守单一代码所有者规则；不允许多个实现 Agent 同时编辑同一分支。10E 失败不得阻止 BIDS Agent-first 能力按真实范围验收，但会阻止宣称“DICOM 一句话完成”已交付。
 
-## 冻结边界
+## 仍有效的冻结边界
 
-- 阶段十计划文档可以在 RC2 冻结期内维护。
-- 新公共 Agent Task API、生命周期 schema、执行入口、前端默认导航和持久化变化均属于能力扩展，在阶段九关闭前禁止实施。
+- 新公共 Agent Task API、生命周期 schema、执行入口、前端默认导航和持久化变化均属于
+  能力扩展；当前源码存在不等于已进入 RC2 发布线。
 - 本阶段不得借交互收敛修改科学公式、能力等级或 rawdata 只读边界。

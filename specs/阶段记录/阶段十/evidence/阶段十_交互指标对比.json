@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "measured_on": "2026-07-16",
+  "measurement_scope": "Phase 10 source interaction contract",
+  "packaged_ui_measurement": "deferred",
+  "counting_rules": {
+    "explicit_operations": "Clicks, submissions, or selections that change task state or deliberately open the final result.",
+    "automatic_activity_excluded": [
+      "initial page loading",
+      "background polling",
+      "automatic event pagination",
+      "automatic validation and report collection",
+      "opening optional technical details"
+    ]
+  },
+  "workflows": [
+    {
+      "id": "converted_bids_to_fc",
+      "source_status": "validated_by_layered_source_tests",
+      "baseline": {
+        "top_level_pages": 6,
+        "explicit_operations": 8,
+        "form_fields": 4,
+        "approvals": 3,
+        "science_decisions": 4,
+        "technical_concepts": 6,
+        "manual_refresh": 3,
+        "failure_triage_steps": 3
+      },
+      "agent_first": {
+        "top_level_pages": 1,
+        "explicit_operations": 3,
+        "operations": ["select project", "submit goal", "approve reviewed execution"],
+        "form_fields": 1,
+        "approvals": 1,
+        "science_decisions": 0,
+        "technical_concepts": 0,
+        "manual_refresh": 0,
+        "failure_triage_steps": 0
+      },
+      "explicit_operation_reduction_fraction": 0.625,
+      "target_met": true
+    },
+    {
+      "id": "raw_dicom_to_native_preprocessing_to_fc",
+      "source_status": "gateway_contract_validated_packaged_visible_ui_deferred",
+      "baseline": {
+        "top_level_pages": 6,
+        "explicit_operations": 11,
+        "form_fields": 6,
+        "approvals": 2,
+        "science_decisions": 5,
+        "technical_concepts": 6,
+        "manual_refresh": 4,
+        "failure_triage_steps": 3
+      },
+      "agent_first": {
+        "top_level_pages": 1,
+        "explicit_operations": 4,
+        "operations": ["select project", "submit goal", "answer one required data or science decision", "approve reviewed execution"],
+        "form_fields": 2,
+        "approvals": 1,
+        "science_decisions": 1,
+        "technical_concepts": 0,
+        "manual_refresh": 0,
+        "failure_triage_steps": 0
+      },
+      "explicit_operation_reduction_fraction": 0.6364,
+      "target_met": true
+    },
+    {
+      "id": "single_subject_failure_to_approved_recovery",
+      "source_status": "validated_by_controlled_recovery_source_tests",
+      "baseline": {
+        "top_level_pages": 4,
+        "explicit_operations": 8,
+        "form_fields": 4,
+        "approvals": 2,
+        "science_decisions": 3,
+        "technical_concepts": 6,
+        "manual_refresh": 3,
+        "failure_triage_steps": 3
+      },
+      "agent_first": {
+        "top_level_pages": 1,
+        "explicit_operations": 2,
+        "operations": ["select project task", "approve recommended bounded recovery"],
+        "form_fields": 0,
+        "approvals": 1,
+        "science_decisions": 0,
+        "technical_concepts": 0,
+        "manual_refresh": 0,
+        "failure_triage_steps": 0
+      },
+      "explicit_operation_reduction_fraction": 0.75,
+      "target_met": true
+    }
+  ],
+  "privacy": {
+    "contains_research_data": false,
+    "contains_private_absolute_paths": false,
+    "contains_runtime_logs": false
+  }
+}

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -18,13 +19,15 @@ from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import (
     bold_reference_readiness,
-    motion_metrics_draft as metrics_mod,
     motion_qc_readiness,
+)
+from src.backend.app.services import (
+    motion_metrics_draft as metrics_mod,
+)
+from src.backend.app.services import (
     rsfmri_qc_planning_report as report_mod,
 )
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-
 
 _REPORT_ROOT = Path("outputs/reports/rsfmri_qc_planning")
 
@@ -35,19 +38,35 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
     monkeypatch.setattr(report_mod, "_REPORT_ROOT", tmp_path / "reports" / "rsfmri_qc_planning")
     monkeypatch.setattr(metrics_mod, "_REPORT_ROOT", tmp_path / "reports" / "motion_metrics")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, metrics_mod, report_mod,
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+        metrics_mod,
+        report_mod,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create_project(client: TestClient, tmp_path: Path) -> dict:
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Report Project", "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
-        "project_dir": str(tmp_path / "report_proj"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Report Project",
+            "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
+            "project_dir": str(tmp_path / "report_proj"),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -110,8 +129,14 @@ def test_safety_flags_all_true(tmp_path, monkeypatch):
     created = _create_project(client, tmp_path)
     resp = client.post(f"/api/projects/{created['project_id']}/rsfmri-qc/planning-report")
     flags = resp.json()["safety_flags"]
-    for key in ("read_only_inputs", "rawdata_not_modified", "no_realign_executed",
-                "no_reference_image_written", "no_external_tools_executed", "planning_report_only"):
+    for key in (
+        "read_only_inputs",
+        "rawdata_not_modified",
+        "no_realign_executed",
+        "no_reference_image_written",
+        "no_external_tools_executed",
+        "planning_report_only",
+    ):
         assert flags.get(key) is True, f"{key} is not True"
 
 
@@ -251,10 +276,14 @@ def test_report_includes_motion_metrics_artifact_paths_when_generated(tmp_path, 
         encoding="utf-8",
     )
 
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Int Report Project", "rawdata_dir": str(rawdata),
-        "project_dir": str(tmp_path / "int_report_proj"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Int Report Project",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(tmp_path / "int_report_proj"),
+        },
+    )
     assert resp.status_code == 200
     created = resp.json()
 

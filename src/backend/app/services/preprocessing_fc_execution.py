@@ -1,69 +1,124 @@
 """FC Sandbox Execution Service — Phase 5N. Python-only, atlas-optional."""
+
 from __future__ import annotations
-import os, json, hashlib, shutil
+
+import hashlib
+import json
+import os
+import shutil
+from datetime import UTC
 from pathlib import Path
 
 from src.backend.app.schemas.preprocessing_fc_execution import (
-    FcSandboxExecutionRequest, FcSandboxExecutionResponse,
-    validate_fc_env, fc_exec_safety_flags,
+    FcSandboxExecutionRequest,
+    FcSandboxExecutionResponse,
+    fc_exec_safety_flags,
+    validate_fc_env,
 )
 from src.backend.app.services.mock_store import mock_store
 
 
 def _now_iso() -> str:
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).isoformat()
+    from datetime import datetime
+
+    return datetime.now(UTC).isoformat()
 
 
 def run_fc_sandbox_execution(
-    project_id: str, run_id: str, request: FcSandboxExecutionRequest,
-    *, project_dir: str = "", env: dict[str, str] | None = None
+    project_id: str,
+    run_id: str,
+    request: FcSandboxExecutionRequest,
+    *,
+    project_dir: str = "",
+    env: dict[str, str] | None = None,
 ) -> FcSandboxExecutionResponse:
     eff_env = env or dict(os.environ)
     ok_flags, missing = validate_fc_env(eff_env)
     if not ok_flags:
-        return FcSandboxExecutionResponse(ok=False, status="disabled", project_id=project_id,
-            blocking_issues=[f"Missing env flags: {missing}"], safety_flags=fc_exec_safety_flags())
+        return FcSandboxExecutionResponse(
+            ok=False,
+            status="disabled",
+            project_id=project_id,
+            blocking_issues=[f"Missing env flags: {missing}"],
+            safety_flags=fc_exec_safety_flags(),
+        )
 
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     effective_pd = project_dir or str(meta.get("project_dir") or "")
 
-    dry_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "spm_dry_runs" / request.dry_run_id if effective_pd else None
+    dry_dir = (
+        Path(effective_pd) / "preprocessing_runs" / run_id / "spm_dry_runs" / request.dry_run_id
+        if effective_pd
+        else None
+    )
     if not dry_dir or not dry_dir.exists():
-        return FcSandboxExecutionResponse(ok=False, status="blocked", project_id=project_id,
-            blocking_issues=[f"Dry-run not found: {request.dry_run_id}"], safety_flags=fc_exec_safety_flags())
+        return FcSandboxExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            blocking_issues=[f"Dry-run not found: {request.dry_run_id}"],
+            safety_flags=fc_exec_safety_flags(),
+        )
 
     func_input = request.functional_input_dir or str(meta.get("current_functional_input_dir") or "")
     func_path = Path(func_input) if func_input else None
     if not func_path or not func_path.exists():
-        return FcSandboxExecutionResponse(ok=False, status="blocked", project_id=project_id,
-            blocking_issues=["Functional input not found."], safety_flags=fc_exec_safety_flags())
+        return FcSandboxExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            blocking_issues=["Functional input not found."],
+            safety_flags=fc_exec_safety_flags(),
+        )
 
-    bold_files = [p for p in sorted(func_path.rglob("*.nii*")) if p.is_file() and ("bold" in p.name.lower() or "rest" in p.name.lower())]
+    bold_files = [
+        p
+        for p in sorted(func_path.rglob("*.nii*"))
+        if p.is_file() and ("bold" in p.name.lower() or "rest" in p.name.lower())
+    ]
     if not bold_files:
-        return FcSandboxExecutionResponse(ok=False, status="blocked", project_id=project_id,
-            blocking_issues=["No functional files found."], safety_flags=fc_exec_safety_flags())
+        return FcSandboxExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            blocking_issues=["No functional files found."],
+            safety_flags=fc_exec_safety_flags(),
+        )
 
-    exec_id = "fc-ex-" + hashlib.sha256(f"{project_id}:{run_id}:{_now_iso()}".encode()).hexdigest()[:10]
-    exec_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "spm_exec" / exec_id if effective_pd else Path(f"outputs/spm_exec/{exec_id}")
+    exec_id = (
+        "fc-ex-" + hashlib.sha256(f"{project_id}:{run_id}:{_now_iso()}".encode()).hexdigest()[:10]
+    )
+    exec_dir = (
+        Path(effective_pd) / "preprocessing_runs" / run_id / "spm_exec" / exec_id
+        if effective_pd
+        else Path(f"outputs/spm_exec/{exec_id}")
+    )
     exec_dir.mkdir(parents=True, exist_ok=True)
-    sandbox_in = exec_dir / "sandbox_input"; sandbox_in.mkdir()
-    sandbox_out = exec_dir / "sandbox_output"; sandbox_out.mkdir()
-    logs_dir = exec_dir / "logs"; logs_dir.mkdir()
+    sandbox_in = exec_dir / "sandbox_input"
+    sandbox_in.mkdir()
+    sandbox_out = exec_dir / "sandbox_output"
+    sandbox_out.mkdir()
+    logs_dir = exec_dir / "logs"
+    logs_dir.mkdir()
 
-    warnings: list[str] = []; copied = []; designs = []
+    warnings: list[str] = []
+    copied = []
+    designs = []
     files_discovered = len(bold_files)
     files_selected = min(files_discovered, 10)
     dataset_complete = files_discovered <= 10
     if not dataset_complete:
         warnings.append(
             f"Found {files_discovered} BOLD files but only processing first 10 "
-            f"(preview mode). Set a higher limit or split the dataset.")
+            f"(preview mode). Set a higher limit or split the dataset."
+        )
     for bf in bold_files[:10]:
         subj = "sub-unknown"
         for part in bf.parts:
-            if part.startswith("sub-"): subj = part; break
+            if part.startswith("sub-"):
+                subj = part
+                break
         # Use full BIDS entity prefix to avoid multi-session/run output collisions
         bids_prefix = subj
         name = bf.name
@@ -77,31 +132,44 @@ def run_fc_sandbox_execution(
         entities = [p for p in parts if "-" in p]
         if entities:
             bids_prefix = "_".join(entities)
-        dest = sandbox_in / bids_prefix; dest.mkdir(parents=True, exist_ok=True)
+        dest = sandbox_in / bids_prefix
+        dest.mkdir(parents=True, exist_ok=True)
         shutil.copy2(bf, dest / bf.name)
         copied.append(dest / bf.name)
-        designs.append({"subject": subj, "bids_prefix": bids_prefix,
-                        "functional": str(dest / bf.name), "fc_computed": False})
+        designs.append(
+            {
+                "subject": subj,
+                "bids_prefix": bids_prefix,
+                "functional": str(dest / bf.name),
+                "fc_computed": False,
+            }
+        )
 
     # FC execution: ROI-based Pearson via the unified compute kernel.
     # The kernel requires a 4D BOLD volume and a matching 3D atlas. When no
     # external atlas is available we synthesize one via ``_generate_atlas``
     # and record that fact in provenance so the matrix is never mistaken for
     # an atlas-grounded result.
-    metadata_only = True; computed = 0; matrix_count = 0
+    metadata_only = True
+    computed = 0
+    matrix_count = 0
     fc_status = "metadata_only"
     _NUMPY_OK = False
     try:
-        import numpy as _np; import nibabel as _nib
+        import nibabel as _nib
+        import numpy as _np
+
         _NUMPY_OK = True
     except ImportError:
         warnings.append("numpy/nibabel not available; metadata-only FC execution.")
 
     if _NUMPY_OK:
         from src.backend.app.tools.functional_connectivity_compute import (
-            compute_fc_backend, _generate_atlas,
+            _generate_atlas,
+            compute_fc_backend,
         )
-        for cp, design in zip(copied, designs):
+
+        for cp, design in zip(copied, designs, strict=False):
             try:
                 img = _nib.load(str(cp))
                 data = img.get_fdata()
@@ -116,11 +184,13 @@ def run_fc_sandbox_execution(
                 atlas_source = "synthetic_x_chunk"
                 result = compute_fc_backend(data, atlas, generate_seed_map=False, prefer_gpu=True)
                 if not result.get("ok") or result.get("correlation_matrix") is None:
-                    warnings.append(f"{design['subject']}: FC kernel returned no matrix: {result.get('errors')}")
+                    warnings.append(
+                        f"{design['subject']}: FC kernel returned no matrix: {result.get('errors')}"
+                    )
                     continue
                 corr = _np.asarray(result["correlation_matrix"]).astype(_np.float32)
                 fz = _np.asarray(result["fisher_z_matrix"]).astype(_np.float32)
-                out_path = sandbox_out / design['bids_prefix']
+                out_path = sandbox_out / design["bids_prefix"]
                 out_path.mkdir(parents=True, exist_ok=True)
                 corr_npy = out_path / f"{design['subject']}_desc-fc_matrix.npy"
                 corr_tsv = out_path / f"{design['subject']}_desc-fc_matrix.tsv"
@@ -130,23 +200,41 @@ def run_fc_sandbox_execution(
                 _np.save(fz_npy, fz)
                 roi_labels = [{"label": d["label"], "name": d["name"]} for d in atlas_defs]
                 (out_path / f"{design['subject']}_desc-fc_labels.json").write_text(
-                    json.dumps({"roi_count": len(roi_labels), "labels": roi_labels}, indent=2))
+                    json.dumps({"roi_count": len(roi_labels), "labels": roi_labels}, indent=2)
+                )
                 (out_path / f"{design['subject']}_desc-fc_provenance.json").write_text(
-                    json.dumps({"method": "pearson", "fisher_z": True, "atlas_source": atlas_source,
-                                "backend": result.get("backend"), "roi_count": int(result.get("roi_count", 0)),
-                                "timepoints": int(result.get("timepoints", T)),
-                                "input_shape": [int(s) for s in data.shape]}, indent=2))
-                design['fc_computed'] = True; design['fc_output'] = str(corr_npy)
-                design['fisher_z_output'] = str(fz_npy)
-                computed += 1; matrix_count += 1; metadata_only = False; fc_status = "numerically_computed"
+                    json.dumps(
+                        {
+                            "method": "pearson",
+                            "fisher_z": True,
+                            "atlas_source": atlas_source,
+                            "backend": result.get("backend"),
+                            "roi_count": int(result.get("roi_count", 0)),
+                            "timepoints": int(result.get("timepoints", T)),
+                            "input_shape": [int(s) for s in data.shape],
+                        },
+                        indent=2,
+                    )
+                )
+                design["fc_computed"] = True
+                design["fc_output"] = str(corr_npy)
+                design["fisher_z_output"] = str(fz_npy)
+                computed += 1
+                matrix_count += 1
+                metadata_only = False
+                fc_status = "numerically_computed"
             except Exception as exc:
                 warnings.append(f"{design['subject']}: {exc}")
 
     fp_path = exec_dir / "fc_plan.json"
-    fp_path.write_text(json.dumps({"designs": designs, "metadata_only": metadata_only,
-                                   "fc_status": fc_status}, indent=2))
+    fp_path.write_text(
+        json.dumps(
+            {"designs": designs, "metadata_only": metadata_only, "fc_status": fc_status}, indent=2
+        )
+    )
 
-    stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
+    stdout_log = logs_dir / "stdout.log"
+    stderr_log = logs_dir / "stderr.log"
     # Status determination — aligned with ALFF/ReHo complete/partial/failed
     # aggregation logic (AGENTS Scientific Computing Contract).
     if metadata_only:
@@ -157,45 +245,95 @@ def run_fc_sandbox_execution(
         result_status = "partial"
         warnings.append(
             f"Overall status is 'partial': only {computed} of {files_selected} "
-            f"selected BOLD files produced valid FC matrices.")
+            f"selected BOLD files produced valid FC matrices."
+        )
     elif not dataset_complete:
         result_status = "partial"
         warnings.append(
             f"Overall status downgraded to 'partial' because only {files_selected} "
-            f"of {files_discovered} discovered BOLD files were processed (preview mode).")
+            f"of {files_discovered} discovered BOLD files were processed (preview mode)."
+        )
     else:
         result_status = "succeeded"
-    stdout_log.write_text(f"FC execution: status={result_status}, computed={computed}\n"); stderr_log.write_text("")
+    stdout_log.write_text(f"FC execution: status={result_status}, computed={computed}\n")
+    stderr_log.write_text("")
 
-    (exec_dir / "manifest.json").write_text(json.dumps({
-        "status": result_status, "metadata_only": metadata_only,
-        "subjects": {"total": len(copied), "succeeded": computed,
-                     "failed": len(copied) - computed},
-        "fc": {"computed": not metadata_only, "status": fc_status, "matrix_count": matrix_count}}))
-    (exec_dir / "provenance.json").write_text(json.dumps({"sandbox_only": True, "metadata_only": metadata_only,
-                                                          "fc_status": fc_status,
-                                                          "dataset_selection": {"files_discovered": files_discovered,
-                                                                                "files_selected": files_selected,
-                                                                                "selection_policy": "first_10_preview" if not dataset_complete else "all",
-                                                                                "dataset_complete": dataset_complete},
-                                                          "atlas_source": "synthetic_x_chunk"}))
-    (exec_dir / "subject_status.json").write_text(json.dumps({"total": len(copied), "computed": computed,
-                                                              "failed": len(copied) - computed,
-                                                              "metadata_only": metadata_only, "fc_status": fc_status}))
-    (exec_dir / "README.md").write_text(f"# FC Sandbox\nStatus: {result_status}. Computed: {computed}/{len(copied)}.\n")
+    (exec_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "status": result_status,
+                "metadata_only": metadata_only,
+                "subjects": {
+                    "total": len(copied),
+                    "succeeded": computed,
+                    "failed": len(copied) - computed,
+                },
+                "fc": {
+                    "computed": not metadata_only,
+                    "status": fc_status,
+                    "matrix_count": matrix_count,
+                },
+            }
+        )
+    )
+    (exec_dir / "provenance.json").write_text(
+        json.dumps(
+            {
+                "sandbox_only": True,
+                "metadata_only": metadata_only,
+                "fc_status": fc_status,
+                "dataset_selection": {
+                    "files_discovered": files_discovered,
+                    "files_selected": files_selected,
+                    "selection_policy": "first_10_preview" if not dataset_complete else "all",
+                    "dataset_complete": dataset_complete,
+                },
+                "atlas_source": "synthetic_x_chunk",
+            }
+        )
+    )
+    (exec_dir / "subject_status.json").write_text(
+        json.dumps(
+            {
+                "total": len(copied),
+                "computed": computed,
+                "failed": len(copied) - computed,
+                "metadata_only": metadata_only,
+                "fc_status": fc_status,
+            }
+        )
+    )
+    (exec_dir / "README.md").write_text(
+        f"# FC Sandbox\nStatus: {result_status}. Computed: {computed}/{len(copied)}.\n"
+    )
 
     return FcSandboxExecutionResponse(
-        ok=True, status=result_status, project_id=project_id, preprocessing_run_id=run_id,
-        dry_run_id=request.dry_run_id, execution_id=exec_id, execution_dir=str(exec_dir),
-        sandbox_input_dir=str(sandbox_in), sandbox_output_dir=str(sandbox_out),
-        subjects_total=len(copied), subjects_succeeded=computed, subjects_failed=len(copied) - computed,
+        ok=True,
+        status=result_status,
+        project_id=project_id,
+        preprocessing_run_id=run_id,
+        dry_run_id=request.dry_run_id,
+        execution_id=exec_id,
+        execution_dir=str(exec_dir),
+        sandbox_input_dir=str(sandbox_in),
+        sandbox_output_dir=str(sandbox_out),
+        subjects_total=len(copied),
+        subjects_succeeded=computed,
+        subjects_failed=len(copied) - computed,
         subjects_partial=0,
-        files_discovered=files_discovered, files_selected=files_selected,
+        files_discovered=files_discovered,
+        files_selected=files_selected,
         dataset_complete=dataset_complete,
-        fc_plan_path=str(fp_path), stdout_log_path=str(stdout_log),
-        stderr_log_path=str(stderr_log), manifest_path=str(exec_dir / "manifest.json"),
+        fc_plan_path=str(fp_path),
+        stdout_log_path=str(stdout_log),
+        stderr_log_path=str(stderr_log),
+        manifest_path=str(exec_dir / "manifest.json"),
         provenance_path=str(exec_dir / "provenance.json"),
         subject_status_path=str(exec_dir / "subject_status.json"),
-        fc_computed=(not metadata_only), fc_status=fc_status, fc_matrix_count=matrix_count,
-        warnings=warnings, next_actions=["Review FC matrices.", "Group analysis requires explicit opt-in."],
-        safety_flags=fc_exec_safety_flags())
+        fc_computed=(not metadata_only),
+        fc_status=fc_status,
+        fc_matrix_count=matrix_count,
+        warnings=warnings,
+        next_actions=["Review FC matrices.", "Group analysis requires explicit opt-in."],
+        safety_flags=fc_exec_safety_flags(),
+    )

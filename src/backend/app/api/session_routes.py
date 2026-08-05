@@ -1,4 +1,9 @@
-"""SessionDB and run-history route handlers."""
+"""Deprecated SessionDB compatibility and run-history route handlers.
+
+The ``/api/sessions/*`` surface remains temporarily for existing consumers;
+it is not the long-term Memory Domain API. New UI uses project history for run
+facts and ``/api/projects/{project_id}/memory`` for reviewed project memory.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -11,7 +16,7 @@ router = APIRouter()
 @router.post("/api/sessions/index")
 async def sessions_index():
     """Index all existing run histories into SessionDB."""
-    from src.backend.app.tools.session_indexer import index_pipeline_runs, index_demo_runs
+    from src.backend.app.tools.session_indexer import index_demo_runs, index_pipeline_runs
 
     pipe_result = index_pipeline_runs()
     demo_result = index_demo_runs()

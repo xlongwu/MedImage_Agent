@@ -1,10 +1,13 @@
 """DPARSF-style parameter mapping to native preprocessing stage configs."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
-from src.backend.app.native_preproc.dpabi_compat.pipeline_templates import DEFAULT_TIME_SERIES_POLICY
+from src.backend.app.native_preproc.dpabi_compat.pipeline_templates import (
+    DEFAULT_TIME_SERIES_POLICY,
+)
 
 
 @dataclass(frozen=True)

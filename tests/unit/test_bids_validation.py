@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -17,7 +18,6 @@ from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import bids_validation
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -46,7 +46,9 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     return store
 
 
-def _create_project(client: TestClient, tmp_path: Path, name: str = "BIDS Validation Project") -> dict:
+def _create_project(
+    client: TestClient, tmp_path: Path, name: str = "BIDS Validation Project"
+) -> dict:
     response = client.post(
         "/api/projects/create",
         json={
@@ -73,9 +75,7 @@ def test_created_project_returns_valid_response(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/bids-validation"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/bids-validation")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -91,9 +91,7 @@ def test_missing_dataset_description_produces_metadata_suggestion(tmp_path, monk
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/bids-validation"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/bids-validation")
     body = resp.json()
     codes = [i["code"] for i in body["issues"]]
     # The synthetic BIDS dir may or may not have dataset_description.json
@@ -122,9 +120,7 @@ def test_synthetic_bids_has_subject_structure(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/bids-validation"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/bids-validation")
     body = resp.json()
     # The synthetic BIDS fixture should have at least one subject
     assert body["subject_count"] > 0
@@ -136,9 +132,7 @@ def test_repair_suggestions_have_required_fields(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/bids-validation"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/bids-validation")
     body = resp.json()
     for suggestion in body["repair_suggestions"]:
         assert "action_type" in suggestion
@@ -156,9 +150,7 @@ def test_data_readiness_includes_bids_check(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     body = resp.json()
     check_names = {c["name"] for c in body["checks"]}
     assert "bids_validation" in check_names, (
@@ -181,9 +173,7 @@ def test_dataset_description_utf8_bom_is_accepted(tmp_path):
     func.mkdir(parents=True)
     (root / "dataset_description.json").write_bytes(
         b"\xef\xbb\xbf"
-        + json.dumps(
-            {"Name": "Converted test dataset", "BIDSVersion": "1.8.0"}
-        ).encode("utf-8")
+        + json.dumps({"Name": "Converted test dataset", "BIDSVersion": "1.8.0"}).encode("utf-8")
     )
     (func / "sub-001_task-rest_bold.json").write_text(
         json.dumps({"TaskName": "rest", "RepetitionTime": 2.0}),
@@ -196,10 +186,7 @@ def test_dataset_description_utf8_bom_is_accepted(tmp_path):
 
     assert result.status == "pass"
     assert "DATASET_DESC_MALFORMED" not in codes
-    assert not any(
-        "dataset_description.json" in action.lower()
-        for action in result.next_actions
-    )
+    assert not any("dataset_description.json" in action.lower() for action in result.next_actions)
 
 
 def test_malformed_dataset_description_gives_specific_next_action(tmp_path):

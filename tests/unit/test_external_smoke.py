@@ -23,29 +23,34 @@ def _write_config(tmp_path: Path) -> Path:
     raw_func.mkdir(parents=True)
     (raw_func / "sub-001_task-rest_bold.nii").write_bytes(b"fake nifti")
     config = tmp_path / "project_config.yaml"
+
     def yml(path: Path) -> str:
         return str(path).replace("\\", "/")
 
     config.write_text(
-        "\n".join([
-            "third_party:",
-            f"  spm_dir: \"{yml(spm_dir)}\"",
-            f"  dpabi_dir: \"{yml(dpabi_dir)}\"",
-            "data:",
-            f"  rawdata_dir: \"{yml(tmp_path / 'rawdata')}\"",
-            "runtime:",
-            f"  matlab_command: \"{yml(fake_matlab)}\"",
-            f"  work_dir: \"{yml(tmp_path / 'work')}\"",
-            f"  log_dir: \"{yml(tmp_path / 'logs')}\"",
-            f"  derivatives_dir: \"{yml(tmp_path / 'derivatives')}\"",
-            "",
-        ]),
+        "\n".join(
+            [
+                "third_party:",
+                f'  spm_dir: "{yml(spm_dir)}"',
+                f'  dpabi_dir: "{yml(dpabi_dir)}"',
+                "data:",
+                f'  rawdata_dir: "{yml(tmp_path / "rawdata")}"',
+                "runtime:",
+                f'  matlab_command: "{yml(fake_matlab)}"',
+                f'  work_dir: "{yml(tmp_path / "work")}"',
+                f'  log_dir: "{yml(tmp_path / "logs")}"',
+                f'  derivatives_dir: "{yml(tmp_path / "derivatives")}"',
+                "",
+            ]
+        ),
         encoding="utf-8",
     )
     return config
 
 
-def test_external_smoke_manual_package_does_not_launch_matlab(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_external_smoke_manual_package_does_not_launch_matlab(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     config = _write_config(tmp_path)
     monkeypatch.setattr(external_smoke, "REPORT_DIR", tmp_path / "reports" / "external_smoke")
 
@@ -66,7 +71,9 @@ def test_external_smoke_manual_package_does_not_launch_matlab(tmp_path: Path, mo
     assert result["next_actions"]
 
 
-def test_external_smoke_approved_mode_requires_explicit_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_external_smoke_approved_mode_requires_explicit_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     config = _write_config(tmp_path)
     monkeypatch.setattr(external_smoke, "REPORT_DIR", tmp_path / "reports" / "external_smoke")
 
@@ -86,7 +93,9 @@ def test_external_smoke_approved_mode_requires_explicit_approval(tmp_path: Path,
     assert "approved_smoke requires --approve" in " ".join(result["errors"])
 
 
-def test_external_smoke_approved_mode_collects_fake_results(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_external_smoke_approved_mode_collects_fake_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     config = _write_config(tmp_path)
     monkeypatch.setattr(external_smoke, "REPORT_DIR", tmp_path / "reports" / "external_smoke")
 
@@ -114,7 +123,9 @@ def test_external_smoke_approved_mode_collects_fake_results(tmp_path: Path, monk
     )
 
     assert result["ok"] is True
-    assert any(item.get("tool_name") == "spm.smoke_test" for item in result["external_tool_results"])
+    assert any(
+        item.get("tool_name") == "spm.smoke_test" for item in result["external_tool_results"]
+    )
 
 
 def test_dpabi_smoke_unapproved_returns_external_tool_result(tmp_path: Path):
@@ -131,7 +142,9 @@ def test_dpabi_smoke_unapproved_returns_external_tool_result(tmp_path: Path):
     assert result["external_tool_result"]["approval"]["required"] is True
 
 
-def test_dpabi_smoke_fake_matlab_success_has_external_tool_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_dpabi_smoke_fake_matlab_success_has_external_tool_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     def fake_run(cmd: list[str], stdout=None, stderr=None, **kwargs):  # type: ignore[no-untyped-def]
         del kwargs
         if stdout:
@@ -198,13 +211,15 @@ def _fake_dpabi_sandbox_subprocess(
             result_json = Path(match.group(1))
             result_json.parent.mkdir(parents=True, exist_ok=True)
             result_json.write_text(
-                json.dumps({
-                    "ok": returncode == 0,
-                    "outputs": [str(result_json.parent / "sandbox_marker.txt")],
-                    "warnings": [],
-                    "errors": [],
-                    "metrics": {"smoke": "ok"},
-                }),
+                json.dumps(
+                    {
+                        "ok": returncode == 0,
+                        "outputs": [str(result_json.parent / "sandbox_marker.txt")],
+                        "warnings": [],
+                        "errors": [],
+                        "metrics": {"smoke": "ok"},
+                    }
+                ),
                 encoding="utf-8",
             )
             (result_json.parent / "sandbox_marker.txt").write_text("ok", encoding="utf-8")
@@ -213,7 +228,9 @@ def _fake_dpabi_sandbox_subprocess(
     monkeypatch.setattr(subprocess, "run", fake_run)
 
 
-def test_dpabi_sandbox_fake_matlab_success_has_external_tool_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_dpabi_sandbox_fake_matlab_success_has_external_tool_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _write_dpabi_run_plan(tmp_path)
     _fake_dpabi_sandbox_subprocess(monkeypatch, returncode=0, write_result=True)
 
@@ -230,7 +247,9 @@ def test_dpabi_sandbox_fake_matlab_success_has_external_tool_result(tmp_path: Pa
     assert Path(result["external_tool_result"]["logs"]["stdout"]).exists()
 
 
-def test_dpabi_sandbox_missing_result_json_fails_with_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_dpabi_sandbox_missing_result_json_fails_with_logs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _write_dpabi_run_plan(tmp_path)
     _fake_dpabi_sandbox_subprocess(monkeypatch, returncode=0, write_result=False)
 
@@ -247,7 +266,9 @@ def test_dpabi_sandbox_missing_result_json_fails_with_logs(tmp_path: Path, monke
     assert Path(result["external_tool_result"]["logs"]["stderr"]).exists()
 
 
-def test_dpabi_sandbox_nonzero_returncode_is_diagnosed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_dpabi_sandbox_nonzero_returncode_is_diagnosed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _write_dpabi_run_plan(tmp_path)
     _fake_dpabi_sandbox_subprocess(monkeypatch, returncode=5, write_result=True)
 

@@ -4,12 +4,13 @@ Single authoritative definition of the layered execution status enum so the
 sandbox execution services do not overload a single ``succeeded/failed``
 string to mean both "sandbox prepared" and "numeric result produced".
 """
+
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     """Layered status distinguishing sandbox scaffolding from numeric output.
 
     Ordered from least to most real. Read-side code should treat anything below

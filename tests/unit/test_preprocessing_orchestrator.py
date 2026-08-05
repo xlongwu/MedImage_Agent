@@ -1,4 +1,5 @@
 """Tests for reviewed preprocessing orchestrator."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -47,7 +48,9 @@ def _create_run(tmp_path, monkeypatch):
     from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
     from src.backend.app.services.preprocessing_run import create_preprocessing_run
 
-    request = PreprocessingRunCreateRequest(preprocessing_input_dir=str(_make_converted_bids(tmp_path)))
+    request = PreprocessingRunCreateRequest(
+        preprocessing_input_dir=str(_make_converted_bids(tmp_path))
+    )
     result = create_preprocessing_run("brain-tumor-study", request, project_dir=str(tmp_path))
     assert result.ok
     return result, store
@@ -65,7 +68,9 @@ def _confirmations() -> dict:
 def test_reviewed_orchestrator_blocks_external_stage_without_approval(tmp_path, monkeypatch):
     created, store = _create_run(tmp_path, monkeypatch)
     from src.backend.app.schemas.preprocessing_pipeline import PreprocessingPipelineExecuteRequest
-    from src.backend.app.services.preprocessing_orchestrator import execute_reviewed_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_orchestrator import (
+        execute_reviewed_preprocessing_pipeline,
+    )
 
     request = PreprocessingPipelineExecuteRequest(
         stages={"dummy_scan_removal": "disabled"},
@@ -92,7 +97,9 @@ def test_reviewed_orchestrator_blocks_external_stage_without_approval(tmp_path, 
 def test_reviewed_orchestrator_delegates_default_execution_to_native_full(tmp_path, monkeypatch):
     created, store = _create_run(tmp_path, monkeypatch)
     from src.backend.app.schemas.preprocessing_pipeline import PreprocessingPipelineExecuteRequest
-    from src.backend.app.services.preprocessing_orchestrator import execute_reviewed_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_orchestrator import (
+        execute_reviewed_preprocessing_pipeline,
+    )
 
     request = PreprocessingPipelineExecuteRequest(
         pipeline_profile="fc_minimal",
@@ -118,8 +125,12 @@ def test_reviewed_orchestrator_delegates_default_execution_to_native_full(tmp_pa
 def test_reviewed_orchestrator_resume_reuses_registered_external_outputs(tmp_path, monkeypatch):
     created, store = _create_run(tmp_path, monkeypatch)
     from src.backend.app.schemas.preprocessing_pipeline import PreprocessingPipelineExecuteRequest
-    from src.backend.app.services.preprocessing_artifact_registry import append_stage_output_artifacts
-    from src.backend.app.services.preprocessing_orchestrator import execute_reviewed_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_artifact_registry import (
+        append_stage_output_artifacts,
+    )
+    from src.backend.app.services.preprocessing_orchestrator import (
+        execute_reviewed_preprocessing_pipeline,
+    )
 
     run_dir = Path(created.run_dir)
     func_dir = tmp_path / "derivatives" / "rsfmri_preproc" / "sub-001" / "func"
@@ -170,8 +181,12 @@ def test_reviewed_orchestrator_resume_reuses_registered_external_outputs(tmp_pat
 def test_nuisance_blocks_when_realignment_motion_qc_is_missing(tmp_path, monkeypatch):
     created, store = _create_run(tmp_path, monkeypatch)
     from src.backend.app.schemas.preprocessing_pipeline import PreprocessingPipelineExecuteRequest
-    from src.backend.app.services.preprocessing_artifact_registry import append_stage_output_artifacts
-    from src.backend.app.services.preprocessing_orchestrator import execute_reviewed_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_artifact_registry import (
+        append_stage_output_artifacts,
+    )
+    from src.backend.app.services.preprocessing_orchestrator import (
+        execute_reviewed_preprocessing_pipeline,
+    )
 
     run_dir = Path(created.run_dir)
     func_dir = tmp_path / "derivatives" / "rsfmri_preproc" / "sub-001" / "func"
@@ -212,8 +227,12 @@ def test_nuisance_blocks_when_realignment_motion_qc_is_missing(tmp_path, monkeyp
 def test_preview_limit_marks_computed_stage_preview_only(tmp_path, monkeypatch):
     created, store = _create_run(tmp_path, monkeypatch)
     from src.backend.app.schemas.preprocessing_pipeline import PreprocessingPipelineExecuteRequest
-    from src.backend.app.services.preprocessing_artifact_registry import append_stage_output_artifacts
-    from src.backend.app.services.preprocessing_orchestrator import execute_reviewed_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_artifact_registry import (
+        append_stage_output_artifacts,
+    )
+    from src.backend.app.services.preprocessing_orchestrator import (
+        execute_reviewed_preprocessing_pipeline,
+    )
 
     run_dir = Path(created.run_dir)
     func_dir = tmp_path / "derivatives" / "rsfmri_preproc" / "sub-001" / "func"
@@ -269,9 +288,13 @@ def test_preview_limit_marks_computed_stage_preview_only(tmp_path, monkeypatch):
 def test_report_and_validation_include_orchestrator_blocked_status(tmp_path, monkeypatch):
     created, store = _create_run(tmp_path, monkeypatch)
     from src.backend.app.schemas.preprocessing_pipeline import PreprocessingPipelineExecuteRequest
-    from src.backend.app.services.preprocessing_orchestrator import execute_reviewed_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_orchestrator import (
+        execute_reviewed_preprocessing_pipeline,
+    )
     from src.backend.app.services.preprocessing_pipeline_report import generate_pipeline_report
-    from src.backend.app.services.preprocessing_pipeline_validation import validate_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_pipeline_validation import (
+        validate_preprocessing_pipeline,
+    )
 
     request = PreprocessingPipelineExecuteRequest(
         stages={"dummy_scan_removal": "disabled"},
@@ -286,11 +309,19 @@ def test_report_and_validation_include_orchestrator_blocked_status(tmp_path, mon
         store=store,
     )
 
-    report = generate_pipeline_report("brain-tumor-study", created.preprocessing_run_id, project_dir=str(tmp_path))
-    validation = validate_preprocessing_pipeline("brain-tumor-study", created.preprocessing_run_id, project_dir=str(tmp_path))
+    report = generate_pipeline_report(
+        "brain-tumor-study", created.preprocessing_run_id, project_dir=str(tmp_path)
+    )
+    validation = validate_preprocessing_pipeline(
+        "brain-tumor-study", created.preprocessing_run_id, project_dir=str(tmp_path)
+    )
 
-    report_realignment = next(item for item in report.stage_statuses if item["stage_id"] == "realignment")
-    validation_realignment = next(item for item in validation.stage_summary if item["stage_id"] == "realignment")
+    report_realignment = next(
+        item for item in report.stage_statuses if item["stage_id"] == "realignment"
+    )
+    validation_realignment = next(
+        item for item in validation.stage_summary if item["stage_id"] == "realignment"
+    )
     assert report_realignment["status"] == "blocked"
     assert validation_realignment["status"] == "blocked"
     assert report_realignment["orchestrator_result"]["stage_id"] == "realignment"
@@ -299,6 +330,7 @@ def test_report_and_validation_include_orchestrator_blocked_status(tmp_path, mon
 
 def test_reviewed_endpoint_is_registered(tmp_path):
     from fastapi.testclient import TestClient
+
     from src.backend.app.api.dependencies import get_project_store
     from src.backend.app.main import app
     from src.backend.app.services.mock_store import SQLiteDesktopStore
@@ -307,7 +339,9 @@ def test_reviewed_endpoint_is_registered(tmp_path):
     project = store.get_project("brain-tumor-study")
     assert project is not None
     project.metadata = {**(project.metadata or {}), "project_dir": str(tmp_path)}
-    store.add_project(project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True)
+    store.add_project(
+        project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True
+    )
     app.dependency_overrides[get_project_store] = lambda: store
     client = TestClient(app)
     try:

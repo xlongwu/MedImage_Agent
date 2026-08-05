@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from src.backend.app.runtime.node_registry_plugins.base import NodeExecutionContext, NodeRunner
+from src.backend.app.runtime.node_registry_plugins.base import (
+    NodeExecutionContext as NodeExecutionContext,
+)
+from src.backend.app.runtime.node_registry_plugins.base import NodeRunner
 from src.backend.app.runtime.node_registry_plugins.create import create_registry
 
 NODE_REGISTRY: dict[str, NodeRunner] = create_registry()

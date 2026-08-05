@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,7 +12,6 @@ from src.backend.app.runtime.capability_enforcement import (
     enforce_recovery_pipeline_scope,
     filter_recovery_subjects,
 )
-from src.backend.app.schemas.execution_ticket import ExecutionTicket
 from src.backend.app.runtime.execution_gateway import (
     ExecutionGateway,
     current_safe_allowlist_fingerprint,
@@ -20,6 +19,7 @@ from src.backend.app.runtime.execution_gateway import (
 from src.backend.app.runtime.node_registry import NODE_REGISTRY
 from src.backend.app.runtime.pipeline_executor import run_pipeline
 from src.backend.app.runtime.tool_execution_context import ToolExecutionContext
+from src.backend.app.schemas.execution_ticket import ExecutionTicket
 from src.backend.app.schemas.pipeline_schema import PipelineNode
 from src.backend.app.services.execution_ticket_service import ExecutionTicketService
 from src.backend.app.services.mock_store import SQLiteDesktopStore
@@ -61,7 +61,7 @@ def _issue(
         pipeline_path=str(pipeline),
         safe_allowlist_fingerprint=current_safe_allowlist_fingerprint(),
         normalized_params_hash="normalized-params-hash",
-        contract_versions={node_id: "1.0.0" for node_id in approved_nodes},
+        contract_versions=dict.fromkeys(approved_nodes, "1.0.0"),
         audit_id="audit-1",
     )
     return service, ticket, project, rawdata, inputs, outputs
@@ -94,7 +94,11 @@ def test_normal_read_and_write_paths_are_allowed(tmp_path):
 @pytest.mark.parametrize("kind", ["traversal", "cross_project"])
 def test_write_escape_is_rejected_and_audited(tmp_path, kind):
     service, ticket, project, _, _, outputs = _issue(tmp_path)
-    target = outputs / ".." / ".." / "escape.nii" if kind == "traversal" else tmp_path / "other-project" / "result.nii"
+    target = (
+        outputs / ".." / ".." / "escape.nii"
+        if kind == "traversal"
+        else tmp_path / "other-project" / "result.nii"
+    )
     with pytest.raises(SafetyError, match="CAPABILITY_WRITE_PATH_OUTSIDE_ROOT"):
         enforce_node_capabilities(
             _context(service, ticket),
@@ -116,9 +120,7 @@ def test_rawdata_write_is_rejected(tmp_path):
 
 def test_expired_ticket_and_unapproved_backend_are_rejected(tmp_path):
     service, ticket, *_ = _issue(tmp_path)
-    expired = ticket.model_copy(
-        update={"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)}
-    )
+    expired = ticket.model_copy(update={"expires_at": datetime.now(UTC) - timedelta(seconds=1)})
     with pytest.raises(SafetyError, match="EXECUTION_TICKET_EXPIRED"):
         enforce_node_capabilities(_context(service, expired), _node())
 
@@ -164,7 +166,10 @@ def test_unapproved_node_is_rejected_before_runner_call(tmp_path, monkeypatch):
                     "report_dir": str(project / "reports"),
                     "matlab_command": "matlab",
                 },
-                "third_party": {"spm_dir": str(project / "spm"), "dpabi_dir": str(project / "dpabi")},
+                "third_party": {
+                    "spm_dir": str(project / "spm"),
+                    "dpabi_dir": str(project / "dpabi"),
+                },
                 "safety": {"rawdata_readonly": True},
             }
         ),

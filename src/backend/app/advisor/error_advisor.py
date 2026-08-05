@@ -6,7 +6,6 @@ from typing import Any
 from src.backend.app.advisor.advisor_safety import (
     is_llm_enabled,
     wrap_advisor_response,
-    advisor_fallback,
 )
 
 
@@ -49,7 +48,7 @@ def advise_error(
 def _deterministic_explanation(classified: dict, error_message: str, subject_id: str) -> str:
     if not classified.get("classified"):
         if "not found" in error_message.lower():
-            return f"File or resource not found. Check if the expected derivative exists and upstream processing completed successfully."
+            return "File or resource not found. Check if the expected derivative exists and upstream processing completed successfully."
         return f"Unclassified error: {error_message[:200]}. Review logs and run error diagnosis."
 
     category = classified.get("category", "")
@@ -60,8 +59,8 @@ def _deterministic_explanation(classified: dict, error_message: str, subject_id:
 
 
 def _llm_error_explanation(error_message: str, node_id: str, backend: str, category: str, subject_id: str) -> str:
-    from src.backend.app.advisor.protocol_advisor import _call_llm
     from src.backend.app.advisor.advisor_safety import get_llm_config
+    from src.backend.app.advisor.protocol_advisor import _call_llm
 
     config = get_llm_config()
     prompt = (

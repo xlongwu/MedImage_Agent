@@ -15,18 +15,14 @@ Reference:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from src.backend.app.schemas.dicom_conversion_go_no_go import (
-    DicomConversionGoNoGoReview,
     build_default_go_no_go_review,
     summarize_missing_go_criteria,
 )
 from src.backend.app.schemas.dicom_conversion_release_readiness import (
     DicomConversionDiskSpaceCheck,
     DicomConversionReleaseReadinessReport,
-    DicomConversionReleaseReadinessStatus,
-    DicomConversionRuntimePolicy,
     evaluate_disk_space_check,
     evaluate_release_readiness,
     evaluate_runtime_policy,
@@ -42,6 +38,7 @@ def _check_disk_space(output_root: str, estimated_bytes: int = 0) -> DicomConver
     """
     try:
         import shutil
+
         check_path = output_root
         p = Path(output_root)
         if not p.exists():
@@ -55,7 +52,9 @@ def _check_disk_space(output_root: str, estimated_bytes: int = 0) -> DicomConver
                     free_bytes=0,
                     estimated_required_bytes=estimated_bytes,
                     ok=False,
-                    warnings=[f"Output root path does not exist and parent is not accessible: {output_root}"],
+                    warnings=[
+                        f"Output root path does not exist and parent is not accessible: {output_root}"
+                    ],
                 )
         usage = shutil.disk_usage(check_path)
         return evaluate_disk_space_check(
@@ -91,12 +90,12 @@ def evaluate_conversion_release_readiness(
 
     Returns a ``DicomConversionReleaseReadinessReport``.
     """
-    warnings: list[str] = []
+    _warnings: list[str] = []
     blocking: list[str] = []
 
     # ── 1. Read GO/NO-GO review ──
     review = build_default_go_no_go_review()
-    gate_summary = summarize_missing_go_criteria(review)
+    _gate_summary = summarize_missing_go_criteria(review)
 
     gates_met = review.met_count
     gates_total = review.total_criteria
@@ -104,7 +103,7 @@ def evaluate_conversion_release_readiness(
 
     # ── 2. Check public endpoint status ──
     public_endpoint_state = _classify_public_endpoint_state()
-    public_endpoint_enabled = (public_endpoint_state != "absent")
+    public_endpoint_enabled = public_endpoint_state != "absent"
 
     # ── 3. Check frontend execute button status ──
     frontend_execute_enabled = _is_frontend_execute_button_present()
@@ -127,8 +126,8 @@ def evaluate_conversion_release_readiness(
     # ── 9. Runtime policy ──
     runtime = evaluate_runtime_policy(
         cancellation_supported=False,  # Not yet implemented
-        resume_supported=False,         # Not yet implemented
-        retry_supported=False,          # Not yet implemented
+        resume_supported=False,  # Not yet implemented
+        retry_supported=False,  # Not yet implemented
     )
 
     # ── 10. Build report ──
@@ -214,9 +213,10 @@ def _classify_public_endpoint_state() -> str:
     has_internal = False
     try:
         from src.backend.app.services.dicom_conversion_execution import (
-            run_internal_user_dicom_conversion_from_persisted_package,
+            run_internal_user_dicom_conversion_from_persisted_package as internal_runner,
         )
-        has_internal = True
+
+        has_internal = callable(internal_runner)
     except ImportError:
         pass
 
@@ -248,10 +248,7 @@ def _is_frontend_execute_button_present() -> bool:
         config = get_desktop_config(redacted=True)
         frontend = config.get("frontend", {}) if isinstance(config, dict) else {}
         dicom = config.get("dicom_conversion", {}) if isinstance(config, dict) else {}
-        return bool(
-            frontend.get("dicom_execute_ui_enabled")
-            or dicom.get("execute_ui_enabled")
-        )
+        return bool(frontend.get("dicom_execute_ui_enabled") or dicom.get("execute_ui_enabled"))
     except Exception:
         return False
 
@@ -262,6 +259,7 @@ def _is_spm_dpabi_matlab_enabled() -> bool:
     These must remain disabled.  Returns True if they appear enabled.
     """
     import os
+
     flags = [
         "MEDIMAGE_MATLAB_ENABLED",
         "MEDIMAGE_SPM_SMOKE_ENABLED",
@@ -290,8 +288,11 @@ def _is_rollback_ready() -> bool:
     Rollback was implemented in Phase 4J-0.
     """
     try:
-        from src.backend.app.services.dicom_conversion_safety import run_conversion_rollback
-        return True
+        from src.backend.app.services.dicom_conversion_safety import (
+            run_conversion_rollback as rollback_runner,
+        )
+
+        return callable(rollback_runner)
     except ImportError:
         return False
 
@@ -303,9 +304,10 @@ def _is_approval_audit_ready() -> bool:
     """
     try:
         from src.backend.app.services.dicom_conversion_execution import (
-            run_internal_user_dicom_conversion_from_persisted_package,
+            run_internal_user_dicom_conversion_from_persisted_package as internal_runner,
         )
-        return True
+
+        return callable(internal_runner)
     except ImportError:
         return False
 

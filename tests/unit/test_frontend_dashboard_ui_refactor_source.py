@@ -27,7 +27,7 @@ def test_app_shell_workspace_structure_exists():
         "TopBar",
         "ProjectsPage",
         "ProjectCreateSheet",
-        "LifecycleRail",
+        "AgentWorkspace",
         "OverviewWorkspace",
         "RunActivityBar",
         "ContextInspector",
@@ -46,11 +46,13 @@ def test_app_shell_workspace_structure_exists():
     for component in app_components:
         assert component in app, f"{component} must be wired from App.tsx"
     navigation = _read("src/frontend/src/features/navigation/workspaceModel.ts")
-    assert "locationForProject" in navigation and 'workspace: "overview"' in navigation
+    assert "locationForProject" in navigation and 'workspace: "agent"' in navigation
     for component in shell_components:
         assert component in shell, f"{component} must exist in AppShellView"
     for component in chrome_components:
-        assert component in shell or component in chrome, f"{component} must exist in AppShellView or DashboardChrome"
+        assert component in shell or component in chrome, (
+            f"{component} must exist in AppShellView or DashboardChrome"
+        )
     assert "topBarSlot" in app_shell
     assert "lifecycleSlot" in app_shell
     assert "inspectorSlot" in app_shell
@@ -61,10 +63,13 @@ def test_app_shell_workspace_structure_exists():
 def test_advanced_preprocessing_placeholder_text_exists():
     panel = _read("src/frontend/src/components/AdvancedPreprocessingPipelinePanel.tsx")
     messages = _read_en_messages()
-    assert 'technical.AdvancedPreprocessingPipeline.001' in panel
-    assert 'technical.AdvancedPreprocessingPipeline.002' in panel
+    assert "technical.AdvancedPreprocessingPipeline.001" in panel
+    assert "technical.AdvancedPreprocessingPipeline.002" in panel
     assert "Preprocessing validation" in messages
-    assert "Create a preprocessing run after conversion or BIDS registration to inspect the full pipeline." in messages
+    assert (
+        "Create a preprocessing run after conversion or BIDS registration to inspect the full pipeline."
+        in messages
+    )
 
 
 def test_raw_dicom_and_bids_expected_wording_exists():
@@ -74,13 +79,23 @@ def test_raw_dicom_and_bids_expected_wording_exists():
     data_readiness = _read("src/frontend/src/components/DataReadinessPanel.tsx")
     dashboard_chrome = _read("src/frontend/src/features/dashboard/DashboardChrome.tsx")
     project_create_panel = _read("src/frontend/src/features/app/ProjectCreateResultPanel.tsx")
-    combined = workspace + bids + nifti + data_readiness + dashboard_chrome + project_create_panel + _read_en_messages()
+    combined = (
+        workspace
+        + bids
+        + nifti
+        + data_readiness
+        + dashboard_chrome
+        + project_create_panel
+        + _read_en_messages()
+    )
     assert "Raw DICOM candidates" in combined
     assert "Converted subjects" in combined
     messages = _read_en_messages()
     assert 't("data.bids.rawExpectedDescription")' in bids
     assert "NIfTI QC is not applicable until DICOM data is converted." in nifti
-    assert "BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion." in messages
+    assert (
+        "BIDS validation is expected to be incomplete before DICOM-to-NIfTI conversion." in messages
+    )
 
 
 def test_next_actions_cleanup_helper_exists():
@@ -94,7 +109,9 @@ def test_next_actions_cleanup_helper_exists():
 def test_app_shell_does_not_render_technical_tools_as_default_cards():
     shell = _read("src/frontend/src/features/app/AppShellView.tsx")
     plan_workspace = _read("src/frontend/src/features/workspaces/PlanWorkspace.tsx")
-    preprocessing_workspace = _read("src/frontend/src/features/workspaces/PreprocessingWorkspace.tsx")
+    preprocessing_workspace = _read(
+        "src/frontend/src/features/workspaces/PreprocessingWorkspace.tsx"
+    )
     assert "SecondaryToolsDrawer" not in shell
     assert "CompactTaskLog" not in shell
     assert "PlanReviewConsole" not in shell

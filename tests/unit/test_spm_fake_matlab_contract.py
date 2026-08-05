@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import nibabel as nib
 import numpy as np
@@ -16,7 +17,6 @@ from src.backend.app.tools.spm_realign_runner import run_spm_realign_subject
 from src.backend.app.tools.spm_segment_runner import run_spm_segment_subject
 from src.backend.app.tools.spm_slice_timing_runner import run_spm_slice_timing_subject
 from src.backend.app.tools.spm_smooth_runner import run_spm_smooth_subject
-
 
 Runner = Callable[[Path], dict[str, Any]]
 
@@ -67,7 +67,9 @@ def _make_raw_t1w(tmp_path: Path) -> Path:
     return t1w
 
 
-def _fake_subprocess_run(monkeypatch: pytest.MonkeyPatch, *, returncode: int = 0, create_outputs: bool = True) -> None:
+def _fake_subprocess_run(
+    monkeypatch: pytest.MonkeyPatch, *, returncode: int = 0, create_outputs: bool = True
+) -> None:
     def fake_run(cmd: list[str], stdout=None, stderr=None, **kwargs):  # type: ignore[no-untyped-def]
         del kwargs
         if stdout:
@@ -97,18 +99,38 @@ def _fake_subprocess_run(monkeypatch: pytest.MonkeyPatch, *, returncode: int = 0
             payload["realigned_files"] = [str(realigned)]
             if create_outputs and returncode == 0:
                 _write_nifti(realigned)
-            add_nifti("mean_file", result_json.parent / f"mean{subject_id}_bold.nii", shape=(4, 4, 4))
+            add_nifti(
+                "mean_file", result_json.parent / f"mean{subject_id}_bold.nii", shape=(4, 4, 4)
+            )
             add_text("motion_parameter_file", result_json.parent / f"rp_{subject_id}_bold.txt")
         elif name == "spm_coregistration_result.json":
-            add_nifti("coregistered_file", result_json.parent / f"coreg_{subject_id}_T1w.nii", shape=(4, 4, 4))
+            add_nifti(
+                "coregistered_file",
+                result_json.parent / f"coreg_{subject_id}_T1w.nii",
+                shape=(4, 4, 4),
+            )
         elif name == "spm_segmentation_result.json":
-            add_nifti("gm_file", result_json.parent / f"c1coreg_{subject_id}_T1w.nii", shape=(4, 4, 4))
-            add_nifti("wm_file", result_json.parent / f"c2coreg_{subject_id}_T1w.nii", shape=(4, 4, 4))
-            add_nifti("csf_file", result_json.parent / f"c3coreg_{subject_id}_T1w.nii", shape=(4, 4, 4))
-            add_nifti("deformation_field", result_json.parent / f"y_coreg_{subject_id}_T1w.nii", shape=(4, 4, 4))
+            add_nifti(
+                "gm_file", result_json.parent / f"c1coreg_{subject_id}_T1w.nii", shape=(4, 4, 4)
+            )
+            add_nifti(
+                "wm_file", result_json.parent / f"c2coreg_{subject_id}_T1w.nii", shape=(4, 4, 4)
+            )
+            add_nifti(
+                "csf_file", result_json.parent / f"c3coreg_{subject_id}_T1w.nii", shape=(4, 4, 4)
+            )
+            add_nifti(
+                "deformation_field",
+                result_json.parent / f"y_coreg_{subject_id}_T1w.nii",
+                shape=(4, 4, 4),
+            )
         elif name == "spm_normalization_result.json":
             add_nifti("normalized_file", result_json.parent / f"wra{subject_id}_bold.nii")
-            add_nifti("normalized_mean_file", result_json.parent / f"wmean{subject_id}_bold.nii", shape=(4, 4, 4))
+            add_nifti(
+                "normalized_mean_file",
+                result_json.parent / f"wmean{subject_id}_bold.nii",
+                shape=(4, 4, 4),
+            )
         elif name == "spm_smoothing_result.json":
             add_nifti("smoothed_file", result_json.parent / f"swra{subject_id}_bold.nii")
         else:
@@ -151,7 +173,9 @@ def _realign_runner(tmp_path: Path) -> dict[str, Any]:
 
 def _coreg_runner(tmp_path: Path) -> dict[str, Any]:
     dirs = _subject_dirs(tmp_path)
-    mean_func = dirs["derivatives"] / "rsfmri_preproc" / "sub-001" / "func" / "mean_sub-001_bold.nii"
+    mean_func = (
+        dirs["derivatives"] / "rsfmri_preproc" / "sub-001" / "func" / "mean_sub-001_bold.nii"
+    )
     _write_nifti(mean_func, shape=(4, 4, 4))
     t1w = _make_raw_t1w(tmp_path)
     return run_spm_coregister_subject(
@@ -205,7 +229,9 @@ def _normalize_runner(tmp_path: Path) -> dict[str, Any]:
 
 def _smooth_runner(tmp_path: Path) -> dict[str, Any]:
     dirs = _subject_dirs(tmp_path)
-    _write_nifti(dirs["derivatives"] / "rsfmri_preproc" / "sub-001" / "func" / "wra_sub-001_bold.nii")
+    _write_nifti(
+        dirs["derivatives"] / "rsfmri_preproc" / "sub-001" / "func" / "wra_sub-001_bold.nii"
+    )
     return run_spm_smooth_subject(
         matlab_command="matlab",
         spm_dir=str(tmp_path / "spm12"),
@@ -228,7 +254,9 @@ SPM_CASES: list[tuple[str, Runner]] = [
 
 
 @pytest.mark.parametrize(("name", "runner"), SPM_CASES)
-def test_spm_fake_matlab_success_has_contract(name: str, runner: Runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_spm_fake_matlab_success_has_contract(
+    name: str, runner: Runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _fake_subprocess_run(monkeypatch, returncode=0, create_outputs=True)
 
     result = runner(tmp_path)
@@ -240,7 +268,9 @@ def test_spm_fake_matlab_success_has_contract(name: str, runner: Runner, tmp_pat
 
 
 @pytest.mark.parametrize(("name", "runner"), SPM_CASES)
-def test_spm_fake_matlab_missing_outputs_fail(name: str, runner: Runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_spm_fake_matlab_missing_outputs_fail(
+    name: str, runner: Runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _fake_subprocess_run(monkeypatch, returncode=0, create_outputs=False)
 
     result = runner(tmp_path)
@@ -251,7 +281,9 @@ def test_spm_fake_matlab_missing_outputs_fail(name: str, runner: Runner, tmp_pat
 
 
 @pytest.mark.parametrize(("name", "runner"), SPM_CASES)
-def test_spm_fake_matlab_nonzero_returncode_diagnoses_logs(name: str, runner: Runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_spm_fake_matlab_nonzero_returncode_diagnoses_logs(
+    name: str, runner: Runner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _fake_subprocess_run(monkeypatch, returncode=7, create_outputs=False)
 
     result = runner(tmp_path)

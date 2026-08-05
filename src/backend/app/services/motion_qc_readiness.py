@@ -8,7 +8,7 @@ realignment, never writes files, never calls external tools.
 from __future__ import annotations
 
 import csv
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,6 @@ from src.backend.app.schemas.desktop import (
 from src.backend.app.services.image_preview import list_image_sources
 from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.qc_evidence_roots import collect_qc_evidence_roots
-
 
 _MOTION_PARAM_PATTERNS = [
     "rp_*.txt",
@@ -38,7 +37,7 @@ _NIFTI_EXT = (".nii", ".nii.gz")
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _is_bold(path: Path) -> bool:

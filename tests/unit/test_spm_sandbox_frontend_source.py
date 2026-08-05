@@ -1,6 +1,10 @@
 """Frontend source-level tests for SPM sandbox execution UI — Phase 5E-Complete."""
+
 from __future__ import annotations
-import os, pytest
+
+import os
+
+import pytest
 
 
 def _read_panel():
@@ -26,13 +30,15 @@ def _read_api():
 
 def test_sandbox_execution_api_wrapper_exists():
     content = _read_api()
-    assert "executeSpmSandboxSliceTimingRealign" in content, "Sandbox execution API wrapper must exist"
+    assert "executeSpmSandboxSliceTimingRealign" in content, (
+        "Sandbox execution API wrapper must exist"
+    )
     assert "execute-sandbox" in content, "API must call execute-sandbox endpoint"
 
 
 def test_no_run_full_preprocessing_text():
     content = _read_panel()
-    lines = [l.strip() for l in content.splitlines() if not l.strip().startswith("//")]
+    lines = [line.strip() for line in content.splitlines() if not line.strip().startswith("//")]
     code = "\n".join(lines)
     assert "Run Full Preprocessing" not in code, "No Run Full Preprocessing text allowed"
     assert "Run DPABI" not in code, "No Run DPABI text allowed"

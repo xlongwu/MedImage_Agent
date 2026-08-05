@@ -26,6 +26,7 @@ from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.planner import pipeline_writer  # imported as module for monkeypatch
 from src.backend.app.planner.approval_gate import check_approval_gate
 from src.backend.app.planner.audit_record import (
+    audit_record_to_dict,
     build_review_audit_record,
     stable_hash,
     write_audit_record,
@@ -48,6 +49,7 @@ from src.backend.app.runtime.execution_gateway import (
     ExecutionGateway,
     current_safe_allowlist_fingerprint,
 )
+from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.schemas.desktop import ReviewedPlanRecord
 from src.backend.app.schemas.execution_consistency import (
     ExecutionConsistencyInput,
@@ -55,10 +57,12 @@ from src.backend.app.schemas.execution_consistency import (
 )
 from src.backend.app.schemas.native_preproc_api import NativeFullPreprocRequest
 from src.backend.app.services.agent_orchestrator import AgentOrchestrator
+from src.backend.app.services.agent_task_reconciler import AgentTaskReconciler
 from src.backend.app.services.execution_ticket_service import ExecutionTicketService
 from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.native_preproc_full import run_native_full_dry_run
 from src.backend.app.services.native_preproc_request import build_native_full_request
+from src.backend.app.services.reviewed_execution_service import ReviewedExecutionService
 
 router = APIRouter()
 
@@ -76,6 +80,7 @@ class ExecuteReviewedRequest(BaseModel):
     write_pipeline_yaml: bool = False
     confirm_execution: bool = False
     actor: str | None = None
+    lifecycle_id: str | None = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -272,12 +277,32 @@ def _write_audit(
             source="execute_reviewed_api",
         )
         path = write_audit_record(record, AUDIT_RECORD_DIR)
-        return {
+        result = {
             "persisted": True,
             "audit_id": record.audit_id,
             "audit_path": str(path),
             "event_type": event_type,
         }
+        if request.project_id:
+            project = mock_store.get_project(request.project_id)
+            metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
+            project_dir = metadata.get("project_dir")
+            if project_dir:
+                project_root = Path(str(project_dir)).expanduser().resolve()
+                projection_path = (
+                    project_root / "reports" / "audit_records" / f"{record.audit_id}.json"
+                ).resolve()
+                try:
+                    projection_path.relative_to(project_root)
+                    atomic_write_json(
+                        projection_path,
+                        audit_record_to_dict(record),
+                        schema_version=1,
+                    )
+                    result["project_audit_path"] = str(projection_path)
+                except Exception as exc:
+                    result["projection_warning"] = f"PROJECT_AUDIT_PROJECTION_FAILED: {exc}"
+        return result
     except Exception:
         return {"persisted": False, "error": "Failed to write audit record"}
 
@@ -314,6 +339,12 @@ def _blocked_result(
         request,
     )
     return result
+
+
+@router.post("/api/plans/execute-reviewed")
+def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
+    """Compatibility HTTP adapter for the shared reviewed execution service."""
+    return ReviewedExecutionService().execute(request)
 
 
 def _early_blocked(
@@ -827,8 +858,7 @@ def _approval_context_id(
 # ── Main endpoint ────────────────────────────────────────────────────────────
 
 
-@router.post("/api/plans/execute-reviewed")
-def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
+def _execute_reviewed_application(request: ExecuteReviewedRequest) -> dict[str, Any]:
     """Validate (and optionally execute) a reviewed plan.
 
     dry_run=true  → readiness check only.
@@ -902,6 +932,23 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 ),
                 reviewed_plan_id=request.reviewed_plan_id,
             )
+
+        if not request.lifecycle_id:
+            bound_lifecycles = [
+                lifecycle
+                for lifecycle in mock_store.list_agent_lifecycles(reviewed_plan.project_id)
+                if lifecycle.reviewed_plan_id == reviewed_plan.reviewed_plan_id
+            ]
+            if bound_lifecycles:
+                result = _early_blocked("AGENT_LIFECYCLE_ID_REQUIRED", request)
+                result["errors"] = [
+                    "AGENT_LIFECYCLE_ID_REQUIRED: this reviewed plan belongs to an Agent Task; "
+                    "approve or retry it from the Agent workspace."
+                ]
+                return _with_link_fields(
+                    result,
+                    reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                )
 
         # 5. Re-validate plan
         validation_result = validate_plan(plan)
@@ -1116,6 +1163,7 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 run_id=linked_run_id,
                 project_config_path=reviewed_plan.project_config_path,
                 pipeline_path=str(written_path),
+                task_id=request.lifecycle_id,
             )
             try:
                 mock_store.add_run_link(run_link)
@@ -1311,13 +1359,59 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 max_retry_count=0,
             )
             orchestrator = AgentOrchestrator(mock_store)
-            lifecycle = orchestrator.prepare_reviewed_execution(
-                project_id=reviewed_plan.project_id,
-                reviewed_plan_id=reviewed_plan.reviewed_plan_id,
-                execution_ticket_id=issued_ticket.execution_ticket_id,
-                audit_id=issued_ticket.audit_id,
-                actor=issued_ticket.approved_actor,
+            if request.lifecycle_id:
+                lifecycle = orchestrator.get(
+                    project_id=reviewed_plan.project_id,
+                    lifecycle_id=request.lifecycle_id,
+                )
+                if lifecycle.state != "WAITING_FOR_APPROVAL":
+                    raise SafetyError(
+                        "LIFECYCLE_APPROVAL_STATE_REQUIRED",
+                        code="LIFECYCLE_APPROVAL_STATE_REQUIRED",
+                    )
+                if lifecycle.reviewed_plan_id != reviewed_plan.reviewed_plan_id:
+                    raise SafetyError(
+                        "LIFECYCLE_BINDING_DRIFT",
+                        code="LIFECYCLE_BINDING_DRIFT",
+                    )
+                lifecycle = orchestrator.transition(
+                    project_id=lifecycle.project_id,
+                    lifecycle_id=lifecycle.lifecycle_id,
+                    to_state="APPROVED",
+                    command_id=f"approve:{issued_ticket.execution_ticket_id}",
+                    actor=issued_ticket.approved_actor,
+                    source_command="agent_approval",
+                )
+                lifecycle = orchestrator.transition(
+                    project_id=lifecycle.project_id,
+                    lifecycle_id=lifecycle.lifecycle_id,
+                    to_state="EXECUTION_READY",
+                    command_id=f"ready:{issued_ticket.execution_ticket_id}",
+                    actor=issued_ticket.approved_actor,
+                    source_command="execution_ticket_issued",
+                    updates={
+                        "execution_ticket_id": issued_ticket.execution_ticket_id,
+                        "audit_id": issued_ticket.audit_id,
+                    },
+                )
+            else:
+                lifecycle = orchestrator.prepare_reviewed_execution(
+                    project_id=reviewed_plan.project_id,
+                    reviewed_plan_id=reviewed_plan.reviewed_plan_id,
+                    execution_ticket_id=issued_ticket.execution_ticket_id,
+                    audit_id=issued_ticket.audit_id,
+                    actor=issued_ticket.approved_actor,
+                )
+            assert run_link_id is not None
+            associated_link = mock_store.update_run_link(
+                run_link_id,
+                task_id=lifecycle.lifecycle_id,
             )
+            if associated_link is None or associated_link.task_id != lifecycle.lifecycle_id:
+                raise SafetyError(
+                    "RUN_LINK_TASK_ASSOCIATION_FAILED",
+                    code="RUN_LINK_TASK_ASSOCIATION_FAILED",
+                )
             executor_result, consumed_ticket, lifecycle = orchestrator.dispatch_execution(
                 lifecycle=lifecycle,
                 actor=issued_ticket.approved_actor,
@@ -1474,6 +1568,22 @@ def api_execute_reviewed(request: ExecuteReviewedRequest) -> dict[str, Any]:
                 pipeline_path=str(written_path) if written_path else None,
                 summary_path=str(summary_path) if summary_path else None,
             )
+        if lifecycle.state == "RUNNING":
+            try:
+                reconciler = AgentTaskReconciler(mock_store)
+                lifecycle = reconciler.reconcile_once(
+                    project_id=lifecycle.project_id,
+                    lifecycle_id=lifecycle.lifecycle_id,
+                )
+                if lifecycle.state == "RUNNING":
+                    reconciler.start_bounded_monitor(
+                        project_id=lifecycle.project_id,
+                        lifecycle_id=lifecycle.lifecycle_id,
+                    )
+            except Exception as exc:
+                response_warnings.append(
+                    f"LIFECYCLE_TERMINAL_COORDINATION_FAILED: {exc}"
+                )
         result = {
             "ok": True,
             "status": "EXECUTION_SUBMITTED",

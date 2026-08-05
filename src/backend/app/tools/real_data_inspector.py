@@ -1,4 +1,5 @@
 """Real data inspector -- read-only metadata scanning for BIDS, DICOM, and NIfTI datasets."""
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,12 @@ def inspect_real_dataset(
         if alt.exists():
             root = alt
         if not root.exists():
-            return {"ok": False, "errors": [f"Dataset path not found: {rawdata_path} (also tried data/{rawdata_path})"]}
+            return {
+                "ok": False,
+                "errors": [
+                    f"Dataset path not found: {rawdata_path} (also tried data/{rawdata_path})"
+                ],
+            }
 
     # --- Phase 1: Try BIDS structure (sub-*/) ---
     bids_subjects = _scan_bids(root, max_subjects)
@@ -39,7 +45,12 @@ def inspect_real_dataset(
     if nifti_subjects:
         return _build_inventory(root, out, nifti_subjects, "NIfTI")
 
-    return {"ok": False, "errors": [f"No recognizable data found in {rawdata_path}. Expected BIDS (sub-*/), DICOM (FunRaw/Sub_*/), or NIfTI files."]}
+    return {
+        "ok": False,
+        "errors": [
+            f"No recognizable data found in {rawdata_path}. Expected BIDS (sub-*/), DICOM (FunRaw/Sub_*/), or NIfTI files."
+        ],
+    }
 
 
 def inspect_real_data_directory(
@@ -50,7 +61,11 @@ def inspect_real_data_directory(
 ) -> dict[str, Any]:
     """API-compatible wrapper for read-only real-data inspection."""
     report_root = Path(report_dir)
-    output_dir = report_root if report_root.name == "real_data_sandbox" else report_root / "real_data_sandbox"
+    output_dir = (
+        report_root
+        if report_root.name == "real_data_sandbox"
+        else report_root / "real_data_sandbox"
+    )
     result = inspect_real_dataset(root_dir, output_dir=str(output_dir), max_subjects=max_subjects)
     if result.get("ok"):
         result["work_dir"] = str(Path(work_dir))
@@ -123,7 +138,9 @@ def _scan_dicom(root: Path, max_subjects: int) -> list[dict[str, Any]]:
                     header = _read_dicom_headers(dcms)
                     entry.update(header)
                     entry["bold_count"] = len(dcms)
-                    entry["bold_size_mb"] = round(sum(f.stat().st_size for f in dcms) / (1024 * 1024), 1)
+                    entry["bold_size_mb"] = round(
+                        sum(f.stat().st_size for f in dcms) / (1024 * 1024), 1
+                    )
                     break
 
         # Check T1Raw (anatomical DICOM)
@@ -137,7 +154,9 @@ def _scan_dicom(root: Path, max_subjects: int) -> list[dict[str, Any]]:
                     t1_header = _read_dicom_headers(dcms)
                     if not entry.get("matrix"):
                         entry["matrix"] = t1_header.get("matrix")
-                    entry["t1_size_mb"] = round(sum(f.stat().st_size for f in dcms) / (1024 * 1024), 1)
+                    entry["t1_size_mb"] = round(
+                        sum(f.stat().st_size for f in dcms) / (1024 * 1024), 1
+                    )
                     break
 
         if entry["t1w"] or entry["bold"]:
@@ -152,7 +171,7 @@ def _scan_nifti(root: Path, max_subjects: int) -> list[dict[str, Any]]:
     for nii in sorted(root.rglob("*.nii")):
         # Derive subject ID from path
         parts = nii.relative_to(root).parts
-        for i, p in enumerate(parts):
+        for _i, p in enumerate(parts):
             p_lower = p.lower()
             if p_lower.startswith("sub") and len(p) >= 4:
                 sid = p
@@ -184,8 +203,12 @@ def _read_dicom_headers(dcm_files: list[Path]) -> dict[str, Any]:
             "matrix": f"{ds.get('Rows', '?')}x{ds.get('Columns', '?')}",
             "tr": float(tr) / 1000.0 if tr else None,
             "te_ms": float(ds.get("EchoTime", 0)) if ds.get("EchoTime") else None,
-            "slice_thickness_mm": float(ds.get("SliceThickness", 0)) if ds.get("SliceThickness") else None,
-            "field_strength_t": float(ds.get("MagneticFieldStrength", 0)) if ds.get("MagneticFieldStrength") else None,
+            "slice_thickness_mm": float(ds.get("SliceThickness", 0))
+            if ds.get("SliceThickness")
+            else None,
+            "field_strength_t": float(ds.get("MagneticFieldStrength", 0))
+            if ds.get("MagneticFieldStrength")
+            else None,
             "manufacturer": str(ds.get("Manufacturer", "")),
             "model": str(ds.get("ManufacturerModelName", "")),
             "series_description": str(ds.get("SeriesDescription", "")),

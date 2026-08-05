@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+
 import pytest
 from fastapi.testclient import TestClient
 
 from src.backend.app.desktop_backend_entry import (
     APP_IMPORT_STRING,
     DEFAULT_DESKTOP_HOST,
+    DESKTOP_PARENT_PID_ENV,
     DesktopBackendConfig,
+    _desktop_parent_pid,
+    _watch_parent_process,
     ensure_packaged_windows_runtime_dirs,
     parse_args,
     run_backend,
@@ -44,6 +50,7 @@ def test_desktop_backend_entry_runs_uvicorn_without_reload(monkeypatch: pytest.M
         captured.update(kwargs)
 
     monkeypatch.setattr("src.backend.app.desktop_backend_entry.uvicorn.run", fake_run)
+    monkeypatch.delenv(DESKTOP_PARENT_PID_ENV, raising=False)
     run_backend(DesktopBackendConfig(host="127.0.0.1", port=8765, log_level="info"))
 
     assert captured["app_import"] == APP_IMPORT_STRING
@@ -53,12 +60,36 @@ def test_desktop_backend_entry_runs_uvicorn_without_reload(monkeypatch: pytest.M
     assert captured["factory"] is False
 
 
+def test_desktop_parent_pid_accepts_only_a_distinct_positive_pid(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv(DESKTOP_PARENT_PID_ENV, "4242")
+    monkeypatch.setattr("src.backend.app.desktop_backend_entry.os.getpid", lambda: 100)
+    assert _desktop_parent_pid() == 4242
+
+    for invalid in ("", "not-a-pid", "0", "-1", "100"):
+        monkeypatch.setenv(DESKTOP_PARENT_PID_ENV, invalid)
+        assert _desktop_parent_pid() is None
+
+
+def test_desktop_parent_watchdog_exits_after_parent_disappears():
+    alive_states = iter((True, False))
+    exit_codes: list[int] = []
+
+    _watch_parent_process(
+        4242,
+        poll_interval=0,
+        is_alive=lambda _pid: next(alive_states),
+        exit_process=lambda code: exit_codes.append(code),
+    )
+
+    assert exit_codes == [0]
+
+
 def test_frozen_windows_runtime_bin_stays_inside_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    monkeypatch.setattr(
-        "src.backend.app.desktop_backend_entry._is_windows_runtime", lambda: True
-    )
+    monkeypatch.setattr("src.backend.app.desktop_backend_entry._is_windows_runtime", lambda: True)
     monkeypatch.setenv("MEDIMAGE_DESKTOP_WORKSPACE", str(tmp_path))
 
     created = ensure_packaged_windows_runtime_dirs()
@@ -70,9 +101,7 @@ def test_frozen_windows_runtime_bin_stays_inside_workspace(
 def test_windows_runtime_bin_is_noop_without_desktop_workspace(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ):
-    monkeypatch.setattr(
-        "src.backend.app.desktop_backend_entry._is_windows_runtime", lambda: True
-    )
+    monkeypatch.setattr("src.backend.app.desktop_backend_entry._is_windows_runtime", lambda: True)
     monkeypatch.delenv("MEDIMAGE_DESKTOP_WORKSPACE", raising=False)
 
     assert ensure_packaged_windows_runtime_dirs() == ()
@@ -88,3 +117,23 @@ def test_backend_health_endpoints_available_for_desktop_shell():
     assert root_health.status_code == 200
     assert root_health.json()["ok"] is True
     assert api_health.status_code == 200
+
+
+def test_backend_health_proves_desktop_sidecar_identity(monkeypatch: pytest.MonkeyPatch):
+    token = "desktop-session-token"
+    nonce = "sidecar-health-nonce"
+    monkeypatch.setenv("MEDIMAGE_DESKTOP_SESSION_TOKEN", token)
+    client = TestClient(app)
+
+    challenged = client.get(
+        "/api/health",
+        headers={"X-MedImage-Desktop-Health-Nonce": nonce},
+    )
+    unchallenged = client.get("/api/health")
+
+    expected = hmac.new(
+        token.encode("utf-8"), nonce.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    assert challenged.status_code == 200
+    assert challenged.headers["X-MedImage-Desktop-Health-Proof"] == expected
+    assert "X-MedImage-Desktop-Health-Proof" not in unchallenged.headers

@@ -45,9 +45,7 @@ def test_replan_persists_complete_new_plan_with_new_identity_and_pending_approva
     )
     assert len(reservations) == 1 and reservations[0].status == "consumed"
 
-    replay_lifecycle, replay_reviewed, replay_attempt = ReplanService(
-        fixture.store
-    ).create_replan(
+    replay_lifecycle, replay_reviewed, replay_attempt = ReplanService(fixture.store).create_replan(
         project_id=fixture.project_id,
         lifecycle_id=fixture.lifecycle_id,
         proposal_id=fixture.proposal.recovery_proposal_id,

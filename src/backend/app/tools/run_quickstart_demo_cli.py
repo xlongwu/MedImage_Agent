@@ -2,17 +2,16 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
-from src.backend.app.tools.synthetic_bids import create_synthetic_bids_dataset
-from src.backend.app.tools.data_inspector import inspect_dataset
 from src.backend.app.tools.alff_falff import run_python_alff_falff_subject
-from src.backend.app.tools.reho import run_python_reho_subject
+from src.backend.app.tools.data_inspector import inspect_dataset
 from src.backend.app.tools.functional_connectivity import run_python_functional_connectivity_subject
 from src.backend.app.tools.group_dataset_summary import build_group_dataset_summary
+from src.backend.app.tools.reho import run_python_reho_subject
 from src.backend.app.tools.report_exporter import export_rsfmri_report_package
 from src.backend.app.tools.report_package_validator import validate_rsfmri_report_package
+from src.backend.app.tools.synthetic_bids import create_synthetic_bids_dataset
 
 
 def main() -> int:

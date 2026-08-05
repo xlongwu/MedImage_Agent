@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from uuid import uuid4
 
@@ -477,7 +477,7 @@ class RecoveryPolicyService:
         ]
         if existing:
             return existing[0]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         identity = stable_hash(
             {
                 "proposal": proposal.recovery_proposal_hash,
@@ -546,7 +546,7 @@ class RecoveryPolicyService:
             raise SafetyError("RECOVERY_APPROVAL_NOT_FOUND", code="RECOVERY_APPROVAL_NOT_FOUND")
         if calculate_recovery_approval_hash(approval) != approval.recovery_approval_hash:
             raise SafetyError("RECOVERY_APPROVAL_TAMPERED", code="RECOVERY_APPROVAL_TAMPERED")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if approval.status == "active" and now >= approval.expires_at:
             expired = approval.model_copy(
                 update={"status": "expired", "recovery_approval_hash": "pending"}
@@ -609,7 +609,7 @@ class RecoveryPolicyService:
             recovery_approval_id=approval.recovery_approval_id,
             project_id=approval.project_id,
             event_type="revoked",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             actor=actor,
             command_id=command_id,
             reason_code=reason_code,
@@ -628,7 +628,7 @@ class RecoveryPolicyService:
         attempt_id: str,
         quota,
     ) -> RecoveryQuotaReservation:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         wall = min(300, quota.effective_limits["max_recovery_wall_seconds"])
         identity = stable_hash(
             {
@@ -670,7 +670,7 @@ class RecoveryPolicyService:
         if calculate_quota_reservation_hash(reservation) != reservation.reservation_hash:
             raise SafetyError("RECOVERY_QUOTA_RESERVATION_TAMPERED", code="RECOVERY_QUOTA_RESERVATION_TAMPERED")
         updated = reservation.model_copy(
-            update={"status": "consumed", "consumed_at": datetime.now(timezone.utc), "reservation_hash": "pending"}
+            update={"status": "consumed", "consumed_at": datetime.now(UTC), "reservation_hash": "pending"}
         )
         updated = updated.model_copy(
             update={"reservation_hash": calculate_quota_reservation_hash(updated)}

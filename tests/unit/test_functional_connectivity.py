@@ -1,26 +1,45 @@
 from __future__ import annotations
-import json; from pathlib import Path
-import nibabel as nib; import numpy as np
+
+import json
+from pathlib import Path
+
+import nibabel as nib
+import numpy as np
+
 from src.backend.app.tools import functional_connectivity as fc_module
 from src.backend.app.tools.functional_connectivity import run_python_functional_connectivity_subject
 
+
 def test_python_fc_outputs_matrices(tmp_path: Path):
-    d = tmp_path / "derivatives"; sid = "sub-001"
-    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    d = tmp_path / "derivatives"
+    sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"
+    fd.mkdir(parents=True)
     ip = fd / "filt_resid_swrasub-001_bold.nii"
-    nt = 12; t = np.linspace(0, 2*np.pi, nt, dtype=np.float32)
-    data = np.zeros((4,4,4,nt), dtype=np.float32)
-    data[0:1,:,:,:] = np.sin(t); data[1:2,:,:,:] = np.sin(t); data[2:3,:,:,:] = np.cos(t); data[3:4,:,:,:] = -np.sin(t)
+    nt = 12
+    t = np.linspace(0, 2 * np.pi, nt, dtype=np.float32)
+    data = np.zeros((4, 4, 4, nt), dtype=np.float32)
+    data[0:1, :, :, :] = np.sin(t)
+    data[1:2, :, :, :] = np.sin(t)
+    data[2:3, :, :, :] = np.cos(t)
+    data[3:4, :, :, :] = -np.sin(t)
     nib.save(nib.Nifti1Image(data, affine=np.eye(4)), str(ip))
-    r = run_python_functional_connectivity_subject(subject_id=sid, derivatives_dir=str(d), roi_count=4, generate_seed_map=True)
+    r = run_python_functional_connectivity_subject(
+        subject_id=sid, derivatives_dir=str(d), roi_count=4, generate_seed_map=True
+    )
     assert r["ok"] is True
     fcd = d / "rsfmri_fc" / sid
-    assert (fcd / "roi_timeseries.tsv").exists(); assert (fcd / "correlation_matrix.tsv").exists()
-    assert (fcd / "fisher_z_matrix.tsv").exists(); assert (fcd / "seed_correlation_map.nii").exists()
-    qp = d / "rsfmri_qc" / sid / "functional_connectivity_qc.json"; assert qp.exists()
+    assert (fcd / "roi_timeseries.tsv").exists()
+    assert (fcd / "correlation_matrix.tsv").exists()
+    assert (fcd / "fisher_z_matrix.tsv").exists()
+    assert (fcd / "seed_correlation_map.nii").exists()
+    qp = d / "rsfmri_qc" / sid / "functional_connectivity_qc.json"
+    assert qp.exists()
     pl = json.loads(qp.read_text(encoding="utf-8"))
-    assert pl["subject_id"] == sid; assert pl["fc_qc_status"] in {"PASS","WARNING"}
-    assert pl["roi_count"] == 4; assert pl["correlation_matrix_shape"] == [4,4]
+    assert pl["subject_id"] == sid
+    assert pl["fc_qc_status"] in {"PASS", "WARNING"}
+    assert pl["roi_count"] == 4
+    assert pl["correlation_matrix_shape"] == [4, 4]
     assert pl["stage_status"] == "preview_only"
     assert pl["preview_only"] is True
     assert (fcd / "correlation_matrix.npy").exists()
@@ -29,19 +48,21 @@ def test_python_fc_outputs_matrices(tmp_path: Path):
 
 
 def test_python_fc_with_real_atlas_outputs_reloadable_grounded_artifacts(tmp_path: Path):
-    d = tmp_path / "derivatives"; sid = "sub-001"
-    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    d = tmp_path / "derivatives"
+    sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"
+    fd.mkdir(parents=True)
     ip = fd / "filt_resid_rsub-001_bold.nii.gz"
     nt = 16
-    t = np.linspace(0, 2*np.pi, nt, dtype=np.float32)
-    data = np.zeros((4,4,3,nt), dtype=np.float32)
-    data[:2,:,:,:] = np.sin(t)
-    data[2:,:,:,:] = np.cos(t)
+    t = np.linspace(0, 2 * np.pi, nt, dtype=np.float32)
+    data = np.zeros((4, 4, 3, nt), dtype=np.float32)
+    data[:2, :, :, :] = np.sin(t)
+    data[2:, :, :, :] = np.cos(t)
     affine = np.eye(4)
     nib.save(nib.Nifti1Image(data, affine=affine), str(ip))
-    atlas = np.zeros((4,4,3), dtype=np.int16)
-    atlas[:2,:,:] = 1
-    atlas[2:,:,:] = 2
+    atlas = np.zeros((4, 4, 3), dtype=np.int16)
+    atlas[:2, :, :] = 1
+    atlas[2:, :, :] = 2
     atlas_path = d / "atlases" / "subject_atlas.nii.gz"
     atlas_path.parent.mkdir(parents=True)
     nib.save(nib.Nifti1Image(atlas, affine=affine), str(atlas_path))
@@ -75,21 +96,23 @@ def test_python_fc_with_real_atlas_outputs_reloadable_grounded_artifacts(tmp_pat
 
 
 def test_python_fc_materializes_known_template_atlas_before_execution(tmp_path: Path, monkeypatch):
-    d = tmp_path / "derivatives"; sid = "sub-001"
-    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    d = tmp_path / "derivatives"
+    sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"
+    fd.mkdir(parents=True)
     ip = fd / "filt_resid_rsub-001_bold.nii"
     nt = 10
-    t = np.linspace(0, 2*np.pi, nt, dtype=np.float32)
-    data = np.zeros((4,4,3,nt), dtype=np.float32)
-    data[:2,:,:,:] = np.sin(t)
-    data[2:,:,:,:] = np.cos(t)
+    t = np.linspace(0, 2 * np.pi, nt, dtype=np.float32)
+    data = np.zeros((4, 4, 3, nt), dtype=np.float32)
+    data[:2, :, :, :] = np.sin(t)
+    data[2:, :, :, :] = np.cos(t)
     nib.save(nib.Nifti1Image(data, affine=np.eye(4)), str(ip))
 
     template_root = tmp_path / "repo_templates"
     template_root.mkdir()
-    atlas = np.zeros((4,4,3), dtype=np.int16)
-    atlas[:2,:,:] = 1
-    atlas[2:,:,:] = 2
+    atlas = np.zeros((4, 4, 3), dtype=np.int16)
+    atlas[:2, :, :] = 1
+    atlas[2:, :, :] = 2
     template_atlas = template_root / "aal.nii"
     nib.save(nib.Nifti1Image(atlas, affine=np.eye(4)), str(template_atlas))
     monkeypatch.setattr(fc_module, "_known_template_atlas_roots", lambda: [template_root])
@@ -117,13 +140,15 @@ def test_python_fc_materializes_known_template_atlas_before_execution(tmp_path: 
 
 
 def test_python_fc_rejects_unregistered_external_atlas(tmp_path: Path):
-    d = tmp_path / "derivatives"; sid = "sub-001"
-    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    d = tmp_path / "derivatives"
+    sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"
+    fd.mkdir(parents=True)
     ip = fd / "filt_resid_rsub-001_bold.nii"
-    nib.save(nib.Nifti1Image(np.zeros((4,4,3,8), dtype=np.float32), np.eye(4)), str(ip))
+    nib.save(nib.Nifti1Image(np.zeros((4, 4, 3, 8), dtype=np.float32), np.eye(4)), str(ip))
     atlas_path = tmp_path / "outside" / "atlas.nii"
     atlas_path.parent.mkdir()
-    nib.save(nib.Nifti1Image(np.ones((4,4,3), dtype=np.int16), np.eye(4)), str(atlas_path))
+    nib.save(nib.Nifti1Image(np.ones((4, 4, 3), dtype=np.int16), np.eye(4)), str(atlas_path))
 
     result = run_python_functional_connectivity_subject(
         subject_id=sid,
@@ -137,13 +162,15 @@ def test_python_fc_rejects_unregistered_external_atlas(tmp_path: Path):
 
 
 def test_python_fc_rejects_atlas_shape_mismatch(tmp_path: Path):
-    d = tmp_path / "derivatives"; sid = "sub-001"
-    fd = d / "rsfmri_preproc" / sid / "func"; fd.mkdir(parents=True)
+    d = tmp_path / "derivatives"
+    sid = "sub-001"
+    fd = d / "rsfmri_preproc" / sid / "func"
+    fd.mkdir(parents=True)
     ip = fd / "filt_resid_rsub-001_bold.nii"
-    nib.save(nib.Nifti1Image(np.zeros((4,4,3,8), dtype=np.float32), np.eye(4)), str(ip))
+    nib.save(nib.Nifti1Image(np.zeros((4, 4, 3, 8), dtype=np.float32), np.eye(4)), str(ip))
     atlas_path = d / "atlases" / "bad_atlas.nii"
     atlas_path.parent.mkdir(parents=True)
-    nib.save(nib.Nifti1Image(np.ones((3,4,3), dtype=np.int16), np.eye(4)), str(atlas_path))
+    nib.save(nib.Nifti1Image(np.ones((3, 4, 3), dtype=np.int16), np.eye(4)), str(atlas_path))
 
     result = run_python_functional_connectivity_subject(
         subject_id=sid,

@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 
 from src.backend.app.planner.audit_record import (
-    ReviewAuditRecord,
     audit_record_to_dict,
     build_review_audit_record,
     stable_hash,
@@ -81,7 +80,7 @@ def test_write_audit_record_writes_json(tmp_path):
 def test_write_atomic_uses_tmp_replace(tmp_path):
     audit_dir = tmp_path / "audit"
     rec = build_review_audit_record("dry_run_checked", {"nodes": []}, {"ok": True})
-    path = write_audit_record(rec, audit_dir)
+    _path = write_audit_record(rec, audit_dir)
     # No .tmp file should remain after replace
     tmp_files = list(audit_dir.glob("*.tmp"))
     assert len(tmp_files) == 0

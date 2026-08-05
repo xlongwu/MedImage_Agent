@@ -5,13 +5,12 @@ from __future__ import annotations
 import json
 
 from src.backend.app.planner.approval_gate import (
-    ApprovalGateResult,
     ApprovalRecord,
     check_approval_gate,
 )
 
-
 # ── Helpers ──
+
 
 def _valid_validation(**overrides):
     v = {
@@ -42,6 +41,7 @@ def _approval(approved=True, approved_nodes=None, rejected_nodes=None):
 
 # ── 1. Validation missing ──
 
+
 def test_validation_missing():
     result = check_approval_gate({}, None, None)  # type: ignore[arg-type]
     assert result.execution_allowed is False
@@ -49,6 +49,7 @@ def test_validation_missing():
 
 
 # ── 2. Validation not ok ──
+
 
 def test_validation_not_ok():
     result = check_approval_gate({}, {"ok": False}, None)
@@ -58,6 +59,7 @@ def test_validation_not_ok():
 
 # ── 3. No approval needed → allowed ──
 
+
 def test_no_approval_needed():
     result = check_approval_gate({}, _valid_validation(), None)
     assert result.execution_allowed is True
@@ -65,6 +67,7 @@ def test_no_approval_needed():
 
 
 # ── 4. Approval needed but missing ──
+
 
 def test_approval_missing():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
@@ -74,6 +77,7 @@ def test_approval_missing():
 
 
 # ── 5. approved=false ──
+
 
 def test_approved_false():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
@@ -85,6 +89,7 @@ def test_approved_false():
 
 # ── 6. approved_nodes cover required ──
 
+
 def test_approved_nodes_cover_required():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
     a = _approval(approved_nodes=["spm_realign_subject"])
@@ -93,6 +98,7 @@ def test_approved_nodes_cover_required():
 
 
 # ── 7. approved_nodes missing required ──
+
 
 def test_approved_nodes_missing_required():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
@@ -104,6 +110,7 @@ def test_approved_nodes_missing_required():
 
 # ── 8. Wildcard approval ──
 
+
 def test_wildcard_approval():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject", "spm_smooth_subject"])
     a = _approval(approved_nodes=["*"])
@@ -112,6 +119,7 @@ def test_wildcard_approval():
 
 
 # ── 9. rejected_nodes block ──
+
 
 def test_rejected_nodes_block():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
@@ -122,6 +130,7 @@ def test_rejected_nodes_block():
 
 
 # ── 10. High risk → warning ──
+
 
 def test_high_risk_warning():
     v = _valid_validation(
@@ -136,6 +145,7 @@ def test_high_risk_warning():
 
 # ── 11. Manual required → blocked ──
 
+
 def test_manual_required_blocked():
     v = _valid_validation(
         approval_required_nodes=["spm_realign_subject"],
@@ -149,6 +159,7 @@ def test_manual_required_blocked():
 
 # ── 12. to_dict JSON serializable ──
 
+
 def test_to_dict_json():
     result = check_approval_gate({}, _valid_validation(), None)
     d = result.to_dict()
@@ -159,6 +170,7 @@ def test_to_dict_json():
 
 # ── 13. No pipeline execution ──
 
+
 def test_no_pipeline_execution():
     result = check_approval_gate({}, _valid_validation(), None)
     assert result.execution_allowed is True
@@ -166,14 +178,17 @@ def test_no_pipeline_execution():
 
 # ── 14. No node runner ──
 
+
 def test_no_runner():
     check_approval_gate({}, _valid_validation(), None)
 
 
 # ── 15. No file writes ──
 
+
 def test_no_file_writes(tmp_path):
     import os
+
     before = set(os.listdir(tmp_path))
     check_approval_gate({}, _valid_validation(), None)
     after = set(os.listdir(tmp_path))
@@ -181,6 +196,7 @@ def test_no_file_writes(tmp_path):
 
 
 # ── 16. Dict approval accepted ──
+
 
 def test_dict_approval():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
@@ -190,6 +206,7 @@ def test_dict_approval():
 
 
 # ── 17. Risk summary requires_approval triggers ──
+
 
 def test_risk_summary_triggers_approval():
     v = _valid_validation(risk_summary={"requires_approval": True})
@@ -207,15 +224,24 @@ def _hr_plan(nodes=None):
     """Build a plan with high-risk backend nodes."""
     return {
         "pipeline_id": "test",
-        "nodes": nodes or [
+        "nodes": nodes
+        or [
             {"id": "spm_realign_subject", "backend": "matlab-spm", "depends_on": [], "params": {}},
         ],
     }
 
 
-def _hr_approval(approved_nodes=None, approved_backends=None, rejected_nodes=None,
-                 ext_ack=True, rawdata_ok=True, output_ok=True,
-                 risk_ok=True, overwrite="fail_if_exists", subj_ok=True):
+def _hr_approval(
+    approved_nodes=None,
+    approved_backends=None,
+    rejected_nodes=None,
+    ext_ack=True,
+    rawdata_ok=True,
+    output_ok=True,
+    risk_ok=True,
+    overwrite="fail_if_exists",
+    subj_ok=True,
+):
     return ApprovalRecord(
         approved=True,
         approved_by="test-user",
@@ -233,6 +259,7 @@ def _hr_approval(approved_nodes=None, approved_backends=None, rejected_nodes=Non
 
 # ── 18. ApprovalRecord supports approved_backends ──
 
+
 def test_approval_record_supports_approved_backends():
     a = ApprovalRecord(
         approved=True,
@@ -243,16 +270,20 @@ def test_approval_record_supports_approved_backends():
 
 # ── 19. SPM node with wildcard → blocked ──
 
+
 def test_spm_node_wildcard_blocked():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
     plan = _hr_plan()
     a = _hr_approval(approved_nodes=["*"])
     result = check_approval_gate(plan, v, a)
     assert result.execution_allowed is False
-    assert any(e.code == "WILDCARD_APPROVAL_NOT_ALLOWED_FOR_HIGH_RISK_BACKEND" for e in result.errors)
+    assert any(
+        e.code == "WILDCARD_APPROVAL_NOT_ALLOWED_FOR_HIGH_RISK_BACKEND" for e in result.errors
+    )
 
 
 # ── 20. SPM node without explicit node approval → blocked ──
+
 
 def test_spm_node_no_explicit_approval():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
@@ -265,6 +296,7 @@ def test_spm_node_no_explicit_approval():
 
 # ── 21. SPM node without backend approval → blocked ──
 
+
 def test_spm_node_no_backend_approval():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
     plan = _hr_plan()
@@ -276,6 +308,7 @@ def test_spm_node_no_backend_approval():
 
 # ── 22. SPM node with explicit node + backend approval → passes ──
 
+
 def test_spm_node_full_approval_passes():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
     plan = _hr_plan()
@@ -286,11 +319,15 @@ def test_spm_node_full_approval_passes():
 
 # ── 23. Python-only node still works with wildcard ──
 
+
 def test_python_only_node_wildcard_still_works():
     v = _valid_validation(approval_required_nodes=["data_inspection"])
-    plan = {"pipeline_id": "test", "nodes": [
-        {"id": "data_inspection", "backend": "python", "depends_on": [], "params": {}},
-    ]}
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [
+            {"id": "data_inspection", "backend": "python", "depends_on": [], "params": {}},
+        ],
+    }
     a = _hr_approval(approved_nodes=["*"])
     result = check_approval_gate(plan, v, a)
     assert result.execution_allowed is True
@@ -298,11 +335,15 @@ def test_python_only_node_wildcard_still_works():
 
 # ── 24. DPABI execution node requires explicit node + backend ──
 
+
 def test_dpabi_execution_requires_explicit():
     v = _valid_validation(approval_required_nodes=["dpabi_subject_smooth"])
-    plan = {"pipeline_id": "test", "nodes": [
-        {"id": "dpabi_subject_smooth", "backend": "dpabi", "depends_on": [], "params": {}},
-    ]}
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [
+            {"id": "dpabi_subject_smooth", "backend": "dpabi", "depends_on": [], "params": {}},
+        ],
+    }
     a = _hr_approval(approved_nodes=["*"])
     result = check_approval_gate(plan, v, a)
     assert result.execution_allowed is False  # wildcard blocked
@@ -310,16 +351,26 @@ def test_dpabi_execution_requires_explicit():
 
 # ── 25. DPABI contract Python-only node NOT treated as high-risk ──
 
+
 def test_dpabi_contract_python_not_high_risk():
     v = _valid_validation()
-    plan = {"pipeline_id": "test", "nodes": [
-        {"id": "dpabi_capability_inspection", "backend": "python", "depends_on": [], "params": {}},
-    ]}
+    plan = {
+        "pipeline_id": "test",
+        "nodes": [
+            {
+                "id": "dpabi_capability_inspection",
+                "backend": "python",
+                "depends_on": [],
+                "params": {},
+            },
+        ],
+    }
     result = check_approval_gate(plan, v, None)  # no approval needed
     assert result.execution_allowed is True
 
 
 # ── 26. Rejected nodes still block (priority) ──
+
 
 def test_rejected_blocks_even_with_backend_approval():
     v = _valid_validation(approval_required_nodes=["spm_realign_subject"])
@@ -336,6 +387,7 @@ def test_rejected_blocks_even_with_backend_approval():
 
 # ── 27. Manual required still blocks ──
 
+
 def test_manual_required_still_blocks():
     v = _valid_validation(manual_required_nodes=["gui_acpc_location"])
     plan = _hr_plan()
@@ -349,6 +401,7 @@ def test_manual_required_still_blocks():
 
 
 # ── 28. High risk approved still warns ──
+
 
 def test_high_risk_still_warns():
     v = _valid_validation(

@@ -1,4 +1,4 @@
-"""Launch the frozen backend and verify its lazy CuPy import path."""
+"""Launch the frozen backend and verify packaged scientific capabilities."""
 
 from __future__ import annotations
 
@@ -26,6 +26,25 @@ def _get_json(url: str, *, timeout: float) -> dict:
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"{url} returned HTTP {exc.code}: {body}") from exc
+
+
+def _stop_backend_process_tree(proc: subprocess.Popen[bytes]) -> None:
+    """Stop the PyInstaller bootloader and its extracted backend child."""
+    if os.name == "nt" and proc.poll() is None:
+        subprocess.run(
+            ["taskkill", "/pid", str(proc.pid), "/t", "/f"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    if proc.poll() is None:
+        proc.kill()
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=30)
 
 
 def main() -> int:
@@ -83,6 +102,11 @@ def main() -> int:
                 )
 
             gpu = _get_json(f"{base}/api/gpu/detect", timeout=120)
+            dicom = _get_json(
+                f"{base}/api/desktop/capabilities/dicom-conversion",
+                timeout=30,
+            )
+            dicom_capability = dict(dicom.get("capability") or {})
             evidence = {
                 "ok": True,
                 "backend_exe": backend.name,
@@ -91,9 +115,28 @@ def main() -> int:
                 "gpu_available": bool(gpu.get("gpu_available")),
                 "capability_error_code": gpu.get("capability_error_code"),
                 "warnings": list(gpu.get("warnings") or []),
+                "dicom_converter_available": bool(
+                    dicom_capability.get("converter_available")
+                ),
+                "dicom_execution_supported": bool(
+                    dicom_capability.get("execution_supported")
+                ),
+                "dicom_converter_name": dicom_capability.get("converter_name"),
+                "dicom_converter_version": dicom_capability.get("converter_version"),
+                "dicom_error": dicom_capability.get("error"),
                 "stdout_log": str(stdout_path),
                 "stderr_log": str(stderr_path),
             }
+            if not (
+                evidence["dicom_converter_available"]
+                and evidence["dicom_execution_supported"]
+            ):
+                evidence["ok"] = False
+                result_path.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
+                raise RuntimeError(
+                    "Frozen backend DICOM converter is unavailable: "
+                    + str(evidence["dicom_error"])
+                )
             if args.expect_cupy and not evidence["cupy_available"]:
                 evidence["ok"] = False
                 result_path.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
@@ -104,9 +147,7 @@ def main() -> int:
             result_path.write_text(json.dumps(evidence, indent=2), encoding="utf-8")
             print(json.dumps(evidence, indent=2))
         finally:
-            if proc.poll() is None:
-                proc.kill()
-                proc.wait(timeout=30)
+            _stop_backend_process_tree(proc)
     return 0
 
 

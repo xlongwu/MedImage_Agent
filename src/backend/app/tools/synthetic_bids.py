@@ -10,14 +10,12 @@ def create_synthetic_bids_dataset(
     subjects: list[str] | None = None,
 ) -> dict[str, Any]:
     try:
-        import numpy as np
         import nibabel as nib
+        import numpy as np
     except ImportError as exc:
         return {
             "ok": False,
-            "errors": [
-                f"Missing dependency: {exc.name}. Install with: pip install numpy nibabel"
-            ],
+            "errors": [f"Missing dependency: {exc.name}. Install with: pip install numpy nibabel"],
         }
 
     subjects = subjects or ["sub-001", "sub-002"]
@@ -80,7 +78,7 @@ def create_synthetic_bids_dataset(
         even_indices = list(range(0, n_slices, 2))
         odd_indices = list(range(1, n_slices, 2))
         interleaved_order = even_indices + odd_indices
-        slice_timing = [i * slice_time_increment for i in range(n_slices)]
+        _slice_timing = [i * slice_time_increment for i in range(n_slices)]
         # Assign timing values back to slice positions for BIDS SliceTiming
         # BIDS SliceTiming is in slice order (slice 0, 1, 2, ...), value = acquisition time
         bids_slice_timing = [0.0] * n_slices
@@ -99,12 +97,14 @@ def create_synthetic_bids_dataset(
             encoding="utf-8",
         )
 
-        created_files.extend([
-            str(t1_path),
-            str(t1_json_path),
-            str(bold_path),
-            str(bold_json_path),
-        ])
+        created_files.extend(
+            [
+                str(t1_path),
+                str(t1_json_path),
+                str(bold_path),
+                str(bold_json_path),
+            ]
+        )
 
     return {
         "ok": True,

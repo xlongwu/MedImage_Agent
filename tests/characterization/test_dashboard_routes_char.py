@@ -10,30 +10,29 @@ They deliberately avoid depending on ``mock_store`` internal row formats or
 service implementation details.  After the route split (Tasks 3.2 / 3.3),
 these same tests must pass against the new routers with no changes.
 """
+
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
 
-import pytest
-
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-
 
 # ── Isolation helpers (mirrors existing conversion test pattern) ──────────
 
+
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
+    import src.backend.app.services.mock_store as mock_store_module
     from src.backend.app.api import (
         dashboard_routes,
-        project_routes,
         execute_reviewed_routes,
         project_history_routes,
+        project_routes,
     )
-    from src.backend.app.runtime import desktop_config
     from src.backend.app.planner import project_context, reviewed_plan_store
+    from src.backend.app.runtime import desktop_config
     from src.backend.app.services import conversion_planner
-    import src.backend.app.services.mock_store as mock_store_module
 
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
@@ -44,13 +43,19 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     # ``get_project_store`` helpers in the split route files all return the
     # isolated store.
     for module in (
-        project_routes, dashboard_routes, project_context,
-        reviewed_plan_store, project_history_routes,
-        execute_reviewed_routes, conversion_planner, mock_store_module,
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        conversion_planner,
+        mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
-        json.dumps({"projects_root": str(tmp_path / "projects")}), encoding="utf-8",
+        json.dumps({"projects_root": str(tmp_path / "projects")}),
+        encoding="utf-8",
     )
     return store
 
@@ -74,6 +79,7 @@ def _create_project(client, tmp_path: Path, project_id: str = "char-test-project
 
 def _client(tmp_path: Path, monkeypatch, env_flags: dict | None = None):
     from fastapi.testclient import TestClient
+
     from src.backend.app.main import app
 
     store = _isolated_store(tmp_path, monkeypatch)
@@ -95,6 +101,7 @@ def _client(tmp_path: Path, monkeypatch, env_flags: dict | None = None):
 
 
 # ── Baseline read routes ──────────────────────────────────────────────────
+
 
 class TestReadRoutes:
     """Read-only routes that should always be reachable."""
@@ -138,6 +145,7 @@ class TestReadRoutes:
 
 # ── Conversion dry-run / preflight ────────────────────────────────────────
 
+
 class TestConversionDryRunPreflight:
     """Conversion planning routes — read-only, never executes dcm2niix."""
 
@@ -172,6 +180,7 @@ class TestConversionDryRunPreflight:
 
 
 # ── Conversion approval / review package ──────────────────────────────────
+
 
 class TestConversionApprovalRoutes:
     """Approval and review-package routes — metadata only, no execution."""
@@ -220,9 +229,7 @@ class TestConversionApprovalRoutes:
 
     def test_release_readiness_returns_status(self, tmp_path, monkeypatch):
         client, project_id, _ = _client(tmp_path, monkeypatch)
-        resp = client.get(
-            f"/api/projects/{project_id}/conversion/release-readiness/run-001"
-        )
+        resp = client.get(f"/api/projects/{project_id}/conversion/release-readiness/run-001")
         # Always returns 200 with a status dict (even for missing runs)
         assert resp.status_code == 200
         data = resp.json()
@@ -230,6 +237,7 @@ class TestConversionApprovalRoutes:
 
 
 # ── Public execute endpoint — safety gate contract ────────────────────────
+
 
 class TestConversionExecuteSafetyGates:
     """The public conversion execute endpoint must block unless all gates pass.

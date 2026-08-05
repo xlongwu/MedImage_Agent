@@ -18,10 +18,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from tests.unit.test_native_dicom_to_nifti import _write_classic_series
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
@@ -93,7 +90,8 @@ def _make_command_templates(
                 "bids_sidecar": True,
                 "create_bids": True,
             }
-        ] * count,
+        ]
+        * count,
     }
 
 
@@ -107,7 +105,8 @@ def _make_mapping_snapshot(count: int = 1) -> dict:
                 "suffix": "bold",
                 "suggested_relative_path": "sub-001/func/sub-001_task-rest_bold.nii.gz",
             }
-        ] * count,
+        ]
+        * count,
     }
 
 
@@ -144,25 +143,25 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
 
     approval_record = _make_approved_approval_record()
     approval_record["output_root"] = str(output_root)
-    (run_dir / "approval_record.json").write_text(
-        json.dumps(approval_record)
-    )
+    (run_dir / "approval_record.json").write_text(json.dumps(approval_record))
     (run_dir / "audit_preview.json").write_text(
         json.dumps(_make_audit_preview(str(project_dir / "converted_bids")))
     )
-    (run_dir / "preflight_snapshot.json").write_text(
-        json.dumps({"status": "ready", "ok": True})
-    )
+    (run_dir / "preflight_snapshot.json").write_text(json.dumps({"status": "ready", "ok": True}))
     (run_dir / "mapping_snapshot.json").write_text(
-        json.dumps({
-            "mappings": [{
-                "source_path": str(input_dir),
-                "subject_id": "sub-001",
-                "modality": "anat",
-                "suffix": "T1w",
-                "output_filename": "sub-001_T1w.nii.gz",
-            }]
-        })
+        json.dumps(
+            {
+                "mappings": [
+                    {
+                        "source_path": str(input_dir),
+                        "subject_id": "sub-001",
+                        "modality": "anat",
+                        "suffix": "T1w",
+                        "output_filename": "sub-001_T1w.nii.gz",
+                    }
+                ]
+            }
+        )
     )
     (run_dir / "command_templates.json").write_text(
         json.dumps(
@@ -177,17 +176,13 @@ def _setup_complete_review_package(project_dir: Path, conversion_run_id: str) ->
         build_pre_conversion_rawdata_snapshot,
     )
 
-    checksum_before = build_pre_conversion_rawdata_snapshot(
-        [str(project_dir / "rawdata")]
-    )
+    checksum_before = build_pre_conversion_rawdata_snapshot([str(project_dir / "rawdata")])
     (run_dir / "rawdata_checksum_before.json").write_text(
         json.dumps(checksum_before.model_dump(mode="json"))
     )
-    (run_dir / "rollback_plan_dry_run.json").write_text(
-        json.dumps(_make_rollback_plan())
-    )
+    (run_dir / "rollback_plan_dry_run.json").write_text(json.dumps(_make_rollback_plan()))
     (run_dir / "planned_output_manifest.json").write_text('{"items": []}')
-    (run_dir / "planned_execution_provenance.json").write_text('{}')
+    (run_dir / "planned_execution_provenance.json").write_text("{}")
     (logs_dir / "stdout.log").write_text("")
     (logs_dir / "stderr.log").write_text("")
     (run_dir / "README.md").write_text("# test")
@@ -203,20 +198,28 @@ def _fake_successful_runner(argv):
         suffix = ".nii" if str(compress).lower() in {"n", "3"} else ".nii.gz"
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / f"{filename}{suffix}").write_bytes(b"FAKE_NIFTI")
-    return type("R", (), {
-        "returncode": 0,
-        "stdout": "dcm2niix v1.0 — OK",
-        "stderr": "",
-    })()
+    return type(
+        "R",
+        (),
+        {
+            "returncode": 0,
+            "stdout": "dcm2niix v1.0 — OK",
+            "stderr": "",
+        },
+    )()
 
 
 def _fake_failing_runner(argv):
     """Fake dcm2niix runner that always fails."""
-    return type("R", (), {
-        "returncode": 1,
-        "stdout": "",
-        "stderr": "Conversion failed",
-    })()
+    return type(
+        "R",
+        (),
+        {
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "Conversion failed",
+        },
+    )()
 
 
 def _monkeypatch_dcm2niix_available(monkeypatch, tmp_path):
@@ -226,26 +229,35 @@ def _monkeypatch_dcm2niix_available(monkeypatch, tmp_path):
     use _patch_subprocess_with(monkeypatch, runner) for the conversion runner.
     """
     import shutil
+
     fake_exe = tmp_path / "dcm2niix.exe"
     fake_exe.write_text("fake")
-    monkeypatch.setattr(shutil, "which", lambda x, path=None: str(fake_exe) if x == "dcm2niix" else None)
+    monkeypatch.setattr(
+        shutil, "which", lambda x, path=None: str(fake_exe) if x == "dcm2niix" else None
+    )
 
 
 def _version_result():
-    return type("R", (), {
-        "returncode": 0,
-        "stdout": "Chris Rorden's dcm2niix version v1.0.20260416",
-        "stderr": "",
-    })()
+    return type(
+        "R",
+        (),
+        {
+            "returncode": 0,
+            "stdout": "Chris Rorden's dcm2niix version v1.0.20260416",
+            "stderr": "",
+        },
+    )()
 
 
 def _patch_subprocess_with(monkeypatch, runner):
     """Patch subprocess.run to use *runner* for conversion, but still handle --version."""
     import subprocess as sp
+
     def _smart_run(argv, **kwargs):
         if "--version" in argv:
             return _version_result()
         return runner(argv)
+
     monkeypatch.setattr(sp, "run", _smart_run)
 
 
@@ -268,20 +280,26 @@ def test_missing_approval_record_blocks_execution(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
     (run_dir / "approval_record.json").unlink()
 
     import subprocess as sp
+
     called = []
+
     def track(*args, **kwargs):
         called.append(args)
         return _fake_successful_runner(args[0])
 
     monkeypatch.setattr(sp, "run", track)
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "blocked", f"Expected blocked, got {result.status}"
     assert len(called) == 0, "Subprocess must not be called"
@@ -297,16 +315,23 @@ def test_missing_audit_preview_blocks_execution(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
     (run_dir / "audit_preview.json").unlink()
 
     import subprocess as sp
+
     called = []
-    monkeypatch.setattr(sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0]))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0])
+    )
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "blocked", f"Expected blocked, got {result.status}"
     assert len(called) == 0
@@ -322,6 +347,7 @@ def test_incomplete_approval_gate_blocks_execution(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
@@ -331,10 +357,16 @@ def test_incomplete_approval_gate_blocks_execution(tmp_path, monkeypatch):
     (run_dir / "approval_record.json").write_text(json.dumps(bad_approval))
 
     import subprocess as sp
+
     called = []
-    monkeypatch.setattr(sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0]))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0])
+    )
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "blocked", f"Expected blocked, got {result.status}"
     assert len(called) == 0
@@ -350,16 +382,23 @@ def test_missing_checksum_snapshot_blocks_execution(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
     (run_dir / "rawdata_checksum_before.json").unlink()
 
     import subprocess as sp
+
     called = []
-    monkeypatch.setattr(sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0]))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0])
+    )
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "blocked", f"Expected blocked, got {result.status}"
     assert len(called) == 0
@@ -403,16 +442,23 @@ def test_missing_rollback_plan_blocks_execution(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
     (run_dir / "rollback_plan_dry_run.json").unlink()
 
     import subprocess as sp
+
     called = []
-    monkeypatch.setattr(sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0]))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0])
+    )
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "blocked", f"Expected blocked, got {result.status}"
     assert len(called) == 0
@@ -429,15 +475,20 @@ def test_audit_start_file_written_without_external_runner(tmp_path, monkeypatch)
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     import subprocess as sp
+
     called = []
     monkeypatch.setattr(sp, "run", lambda *a, **kw: called.append(a))
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "succeeded", f"Expected succeeded, got {result.status}"
     assert called == [], "Native conversion must not invoke subprocess"
@@ -463,13 +514,17 @@ def test_audit_final_file_written_on_success(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     _patch_subprocess_with(monkeypatch, _fake_successful_runner)
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "succeeded"
 
@@ -494,6 +549,7 @@ def test_audit_final_file_written_on_failure(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
@@ -501,7 +557,10 @@ def test_audit_final_file_written_on_failure(tmp_path, monkeypatch):
 
     _patch_subprocess_with(monkeypatch, _fake_failing_runner)
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     # Status is "warning" because dcm2niix failure with no checksum change
     assert result.status in ("warning", "failed")
@@ -524,20 +583,28 @@ def test_native_execution_does_not_consume_subprocess_stdout(tmp_path, monkeypat
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     def stdout_error_runner(argv):
-        return type("R", (), {
-            "returncode": 0,
-            "stdout": "Error: invalid option '-b -ba'",
-            "stderr": "",
-        })()
+        return type(
+            "R",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "Error: invalid option '-b -ba'",
+                "stderr": "",
+            },
+        )()
 
     _patch_subprocess_with(monkeypatch, stdout_error_runner)
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
 
     assert result.status == "succeeded"
@@ -550,21 +617,29 @@ def test_missing_expected_nifti_fails_execution(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
     _set_missing_mapping_source(run_dir)
 
     def no_output_runner(argv):
-        return type("R", (), {
-            "returncode": 0,
-            "stdout": "Conversion ok",
-            "stderr": "",
-        })()
+        return type(
+            "R",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "Conversion ok",
+                "stderr": "",
+            },
+        )()
 
     _patch_subprocess_with(monkeypatch, no_output_runner)
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
 
     assert result.status == "failed"
@@ -577,13 +652,17 @@ def test_provenance_references_approval_record(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     _patch_subprocess_with(monkeypatch, _fake_successful_runner)
     run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
 
     provenance_path = project_dir / "conversion_runs" / "conv-test" / "execution_provenance.json"
@@ -605,13 +684,17 @@ def test_provenance_references_audit_final(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     _patch_subprocess_with(monkeypatch, _fake_successful_runner)
     run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
 
     provenance_path = project_dir / "conversion_runs" / "conv-test" / "execution_provenance.json"
@@ -633,13 +716,17 @@ def test_provenance_references_checksum_snapshots(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     _patch_subprocess_with(monkeypatch, _fake_successful_runner)
     run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
 
     provenance_path = project_dir / "conversion_runs" / "conv-test" / "execution_provenance.json"
@@ -660,13 +747,17 @@ def test_provenance_records_native_backend_without_external_commands(tmp_path, m
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     _patch_subprocess_with(monkeypatch, _fake_successful_runner)
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "succeeded"
 
@@ -687,13 +778,17 @@ def test_provenance_references_rollback_plan(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     _setup_complete_review_package(project_dir, "conv-test")
 
     _patch_subprocess_with(monkeypatch, _fake_successful_runner)
     run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
 
     provenance_path = project_dir / "conversion_runs" / "conv-test" / "execution_provenance.json"
@@ -713,6 +808,7 @@ def test_failure_references_rollback_plan(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
@@ -720,13 +816,18 @@ def test_failure_references_rollback_plan(tmp_path, monkeypatch):
 
     _patch_subprocess_with(monkeypatch, _fake_failing_runner)
     run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
 
     audit_final_path = project_dir / "conversion_runs" / "conv-test" / "audit_execution_final.json"
     data = json.loads(audit_final_path.read_text())
     assert data["rollback_plan_path"], "Rollback plan path must be present on failure"
-    assert data["rollback_result_path"] is not None, "Rollback result path must be referenced on failure"
+    assert data["rollback_result_path"] is not None, (
+        "Rollback result path must be referenced on failure"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -740,6 +841,7 @@ def test_no_rawdata_modification(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     rawdata_dir = tmp_path / "rawdata"
     rawdata_dir.mkdir()
@@ -750,7 +852,10 @@ def test_no_rawdata_modification(tmp_path, monkeypatch):
 
     _patch_subprocess_with(monkeypatch, _fake_successful_runner)
     run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
         rawdata_dir=str(rawdata_dir),
     )
 
@@ -766,12 +871,13 @@ def test_no_rawdata_modification(tmp_path, monkeypatch):
 
 def test_run_conversion_execute_still_blocked():
     """Gate 15: run_conversion_execute() must still block for normal users."""
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+
     result = run_conversion_execute("test", DicomConversionExecutionRequest())
     assert result.conversion_disabled is True, "Public conversion must remain disabled"
 
@@ -783,8 +889,8 @@ def test_run_conversion_execute_still_blocked():
 
 def test_no_public_conversion_endpoint():
     """Gate 16: Phase 7 permanently retires this weak execution route."""
-    from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
     from src.backend.app.main import app
 
     client = TestClient(app)
@@ -807,6 +913,7 @@ def test_no_public_conversion_endpoint():
 def test_no_frontend_execute_button():
     """Gate 17: No frontend execute button with onClick handler exists."""
     import os
+
     review_panel_paths = [
         "src/frontend/src/components/DicomConversionReviewPanel.tsx",
         "src/frontend/src/components/DicomConversionReviewPanel.jsx",
@@ -819,10 +926,17 @@ def test_no_frontend_execute_button():
             for line in lines:
                 stripped = line.strip()
                 # Skip comments
-                if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*") or stripped.startswith("#"):
+                if (
+                    stripped.startswith("//")
+                    or stripped.startswith("/*")
+                    or stripped.startswith("*")
+                    or stripped.startswith("#")
+                ):
                     continue
                 # Look for onClick handlers that trigger conversion execution
-                if ("Run Conversion" in stripped or "Execute Conversion" in stripped) and "onClick" in stripped:
+                if (
+                    "Run Conversion" in stripped or "Execute Conversion" in stripped
+                ) and "onClick" in stripped:
                     found_execute_button = True
                     break
     assert not found_execute_button, (
@@ -837,10 +951,12 @@ def test_no_frontend_execute_button():
 
 def test_no_spm_dpabi_matlab_enabled():
     """Gate 18: SPM/DPABI/MATLAB must remain disabled."""
+    import inspect
+
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
-    import inspect
+
     source = inspect.getsource(run_internal_user_dicom_conversion_from_persisted_package)
     assert "import spm" not in source.lower()
     assert "import matlab" not in source.lower()
@@ -857,13 +973,15 @@ def test_no_spm_dpabi_matlab_enabled():
 
 def test_no_shell_true():
     """Gate 19: No shell=True anywhere in the internal conversion function."""
+    import inspect
+
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
-    import inspect
+
     source = inspect.getsource(run_internal_user_dicom_conversion_from_persisted_package)
     # Remove docstrings to avoid false positives in comments
-    lines = [l for l in source.splitlines() if '"""' not in l]
+    lines = [line for line in source.splitlines() if '"""' not in line]
     code = "\n".join(lines)
     assert "shell=True" not in code, "shell=True must never be used"
 
@@ -878,6 +996,7 @@ def test_no_subprocess_when_approval_incomplete(tmp_path, monkeypatch):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     project_dir = tmp_path / "project"
     project_dir.mkdir()
     run_dir = _setup_complete_review_package(project_dir, "conv-test")
@@ -887,10 +1006,16 @@ def test_no_subprocess_when_approval_incomplete(tmp_path, monkeypatch):
     (run_dir / "approval_record.json").write_text(json.dumps(bad_approval))
 
     import subprocess as sp
+
     called = []
-    monkeypatch.setattr(sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0]))
+    monkeypatch.setattr(
+        sp, "run", lambda *a, **kw: called.append(a) or _fake_successful_runner(a[0])
+    )
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=_ALL_FLAGS, project_dir=str(project_dir),
+        "test",
+        "conv-test",
+        env=_ALL_FLAGS,
+        project_dir=str(project_dir),
     )
     assert result.status == "blocked"
     assert len(called) == 0, "Subprocess must not be called when approval incomplete"

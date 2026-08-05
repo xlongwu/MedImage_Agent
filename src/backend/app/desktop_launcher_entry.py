@@ -10,16 +10,15 @@ import time
 import urllib.error
 import urllib.request
 import webbrowser
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 import uvicorn
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.backend.app.main import create_app
-
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
@@ -42,7 +41,7 @@ def validate_host(host: str) -> str:
 
 def _resource_root() -> Path:
     if hasattr(sys, "_MEIPASS"):
-        return Path(getattr(sys, "_MEIPASS"))
+        return Path(sys._MEIPASS)
     return Path(__file__).resolve().parents[3]
 
 

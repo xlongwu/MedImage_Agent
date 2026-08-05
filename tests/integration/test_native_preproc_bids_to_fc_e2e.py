@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -31,10 +32,14 @@ def test_native_preproc_bids_to_fc_e2e_generates_reloadable_fc_chain(tmp_path) -
     assert result.safety_flags["no_matlab_spm_dpabi"] is True
     assert result.safety_flags["third_party_runtime_not_used"] is True
 
-    dicom_stage = next(stage for stage in result.stage_results if stage.stage_id == "dicom_to_nifti")
+    dicom_stage = next(
+        stage for stage in result.stage_results if stage.stage_id == "dicom_to_nifti"
+    )
     assert dicom_stage.status == "skipped"
 
-    fc_stage = next(stage for stage in result.stage_results if stage.stage_id == "functional_connectivity")
+    fc_stage = next(
+        stage for stage in result.stage_results if stage.stage_id == "functional_connectivity"
+    )
     artifact_paths = {
         artifact["artifact_type"]: Path(str(artifact["path"]))
         for artifact in fc_stage.output_artifacts
@@ -61,8 +66,21 @@ def test_native_preproc_bids_to_fc_e2e_generates_reloadable_fc_chain(tmp_path) -
     assert Path(result.validation_report_path).exists()
     assert Path(result.final_report_path).exists()
 
+    registry_path = (
+        tmp_path
+        / "work"
+        / "pipeline_runs"
+        / "native-bids-to-fc"
+        / "preprocessing_artifact_registry.json"
+    )
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    reho_artifact = next(
+        item for item in registry["artifacts"] if item["artifact_type"] == "reho_map"
+    )
+    assert reho_artifact["path_kind"] == "project_relative"
+    assert (tmp_path / reho_artifact["path"]).is_file()
+    assert reho_artifact["provenance_path"]
+
     assert original_input_digests == {
-        name: file_digest(path)
-        for name, path in inputs.items()
-        if name in original_input_digests
+        name: file_digest(path) for name, path in inputs.items() if name in original_input_digests
     }

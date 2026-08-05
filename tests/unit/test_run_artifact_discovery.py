@@ -65,6 +65,7 @@ def _add_run_link(
     run_id: str,
     summary_path: Path | str | None,
     status: str = "SUCCESS",
+    payload: dict | None = None,
 ) -> RunLinkRecord:
     now = utc_now_iso()
     record = RunLinkRecord(
@@ -78,6 +79,7 @@ def _add_run_link(
         status=status,
         created_at=now,
         updated_at=now,
+        payload=payload or {},
     )
     return store.add_run_link(record)
 
@@ -241,7 +243,10 @@ def test_discover_run_artifacts_finds_outputs_and_enriches_records(tmp_path, mon
     assert mat["previewable"] is False
 
     artifacts_again, _ = discover_run_artifacts(project, record)
-    assert _artifact_by_name(artifacts_again, paths["qc_json"].name)["artifact_id"] == qc_json["artifact_id"]
+    assert (
+        _artifact_by_name(artifacts_again, paths["qc_json"].name)["artifact_id"]
+        == qc_json["artifact_id"]
+    )
     found, find_warnings = find_run_artifact(project, record, qc_json["artifact_id"])
     assert find_warnings == []
     assert found is not None
@@ -278,6 +283,124 @@ def test_discover_run_artifacts_rejects_rawdata_and_outside_paths(tmp_path, monk
     names = {item["name"] for item in artifacts}
     assert outside_path.name not in names
     assert rawdata_path.name not in names
+
+
+def test_discover_run_artifacts_accepts_project_data_outputs(tmp_path, monkeypatch):
+    store = _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+    created = _create_project(client, tmp_path)
+    run_id = "run_project_data_artifact"
+    project_dir = Path(created["project_dir"])
+    data_path = project_dir / "data" / "dataset_index.json"
+    data_path.parent.mkdir(parents=True, exist_ok=True)
+    data_path.write_text(json.dumps({"subjects": ["sub-001"]}), encoding="utf-8")
+    summary_path = project_dir / "work" / "pipeline_runs" / run_id / "summary.json"
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(
+        json.dumps({"run_id": run_id, "status": "SUCCESS", "outputs": [str(data_path)]}),
+        encoding="utf-8",
+    )
+    record = _add_run_link(store, created, run_id=run_id, summary_path=summary_path)
+
+    artifacts, warnings = discover_run_artifacts(_project(store, created), record)
+
+    assert not any("ARTIFACT_PATH_OUTSIDE_PROJECT_OUTPUTS" in item for item in warnings)
+    assert data_path.name in {item["name"] for item in artifacts}
+
+
+def test_discover_run_artifacts_loads_only_selected_run_registry(tmp_path, monkeypatch):
+    store = _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+    created = _create_project(client, tmp_path)
+    project_dir = Path(created["project_dir"])
+    run_id = "run_selected"
+    other_run_id = "run_other"
+    selected_output = (
+        project_dir
+        / "preprocessing_native_runs"
+        / run_id
+        / "sub-001"
+        / "artifacts"
+        / "temporal_filtering"
+        / "sub-001_task-rest_desc-filtered_bold.nii.gz"
+    )
+    other_output = (
+        project_dir
+        / "preprocessing_native_runs"
+        / other_run_id
+        / "sub-002"
+        / "artifacts"
+        / "temporal_filtering"
+        / "sub-002_task-rest_desc-filtered_bold.nii.gz"
+    )
+    selected_output.parent.mkdir(parents=True)
+    other_output.parent.mkdir(parents=True)
+    selected_output.write_bytes(b"SELECTED")
+    other_output.write_bytes(b"OTHER")
+    summary_path = project_dir / "work" / "pipeline_runs" / run_id / "summary.json"
+    summary_path.parent.mkdir(parents=True)
+    summary_path.write_text(
+        json.dumps({"run_id": run_id, "status": "SUCCESS"}),
+        encoding="utf-8",
+    )
+    registry_path = summary_path.parent / "preprocessing_artifact_registry.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "preprocessing_run_id": run_id,
+                "project_id": created["project_id"],
+                "artifacts": [
+                    {
+                        "artifact_id": "selected-filtered",
+                        "artifact_type": "filtered_bold",
+                        "subject_id": "sub-001",
+                        "stage_id": "temporal_filtering",
+                        "path": selected_output.relative_to(project_dir).as_posix(),
+                        "path_kind": "project_relative",
+                    },
+                    {
+                        "artifact_id": "cross-run-filtered",
+                        "artifact_type": "filtered_bold",
+                        "subject_id": "sub-002",
+                        "stage_id": "temporal_filtering",
+                        "path": other_output.relative_to(project_dir).as_posix(),
+                        "path_kind": "project_relative",
+                        "metadata": {"preprocessing_run_id": other_run_id},
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    audit_path = project_dir / "reports" / "audit_records" / "audit-selected.json"
+    audit_path.parent.mkdir(parents=True)
+    audit_path.write_text(json.dumps({"audit_id": "audit-selected"}), encoding="utf-8")
+    record = _add_run_link(
+        store,
+        created,
+        run_id=run_id,
+        summary_path=summary_path,
+        payload={
+            "audit": {
+                "project_audit_path": str(audit_path),
+                "audit_path": "outputs/reports/audit_records/audit-selected.json",
+            }
+        },
+    )
+
+    artifacts, warnings = discover_run_artifacts(_project(store, created), record)
+
+    by_name = {item["name"]: item for item in artifacts}
+    assert selected_output.name in by_name
+    assert by_name[selected_output.name]["registered_artifact_id"] == "selected-filtered"
+    assert by_name[selected_output.name]["artifact_type"] == "filtered_bold"
+    assert by_name[audit_path.name]["artifact_type"] == "audit_record"
+    assert sum(item["name"] == audit_path.name for item in artifacts) == 1
+    assert not any(
+        item["source"] == "run_link.payload" and not item["exists"] for item in artifacts
+    )
+    assert other_output.name not in by_name
+    assert any("ARTIFACT_REGISTRY_ENTRY_RUN_MISMATCH" in item for item in warnings)
 
 
 def test_run_artifacts_list_api_smoke_uses_project_history_route(tmp_path, monkeypatch):

@@ -5,10 +5,9 @@ import json
 import os
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone, timezone as _tz
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
-
 
 GUI_ROOT = Path("outputs/work/gui_agent")
 SUPPORTED_PROVIDERS = {"mock", "pywinauto"}
@@ -98,7 +97,7 @@ class PyWinAutoGuiProvider:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _session_dir(session_id: str) -> Path:

@@ -198,9 +198,14 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
     assert imports.status_code == 200
     import_payload = imports.json()
     assert import_payload["ok"] is True
-    assert any(item["path"] == str(import_root) and item["exists"] is True for item in import_payload["imports"])
+    assert any(
+        item["path"] == str(import_root) and item["exists"] is True
+        for item in import_payload["imports"]
+    )
 
-    package = client.post("/api/datasets/diagnostics/package", params={"project_id": "brain-tumor-study"})
+    package = client.post(
+        "/api/datasets/diagnostics/package", params={"project_id": "brain-tumor-study"}
+    )
     assert package.status_code == 200
     package_payload = package.json()
     assert Path(package_payload["report_path"]).exists()
@@ -222,7 +227,9 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
     assert "artifacts/image_source_manifest.json" in names
     assert "artifacts/image_validation_report.md" in names
 
-    latest_package = client.get("/api/datasets/diagnostics/package/latest", params={"project_id": "brain-tumor-study"})
+    latest_package = client.get(
+        "/api/datasets/diagnostics/package/latest", params={"project_id": "brain-tumor-study"}
+    )
     assert latest_package.status_code == 200
     latest_payload = latest_package.json()
     assert latest_payload["ok"] is True
@@ -231,7 +238,9 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
     assert latest_payload["latest"]["safety_flags"]["rawdata_not_bundled"] is True
     assert latest_payload["latest"]["report_text"].startswith("# Import Diagnostics Package")
 
-    verify_package = client.post("/api/datasets/diagnostics/package/verify", params={"project_id": "brain-tumor-study"})
+    verify_package = client.post(
+        "/api/datasets/diagnostics/package/verify", params={"project_id": "brain-tumor-study"}
+    )
     assert verify_package.status_code == 200
     verify_payload = verify_package.json()
     assert verify_payload["ok"] is True
@@ -243,8 +252,12 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
     sources = client.get("/api/images/sources", params={"project_id": "brain-tumor-study"})
     assert sources.status_code == 200
     source_payload = sources.json()
-    imported_matches = [item for item in source_payload["manifest"] if item["subject_id"] == "sub-import"]
-    assert imported_matches, f"sub-import not found in manifest; found subjects: {[item.get('subject_id') for item in source_payload['manifest']]}"
+    imported_matches = [
+        item for item in source_payload["manifest"] if item["subject_id"] == "sub-import"
+    ]
+    assert imported_matches, (
+        f"sub-import not found in manifest; found subjects: {[item.get('subject_id') for item in source_payload['manifest']]}"
+    )
     imported_source = imported_matches[0]
     assert imported_source["sequence"] == "T1"
     assert imported_source["dimensions"] == [4, 5, 6]
@@ -252,7 +265,12 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
 
     preview = client.get(
         "/api/images/preview",
-        params={"project_id": "brain-tumor-study", "subject_id": "sub-import", "sequence": "T1", "plane": "axial"},
+        params={
+            "project_id": "brain-tumor-study",
+            "subject_id": "sub-import",
+            "sequence": "T1",
+            "plane": "axial",
+        },
     )
     assert preview.status_code == 200
     assert preview.json()["source"] == "nifti"
@@ -266,7 +284,9 @@ def test_dataset_import_and_pipeline_run_create_task(tmp_path, monkeypatch):
     assert Path(validation_payload["report_path"]).exists()
     assert Path(validation_payload["json_path"]).exists()
     assert validation_payload["report_text"].startswith("# Image Validation Report")
-    assert any(issue["code"] == "missing_expected_sequence" for issue in validation_payload["issues"])
+    assert any(
+        issue["code"] == "missing_expected_sequence" for issue in validation_payload["issues"]
+    )
 
     run = client.post(
         "/api/pipelines/run",
@@ -307,7 +327,11 @@ def test_dicom_preflight_api_reads_demodata_metadata_only():
     assert payload["safety_flags"]["sample_paths_relative"] is True
     assert all(str(item["series_instance_uid"]).startswith("sha256:") for item in payload["series"])
     assert "1.3.12.2" not in json.dumps(payload["series"])
-    assert all(not Path(item["sample_file"]).is_absolute() for item in payload["series"] if item.get("sample_file"))
+    assert all(
+        not Path(item["sample_file"]).is_absolute()
+        for item in payload["series"]
+        if item.get("sample_file")
+    )
     assert payload["report_text"].startswith("# DICOM Metadata Preflight")
     assert Path(payload["report_path"]).exists()
     assert Path(payload["json_path"]).exists()
@@ -354,7 +378,9 @@ def test_real_data_inspect_api_reads_demodata_inventory():
     assert Path("outputs/reports/real_data_sandbox/risk_report.json").exists()
     assert Path("outputs/reports/real_data_sandbox/protocol_recommendation.json").exists()
 
-    package = client.post("/api/datasets/diagnostics/package", params={"project_id": "brain-tumor-study"})
+    package = client.post(
+        "/api/datasets/diagnostics/package", params={"project_id": "brain-tumor-study"}
+    )
     assert package.status_code == 200
     package_payload = package.json()
     assert package_payload["dicom_file_count"] >= 1
@@ -487,7 +513,9 @@ def test_task_approval_records_event_and_diagnostics(monkeypatch):
             source="external_smoke",
         )
 
-    monkeypatch.setattr("src.backend.app.api.dashboard_routes.run_pipeline_task", fake_run_pipeline_task)
+    monkeypatch.setattr(
+        "src.backend.app.api.dashboard_routes.run_pipeline_task", fake_run_pipeline_task
+    )
     client = TestClient(app)
     created = client.post(
         "/api/pipelines/run",
@@ -525,7 +553,9 @@ def test_fake_external_smoke_artifacts_and_diagnostics(monkeypatch):
             "next_actions": [],
         }
 
-    monkeypatch.setattr("src.backend.app.services.pipeline_runner._run_external_smoke", fake_external_smoke)
+    monkeypatch.setattr(
+        "src.backend.app.services.pipeline_runner._run_external_smoke", fake_external_smoke
+    )
     request = PipelineRunRequest(
         project_id="brain-tumor-study",
         pipeline_id="external-smoke",
@@ -625,7 +655,8 @@ def test_image_preview_uses_nifti_when_available(tmp_path):
     source_payload = sources.json()
     assert "sub-001" in {item["subject_id"] for item in source_payload["subjects"]}
     bold_manifest = next(
-        item for item in source_payload["manifest"]
+        item
+        for item in source_payload["manifest"]
         if item["subject_id"] == "sub-001" and item["sequence"] == "BOLD"
     )
     assert bold_manifest["dimensions"]

@@ -8,9 +8,9 @@ import pytest
 nib = pytest.importorskip("nibabel")
 pytest.importorskip("scipy")
 
-from scipy.ndimage import rotate, shift
+from scipy.ndimage import rotate, shift  # noqa: E402
 
-from src.backend.app.native_preproc.stages.realignment import run_realignment
+from src.backend.app.native_preproc.stages.realignment import run_realignment  # noqa: E402
 
 
 def _phantom(shape: tuple[int, int, int] = (9, 9, 9)) -> np.ndarray:
@@ -26,10 +26,18 @@ def _save_bold(path: Path, data: np.ndarray) -> Path:
 
 
 def _artifact_path(result, artifact_type: str) -> Path:
-    return Path(next(artifact.path for artifact in result.output_artifacts if artifact.artifact_type == artifact_type))
+    return Path(
+        next(
+            artifact.path
+            for artifact in result.output_artifacts
+            if artifact.artifact_type == artifact_type
+        )
+    )
 
 
-def test_translation_only_realignment_improves_known_shift_and_writes_outputs(tmp_path: Path) -> None:
+def test_translation_only_realignment_improves_known_shift_and_writes_outputs(
+    tmp_path: Path,
+) -> None:
     ref = _phantom()
     moved = shift(ref, shift=(1.0, 0.0, 0.0), order=1, mode="nearest")
     data = np.stack([ref, moved], axis=3)

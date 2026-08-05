@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from uuid import uuid4
 
 from src.backend.app.core.exceptions import SafetyError
@@ -12,7 +13,6 @@ from src.backend.app.planner.audit_record import stable_hash
 from src.backend.app.runtime.node_contract_registry import executable_contract_versions
 from src.backend.app.schemas.execution_ticket import ExecutionTicket
 from src.backend.app.services.execution_ticket_service import ExecutionTicketService
-
 
 _VERIFICATION_SENTINEL = object()
 

@@ -1,4 +1,5 @@
 """Tests for preprocessing artifact registry and lineage."""
+
 from __future__ import annotations
 
 import json
@@ -84,6 +85,7 @@ def test_write_converted_input_registry_reload_and_checksums(tmp_path):
     assert result.artifacts_by_type["converted_bold"] == 1
     assert result.artifacts_by_type["converted_t1w"] == 1
     assert result.artifacts_by_type["sidecar_json"] == 2
+    assert data["safety_flags"]["no_preprocessing_executed"] is True
     bold = next(a for a in data["artifacts"] if a["artifact_type"] == "converted_bold")
     assert bold["path_kind"] == "project_relative"
     assert bold["checksum"]
@@ -96,7 +98,9 @@ def test_handoff_writes_registry_path_to_metadata(tmp_path, monkeypatch):
     bids_root = _make_bids(project_dir)
 
     from src.backend.app.schemas.preprocessing_handoff import PreprocessingInputRegistrationRequest
-    from src.backend.app.services.preprocessing_handoff import register_converted_bids_as_preprocessing_input
+    from src.backend.app.services.preprocessing_handoff import (
+        register_converted_bids_as_preprocessing_input,
+    )
 
     result = register_converted_bids_as_preprocessing_input(
         "brain-tumor-study",
@@ -123,8 +127,13 @@ def test_create_run_and_preflight_preserve_registry_lineage(tmp_path, monkeypatc
 
     from src.backend.app.schemas.preprocessing_handoff import PreprocessingInputRegistrationRequest
     from src.backend.app.schemas.preprocessing_run import PreprocessingRunCreateRequest
-    from src.backend.app.services.preprocessing_handoff import register_converted_bids_as_preprocessing_input
-    from src.backend.app.services.preprocessing_run import create_preprocessing_run, execute_python_preflight
+    from src.backend.app.services.preprocessing_handoff import (
+        register_converted_bids_as_preprocessing_input,
+    )
+    from src.backend.app.services.preprocessing_run import (
+        create_preprocessing_run,
+        execute_python_preflight,
+    )
 
     handoff = register_converted_bids_as_preprocessing_input(
         "brain-tumor-study",
@@ -154,7 +163,9 @@ def test_create_run_and_preflight_preserve_registry_lineage(tmp_path, monkeypatc
 
 
 def test_stage_output_registration_appends_run_registry_artifacts(tmp_path, monkeypatch):
-    store = _setup_store(tmp_path, monkeypatch, "src.backend.app.services.preprocessing_stage_outputs")
+    _store = _setup_store(
+        tmp_path, monkeypatch, "src.backend.app.services.preprocessing_stage_outputs"
+    )
     project_dir = tmp_path
     bids_root = _make_bids(project_dir)
 
@@ -179,7 +190,9 @@ def test_stage_output_registration_appends_run_registry_artifacts(tmp_path, monk
     exec_dir = run_dir / "spm_exec" / "spm-ex-1"
     output_dir = exec_dir / "sandbox_output" / "sub-001"
     output_dir.mkdir(parents=True)
-    (exec_dir / "manifest.json").write_text('{"status":"succeeded","stage":"realignment"}', encoding="utf-8")
+    (exec_dir / "manifest.json").write_text(
+        '{"status":"succeeded","stage":"realignment"}', encoding="utf-8"
+    )
     (output_dir / "rasub-001_task-rest_bold.nii").write_text("realigned", encoding="utf-8")
     (output_dir / "rp_sub-001.txt").write_text("motion", encoding="utf-8")
     (output_dir / "meansub-001_task-rest_bold.nii").write_text("mean", encoding="utf-8")
@@ -195,19 +208,28 @@ def test_stage_output_registration_appends_run_registry_artifacts(tmp_path, monk
     data = load_artifact_registry(run_dir / REGISTRY_FILENAME)
     types = {item["artifact_type"] for item in data["artifacts"]}
     assert "realigned_bold" in types
-    realigned = next(item for item in data["artifacts"] if item["artifact_type"] == "realigned_bold")
+    assert data["safety_flags"]["no_preprocessing_executed"] is False
+    realigned = next(
+        item for item in data["artifacts"] if item["artifact_type"] == "realigned_bold"
+    )
     assert realigned["source_artifact_ids"]
 
 
 def test_report_and_validation_prefer_run_registry(tmp_path, monkeypatch):
     _setup_store(tmp_path, monkeypatch, "src.backend.app.services.preprocessing_pipeline_report")
-    _setup_store(tmp_path, monkeypatch, "src.backend.app.services.preprocessing_pipeline_validation")
+    _setup_store(
+        tmp_path, monkeypatch, "src.backend.app.services.preprocessing_pipeline_validation"
+    )
     project_dir = tmp_path
     bids_root = _make_bids(project_dir)
 
-    from src.backend.app.services.preprocessing_artifact_registry import ensure_run_artifact_registry
+    from src.backend.app.services.preprocessing_artifact_registry import (
+        ensure_run_artifact_registry,
+    )
     from src.backend.app.services.preprocessing_pipeline_report import generate_pipeline_report
-    from src.backend.app.services.preprocessing_pipeline_validation import validate_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_pipeline_validation import (
+        validate_preprocessing_pipeline,
+    )
 
     run_dir = project_dir / "preprocessing_runs" / "pp-test"
     ensure_run_artifact_registry(
@@ -221,7 +243,9 @@ def test_report_and_validation_prefer_run_registry(tmp_path, monkeypatch):
     )
 
     report = generate_pipeline_report("brain-tumor-study", "pp-test", project_dir=str(project_dir))
-    validation = validate_preprocessing_pipeline("brain-tumor-study", "pp-test", project_dir=str(project_dir))
+    validation = validate_preprocessing_pipeline(
+        "brain-tumor-study", "pp-test", project_dir=str(project_dir)
+    )
 
     assert report.artifact_registry_path
     assert report.registered_outputs[0]["artifact_id"].startswith("ppart-")

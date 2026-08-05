@@ -11,11 +11,13 @@ Reference:
 
 from __future__ import annotations
 
+from datetime import UTC
 from pathlib import Path
-from typing import Any
 
 from src.backend.app.schemas.dicom_conversion_safety import (
+    DicomConversionRollbackExecResult,
     DicomConversionRollbackPlan,
+    DicomConversionRollbackRequest,
     DicomConversionRollbackResult,
     RawdataChecksumComparison,
     RawdataChecksumSnapshot,
@@ -23,7 +25,6 @@ from src.backend.app.schemas.dicom_conversion_safety import (
     build_rawdata_checksum_snapshot,
     compare_rawdata_checksum_snapshots,
     run_conversion_rollback_dry_run,
-    summarize_rollback_plan,
 )
 from src.backend.app.services.rawdata_fingerprint import (
     build_rawdata_fingerprint,
@@ -98,11 +99,11 @@ def run_conversion_output_rollback_dry_run(
 
 
 def run_conversion_rollback(
-    request: "DicomConversionRollbackRequest",
+    request: DicomConversionRollbackRequest,
     *,
     project_dir: str = "",
     rawdata_roots: list[str] | None = None,
-) -> "DicomConversionRollbackExecResult":
+) -> DicomConversionRollbackExecResult:
     """Execute a real rollback on conversion outputs.
 
     - ``dry_run``: report what would happen, delete nothing.
@@ -113,11 +114,9 @@ def run_conversion_rollback(
     paths outside output_root, path traversal, symlink escapes.
     """
     import shutil
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from src.backend.app.schemas.dicom_conversion_safety import (
-        DicomConversionRollbackExecResult,
-        DicomConversionRollbackRequest,
         _rollback_safety_flags,
         classify_rollback_candidate,
         validate_rollback_request,
@@ -130,7 +129,9 @@ def run_conversion_rollback(
     ok_req, req_issues = validate_rollback_request(request)
     if not ok_req:
         return DicomConversionRollbackExecResult(
-            ok=False, status="blocked", mode=mode,
+            ok=False,
+            status="blocked",
+            mode=mode,
             conversion_run_id=request.conversion_run_id,
             errors=req_issues,
             safety_flags=_rollback_safety_flags(),
@@ -138,7 +139,9 @@ def run_conversion_rollback(
 
     if mode == "delete" and not request.confirm_rollback:
         return DicomConversionRollbackExecResult(
-            ok=False, status="blocked", mode=mode,
+            ok=False,
+            status="blocked",
+            mode=mode,
             conversion_run_id=request.conversion_run_id,
             errors=["Delete mode requires confirm_rollback=True."],
             safety_flags=_rollback_safety_flags(),
@@ -147,7 +150,9 @@ def run_conversion_rollback(
     output_root = request.expected_output_root or ""
     if not output_root:
         return DicomConversionRollbackExecResult(
-            ok=False, status="blocked", mode=mode,
+            ok=False,
+            status="blocked",
+            mode=mode,
             conversion_run_id=request.conversion_run_id,
             errors=["expected_output_root is required for rollback."],
             safety_flags=_rollback_safety_flags(),
@@ -156,7 +161,9 @@ def run_conversion_rollback(
     output_path = Path(output_root).resolve()
     if not output_path.exists():
         return DicomConversionRollbackExecResult(
-            ok=False, status="blocked", mode=mode,
+            ok=False,
+            status="blocked",
+            mode=mode,
             conversion_run_id=request.conversion_run_id,
             errors=[f"Output root does not exist: {output_root}"],
             safety_flags=_rollback_safety_flags(),
@@ -173,8 +180,10 @@ def run_conversion_rollback(
             continue
         sp = str(p)
         classification = classify_rollback_candidate(
-            sp, project_dir=project_dir,
-            output_root=output_root, rawdata_roots=list(rawdata_roots or []),
+            sp,
+            project_dir=project_dir,
+            output_root=output_root,
+            rawdata_roots=list(rawdata_roots or []),
         )
 
         if classification == "protected":
@@ -183,7 +192,7 @@ def run_conversion_rollback(
             if mode == "dry_run":
                 removed.append(sp)  # Report only
             elif mode == "quarantine":
-                ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+                ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
                 quarantine_dir = output_path / "rollback_quarantine" / ts
                 quarantine_dir.mkdir(parents=True, exist_ok=True)
                 dest = quarantine_dir / p.relative_to(output_path)
@@ -201,21 +210,34 @@ def run_conversion_rollback(
     provenance_path = output_path / "rollback_provenance.json"
 
     import json as _json
-    manifest_path.write_text(_json.dumps({
-        "conversion_run_id": request.conversion_run_id,
-        "mode": mode,
-        "removed_count": len(removed),
-        "quarantined_count": len(quarantined),
-        "protected_count": len(protected),
-        "removed": removed,
-        "quarantined": quarantined,
-    }, indent=2), encoding="utf-8")
-    provenance_path.write_text(_json.dumps({
-        "mode": mode,
-        "confirm_rollback": request.confirm_rollback,
-        "requested_by": request.requested_by,
-        "reason": request.reason,
-    }, indent=2), encoding="utf-8")
+
+    manifest_path.write_text(
+        _json.dumps(
+            {
+                "conversion_run_id": request.conversion_run_id,
+                "mode": mode,
+                "removed_count": len(removed),
+                "quarantined_count": len(quarantined),
+                "protected_count": len(protected),
+                "removed": removed,
+                "quarantined": quarantined,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    provenance_path.write_text(
+        _json.dumps(
+            {
+                "mode": mode,
+                "confirm_rollback": request.confirm_rollback,
+                "requested_by": request.requested_by,
+                "reason": request.reason,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     status = "completed" if not errors else "partial"
 

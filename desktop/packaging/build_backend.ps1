@@ -42,7 +42,7 @@ try {
     # Native preprocessing imports these modules lazily, so PyInstaller can
     # otherwise produce a sidecar that starts successfully but fails only
     # after a real scientific run begins.
-    & $PythonExe -c "import graphlib, numpy, scipy, scipy.ndimage, scipy.signal, nibabel; print('Scientific packaging dependencies available')"
+    & $PythonExe -c "import graphlib, numpy, scipy, scipy.ndimage, scipy.signal, nibabel, pydicom; print('Scientific packaging dependencies available')"
     if ($LASTEXITCODE -ne 0) {
         throw "Scientific packaging dependency check failed. Install requirements.txt before building the backend sidecar."
     }

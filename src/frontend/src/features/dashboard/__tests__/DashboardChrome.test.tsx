@@ -14,8 +14,6 @@ const defaultTopBarProps: ComponentProps<typeof TopBar> = {
   onLocaleChange: vi.fn(),
   onOpenAssistant: vi.fn(),
   onOpenInspector: vi.fn(),
-  onOpenRuns: vi.fn(),
-  onOpenSettings: vi.fn(),
   onRetry: vi.fn(),
   projectName: "Demo Project",
   version: "0.6.0-rc1",
@@ -47,6 +45,9 @@ describe("TopBar", () => {
     expect(screen.getByText("MedImage Agent")).toBeInTheDocument();
     expect(screen.getByText("Demo Project")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /advanced console/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "Primary navigation" }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Assistant" }));
     expect(openAssistant).toHaveBeenCalled();

@@ -158,7 +158,9 @@ def _materialize_known_template_labels(
     derivatives_dir: str,
     warnings: list[str],
 ) -> dict[str, str] | None:
-    if not _is_known_template_resource(source_path, allowed_suffixes={".json", ".tsv", ".txt", ".csv"}):
+    if not _is_known_template_resource(
+        source_path, allowed_suffixes={".json", ".tsv", ".txt", ".csv"}
+    ):
         return None
     if not source_path.exists() or not source_path.is_file():
         raise ValueError(f"Template atlas labels file not found: {source_path}")
@@ -212,7 +214,9 @@ def _generate_atlas(shape: tuple[int, int, int], roi_count: int):
     return atlas, definitions
 
 
-def _extract_roi_timeseries(data: Any, atlas: Any, labels: list[int]) -> tuple[Any, dict[str, int], int, list[str]]:
+def _extract_roi_timeseries(
+    data: Any, atlas: Any, labels: list[int]
+) -> tuple[Any, dict[str, int], int, list[str]]:
     import numpy as np
 
     nt = int(data.shape[3])
@@ -326,11 +330,21 @@ def run_python_functional_connectivity_subject(
 
     input_path = Path(input_nii) if input_nii else _find_filtered(subject_id, derivatives_dir)
     if not input_path:
-        return _fail(subject_id, result_json, qc_json, qc_md, ["No filtered functional input found."])
+        return _fail(
+            subject_id, result_json, qc_json, qc_md, ["No filtered functional input found."]
+        )
     if not input_path.exists():
-        return _fail(subject_id, result_json, qc_json, qc_md, [f"Filtered functional input not found: {input_path}"])
+        return _fail(
+            subject_id,
+            result_json,
+            qc_json,
+            qc_md,
+            [f"Filtered functional input not found: {input_path}"],
+        )
     if not _safe_derivative_input(input_path, subject_id, derivatives_dir):
-        return _fail(subject_id, result_json, qc_json, qc_md, [f"Unsafe filtered input: {input_path}"])
+        return _fail(
+            subject_id, result_json, qc_json, qc_md, [f"Unsafe filtered input: {input_path}"]
+        )
 
     try:
         img = nib.load(str(input_path))
@@ -344,7 +358,9 @@ def run_python_functional_connectivity_subject(
         if atlas_path:
             atlas_file = Path(atlas_path)
             if not _safe_atlas(atlas_file, derivatives_dir):
-                materialized = _materialize_known_template_atlas(atlas_file, derivatives_dir, warnings)
+                materialized = _materialize_known_template_atlas(
+                    atlas_file, derivatives_dir, warnings
+                )
                 if materialized is None:
                     raise ValueError(f"Unsafe atlas: {atlas_file}")
                 atlas_file = Path(materialized["atlas_path"])
@@ -354,7 +370,9 @@ def run_python_functional_connectivity_subject(
             labels_path_for_load = labels_path
             labels_materialized = None
             if labels_path and not _safe_atlas(Path(labels_path), derivatives_dir):
-                labels_materialized = _materialize_known_template_labels(Path(labels_path), derivatives_dir, warnings)
+                labels_materialized = _materialize_known_template_labels(
+                    Path(labels_path), derivatives_dir, warnings
+                )
                 if labels_materialized is None:
                     raise ValueError(f"Unsafe atlas labels: {labels_path}")
                 labels_path_for_load = labels_materialized["labels_path"]
@@ -383,7 +401,10 @@ def run_python_functional_connectivity_subject(
                 header.set_data_shape(atlas_data.shape)
             except Exception:
                 pass
-            nib.save(nib.Nifti1Image(atlas_data.astype("int16"), affine=img.affine, header=header), str(atlas_file))
+            nib.save(
+                nib.Nifti1Image(atlas_data.astype("int16"), affine=img.affine, header=header),
+                str(atlas_file),
+            )
             atlas_file_for_output = str(atlas_file)
             atlas_checksum = sha256_file(atlas_file)
             atlas_grounded = False
@@ -393,10 +414,14 @@ def run_python_functional_connectivity_subject(
             atlas_template_source = {}
             labels_template_source = {}
             labels_path_for_output = ""
-            warnings.append("Synthetic atlas generated; FC result is preview_only, not atlas-grounded.")
+            warnings.append(
+                "Synthetic atlas generated; FC result is preview_only, not atlas-grounded."
+            )
 
         labels = [int(item["label"]) for item in roi_definitions]
-        names = [str(item.get("name") or f"ROI_{label}") for item, label in zip(roi_definitions, labels)]
+        names = [
+            str(item.get("name") or f"ROI_{label}") for item, label in zip(roi_definitions, labels, strict=False)
+        ]
         roi_timeseries, roi_voxel_counts, empty_roi_count, roi_warnings = _extract_roi_timeseries(
             data,
             atlas_data,
@@ -412,7 +437,10 @@ def run_python_functional_connectivity_subject(
             require_gpu=require_gpu,
         )
         if not compute.get("ok"):
-            raise ValueError("; ".join(str(item) for item in compute.get("errors", [])) or "FC computation failed.")
+            raise ValueError(
+                "; ".join(str(item) for item in compute.get("errors", []))
+                or "FC computation failed."
+            )
         corr = np.asarray(compute["correlation_matrix"], dtype=np.float64)
         fisher_z = np.asarray(compute["fisher_z_matrix"], dtype=np.float64)
 
@@ -420,7 +448,10 @@ def run_python_functional_connectivity_subject(
         _write_tsv(
             roi_timeseries_tsv,
             names,
-            [[float(roi_timeseries[roi_index, time_index]) for roi_index in range(len(labels))] for time_index in range(nt)],
+            [
+                [float(roi_timeseries[roi_index, time_index]) for roi_index in range(len(labels))]
+                for time_index in range(nt)
+            ],
         )
 
         labels_json = fc_dir / "labels.json"
@@ -436,7 +467,14 @@ def run_python_functional_connectivity_subject(
         }
         atomic_write_json(labels_json, labels_payload, schema_version=1)
         atomic_write_json(fc_dir / "roi_definitions.json", labels_payload, schema_version=1)
-        _write_tsv(labels_tsv, ["label", "name", "strategy"], [[item["label"], item.get("name", ""), item.get("strategy", "")] for item in roi_definitions])
+        _write_tsv(
+            labels_tsv,
+            ["label", "name", "strategy"],
+            [
+                [item["label"], item.get("name", ""), item.get("strategy", "")]
+                for item in roi_definitions
+            ],
+        )
 
         corr_tsv = fc_dir / "correlation_matrix.tsv"
         corr_json = fc_dir / "correlation_matrix.json"
@@ -444,10 +482,26 @@ def run_python_functional_connectivity_subject(
         fisher_tsv = fc_dir / "fisher_z_matrix.tsv"
         fisher_json = fc_dir / "fisher_z_matrix.json"
         fisher_npy = fc_dir / "fisher_z_matrix.npy"
-        _write_tsv(corr_tsv, ["roi"] + names, [[names[idx]] + [float(value) for value in corr[idx]] for idx in range(len(names))])
-        _write_tsv(fisher_tsv, ["roi"] + names, [[names[idx]] + [float(value) for value in fisher_z[idx]] for idx in range(len(names))])
-        atomic_write_json(corr_json, {"subject_id": subject_id, "roi_names": names, "matrix": corr.tolist()}, schema_version=1)
-        atomic_write_json(fisher_json, {"subject_id": subject_id, "roi_names": names, "matrix": fisher_z.tolist()}, schema_version=1)
+        _write_tsv(
+            corr_tsv,
+            ["roi"] + names,
+            [[names[idx]] + [float(value) for value in corr[idx]] for idx in range(len(names))],
+        )
+        _write_tsv(
+            fisher_tsv,
+            ["roi"] + names,
+            [[names[idx]] + [float(value) for value in fisher_z[idx]] for idx in range(len(names))],
+        )
+        atomic_write_json(
+            corr_json,
+            {"subject_id": subject_id, "roi_names": names, "matrix": corr.tolist()},
+            schema_version=1,
+        )
+        atomic_write_json(
+            fisher_json,
+            {"subject_id": subject_id, "roi_names": names, "matrix": fisher_z.tolist()},
+            schema_version=1,
+        )
         np.save(corr_npy, corr.astype("float32"))
         np.save(fisher_npy, fisher_z.astype("float32"))
 
@@ -462,18 +516,36 @@ def run_python_functional_connectivity_subject(
                 map_header.set_data_shape(compute["seed_correlation_map"].shape)
             except Exception:
                 pass
-            nib.save(nib.Nifti1Image(compute["seed_correlation_map"], affine=img.affine, header=map_header), str(seed_corr_map))
-            nib.save(nib.Nifti1Image(compute["seed_fisher_z_map"], affine=img.affine, header=map_header), str(seed_fisher_map))
+            nib.save(
+                nib.Nifti1Image(
+                    compute["seed_correlation_map"], affine=img.affine, header=map_header
+                ),
+                str(seed_corr_map),
+            )
+            nib.save(
+                nib.Nifti1Image(compute["seed_fisher_z_map"], affine=img.affine, header=map_header),
+                str(seed_fisher_map),
+            )
             seed_generated = True
         elif generate_seed_map:
             warnings.append("Seed map requested but no valid seed map was produced.")
 
-        timeseries_finite_fraction = float(np.count_nonzero(np.isfinite(roi_timeseries)) / roi_timeseries.size) if roi_timeseries.size else 0.0
-        corr_finite_fraction = float(np.count_nonzero(np.isfinite(corr)) / corr.size) if corr.size else 0.0
-        fisher_finite_fraction = float(np.count_nonzero(np.isfinite(fisher_z)) / fisher_z.size) if fisher_z.size else 0.0
+        timeseries_finite_fraction = (
+            float(np.count_nonzero(np.isfinite(roi_timeseries)) / roi_timeseries.size)
+            if roi_timeseries.size
+            else 0.0
+        )
+        corr_finite_fraction = (
+            float(np.count_nonzero(np.isfinite(corr)) / corr.size) if corr.size else 0.0
+        )
+        fisher_finite_fraction = (
+            float(np.count_nonzero(np.isfinite(fisher_z)) / fisher_z.size) if fisher_z.size else 0.0
+        )
         diagonal_mean = float(np.mean(np.diag(corr))) if corr.size else None
         symmetry_max_abs_diff = float(np.max(np.abs(corr - corr.T))) if corr.size else None
-        fisher_diagonal_max_abs = float(np.max(np.abs(np.diag(fisher_z)))) if fisher_z.size else None
+        fisher_diagonal_max_abs = (
+            float(np.max(np.abs(np.diag(fisher_z)))) if fisher_z.size else None
+        )
 
         fc_qc_status = "PASS"
         if len(labels) == 0:
@@ -482,7 +554,11 @@ def run_python_functional_connectivity_subject(
         elif empty_roi_count > 0:
             fc_qc_status = "WARNING"
             warnings.append(f"{empty_roi_count} empty ROI(s).")
-        elif timeseries_finite_fraction < 1.0 or corr_finite_fraction < 1.0 or fisher_finite_fraction < 1.0:
+        elif (
+            timeseries_finite_fraction < 1.0
+            or corr_finite_fraction < 1.0
+            or fisher_finite_fraction < 1.0
+        ):
             fc_qc_status = "WARNING"
             warnings.append("Non-finite values detected.")
         elif diagonal_mean is not None and abs(diagonal_mean - 1.0) > 1e-5:
@@ -617,7 +693,9 @@ def run_python_functional_connectivity_subject(
     return result
 
 
-def write_functional_connectivity_dataset_report(derivatives_dir: str, report_dir: str) -> dict[str, Any]:
+def write_functional_connectivity_dataset_report(
+    derivatives_dir: str, report_dir: str
+) -> dict[str, Any]:
     derivatives = Path(derivatives_dir)
     report_out = Path(report_dir) / "rsfmri"
     report_out.mkdir(parents=True, exist_ok=True)
@@ -636,8 +714,14 @@ def write_functional_connectivity_dataset_report(derivatives_dir: str, report_di
     warning_count = sum(1 for item in subjects if item.get("fc_qc_status") == "WARNING")
     fail_count = sum(1 for item in subjects if item.get("fc_qc_status") == "FAIL")
     preview_count = sum(1 for item in subjects if item.get("preview_only"))
-    roi_counts = [float(item["roi_count"]) for item in subjects if item.get("roi_count") is not None]
-    empty_counts = [float(item["empty_roi_count"]) for item in subjects if item.get("empty_roi_count") is not None]
+    roi_counts = [
+        float(item["roi_count"]) for item in subjects if item.get("roi_count") is not None
+    ]
+    empty_counts = [
+        float(item["empty_roi_count"])
+        for item in subjects
+        if item.get("empty_roi_count") is not None
+    ]
     summary = {
         "ok": subject_count > 0 and fail_count == 0,
         "node_id": "functional_connectivity_qc_dataset_report",

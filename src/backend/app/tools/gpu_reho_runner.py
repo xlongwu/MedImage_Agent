@@ -6,15 +6,14 @@ Uses gpu_safety.py guards for device, memory, timeout, concurrency.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from src.backend.app.tools.gpu_utils import (
     apply_gpu_guard,
     is_scoped_derivative_path,
     write_gpu_provenance,
 )
-
 
 _ALLOWED_NEIGHBORHOODS = frozenset({7, 19, 27})
 

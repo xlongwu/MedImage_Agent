@@ -5,15 +5,16 @@ from __future__ import annotations
 import json
 
 import pytest
+
 from src.backend.app.runtime.gui_model_provider_policy import (
     allowed_fixture_provider_declaration,
     validate_model_provider_policy,
 )
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Allowed fixture_only
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_fixture_only_allowed():
     r = validate_model_provider_policy(**allowed_fixture_provider_declaration())
@@ -58,6 +59,7 @@ def test_approved_true_does_not_change():
 # B. Missing / Unknown
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_missing_provider_type():
     r = validate_model_provider_policy(provider_type=None)
     assert r.ok is False
@@ -80,8 +82,11 @@ def test_unknown_provider_type():
 # ══════════════════════════════════════════════════════════════════════════════
 
 REAL_TYPES = [
-    "local_allowlisted", "local_untrusted",
-    "remote_disabled", "remote_allowlisted_future", "remote_untrusted",
+    "local_allowlisted",
+    "local_untrusted",
+    "remote_disabled",
+    "remote_allowlisted_future",
+    "remote_untrusted",
     "external_tool_provider",
 ]
 
@@ -98,15 +103,24 @@ def test_real_provider_blocked(ptype):
 # ══════════════════════════════════════════════════════════════════════════════
 
 BLOCKED_NAMES = [
-    "openai", "huggingface", "ollama", "vllm", "transformers",
-    "custom_http", "pywinauto", "desktop", "browser", "manual",
+    "openai",
+    "huggingface",
+    "ollama",
+    "vllm",
+    "transformers",
+    "custom_http",
+    "pywinauto",
+    "desktop",
+    "browser",
+    "manual",
 ]
 
 
 @pytest.mark.parametrize("pname", BLOCKED_NAMES)
 def test_blocked_name(pname):
     r = validate_model_provider_policy(
-        provider_type="fixture_only", provider_name=pname,
+        provider_type="fixture_only",
+        provider_name=pname,
     )
     assert r.ok is False
     assert r.error_code == "MODEL_PROVIDER_BLOCKED"
@@ -115,6 +129,7 @@ def test_blocked_name(pname):
 # ══════════════════════════════════════════════════════════════════════════════
 # E. Policy Deviations Blocked (fixture_only base)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_inference_enabled_blocked():
     decl = allowed_fixture_provider_declaration()
@@ -202,6 +217,7 @@ def test_extra_enable_pywinauto_blocked():
 # F. Real provider declaration blocked (even when valid-looking)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _real_base():
     return {
         "provider_type": "local_allowlisted",
@@ -233,8 +249,10 @@ def test_real_valid_looking_still_blocked():
 # G. Non-Call / Isolation
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_no_pywinauto_import():
     import sys
+
     assert "pywinauto" not in sys.modules
 
 
@@ -250,6 +268,7 @@ def test_blocked_result_safety():
 # H. Regression
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_mock_adapter_e2e_pass():
     pass
 
@@ -264,24 +283,47 @@ def test_gui_blocklist_pass():
 
 def test_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]

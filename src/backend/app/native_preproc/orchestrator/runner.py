@@ -5,11 +5,13 @@ import hashlib
 import json
 import re
 import shutil
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from src.backend.app.native_preproc.dpabi_compat.dparsf_config import convert_dparsf_config
+from src.backend.app.native_preproc.io.nifti_io import load_nifti
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
 from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.orchestrator.report import run_group_summary
@@ -24,13 +26,14 @@ from src.backend.app.native_preproc.orchestrator.validation import (
     validate_stage_result_artifacts,
 )
 from src.backend.app.native_preproc.stages._common import stage_result
-from src.backend.app.native_preproc.io.nifti_io import load_nifti
 from src.backend.app.native_preproc.stages.alff_falff import run_alff, run_falff
 from src.backend.app.native_preproc.stages.atlas_resampling import run_atlas_resampling
 from src.backend.app.native_preproc.stages.coregistration import run_coregistration
 from src.backend.app.native_preproc.stages.detrending import run_detrending
 from src.backend.app.native_preproc.stages.dummy_scan import run_dummy_scan_removal
-from src.backend.app.native_preproc.stages.functional_connectivity import run_functional_connectivity
+from src.backend.app.native_preproc.stages.functional_connectivity import (
+    run_functional_connectivity,
+)
 from src.backend.app.native_preproc.stages.motion_qc import run_motion_qc
 from src.backend.app.native_preproc.stages.normalization import run_affine_normalization
 from src.backend.app.native_preproc.stages.nuisance_regression import run_nuisance_regression
@@ -48,7 +51,6 @@ from src.backend.app.schemas.native_preproc_api import (
     NativeFullPreprocResponse,
     NativeFullStageApiResult,
 )
-
 
 # Process-local hook used by the spawn-safe subject worker.  The runner remains
 # sequential; this only makes stage boundaries observable to its parent.
@@ -74,11 +76,11 @@ _BIDS_SUBJECT_RE = re.compile(r"sub-[A-Za-z0-9]+")
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _new_run_id(project_id: str) -> str:
-    digest = hashlib.sha256(f"{project_id}:{_now_iso()}".encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha256(f"{project_id}:{_now_iso()}".encode()).hexdigest()[:12]
     return f"npre-{digest}"
 
 
@@ -1162,40 +1164,43 @@ def execute_native_full_preproc(
         stage_results=stage_results,
         safety_flags=safety_flags,
     )
-    validation_result = _write_report_stage(
-        context,
-        specs["validation_report"],
-        payload=validation_payload,
-        artifact_type="validation_report",
-        filename="native_preproc_validation_report.json",
-    )
-    stage_results.append(_result_to_api(specs["validation_report"], validation_result))
+    validation_result: NativePreprocStageResult | None = None
+    if _stage_enabled(request, "validation_report", default=True):
+        validation_result = _write_report_stage(
+            context,
+            specs["validation_report"],
+            payload=validation_payload,
+            artifact_type="validation_report",
+            filename="native_preproc_validation_report.json",
+        )
+        stage_results.append(_result_to_api(specs["validation_report"], validation_result))
 
-    final_payload = {
-        "project_id": project_id,
-        "run_id": run_id,
-        "created_at": _now_iso(),
-        "backend": "native_python",
-        "stage_results": [item.model_dump(mode="json") for item in stage_results],
-        "validation_summary": validation_payload["summary"],
-        "validation_report_path": _artifact_path(validation_result, "validation_report"),
-        "report_consistency": {
-            "manifest_is_authoritative": True,
-            "final_report_excludes_its_own_artifact_by_construction": True,
-            "stage_count_before_final_report": len(stage_results),
-            "artifact_count_before_final_report": sum(len(item.output_artifacts) for item in stage_results),
-        },
-        "safety_flags": safety_flags,
-        "limitations": validation_payload["limitations"],
-    }
-    final_result = _write_report_stage(
-        context,
-        specs["final_report"],
-        payload=final_payload,
-        artifact_type="final_report",
-        filename="native_preproc_final_report.json",
-    )
-    stage_results.append(_result_to_api(specs["final_report"], final_result))
+    if _stage_enabled(request, "final_report", default=True):
+        final_payload = {
+            "project_id": project_id,
+            "run_id": run_id,
+            "created_at": _now_iso(),
+            "backend": "native_python",
+            "stage_results": [item.model_dump(mode="json") for item in stage_results],
+            "validation_summary": validation_payload["summary"],
+            "validation_report_path": _artifact_path(validation_result, "validation_report"),
+            "report_consistency": {
+                "manifest_is_authoritative": True,
+                "final_report_excludes_its_own_artifact_by_construction": True,
+                "stage_count_before_final_report": len(stage_results),
+                "artifact_count_before_final_report": sum(len(item.output_artifacts) for item in stage_results),
+            },
+            "safety_flags": safety_flags,
+            "limitations": validation_payload["limitations"],
+        }
+        final_result = _write_report_stage(
+            context,
+            specs["final_report"],
+            payload=final_payload,
+            artifact_type="final_report",
+            filename="native_preproc_final_report.json",
+        )
+        stage_results.append(_result_to_api(specs["final_report"], final_result))
 
     manifest_path = run_dir / "native_full_run_manifest.json"
     response = _build_response(

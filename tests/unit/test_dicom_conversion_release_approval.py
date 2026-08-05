@@ -8,14 +8,11 @@ No frontend execute button.  No public endpoint.
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
-import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_complete_approval() -> dict:
     return {
@@ -46,6 +43,7 @@ def test_missing_approval_is_incomplete():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_complete,
     )
+
     record = DicomConversionReleaseApprovalRecord()
     assert not is_release_approval_complete(record)
 
@@ -56,6 +54,7 @@ def test_incomplete_approval_blocked():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_complete,
     )
+
     record = DicomConversionReleaseApprovalRecord(
         approved_by="tester",
         human_approval_statement="Approved.",
@@ -71,6 +70,7 @@ def test_complete_approval_accepted():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_complete,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
     assert is_release_approval_complete(record)
 
@@ -86,9 +86,13 @@ def test_approval_blocked_if_not_ready():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
     ok, issues = is_release_approval_valid(
-        record, readiness_status="blocked", gates_met=32, gates_total=32,
+        record,
+        readiness_status="blocked",
+        gates_met=32,
+        gates_total=32,
     )
     assert not ok
     assert any("ready_for_human_release_review" in i for i in issues)
@@ -100,9 +104,13 @@ def test_approval_blocked_if_gates_not_32():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=25, gates_total=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=25,
+        gates_total=32,
     )
     assert not ok
     assert any("25/32" in i for i in issues)
@@ -114,11 +122,14 @@ def test_approval_blocked_if_no_maintainer():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     data = _make_complete_approval()
     data["approved_by"] = ""
     record = DicomConversionReleaseApprovalRecord(**data)
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=32,
     )
     assert not ok
     assert any("approved_by" in i for i in issues)
@@ -130,11 +141,14 @@ def test_approval_blocked_if_no_statement():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     data = _make_complete_approval()
     data["human_approval_statement"] = ""
     record = DicomConversionReleaseApprovalRecord(**data)
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=32,
     )
     assert not ok
     assert any("statement" in i.lower() for i in issues)
@@ -146,11 +160,14 @@ def test_approval_blocked_if_no_rawdata_ack():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     data = _make_complete_approval()
     data["rawdata_readonly_acknowledged"] = False
     record = DicomConversionReleaseApprovalRecord(**data)
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=32,
     )
     assert not ok
     assert any("rawdata" in i.lower() for i in issues)
@@ -162,11 +179,14 @@ def test_approval_blocked_if_no_clinical_ack():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     data = _make_complete_approval()
     data["no_clinical_use_acknowledged"] = False
     record = DicomConversionReleaseApprovalRecord(**data)
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=32,
     )
     assert not ok
     assert any("clinical" in i.lower() for i in issues)
@@ -178,11 +198,14 @@ def test_approval_blocked_if_no_rollback_ack():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     data = _make_complete_approval()
     data["rollback_acknowledged"] = False
     record = DicomConversionReleaseApprovalRecord(**data)
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=32,
     )
     assert not ok
     assert any("rollback" in i.lower() for i in issues)
@@ -194,11 +217,14 @@ def test_approval_blocked_if_no_audit_ack():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     data = _make_complete_approval()
     data["approval_audit_acknowledged"] = False
     record = DicomConversionReleaseApprovalRecord(**data)
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=32,
     )
     assert not ok
     assert any("audit" in i.lower() for i in issues)
@@ -210,9 +236,13 @@ def test_approval_valid_when_all_met():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
     ok, issues = is_release_approval_valid(
-        record, readiness_status="ready_for_human_release_review", gates_met=32, gates_total=32,
+        record,
+        readiness_status="ready_for_human_release_review",
+        gates_met=32,
+        gates_total=32,
     )
     assert ok
     assert len(issues) == 0
@@ -229,9 +259,13 @@ def test_approval_valid_when_readiness_has_nonblocking_warnings():
         DicomConversionReleaseApprovalRecord,
         is_release_approval_valid,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
     ok, issues = is_release_approval_valid(
-        record, readiness_status="warning", gates_met=32, gates_total=32,
+        record,
+        readiness_status="warning",
+        gates_met=32,
+        gates_total=32,
     )
     assert ok
     assert len(issues) == 0
@@ -242,6 +276,7 @@ def test_evaluate_approval_returns_approved():
         DicomConversionReleaseApprovalRecord,
         evaluate_release_approval,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
     decision = evaluate_release_approval(
         record,
@@ -259,6 +294,7 @@ def test_evaluate_approval_returns_blocked_when_incomplete():
         DicomConversionReleaseApprovalRecord,
         evaluate_release_approval,
     )
+
     record = DicomConversionReleaseApprovalRecord()
     decision = evaluate_release_approval(record)
     assert decision.status in ("blocked", "incomplete")
@@ -275,6 +311,7 @@ def test_build_summary():
         DicomConversionReleaseApprovalRecord,
         build_release_approval_summary,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
     summary = build_release_approval_summary(record)
     assert summary["complete"] is True
@@ -284,6 +321,7 @@ def test_build_summary():
 
 def test_schema_has_no_subprocess():
     import src.backend.app.schemas.dicom_conversion_release_approval as mod
+
     source = open(mod.__file__, encoding="utf-8").read()
     assert "import subprocess" not in source
     assert "from subprocess" not in source
@@ -291,6 +329,7 @@ def test_schema_has_no_subprocess():
 
 def test_schema_has_no_file_write():
     import src.backend.app.schemas.dicom_conversion_release_approval as mod
+
     source = open(mod.__file__, encoding="utf-8").read()
     assert "open(" not in source
 
@@ -308,8 +347,9 @@ def test_service_persist_writes_metadata_even_when_blocked(tmp_path):
     from src.backend.app.services.dicom_conversion_release_approval import (
         persist_release_approval,
     )
+
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
-    decision = persist_release_approval(
+    _decision = persist_release_approval(
         record,
         project_dir=str(tmp_path),
         conversion_run_id="conv-test",
@@ -332,14 +372,16 @@ def test_service_approval_succeeds_when_ready(tmp_path, monkeypatch):
     from src.backend.app.schemas.dicom_conversion_release_approval import (
         DicomConversionReleaseApprovalRecord,
     )
-    from src.backend.app.services.dicom_conversion_release_approval import (
-        persist_release_approval,
-    )
-    # Monkeypatch the readiness check to return ready
-    from src.backend.app.services import dicom_conversion_release_readiness as rr_mod
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         DicomConversionReleaseReadinessReport,
     )
+
+    # Monkeypatch the readiness check to return ready
+    from src.backend.app.services import dicom_conversion_release_readiness as rr_mod
+    from src.backend.app.services.dicom_conversion_release_approval import (
+        persist_release_approval,
+    )
+
     def fake_readiness(*args, **kwargs):
         return DicomConversionReleaseReadinessReport(
             ok=True,
@@ -349,6 +391,7 @@ def test_service_approval_succeeds_when_ready(tmp_path, monkeypatch):
             gate_status="CONDITIONAL_GO",
             human_release_approval_required=True,
         )
+
     monkeypatch.setattr(rr_mod, "evaluate_conversion_release_readiness", fake_readiness)
 
     record = DicomConversionReleaseApprovalRecord(**_make_complete_approval())
@@ -366,12 +409,16 @@ def test_service_approval_succeeds_when_ready(tmp_path, monkeypatch):
 def test_service_does_not_call_dcm2niix():
     """Gate 14: Service does not call dcm2niix in executable code."""
     import inspect
+
     from src.backend.app.services import dicom_conversion_release_approval as mod
+
     source = inspect.getsource(mod.persist_release_approval)
     # Exclude docstring and comment lines
-    code_lines = [l for l in source.splitlines()
-                  if '"""' not in l and "dcm2niix" not in l.lower()
-                  and not l.strip().startswith("#")]
+    code_lines = [
+        line
+        for line in source.splitlines()
+        if '"""' not in line and "dcm2niix" not in line.lower() and not line.strip().startswith("#")
+    ]
     code = "\n".join(code_lines)
     assert "subprocess" not in code.lower()
 
@@ -379,10 +426,14 @@ def test_service_does_not_call_dcm2niix():
 def test_service_does_not_modify_rawdata():
     """Gate 15: Service does not modify rawdata."""
     import inspect
+
     from src.backend.app.services import dicom_conversion_release_approval as mod
+
     source = inspect.getsource(mod.persist_release_approval)
     # Exclude docstrings
-    code_lines = [l for l in source.splitlines() if '"""' not in l and "rawdata" not in l.lower()]
+    code_lines = [
+        line for line in source.splitlines() if '"""' not in line and "rawdata" not in line.lower()
+    ]
     code = "\n".join(code_lines)
     assert "open(" not in code
 
@@ -395,6 +446,7 @@ def test_service_incomplete_returns_blocked(tmp_path):
     from src.backend.app.services.dicom_conversion_release_approval import (
         persist_release_approval,
     )
+
     record = DicomConversionReleaseApprovalRecord()  # empty
     decision = persist_release_approval(
         record,
@@ -412,21 +464,23 @@ def test_service_incomplete_returns_blocked(tmp_path):
 
 def test_run_conversion_execute_still_blocked():
     """Gate 16: run_conversion_execute() remains blocked."""
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+
     result = run_conversion_execute("test", DicomConversionExecutionRequest())
     assert result.conversion_disabled is True
 
 
 def test_no_public_conversion_execute_endpoint():
     """Phase 7 retires this weak execution path in favor of reviewed tickets."""
-    from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
     from src.backend.app.main import app
+
     client = TestClient(app)
     resp = client.post("/api/projects/test/conversion/execute", json={})
     assert resp.status_code == 410
@@ -438,6 +492,7 @@ def test_no_public_conversion_execute_endpoint():
 def test_no_frontend_execute_button():
     """Gate 18: No frontend 'Run Conversion' onClick handler exists."""
     import os
+
     panel_paths = [
         "src/frontend/src/components/DicomConversionReviewPanel.tsx",
         "src/frontend/src/components/DicomConversionReviewPanel.jsx",
@@ -449,8 +504,14 @@ def test_no_frontend_execute_button():
             lines = open(full, encoding="utf-8").read().splitlines()
             for line in lines:
                 stripped = line.strip()
-                if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
+                if (
+                    stripped.startswith("//")
+                    or stripped.startswith("/*")
+                    or stripped.startswith("*")
+                ):
                     continue
-                if "onClick" in stripped and ("Run Conversion" in stripped or "runConversion" in stripped):
+                if "onClick" in stripped and (
+                    "Run Conversion" in stripped or "runConversion" in stripped
+                ):
                     found = True
     assert not found

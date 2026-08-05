@@ -7,7 +7,7 @@ never writes files, never creates directories.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.backend.app.schemas.desktop import (
@@ -22,7 +22,6 @@ from src.backend.app.services.spm_realign_manifest_adapter import (
     build_output_manifest_from_dry_run_input,
 )
 from src.backend.app.services.spm_realign_params import (
-    default_spm_realign_params,
     validate_spm_realign_params,
 )
 
@@ -30,7 +29,7 @@ COMMAND_TEMPLATE_ID = "spm12_realign_estwrite_v1"
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def build_spm_realign_batch_preview_result(
@@ -73,47 +72,53 @@ def build_spm_realign_batch_preview_result(
         for warn in param_warnings[:10]:
             lines.append(f"%   WARNING: {warn}")
 
-    lines.extend([
-        "%",
-        "%% Realign: Estimate & Reslice",
-        "matlabbatch{1}.spm.spatial.realign.estwrite.data = {",
-    ])
+    lines.extend(
+        [
+            "%",
+            "%% Realign: Estimate & Reslice",
+            "matlabbatch{1}.spm.spatial.realign.estwrite.data = {",
+        ]
+    )
 
     for inp in safe_inputs[:10]:
         bp = inp.get("bold_path", "MISSING")
         lines.append(f"    {{'{bp},1'}}; ...")
 
-    lines.extend([
-        "    };",
-        "",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.quality = {p['quality']};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.sep = {p['separation_mm']};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.fwhm = {p['fwhm_mm']};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.rtm = {int(p['register_to_mean'])};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.interp = {p['interpolation']};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.wrap = {p['wrap']};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.weight = {p['weight_image'] or '[]'};",
-        "",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.which = [2 1];",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.interp = {p['interpolation']};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.wrap = {p['wrap']};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.mask = {int(p['estimate_reslice'])};",
-        f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.prefix = 'r';",
-    ])
+    lines.extend(
+        [
+            "    };",
+            "",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.quality = {p['quality']};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.sep = {p['separation_mm']};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.fwhm = {p['fwhm_mm']};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.rtm = {int(p['register_to_mean'])};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.interp = {p['interpolation']};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.wrap = {p['wrap']};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.eoptions.weight = {p['weight_image'] or '[]'};",
+            "",
+            "matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which = [2 1];",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.interp = {p['interpolation']};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.wrap = {p['wrap']};",
+            f"matlabbatch{{1}}.spm.spatial.realign.estwrite.roptions.mask = {int(p['estimate_reslice'])};",
+            "matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';",
+        ]
+    )
 
     if predicted_outputs:
         lines.extend(["", "%% Predicted outputs:", ""])
         for out in predicted_outputs[:25]:
             lines.append(f"%  [{out.get('kind', '?')}] {out.get('path', '?')}")
 
-    lines.extend([
-        "",
-        "%% Execution:",
-        "% spm('defaults', 'FMRI');",
-        "% spm_jobman('run', matlabbatch);",
-        "%",
-        "% END OF PREVIEW",
-    ])
+    lines.extend(
+        [
+            "",
+            "%% Execution:",
+            "% spm('defaults', 'FMRI');",
+            "% spm_jobman('run', matlabbatch);",
+            "%",
+            "% END OF PREVIEW",
+        ]
+    )
 
     return {
         "preview": "\n".join(lines) + "\n",
@@ -130,10 +135,14 @@ def build_spm_realign_batch_preview(
     command_template_id: str = COMMAND_TEMPLATE_ID,
 ) -> str:
     """Backward-compatible string-returning wrapper."""
-    return str(build_spm_realign_batch_preview_result(
-        inputs=inputs, params=params, predicted_outputs=predicted_outputs,
-        command_template_id=command_template_id,
-    )["preview"])
+    return str(
+        build_spm_realign_batch_preview_result(
+            inputs=inputs,
+            params=params,
+            predicted_outputs=predicted_outputs,
+            command_template_id=command_template_id,
+        )["preview"]
+    )
 
 
 def build_spm_realign_wrapper_skeleton(
@@ -143,14 +152,17 @@ def build_spm_realign_wrapper_skeleton(
     """Generate a non-executing wrapper skeleton from the dry-run manifest."""
 
     now = _now_iso()
-    warnings: list[str] = []
+    _warnings: list[str] = []
     errors: list[str] = []
 
     project = mock_store.get_project(project_id)
     if project is None:
         return SpmRealignWrapperSkeletonResponse(
-            ok=False, project_id=project_id, status="blocked",
-            generated_at=now, command_template_id=COMMAND_TEMPLATE_ID,
+            ok=False,
+            project_id=project_id,
+            status="blocked",
+            generated_at=now,
+            command_template_id=COMMAND_TEMPLATE_ID,
             dry_run=None,
             matlab_batch_preview="",
             provenance_preview=SpmRealignProvenancePreview(
@@ -158,8 +170,10 @@ def build_spm_realign_wrapper_skeleton(
                 project_id=project_id,
                 params=params or {},
                 environment_status="unknown",
-                approval_required=True, audit_required=True,
-                execution_enabled=False, safe_allowlist_enabled=False,
+                approval_required=True,
+                audit_required=True,
+                execution_enabled=False,
+                safe_allowlist_enabled=False,
             ),
             errors=[f"Project not found: {project_id}"],
             safety_flags=_safety_flags(),
@@ -169,8 +183,11 @@ def build_spm_realign_wrapper_skeleton(
     cleaned, param_warnings, param_errors = validate_spm_realign_params(params or {})
     if param_errors:
         return SpmRealignWrapperSkeletonResponse(
-            ok=False, project_id=project_id, status="blocked",
-            generated_at=now, command_template_id=COMMAND_TEMPLATE_ID,
+            ok=False,
+            project_id=project_id,
+            status="blocked",
+            generated_at=now,
+            command_template_id=COMMAND_TEMPLATE_ID,
             dry_run=None,
             matlab_batch_preview="",
             provenance_preview=SpmRealignProvenancePreview(
@@ -178,8 +195,10 @@ def build_spm_realign_wrapper_skeleton(
                 project_id=project_id,
                 params=cleaned,
                 environment_status="unknown",
-                approval_required=True, audit_required=True,
-                execution_enabled=False, safe_allowlist_enabled=False,
+                approval_required=True,
+                audit_required=True,
+                execution_enabled=False,
+                safe_allowlist_enabled=False,
                 warnings=param_warnings,
             ),
             warnings=param_warnings,
@@ -217,8 +236,7 @@ def build_spm_realign_wrapper_skeleton(
         params=cleaned,
         input_count=dry_run_dict.get("input_count", 0),
         predicted_output_count=sum(
-            len(inp.get("predicted_outputs", []))
-            for inp in dry_run_dict.get("inputs", [])
+            len(inp.get("predicted_outputs", [])) for inp in dry_run_dict.get("inputs", [])
         ),
         environment_status=dry_run_dict.get("environment_status"),
         approval_required=True,

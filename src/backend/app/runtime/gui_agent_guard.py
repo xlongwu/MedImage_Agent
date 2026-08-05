@@ -24,13 +24,15 @@ from typing import Any
 _ALLOWED_PROVIDERS: frozenset[str] = frozenset({"mock"})
 
 # Providers that are explicitly blocked (even if future feature flags are set)
-_BLOCKED_PROVIDERS: frozenset[str] = frozenset({
-    "pywinauto",
-    "real",
-    "desktop",
-    "browser",
-    "manual",
-})
+_BLOCKED_PROVIDERS: frozenset[str] = frozenset(
+    {
+        "pywinauto",
+        "real",
+        "desktop",
+        "browser",
+        "manual",
+    }
+)
 
 # ── Error codes ─────────────────────────────────────────────────────────────
 
@@ -76,6 +78,7 @@ _ERROR_CODES = {
 
 # ── Dataclass ────────────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class GuiGuardResult:
     """Result of a GUI Agent guard check.
@@ -114,6 +117,7 @@ class GuiGuardResult:
 
 
 # ── Private helpers ──────────────────────────────────────────────────────────
+
 
 def _normalize_provider(raw: str | None) -> str | None:
     """Normalize provider string: strip, lowercase, collapse internal whitespace."""
@@ -158,6 +162,7 @@ def _allowed_result(provider: str) -> GuiGuardResult:
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
+
 
 def validate_gui_provider_policy(
     *,
@@ -239,11 +244,13 @@ _T003_MAX_DURATION_SECONDS: int = 300
 _T003_MAX_STEP_LIMIT: int = 20
 
 # File scope forbidden path segments (case-insensitive check)
-_FILE_SCOPE_FORBIDDEN_SEGMENTS: frozenset[str] = frozenset({
-    "rawdata",
-    "data",
-    "derivatives",
-})
+_FILE_SCOPE_FORBIDDEN_SEGMENTS: frozenset[str] = frozenset(
+    {
+        "rawdata",
+        "data",
+        "derivatives",
+    }
+)
 
 
 def _is_path_safe_for_file_scope(path: str) -> bool:
@@ -428,8 +435,7 @@ def validate_gui_session_declaration(
     if _network not in _T003_ALLOWED_NETWORK_POLICIES:
         return _blocked_result(
             _ERROR_CODES["network_blocked"],
-            f"network_policy '{_network}' is not allowed in T003. "
-            "Only 'disabled' is permitted.",
+            f"network_policy '{_network}' is not allowed in T003. Only 'disabled' is permitted.",
         )
 
     # ── 12. external_app_policy ──
@@ -503,58 +509,66 @@ def validate_gui_session_declaration(
 
 # ── M9-GUI-T003 Action Taxonomy (29 actions, 4 tiers) ──
 
-_TIER_0_ACTIONS: frozenset[str] = frozenset({
-    "record_observation",
-    "get_window_title",
-    "list_windows",
-    "observe_visible_ui_state",
-    "screenshot_ephemeral",
-    "get_control_text",
-    "get_menu_state",
-})
+_TIER_0_ACTIONS: frozenset[str] = frozenset(
+    {
+        "record_observation",
+        "get_window_title",
+        "list_windows",
+        "observe_visible_ui_state",
+        "screenshot_ephemeral",
+        "get_control_text",
+        "get_menu_state",
+    }
+)
 
-_TIER_1_ACTIONS: frozenset[str] = frozenset({
-    "focus_window",
-    "scroll",
-    "switch_tab",
-    "wait_for_window",
-    "open_non_sensitive_panel",
-    "move_focus_within_declared_window",
-})
+_TIER_1_ACTIONS: frozenset[str] = frozenset(
+    {
+        "focus_window",
+        "scroll",
+        "switch_tab",
+        "wait_for_window",
+        "open_non_sensitive_panel",
+        "move_focus_within_declared_window",
+    }
+)
 
-_TIER_2_ACTIONS: frozenset[str] = frozenset({
-    "fill_form_field_non_secret",
-    "select_file_under_scoped_directory",
-    "menu_select_read_only",
-    "toggle_non_destructive_option",
-    "click_dry_run",
-    "type_text_scoped",
-})
+_TIER_2_ACTIONS: frozenset[str] = frozenset(
+    {
+        "fill_form_field_non_secret",
+        "select_file_under_scoped_directory",
+        "menu_select_read_only",
+        "toggle_non_destructive_option",
+        "click_dry_run",
+        "type_text_scoped",
+    }
+)
 
-_TIER_3_ACTIONS: frozenset[str] = frozenset({
-    "click_run",
-    "click_execute",
-    "click_submit",
-    "save_file",
-    "overwrite_file",
-    "delete_file",
-    "open_rawdata",
-    "launch_external_app",
-    "read_clipboard",
-    "write_clipboard",
-    "upload_file",
-    "download_file",
-    "network_submission",
-    "enter_credentials",
-    "accept_permission_dialog",
-    "accept_security_dialog",
-    "accept_license_dialog",
-    "install_software",
-    "send_email",
-    "send_message",
-    "unscoped_file_select",
-    "raw_screenshot_persist",
-})
+_TIER_3_ACTIONS: frozenset[str] = frozenset(
+    {
+        "click_run",
+        "click_execute",
+        "click_submit",
+        "save_file",
+        "overwrite_file",
+        "delete_file",
+        "open_rawdata",
+        "launch_external_app",
+        "read_clipboard",
+        "write_clipboard",
+        "upload_file",
+        "download_file",
+        "network_submission",
+        "enter_credentials",
+        "accept_permission_dialog",
+        "accept_security_dialog",
+        "accept_license_dialog",
+        "install_software",
+        "send_email",
+        "send_message",
+        "unscoped_file_select",
+        "raw_screenshot_persist",
+    }
+)
 
 # T004: only record_observation is allowed among all actions
 _T004_ALLOWED_ACTIONS: frozenset[str] = frozenset({"record_observation"})
@@ -632,9 +646,13 @@ def validate_gui_action_declaration(
     _paths_in = input_paths if input_paths is not None else []
     _paths_out = output_paths if output_paths is not None else []
     _side_effects = (expected_side_effects or "none").strip().lower()
-    _confirmation = requires_per_action_confirmation if requires_per_action_confirmation is not None else False
+    _confirmation = (
+        requires_per_action_confirmation if requires_per_action_confirmation is not None else False
+    )
     _rollback = (rollback_plan or "none").strip().lower()
-    _session_tiers = session_allowed_action_tiers if session_allowed_action_tiers is not None else [0]
+    _session_tiers = (
+        session_allowed_action_tiers if session_allowed_action_tiers is not None else [0]
+    )
     _screenshot_pol = (screenshot_policy or "disabled").strip().lower()
     _clipboard_pol = (clipboard_policy or "disabled").strip().lower()
     _network_pol = (network_policy or "disabled").strip().lower()
@@ -643,7 +661,9 @@ def validate_gui_action_declaration(
     tier, tier_error = classify_gui_action_tier(action_type)
     if tier is None:
         return _blocked_result(
-            _ERROR_CODES["action_unknown"] if action_type and action_type.strip() else _ERROR_CODES["action_invalid"],
+            _ERROR_CODES["action_unknown"]
+            if action_type and action_type.strip()
+            else _ERROR_CODES["action_invalid"],
             tier_error or "action_type must be specified and recognized.",
         )
 
@@ -784,12 +804,13 @@ def validate_gui_action_declaration(
 # Audit Log + Stop-Condition Checker — M9-GUI-GUARD-T005
 # ══════════════════════════════════════════════════════════════════════════════
 
-import hashlib as _hashlib
-from datetime import datetime as _datetime, timezone as _timezone
+import hashlib as _hashlib  # noqa: E402
+from datetime import UTC  # noqa: E402
+from datetime import datetime as _datetime  # noqa: E402
 
 
 def _utc_now_iso() -> str:
-    return _datetime.now(_timezone.utc).isoformat()
+    return _datetime.now(UTC).isoformat()
 
 
 def _short_hash(*parts: str) -> str:

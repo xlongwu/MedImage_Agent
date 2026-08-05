@@ -33,7 +33,9 @@ class TestReHoFallback:
 class TestNuisanceRegressionFallback:
     def test_prefer_gpu_falls_back_to_cpu(self, small_4d, monkeypatch):
         monkeypatch.setitem(sys.modules, "cupy", None)
-        from src.backend.app.tools.nuisance_regression_compute import compute_nuisance_regression_backend
+        from src.backend.app.tools.nuisance_regression_compute import (
+            compute_nuisance_regression_backend,
+        )
 
         X = np.column_stack([np.ones(10), np.arange(10)]).astype(np.float64)
         result = compute_nuisance_regression_backend(small_4d, X, prefer_gpu=True)
@@ -46,7 +48,9 @@ class TestTemporalFilteringFallback:
         monkeypatch.setitem(sys.modules, "cupy", None)
         from src.backend.app.tools.temporal_filtering_compute import compute_temporal_filter_backend
 
-        result = compute_temporal_filter_backend(small_4d, tr=2.0, low_hz=0.01, high_hz=0.08, prefer_gpu=True)
+        result = compute_temporal_filter_backend(
+            small_4d, tr=2.0, low_hz=0.01, high_hz=0.08, prefer_gpu=True
+        )
         assert result["ok"]
         assert result["backend"] == "cpu-numpy"
 

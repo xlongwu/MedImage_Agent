@@ -30,7 +30,8 @@ def test_no_matlab_configured_returns_not_configured(tmp_path, monkeypatch):
 
 def test_matlab_spm_not_exist_returns_warning(tmp_path, monkeypatch):
     _mock_config(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         matlab_command="nonexistent_matlab_binary",
         spm_dir="./third_party/nonexistent_spm",
     )
@@ -43,7 +44,8 @@ def test_matlab_spm_not_exist_returns_warning(tmp_path, monkeypatch):
 def test_matlab_spm_ghost_path_returns_exists_true(tmp_path, monkeypatch):
     """Configure paths to existing directories (tmp_path) — exists=true."""
     _mock_config(
-        tmp_path, monkeypatch,
+        tmp_path,
+        monkeypatch,
         matlab_command=str(tmp_path),  # exists as dir
         spm_dir=str(tmp_path),
     )

@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-import pytest
-from src.backend.app.tools.gpu_smoke_runner import run_gpu_synthetic_smoke
-from src.backend.app.runtime.node_registry import NODE_REGISTRY
 
+from src.backend.app.runtime.node_registry import NODE_REGISTRY
+from src.backend.app.tools.gpu_smoke_runner import run_gpu_synthetic_smoke
 
 # ── Registration ──
+
 
 def test_node_registered():
     assert "gpu_synthetic_smoke" in NODE_REGISTRY
 
 
 # ── Runner guard ──
+
 
 def test_valid_request_ok():
     r = run_gpu_synthetic_smoke()
@@ -62,6 +62,7 @@ def test_approved_false_blocks():
 
 # ── Output scope ──
 
+
 def test_report_written(tmp_path):
     r = run_gpu_synthetic_smoke(reports_dir=str(tmp_path), run_id="test")
     assert r["ok"] is True
@@ -70,6 +71,7 @@ def test_report_written(tmp_path):
 
 
 # ── No CUDA / no GPU ──
+
 
 def test_no_cuda_called():
     r = run_gpu_synthetic_smoke()
@@ -82,15 +84,21 @@ def test_no_cuda_called():
 
 # ── Policy ──
 
+
 def test_blocked_by_safe_allowlist():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "gpu_synthetic_smoke", "depends_on": [], "params": {}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {"id": "gpu_synthetic_smoke", "depends_on": [], "params": {}},
+        ],
+    }
     policy = classify_plan_nodes(plan)
     # gpu backend → allowed_gpu_nodes, then blocked by safe allowlist
-    assert "gpu_synthetic_smoke" in policy.get("allowed_gpu_nodes", []) or \
-           "gpu_synthetic_smoke" not in policy.get("allowed_contract_nodes", [])
+    assert "gpu_synthetic_smoke" in policy.get(
+        "allowed_gpu_nodes", []
+    ) or "gpu_synthetic_smoke" not in policy.get("allowed_contract_nodes", [])
     assert "gpu_synthetic_smoke" not in policy.get("allowed_python_nodes", [])
 
 

@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n/useI18n";
+import { useProjectBidsValidation } from "../hooks/useProjectBidsValidation";
 import { DEFAULT_API_BASE } from "../lib/api/client";
-import { getProjectBidsValidation } from "../lib/api/dicom";
 import type { BidsValidationIssue, BidsRepairSuggestion, BidsValidationResponse } from "../types";
 import {
   ActionList,
@@ -15,6 +14,13 @@ type Props = {
   baseUrl?: string;
   projectId: string | null;
   projectState?: string;
+  validation?: BidsValidationViewState;
+};
+
+export type BidsValidationViewState = {
+  data: BidsValidationResponse | null;
+  loading: boolean;
+  error: string;
 };
 
 const severityPill: Record<string, React.CSSProperties> = {
@@ -73,39 +79,16 @@ const mono: React.CSSProperties = {
   overflowWrap: "anywhere",
 };
 
-export default function BidsValidationPanel({ baseUrl, projectId, projectState }: Props) {
+export default function BidsValidationPanel({
+  baseUrl,
+  projectId,
+  projectState,
+  validation,
+}: Props) {
   const { t } = useI18n();
   const effectiveBase = baseUrl ?? DEFAULT_API_BASE;
-  const [data, setData] = useState<BidsValidationResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const requestRef = useRef(0);
-
-  useEffect(() => {
-    if (!projectId) {
-      /* eslint-disable react-hooks/set-state-in-effect -- Project changes reset the guarded validation request state. */
-      setData(null);
-      setError("");
-      /* eslint-enable react-hooks/set-state-in-effect */
-      return;
-    }
-    const requestId = requestRef.current + 1;
-    requestRef.current = requestId;
-    setLoading(true);
-    setError("");
-    getProjectBidsValidation(effectiveBase, projectId)
-      .then((res) => {
-        if (requestId !== requestRef.current) return;
-        setData(res);
-      })
-      .catch((err) => {
-        if (requestId !== requestRef.current) return;
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (requestId === requestRef.current) setLoading(false);
-      });
-  }, [effectiveBase, projectId]);
+  const internalValidation = useProjectBidsValidation(effectiveBase, validation ? null : projectId);
+  const { data, loading, error } = validation ?? internalValidation;
 
   if (!projectId)
     return (

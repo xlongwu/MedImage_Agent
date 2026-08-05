@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
 
@@ -22,7 +22,7 @@ class NativePreprocRunContext:
         run_id: str = "native_preproc_run",
         subject_id: str = "",
         session_id: str = "",
-    ) -> "NativePreprocRunContext":
+    ) -> NativePreprocRunContext:
         context = cls(Path(output_dir), run_id=run_id, subject_id=subject_id, session_id=session_id)
         context.ensure_directories()
         return context
@@ -64,7 +64,7 @@ class NativePreprocRunContext:
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def package_versions(*names: str) -> dict[str, str]:

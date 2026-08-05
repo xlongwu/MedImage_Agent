@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends
 from src.backend.app.api.dependencies import ProjectStore, get_project_store
 from src.backend.app.core.exceptions import NotFoundError
 
-
 router = APIRouter(prefix="/api/projects/{project_id}/execution-tickets")
 
 

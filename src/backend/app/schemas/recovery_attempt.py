@@ -13,7 +13,6 @@ from src.backend.app.schemas.recovery import (
     RecoveryQuotaDecision,
 )
 
-
 RecoveryApprovalMode = Literal[
     "within_original_approval",
     "explicit_retry_approval",

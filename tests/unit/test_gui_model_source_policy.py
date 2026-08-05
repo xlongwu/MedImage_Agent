@@ -7,6 +7,7 @@ import inspect
 import json
 
 import pytest
+
 from src.backend.app.runtime.gui_model_source_policy import (
     allowed_fixture_model_source_declaration,
     validate_model_source_policy,
@@ -29,6 +30,7 @@ def _assert_source_policy_has_no_forbidden_imports() -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Allowed fixture_catalog
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_fixture_source_allowed():
     r = validate_model_source_policy(**allowed_fixture_model_source_declaration())
@@ -71,6 +73,7 @@ def test_fixture_json_serializable():
 # B. Missing / Unknown
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_missing_source():
     r = validate_model_source_policy(model_source=None)
     assert r.ok is False
@@ -93,8 +96,12 @@ def test_unknown_source():
 # ══════════════════════════════════════════════════════════════════════════════
 
 REAL_SOURCES = [
-    "local_allowlisted", "local_untrusted", "remote_repository",
-    "huggingface_repo", "runtime_download", "user_supplied_path",
+    "local_allowlisted",
+    "local_untrusted",
+    "remote_repository",
+    "huggingface_repo",
+    "runtime_download",
+    "user_supplied_path",
     "absolute_path",
 ]
 
@@ -109,6 +116,7 @@ def test_real_source_blocked(src):
 # ══════════════════════════════════════════════════════════════════════════════
 # D. Fixture Policy Deviations
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _fixture(**overrides):
     d = allowed_fixture_model_source_declaration()
@@ -182,6 +190,7 @@ def test_fixture_extra_real_blocked():
 # E. Future Real Source Blocked
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _real_source(**overrides):
     base = {
         "model_source": "local_allowlisted",
@@ -250,6 +259,7 @@ def test_real_user_path_blocked():
 # F. Path Scope Validation (pure string)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_model_dir_traversal_blocked():
     assert _real_source(model_dir="../escape").ok is False
 
@@ -294,6 +304,7 @@ def test_weights_file_derivatives_blocked():
 # G. Non-Call / Isolation
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_no_torch_import():
     _assert_source_policy_has_no_forbidden_imports()
 
@@ -321,12 +332,14 @@ def test_blocked_all_flags_false():
 
 def test_module_no_side_effects():
     from src.backend.app.runtime import gui_model_source_policy
+
     assert gui_model_source_policy is not None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # H. Regression
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_policy_tests_pass():
     pass
@@ -350,24 +363,47 @@ def test_gui_blocklist_tests_pass():
 
 def test_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]

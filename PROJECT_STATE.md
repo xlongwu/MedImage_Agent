@@ -1,6 +1,6 @@
 # Project State
 
-Current as of 2026-07-16.
+Current as of 2026-07-26.
 
 ## Version and Branch
 
@@ -11,7 +11,9 @@ Current as of 2026-07-16.
 - Backend `APP_VERSION` (`src/backend/app/version.py`) is `0.6.0-rc1`.
   All package surface versions (frontend, desktop/electron, pyproject.toml)
   aligned to `0.6.0-rc1` as of 2026-06-20 architecture audit.
-- Current working branch: `main`.
+- Release-state baseline branch: `main`. The current working tree contains the
+  Phase 10 Agent-first source implementation, but it has no clean exact-SHA,
+  packaging, tag, or release claim yet.
 - Local Git tags present:
   - `v0.3.0-rc1` tagged 2026-06-06
   - `v0.4.0-rc1` tagged 2026-06-10
@@ -50,7 +52,19 @@ their tag state.
   reviewed flow that can create a preprocessing run from registered converted
   input, submit the reviewed gate, show stage status, and expose FC artifact
   metadata handoff links.
+- Native full preprocessing supports a conservative subject scheduler: serial
+  remains the default, while reviewed `process`/`auto` policies bound worker and
+  thread counts by the request, CPU capacity, and available-memory estimates.
+  Async native runs persist per-subject progress, heartbeat, and terminal state;
+  missing memory telemetry fails back to serial scheduling.
 - Frontend API wrappers under `src/frontend/src/lib/api/` with a shared client.
+  Idempotent GET requests receive one bounded retry after a transport failure;
+  mutating requests are never retried automatically.
+- The default local Assistant is a deterministic, read-only project-state
+  summarizer. It reads the injected `ProjectStore`, reports dataset, plan,
+  preprocessing-setup, and execution-run evidence, and never treats chat text
+  as approval or execution authority. A real LLM provider remains disabled
+  until explicitly configured.
 - A server-issued Execution Ticket and single Execution Gateway bind reviewed
   plans, approvals, project identity, allowlists, paths, audit context, expiry,
   and retry policy before Pipeline Runtime dispatch.
@@ -62,17 +76,71 @@ their tag state.
 - Observation, deterministic Goal Evaluation, side-effect-free recovery
   proposals, and controlled retry/resume/local-replan services are implemented
   and covered by source-level regression tests.
+- The Phase 10 source tree adds an Agent-first project workspace backed by a
+  project-scoped Agent Task read projection. Goal commands stop for unresolved
+  science decisions, produce one hashed Approval Summary, and reuse the
+  Reviewed Plan, Approval Gate, Execution Ticket, and sole Execution Gateway.
+  Approval performs one immediate terminal reconciliation before returning;
+  non-terminal runs continue under a bounded single-owner monitor. Read-side
+  Agent Task APIs remain side-effect free, and recovery remains a separate
+  explicit approval.
+- The desktop Runs workspace uses persisted project run links as its authoritative
+  source. Exact duplicate run IDs resolve to the newest backend state; Workspace
+  keeps only the newest attempt for each Agent Task (or legacy reviewed plan),
+  while History retains every distinct attempt. New reviewed executions persist
+  their Agent Task lifecycle ID, and terminal result summaries are projected only
+  when the selected run has that exact task/run association.
+- Runs now joins the exact selected run to its preprocessing artifact registry
+  and project-scoped audit projection. Numerical preprocessing, QC, report,
+  derivative, state, summary, and pipeline artifacts remain run-scoped; paths
+  registered to another preprocessing run are rejected. Run-event and state
+  timelines are rendered chronologically, and a run ID is never used as an
+  Agent Task ID.
+- A complete, reloadable, provenance-bound numerical result remains `computed`
+  when its reviewed contract permits a scientifically simplified method. The
+  simplification remains an explicit limitation and prevents `validated`; it
+  no longer incorrectly converts the capability level to `metadata_only`.
+- Native preprocessing report scope is explicit. `group_summary=false` creates
+  no group summary, and a completed single-subject run registers exactly one
+  validation report and one final report with run/subject scope preserved.
+- Registered-BIDS ReHo goals use the native preprocessing orchestrator with
+  realignment, motion QC, nuisance regression, detrending, temporal filtering,
+  and ReHo enabled. Legacy ReHo plans without a reviewed preprocessed input or
+  an upstream realignment/smoothing producer are rejected before dispatch.
+- Native DICOM conversion is registered as a reviewed gateway node before
+  native preprocessing only when a prepared conversion run has persisted
+  release evidence and `agent_conversion_execution_ready=true`; an already
+  converted BIDS handoff does not schedule conversion again.
+  Partial conversion never marks preprocessing input ready.
+- A project-scoped Memory Domain is implemented behind default-closed install,
+  generation, use, LLM, and file-projection gates. It uses an independent
+  SQLite authority fed by transactional desktop-store outbox records, supports
+  deterministic candidate review/consolidation, provenance, FTS retrieval,
+  version-bound mutation, tombstone-based forgetting, and a rebuildable
+  optional projection. Typed memory snapshots are frozen into Reviewed Plans
+  and Approval Summaries. Scientific memories remain advisory and always stop
+  for current-task confirmation before they can influence a plan.
 
 ## Current Execution Boundaries
 
 - Rawdata is read-only.
 - The Pipeline Runtime remains the only pipeline execution path.
 - LLM output is advisory only.
+- Memory is project-scoped and is neither an execution permission nor a source
+  of scientific validity, capability, approval, or current environment truth.
+  Disabling generation/use does not delete existing memory; forgetting scrubs
+  stored plaintext and prevents old sources from recreating the forgotten
+  generation.
 - DICOM conversion execution is not automatic. It requires explicit environment
   flags, release approval/readiness evidence, confirmation payloads, audit
   package evidence, checksum/rollback checks, and safe output roots.
+- Agent-first visibility and a single approval card do not relax any execution
+  gate. Advanced mode affects navigation only.
 - Reviewed preprocessing uses in-project Python kernels. MATLAB, SPM, and
   DPABI executables are outside the supported execution path.
+- Run artifact discovery accepts managed evidence under project `data/` in
+  addition to `work`, `logs`, `reports`, and `derivatives`; rawdata and paths
+  outside the project output boundary remain rejected.
 - Reviewed Minimal FC can continue from already registered realignment outputs;
   this is a resume/registration path. It is not a one-click local SPM
   realignment execution claim while MATLAB/SPM gates remain unsatisfied.
@@ -94,8 +162,9 @@ their tag state.
 
 - Use `--basetemp=.pytest_tmp` when Windows temp directories contain locked
   pytest temp entries.
-- Expected optional skips commonly include missing `pydicom`, missing `cupy`,
-  and missing `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`.
+- Expected optional skips commonly include missing `cupy` and missing
+  `MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR`. `pydicom` is now a core dependency
+  because the packaged desktop exposes the reviewed native DICOM workflow.
 - The current RC2 working tree was validated on Windows with Python 3.11.15:
   backend `4108 passed, 16 skipped`; frontend format check, typecheck, `238`
   tests, and production build passed. The only backend skip caused by Windows
@@ -109,6 +178,24 @@ their tag state.
 - Current task-level validation is recorded in the final Completion Report and
   the local phase execution record rather than appended here as a development
   diary.
+- An isolated source-tree browser smoke using the Vite renderer and FastAPI
+  backend verified a fresh empty store, real synthetic-BIDS project creation,
+  four indexed NIfTI files, plan-only Agent Task persistence, registered
+  read-only preprocessing setup, QC readiness, NIfTI image preview, project
+  artifact empty state, Runs evidence, Settings memory gates, project-aware
+  Assistant output, and Inspector counts. It created no execution run and did
+  not modify `examples/synthetic_bids/rawdata`. This is source GUI/API evidence,
+  not Electron packaging or scientific preprocessing execution evidence.
+- A separate isolated Agent-workspace UI E2E approved a single-subject native
+  preprocessing plan for `sub-001` and only then dispatched it through the
+  reviewed execution path. It completed 1/1 with an exact lifecycle/run link,
+  17 Agent result artifacts, one validation report, one final report, no group
+  summary, reloadable numerical outputs, and no rawdata writes. A restart using
+  the final packaged sidecar recovered the terminal task, the same run ID, and
+  18 complete selected-run artifacts with one audit projection and no foreign
+  run paths. This evidence drove the built browser-visible UI against the
+  packaged sidecar; it is not a claim that the Electron window itself drove the
+  scientific workflow.
 - Native DICOM validation includes synthetic geometry/affine/error tests,
   guarded approval/audit/artifact/provenance execution tests, and an opt-in
   three-subject DemoData conversion test that prohibits subprocess execution.
@@ -135,6 +222,12 @@ their tag state.
   entry point.
 - Packaging output directories are generated artifacts unless explicitly
   promoted through a release artifact process.
+- The current dirty-tree canonical `win-unpacked` directory was rebuilt on
+  2026-07-26 without generating an installer. A fresh isolated workspace and
+  Electron `userData` smoke verified backend readiness, renderer/backend HTTP
+  health, a mounted React root and main landmark, zero renderer console errors,
+  normal app exit, and zero owned sidecar processes after exit. This is local
+  task evidence, not an exact-SHA release claim.
 - Packaging candidate `6a392c15079f51c16a8e3c2a035915972aabd9ff` was rebuilt
   with the `mamba` Python 3.11.15 environment into a PyInstaller backend
   sidecar, launcher, and Electron unpacked directory. Packaged smoke confirmed
@@ -170,14 +263,23 @@ their tag state.
 - Default Windows temp folders can retain locked pytest directories; use the
   active project interpreter and `--basetemp=.pytest_tmp`.
 - The desktop SQLite state store is ignored runtime state and can accumulate
-  stale local paths.
-- Full DICOM-to-preprocessing-to-report Electron-UI-driven E2E remains unproven;
-  the corresponding source-level and packaged-sidecar/API paths are demonstrated.
+  stale local paths. Fresh stores contain no fabricated projects or runs;
+  deterministic dashboard fixtures are available only through the explicit
+  `MEDIMAGE_DESKTOP_SEED_DEMO_DATA=true` demo/test opt-in.
+- Full DICOM-to-preprocessing-to-report Electron-window-driven E2E remains
+  unproven; source-level paths, packaged-sidecar/API paths, and the isolated
+  Agent-workspace browser-visible single-subject preprocessing path are
+  demonstrated separately.
   Preview/subset runs and synthetic-atlas FC remain labeled `preview_only` or
   `partial`.
-- The controlled recovery implementation is source-tested, but packaged-app
-  exit, forced termination, restart recovery, failed-subject isolation, and
-  local retry have not yet been demonstrated on the three-subject DemoData set.
+- The Phase 10 Agent-first changes remain in a dirty working tree. A local
+  canonical unpacked package and isolated smoke now exist, but exact-SHA
+  packaging, Electron-window scientific workflow validation, installer checks,
+  and release/version alignment are deferred and must not be inferred from the
+  local package.
+- Single-subject packaged-sidecar restart recovery is demonstrated. Forced
+  termination, failed-subject isolation, and approved local retry have not yet
+  been demonstrated on the three-subject DemoData set.
 
 ## Next Work
 
@@ -202,3 +304,5 @@ their tag state.
 - Safety boundaries: `docs/安全与审批/安全边界.md`
 - Run lifecycle: `docs/安全与审批/真实项目运行生命周期.md`
 - RC2 release convergence: `specs/阶段记录/阶段九/README.md`
+- Agent-first source implementation and deferred acceptance gates:
+  `specs/阶段记录/阶段十/README.md`

@@ -1,9 +1,9 @@
 """Native spatial smoothing stage."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 from time import perf_counter
-from typing import Sequence
 
 import numpy as np
 
@@ -80,7 +80,7 @@ def run_smoothing(
 ):
     stage_id = "smoothing"
     context = context_from_output_dir(output_dir, run_id=run_id, subject_id=subject_id, session_id=session_id)
-    parameters = {"fwhm_mm": list(fwhm_mm) if not isinstance(fwhm_mm, (int, float)) else float(fwhm_mm)}
+    parameters = {"fwhm_mm": list(fwhm_mm) if not isinstance(fwhm_mm, int | float) else float(fwhm_mm)}
     warnings: list[str] = []
     errors: list[str] = []
 

@@ -1,6 +1,9 @@
 # 任务 10A：交互基线与 Agent Task 投影层
 
-> 状态：Blocked — set to `Ready for Implementation` only after Phase 9 `G9-6`
+> 状态：Source implemented and automated tests recorded；packaged UI 复验延期。
+>
+> 本文正文保留实施前要求；其中 `Current Behavior`、清单和 Stop Conditions 是历史方案，
+> 当前结果以 `README.md` 和 `evidence/阶段十_E2E验收记录.md` 为准。
 >
 > 任务模式：Feature Bundle Mode（只读 API）
 >

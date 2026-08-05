@@ -7,11 +7,15 @@ registered subject requests.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
-from src.backend.app.schemas.native_preproc_api import NativeCpuExecutionPolicy, NativeFullPreprocRequest
+from src.backend.app.schemas.native_preproc_api import (
+    NativeCpuExecutionPolicy,
+    NativeFullPreprocRequest,
+)
 
 
 @dataclass(frozen=True)

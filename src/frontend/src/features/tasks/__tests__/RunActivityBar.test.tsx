@@ -40,6 +40,12 @@ describe("RunActivityBar", () => {
 
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("42%")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Background run activity" })).toHaveTextContent(
+      "Managed task",
+    );
+    expect(screen.getByRole("status", { name: "Background run activity" })).not.toHaveTextContent(
+      "rs-fMRI preprocessing",
+    );
 
     await user.click(screen.getByRole("button", { name: /expand run activity/i }));
 

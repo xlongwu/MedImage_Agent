@@ -12,7 +12,6 @@ from typing import Any
 
 import numpy as np
 
-
 Check = dict[str, Any]
 
 _SUBJECT_RE = re.compile(r"sub-[A-Za-z0-9]+")
@@ -246,7 +245,9 @@ def _find_artifact(payloads: tuple[dict[str, Any], ...], artifact_type: str) -> 
 
 
 def _read_roi_timeseries_matrix(path: Path) -> tuple[list[str], np.ndarray]:
-    from src.backend.app.native_preproc.stages.functional_connectivity import read_roi_timeseries_tsv
+    from src.backend.app.native_preproc.stages.functional_connectivity import (
+        read_roi_timeseries_tsv,
+    )
 
     labels, matrix = read_roi_timeseries_tsv(path)
     return labels, np.asarray(matrix, dtype=np.float32)

@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import numpy as np
+
 from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
 
@@ -49,9 +50,7 @@ def compute_alff_numpy(
     band_mask = (freqs >= low) & (freqs <= high)
 
     if not np.any(band_mask):
-        warnings.append(
-            f"No FFT bins found in frequency band {freq_band}; ALFF will be zeros."
-        )
+        warnings.append(f"No FFT bins found in frequency band {freq_band}; ALFF will be zeros.")
         alff = np.zeros(data.shape[:3], dtype="float32")
         falff = np.zeros(data.shape[:3], dtype="float32")
         return alff, falff, warnings
@@ -64,9 +63,11 @@ def compute_alff_numpy(
     falff = _safe_falff(band_sum, total_amp)
 
     if standardize:
-        alff_mean = alff.mean(); alff_std = alff.std() + 1e-10
+        alff_mean = alff.mean()
+        alff_std = alff.std() + 1e-10
         alff = (alff - alff_mean) / alff_std
-        falff_mean = falff.mean(); falff_std = falff.std() + 1e-10
+        falff_mean = falff.mean()
+        falff_std = falff.std() + 1e-10
         falff = (falff - falff_mean) / falff_std
 
     return alff, falff, warnings
@@ -103,9 +104,7 @@ def compute_alff_cupy(
     band_mask = (freqs >= low) & (freqs <= high)
 
     if not bool(cp.any(band_mask).get()):
-        warnings.append(
-            f"No FFT bins found in frequency band {freq_band}; ALFF will be zeros."
-        )
+        warnings.append(f"No FFT bins found in frequency band {freq_band}; ALFF will be zeros.")
         alff = cp.zeros(x.shape[:3], dtype=cp.float32)
         falff = cp.zeros(x.shape[:3], dtype=cp.float32)
         return cp.asnumpy(alff), cp.asnumpy(falff), warnings
@@ -206,7 +205,7 @@ def compute_alff_backend(
                     "warnings": warnings,
                     "errors": errors,
                 }
-            except Exception as exc:
+            except Exception:
                 continue
 
         if require_gpu:
@@ -217,7 +216,7 @@ def compute_alff_backend(
                 "falff": None,
                 "runtime_seconds": None,
                 "warnings": warnings,
-                "errors": [f"GPU ALFF failed and require_gpu=true: no GPU backend available"],
+                "errors": ["GPU ALFF failed and require_gpu=true: no GPU backend available"],
             }
         warnings.append("GPU backend unavailable, falling back to CPU.")
 

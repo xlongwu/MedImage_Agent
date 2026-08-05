@@ -1,4 +1,5 @@
 """Tests for the unified preprocessing stage catalog."""
+
 from __future__ import annotations
 
 from src.backend.app.schemas.preprocessing_stage_catalog import (

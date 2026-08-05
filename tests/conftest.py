@@ -8,18 +8,19 @@ from uuid import uuid4
 
 import pytest
 
-
 # Keep module-level SQLiteDesktopStore instances created during pytest away
 # from the persistent desktop database used by the local application.
 _DESKTOP_STORE_ROOT = Path(tempfile.gettempdir()) / "medimage_agent_pytest"
 _DESKTOP_STORE_ROOT.mkdir(parents=True, exist_ok=True)
-_DESKTOP_STORE_PATH = _DESKTOP_STORE_ROOT / (
-    f"desktop_state_{os.getpid()}_{uuid4().hex}.sqlite"
-)
+_DESKTOP_STORE_PATH = _DESKTOP_STORE_ROOT / (f"desktop_state_{os.getpid()}_{uuid4().hex}.sqlite")
 os.environ.setdefault(
     "MEDIMAGE_DESKTOP_STORE_PATH",
     str(_DESKTOP_STORE_PATH),
 )
+# Historical dashboard/API fixtures intentionally exercise the deterministic
+# demo dataset. Production startup remains empty unless this explicit test-only
+# opt-in is set.
+os.environ.setdefault("MEDIMAGE_DESKTOP_SEED_DEMO_DATA", "true")
 _CUPY_CACHE_ROOT = _DESKTOP_STORE_ROOT / f"cupy_cache_{os.getpid()}_{uuid4().hex}"
 _CUPY_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("CUPY_CACHE_DIR", str(_CUPY_CACHE_ROOT))

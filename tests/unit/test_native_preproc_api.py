@@ -22,7 +22,9 @@ def _store(tmp_path: Path) -> SQLiteDesktopStore:
         "project_dir": str(tmp_path),
         "rawdata_dir": str(tmp_path / "rawdata"),
     }
-    store.add_project(project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True)
+    store.add_project(
+        project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True
+    )
     return store
 
 
@@ -290,7 +292,9 @@ def test_native_full_dry_run_resolves_conversion_registry_inputs(tmp_path) -> No
         "preprocessing_conversion_run_id": "conv-native-001",
         "preprocessing_input_registry_path": str(registry_path),
     }
-    store.add_project(project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True)
+    store.add_project(
+        project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True
+    )
     app.dependency_overrides[get_project_store] = lambda: store
     client = TestClient(app)
 
@@ -309,8 +313,14 @@ def test_native_full_dry_run_resolves_conversion_registry_inputs(tmp_path) -> No
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "planned"
-    assert "Resolved native preprocessing BOLD input from conversion artifact registry." in payload["warnings"]
-    assert "Resolved native preprocessing sidecar input from conversion artifact registry." in payload["warnings"]
+    assert (
+        "Resolved native preprocessing BOLD input from conversion artifact registry."
+        in payload["warnings"]
+    )
+    assert (
+        "Resolved native preprocessing sidecar input from conversion artifact registry."
+        in payload["warnings"]
+    )
 
 
 def test_native_full_dry_run_propagates_registered_bold_to_planned_stages(tmp_path) -> None:
@@ -350,7 +360,9 @@ def test_native_full_dry_run_propagates_registered_bold_to_planned_stages(tmp_pa
         "preprocessing_conversion_run_id": "conv-native-002",
         "preprocessing_input_registry_path": str(registry_path),
     }
-    store.add_project(project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True)
+    store.add_project(
+        project, health_status="Review", rawdata_dir=str(tmp_path / "rawdata"), overwrite=True
+    )
     app.dependency_overrides[get_project_store] = lambda: store
     client = TestClient(app)
 
@@ -368,9 +380,7 @@ def test_native_full_dry_run_propagates_registered_bold_to_planned_stages(tmp_pa
     assert response.status_code == 200
     payload = response.json()
     issues = [
-        issue
-        for stage in payload["stage_results"]
-        for issue in stage.get("blocking_issues", [])
+        issue for stage in payload["stage_results"] for issue in stage.get("blocking_issues", [])
     ]
     assert "Missing required input: bold_4d" not in issues
     assert "Missing required input: t" not in issues

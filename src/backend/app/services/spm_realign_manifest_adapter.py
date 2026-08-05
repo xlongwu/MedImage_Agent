@@ -16,15 +16,17 @@ from src.backend.app.schemas.desktop import (
     SpmRealignOutputManifestItem,
 )
 
-_REQUIRED_KINDS: frozenset[str] = frozenset({
-    "realigned_bold",
-    "mean_bold",
-    "motion_params",
-    "stdout_log",
-    "stderr_log",
-    "provenance_json",
-    "node_state_json",
-})
+_REQUIRED_KINDS: frozenset[str] = frozenset(
+    {
+        "realigned_bold",
+        "mean_bold",
+        "motion_params",
+        "stdout_log",
+        "stderr_log",
+        "provenance_json",
+        "node_state_json",
+    }
+)
 
 
 def predicted_output_to_manifest_item(
@@ -46,7 +48,7 @@ def predicted_output_to_manifest_item(
     # Compute relative_path
     relative_path: str | None = None
     if relative_to and path.startswith(relative_to):
-        rel = path[len(relative_to):].lstrip("/").lstrip("\\")
+        rel = path[len(relative_to) :].lstrip("/").lstrip("\\")
         if rel:
             relative_path = rel
 
@@ -77,9 +79,7 @@ def build_output_manifest_from_dry_run_input(
 
     items: list[SpmRealignOutputManifestItem] = []
     errors: list[str] = []
-    manifest_warnings: list[str] = list(
-        input_preview.get("warnings", [])[:20]
-    )
+    manifest_warnings: list[str] = list(input_preview.get("warnings", [])[:20])
 
     for pred in input_preview.get("predicted_outputs", [])[:50]:
         if not isinstance(pred, dict):
@@ -143,7 +143,7 @@ def build_provenance_preview_from_dry_run(
             if kind == "stderr_log" and stderr_log_path is None:
                 stderr_log_path = pp
 
-    env_status = dry_run.get("environment_status")
+    _env_status = dry_run.get("environment_status")
     all_warnings: list[str] = list(dry_run.get("warnings", [])[:20])
 
     return SpmRealignExecutionProvenance(

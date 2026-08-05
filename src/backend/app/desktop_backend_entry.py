@@ -1,16 +1,23 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import os
+import threading
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 import uvicorn
 
 DEFAULT_DESKTOP_HOST = "127.0.0.1"
 DEFAULT_DESKTOP_PORT = 8765
 APP_IMPORT_STRING = "src.backend.app.main:app"
+DESKTOP_PARENT_PID_ENV = "MEDIMAGE_DESKTOP_PARENT_PID"
+_STILL_ACTIVE = 259
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
 
 @dataclass(frozen=True)
@@ -22,6 +29,83 @@ class DesktopBackendConfig:
 
 def _is_windows_runtime() -> bool:
     return os.name == "nt"
+
+
+def _desktop_parent_pid() -> int | None:
+    """Return the Electron main-process PID supplied to the managed sidecar."""
+    raw = os.environ.get(DESKTOP_PARENT_PID_ENV, "").strip()
+    if not raw:
+        return None
+    try:
+        parent_pid = int(raw)
+    except ValueError:
+        return None
+    if parent_pid <= 0 or parent_pid == os.getpid():
+        return None
+    return parent_pid
+
+
+def _parent_process_is_alive(parent_pid: int) -> bool:
+    """Check the desktop parent without opening a broad process handle."""
+    if _is_windows_runtime():
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = (ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong)
+        kernel32.OpenProcess.restype = ctypes.c_void_p
+        kernel32.GetExitCodeProcess.argtypes = (ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong))
+        kernel32.GetExitCodeProcess.restype = ctypes.c_int
+        kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+        kernel32.CloseHandle.restype = ctypes.c_int
+
+        handle = kernel32.OpenProcess(
+            _PROCESS_QUERY_LIMITED_INFORMATION,
+            False,
+            parent_pid,
+        )
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == _STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(parent_pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _watch_parent_process(
+    parent_pid: int,
+    *,
+    poll_interval: float = 1.0,
+    is_alive: Callable[[int], bool] = _parent_process_is_alive,
+    exit_process: Callable[[int], object] = os._exit,
+) -> None:
+    """Exit a managed sidecar if its Electron owner disappears unexpectedly."""
+    while is_alive(parent_pid):
+        time.sleep(poll_interval)
+    exit_process(0)
+
+
+def start_parent_watchdog() -> threading.Thread | None:
+    """Start the parent watchdog only for Electron-managed backend processes."""
+    parent_pid = _desktop_parent_pid()
+    if parent_pid is None:
+        return None
+    watchdog = threading.Thread(
+        target=_watch_parent_process,
+        args=(parent_pid,),
+        name="medimage-desktop-parent-watchdog",
+        daemon=True,
+    )
+    watchdog.start()
+    return watchdog
 
 
 def ensure_packaged_windows_runtime_dirs() -> tuple[Path, ...]:
@@ -100,6 +184,7 @@ def parse_args(argv: Sequence[str] | None = None) -> DesktopBackendConfig:
 
 def run_backend(config: DesktopBackendConfig) -> None:
     ensure_packaged_windows_runtime_dirs()
+    start_parent_watchdog()
     os.environ.setdefault("MEDIMAGE_DESKTOP", "1")
     os.environ["MEDIMAGE_DESKTOP_BACKEND_HOST"] = config.host
     os.environ["MEDIMAGE_DESKTOP_BACKEND_PORT"] = str(config.port)

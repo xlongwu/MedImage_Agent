@@ -41,11 +41,45 @@ check("desktop dist wrapper exists", fs.existsSync(path.join(electronRoot, "buil
 check("main resolves PyInstaller sidecar", main.includes("medimage-backend.exe") && main.includes("resolveBackendCommand"));
 check("main can prepare backend payload sidecar", main.includes("medimage-backend.bin") && main.includes("copyFileSync"));
 check("main starts backend sidecar", main.includes("spawn(backend.command, backend.args"));
+check(
+  "main binds the sidecar lifecycle to the Electron parent",
+  main.includes('MEDIMAGE_DESKTOP_PARENT_PID: String(process.pid)')
+);
 check("main chooses available localhost port", main.includes("findAvailablePort") && main.includes("net.createServer"));
 check("main probes /api/health before UI", main.includes('HEALTH_PATH = "/api/health"') && main.includes("waitForBackend"));
+check(
+  "main verifies a challenge-response proof from the sidecar health endpoint",
+  main.includes("MEDIMAGE_DESKTOP_SESSION_TOKEN") &&
+    main.includes("X-MedImage-Desktop-Health-Nonce") &&
+    main.includes("timingSafeEqual")
+);
+check(
+  "main allows packaged backend cold starts to exceed 30 seconds",
+  main.includes("DEFAULT_BACKEND_STARTUP_TIMEOUT_MS = 120_000") &&
+    main.includes("MEDIMAGE_DESKTOP_BACKEND_STARTUP_TIMEOUT_MS") &&
+    main.includes("Date.now() < deadline")
+);
 check("main injects runtime backend URL", main.includes("MEDIMAGE_DESKTOP_API_BASE_URL") && main.includes("syncRuntimeEnv"));
 check("main loads local static frontend", main.includes("loadFile(frontendIndex)") && main.includes("src\", \"frontend\", \"dist"));
 check("main stops managed backend on quit", main.includes("backendProcess.kill()") && main.includes('app.on("before-quit"'));
+check(
+  "main enforces one desktop instance",
+  main.includes("requestSingleInstanceLock") &&
+    main.includes('app.on("second-instance"') &&
+    main.includes("mainWindow.focus()")
+);
+check(
+  "main deploys backend payload into a versioned directory",
+  main.includes("payloadKey") &&
+    main.includes("app.getVersion()") &&
+    main.includes("deferred stale sidecar cleanup") &&
+    !main.includes("fs.rmSync(destinationDir")
+);
+check(
+  "main cleans managed backend after startup failure",
+  main.includes("createWindow().catch((error) => {") &&
+    main.includes("stopBackend();")
+);
 check("main supports hidden smoke run", main.includes("MEDIMAGE_DESKTOP_SMOKE") && main.includes("MEDIMAGE_DESKTOP_SMOKE_RESULT"));
 check(
   "main verifies the mounted React renderer during smoke",
@@ -53,6 +87,11 @@ check(
     main.includes("reactRootChildCount") &&
     main.includes("mainLandmarkPresent") &&
     main.includes("rendererConsoleErrors")
+);
+check(
+  "main verifies renderer-to-backend HTTP integration during smoke",
+  main.includes("rendererBackendHealthOk") &&
+    main.includes('fetch(backendBaseUrl + "/api/health")')
 );
 check("main denies new windows", main.includes("setWindowOpenHandler") && main.includes('action: "deny"'));
 check("main restricts dev URLs to localhost", main.includes("isAllowedDevUrl") && main.includes("127.0.0.1"));

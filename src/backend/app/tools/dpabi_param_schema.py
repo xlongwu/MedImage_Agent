@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_PARAMS = {
     "basic": {
         "tr": 2.0,

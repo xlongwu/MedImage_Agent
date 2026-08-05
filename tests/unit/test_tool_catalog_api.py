@@ -38,9 +38,19 @@ def test_catalog_items_non_empty():
 def test_catalog_items_have_required_fields():
     resp = client.get("/api/tools/catalog")
     data = resp.json()
-    required = ["id", "name", "backend", "parallel_level", "description",
-                "requires_approval", "manual_required", "risk_level",
-                "inputs", "outputs", "tags"]
+    required = [
+        "id",
+        "name",
+        "backend",
+        "parallel_level",
+        "description",
+        "requires_approval",
+        "manual_required",
+        "risk_level",
+        "inputs",
+        "outputs",
+        "tags",
+    ]
     for item in data["items"]:
         for field in required:
             assert field in item, f"Item {item.get('id')} missing '{field}'"
@@ -75,6 +85,7 @@ def test_api_does_not_execute_runners():
 
 
 # ── Single-item endpoint ──
+
 
 def test_single_item_returns_200():
     resp = client.get("/api/tools/catalog/spm_realign_subject")

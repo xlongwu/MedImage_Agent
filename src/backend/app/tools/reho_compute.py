@@ -7,7 +7,6 @@ import numpy as np
 
 from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
-
 _REHO_TIE_KERNEL = None
 
 
@@ -17,7 +16,7 @@ def _cupy_tie_corrected_kcc_kernel(cp):
     if _REHO_TIE_KERNEL is not None:
         return _REHO_TIE_KERNEL
     _REHO_TIE_KERNEL = cp.RawKernel(
-        r'''
+        r"""
         extern "C" __global__
         void tie_corrected_kcc(const float* data, float* output,
                                const int voxel_count, const int judges, const int timepoints) {
@@ -74,7 +73,7 @@ def _cupy_tie_corrected_kcc_kernel(cp):
                                        - (double)judges * ties;
             output[voxel] = denominator != 0.0 ? (float)(numerator / denominator) : 0.0f;
         }
-        ''',
+        """,
         "tie_corrected_kcc",
     )
     return _REHO_TIE_KERNEL
@@ -107,15 +106,25 @@ def compute_reho_numpy(
     errors: list[str] = []
 
     if data_4d.ndim != 4:
-        return {"ok": False, "backend": "cpu-numpy", "reho": None,
-                "warnings": [], "errors": ["Data must be 4D."],
-                "runtime_seconds": 0.0}
+        return {
+            "ok": False,
+            "backend": "cpu-numpy",
+            "reho": None,
+            "warnings": [],
+            "errors": ["Data must be 4D."],
+            "runtime_seconds": 0.0,
+        }
 
     nx, ny, nz, nt = data_4d.shape
     if nt < 2:
-        return {"ok": False, "backend": "cpu-numpy", "reho": None,
-                "warnings": [], "errors": ["Need >= 2 timepoints."],
-                "runtime_seconds": 0.0}
+        return {
+            "ok": False,
+            "backend": "cpu-numpy",
+            "reho": None,
+            "warnings": [],
+            "errors": ["Need >= 2 timepoints."],
+            "runtime_seconds": 0.0,
+        }
 
     off = _offsets(neighborhood)
     reho_map = np.zeros((nx, ny, nz), dtype=np.float32)
@@ -205,7 +214,7 @@ def _tie_correction_numpy(vals: np.ndarray) -> float:
                 e += 1
             t_i = e - s
             if t_i > 1:
-                total += t_i ** 3 - t_i
+                total += t_i**3 - t_i
             s = e
     return total
 
@@ -231,12 +240,12 @@ def _kcc_numpy(tbv: np.ndarray) -> float:
     T, K = tbv.shape
     if T < 2 or K < 2:
         return 0.0
-    r = _rank_along_time_numpy(tbv)          # (T, K): rank of each timepoint per voxel
-    rs = np.sum(r, axis=1)                     # (T,): rank-sum per timepoint across K judges
-    rm = np.mean(rs)                            # mean rank-sum
+    r = _rank_along_time_numpy(tbv)  # (T, K): rank of each timepoint per voxel
+    rs = np.sum(r, axis=1)  # (T,): rank-sum per timepoint across K judges
+    rm = np.mean(rs)  # mean rank-sum
     num = 12.0 * np.sum((rs - rm) ** 2)
     tie_corr = _tie_correction_numpy(tbv)
-    den = K ** 2 * (T ** 3 - T) - K * tie_corr
+    den = K**2 * (T**3 - T) - K * tie_corr
     return float(num / den) if den != 0 else 0.0
 
 
@@ -255,15 +264,25 @@ def compute_reho_cupy(
     errors: list[str] = []
 
     if data_4d.ndim != 4:
-        return {"ok": False, "backend": "gpu-cupy", "reho": None,
-                "warnings": [], "errors": ["Data must be 4D."],
-                "runtime_seconds": 0.0}
+        return {
+            "ok": False,
+            "backend": "gpu-cupy",
+            "reho": None,
+            "warnings": [],
+            "errors": ["Data must be 4D."],
+            "runtime_seconds": 0.0,
+        }
 
     nx, ny, nz, nt = data_4d.shape
     if nt < 2:
-        return {"ok": False, "backend": "gpu-cupy", "reho": None,
-                "warnings": [], "errors": ["Need >= 2 timepoints."],
-                "runtime_seconds": 0.0}
+        return {
+            "ok": False,
+            "backend": "gpu-cupy",
+            "reho": None,
+            "warnings": [],
+            "errors": ["Need >= 2 timepoints."],
+            "runtime_seconds": 0.0,
+        }
 
     off = _offsets(neighborhood)
     K = len(off)
@@ -273,9 +292,14 @@ def compute_reho_cupy(
         data_gpu = cp.asarray(data_4d, dtype=cp.float32)
     except Exception as exc:
         errors.append(f"Failed to transfer data to GPU: {exc}")
-        return {"ok": False, "backend": "gpu-cupy", "reho": None,
-                "warnings": warnings, "errors": errors,
-                "runtime_seconds": time.perf_counter() - t_start}
+        return {
+            "ok": False,
+            "backend": "gpu-cupy",
+            "reho": None,
+            "warnings": warnings,
+            "errors": errors,
+            "runtime_seconds": time.perf_counter() - t_start,
+        }
 
     reho_gpu = cp.zeros((nx, ny, nz), dtype=cp.float32)
     gm_gpu = cp.asarray(gm_mask, dtype=cp.bool_) if gm_mask is not None else None
@@ -283,8 +307,8 @@ def compute_reho_cupy(
     sc_total = 0
 
     # Build offset index arrays (shared across all chunks)
-    dy_off = cp.array([o[1] for o in off], dtype=cp.int32)
-    dz_off = cp.array([o[2] for o in off], dtype=cp.int32)
+    _dy_off = cp.array([o[1] for o in off], dtype=cp.int32)
+    _dz_off = cp.array([o[2] for o in off], dtype=cp.int32)
 
     for z_start in range(1, nz - 1, z_chunk_size):
         z_end = min(z_start + z_chunk_size, nz - 1)
@@ -338,7 +362,9 @@ def compute_reho_cupy(
             kcc = cp.where(gm_flat, kcc, 0.0)
             sc_total += int(cp.count_nonzero(~gm_flat))
         else:
-            sc_total += int(cp.count_nonzero(~cp.isfinite(neighbor_data.reshape(nv, -1)).all(axis=1)))
+            sc_total += int(
+                cp.count_nonzero(~cp.isfinite(neighbor_data.reshape(nv, -1)).all(axis=1))
+            )
 
         vc_total += int(cp.count_nonzero(kcc != 0))
 
@@ -382,14 +408,18 @@ def compute_reho_backend(
     if prefer_gpu or require_gpu:
         try:
             import cupy as cp  # noqa: F401
+
             gpu_available = True
         except ImportError:
             pass
 
     if require_gpu and not gpu_available:
         return {
-            "ok": False, "backend": "none",
-            "reho": None, "valid_voxel_count": 0, "skipped_voxel_count": 0,
+            "ok": False,
+            "backend": "none",
+            "reho": None,
+            "valid_voxel_count": 0,
+            "skipped_voxel_count": 0,
             "warnings": [],
             "errors": ["require_gpu=True but CuPy is not available."],
             "runtime_seconds": 0.0,
@@ -421,5 +451,7 @@ def compute_reho_backend(
 
     cpu_result = compute_reho_numpy(data_4d, neighborhood, gm_mask)
     if gpu_available:
-        cpu_result.setdefault("warnings", []).append("ReHo GPU computation failed; using CPU canonical path.")
+        cpu_result.setdefault("warnings", []).append(
+            "ReHo GPU computation failed; using CPU canonical path."
+        )
     return cpu_result

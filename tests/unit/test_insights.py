@@ -9,11 +9,27 @@ from src.backend.app.tools.insights import build_insights
 def test_insights_generates_from_session_db(tmp_path: Path):
     db_path = tmp_path / "test.sqlite"
     db = SessionDB(str(db_path))
-    db.upsert_run({"run_id": "r1", "pipeline_id": "p1", "status": "SUCCESS", "duration_seconds": 120.0})
-    db.upsert_run({"run_id": "r2", "pipeline_id": "p1", "status": "FAILED", "duration_seconds": 45.0})
-    db.insert_node({"run_id": "r1", "node_id": "motion_qc", "ok": True, "status": "SUCCESS", "duration_seconds": 5.0})
-    db.insert_node({"run_id": "r2", "node_id": "normalize", "ok": False, "status": "FAILED", "errors": ["err"]})
-    db.insert_error({"run_id": "r2", "node_id": "normalize", "category": "SPM_ERROR", "message": "fail"})
+    db.upsert_run(
+        {"run_id": "r1", "pipeline_id": "p1", "status": "SUCCESS", "duration_seconds": 120.0}
+    )
+    db.upsert_run(
+        {"run_id": "r2", "pipeline_id": "p1", "status": "FAILED", "duration_seconds": 45.0}
+    )
+    db.insert_node(
+        {
+            "run_id": "r1",
+            "node_id": "motion_qc",
+            "ok": True,
+            "status": "SUCCESS",
+            "duration_seconds": 5.0,
+        }
+    )
+    db.insert_node(
+        {"run_id": "r2", "node_id": "normalize", "ok": False, "status": "FAILED", "errors": ["err"]}
+    )
+    db.insert_error(
+        {"run_id": "r2", "node_id": "normalize", "category": "SPM_ERROR", "message": "fail"}
+    )
     db.close()
 
     report_dir = str(tmp_path / "reports" / "insights")

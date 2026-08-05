@@ -33,7 +33,7 @@ class ToolExecutionContext:
         cls,
         ticket: ExecutionTicket,
         ticket_service: ExecutionTicketService,
-    ) -> "ToolExecutionContext":
+    ) -> ToolExecutionContext:
         return cls(
             project_id=ticket.project_id,
             reviewed_plan_id=ticket.reviewed_plan_id,

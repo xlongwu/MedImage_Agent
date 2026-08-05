@@ -6,11 +6,12 @@ import os
 from pathlib import Path
 
 import pytest
+
 from src.backend.app.config import ProjectSettings
 from src.backend.app.config.settings import RuntimeSettings, SafetySettings, ThirdPartySettings
 
-
 # ── Helpers ──
+
 
 def _write_yaml(path: Path, content: str) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -19,6 +20,7 @@ def _write_yaml(path: Path, content: str) -> Path:
 
 
 # ── Happy path: load from real YAML files ──
+
 
 def test_load_from_dataset_yaml():
     """Load from the full project_config_dataset.yaml and verify all fields."""
@@ -64,6 +66,7 @@ def test_load_from_mvp_yaml():
 
 
 # ── Error handling ──
+
 
 def test_file_not_found():
     with pytest.raises(FileNotFoundError, match="Project config file not found"):
@@ -126,6 +129,7 @@ def test_missing_critical_dpabi_dir(tmp_path):
 
 # ── Default values for optional fields ──
 
+
 def test_defaults_minimal_yaml(tmp_path):
     """Only critical fields present — all optional fields use safe defaults."""
     p = _write_yaml(
@@ -177,6 +181,7 @@ def test_safety_require_confirmation_compat(tmp_path):
 
 # ── Source path ──
 
+
 def test_source_path_recorded(tmp_path):
     p = _write_yaml(
         tmp_path / "src.yaml",
@@ -188,6 +193,7 @@ def test_source_path_recorded(tmp_path):
 
 
 # ── No side effects ──
+
 
 def test_does_not_write_files(tmp_path):
     """Loading config must not create or modify any files."""
@@ -215,6 +221,7 @@ def test_does_not_write_files(tmp_path):
 
 
 # ── Integration: check with the real repo files ──
+
 
 def test_load_from_repo_configs():
     """Both real config files load without error."""

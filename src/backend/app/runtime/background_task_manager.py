@@ -4,18 +4,18 @@ from __future__ import annotations
 import json
 import traceback
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable
-
+from typing import Any
 
 _executor = ThreadPoolExecutor(max_workers=2)
 _tasks: dict[str, dict[str, Any]] = {}
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _write_status(path: Path, record: dict[str, Any]) -> None:
@@ -36,7 +36,7 @@ def _read_status(path: Path) -> dict[str, Any] | None:
         return None
     try:
         raw = path.read_text(encoding="utf-8").strip()
-    except IOError:
+    except OSError:
         return None
     if not raw:
         return None

@@ -15,11 +15,9 @@ Rules enforced:
 from __future__ import annotations
 
 import ast
-import json
 import os
 import re
 from pathlib import Path
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -49,6 +47,7 @@ def _safe_parse_python(filepath: Path) -> ast.Module | None:
 
 
 # ── 1. Duplicate Node ID Detection ──────────────────────────────────────────
+
 
 def test_node_registry_no_duplicate_ids():
     """Every registered node must have a unique node_id."""
@@ -84,6 +83,7 @@ def test_node_registry_no_duplicate_ids():
 
 # ── 2. Forbidden Tracked Artifacts ──────────────────────────────────────────
 
+
 def test_no_large_binary_tracked_in_src():
     """src/ directory must not contain tracked large binaries (> 1 MB)."""
     # This test only runs if the repo has a .git directory
@@ -103,12 +103,12 @@ def test_no_large_binary_tracked_in_src():
                     large.append(f"{fpath} ({size} bytes)")
     limit = 20  # Allow up to 20 large binaries (desktop packaging artifacts)
     assert len(large) <= limit, (
-        f"Too many large binaries in src/: {len(large)} (limit {limit}). "
-        f"First 5: {large[:5]}"
+        f"Too many large binaries in src/: {len(large)} (limit {limit}). First 5: {large[:5]}"
     )
 
 
 # ── 3. Referenced Stable Documents Exist ────────────────────────────────────
+
 
 def test_all_referenced_documents_exist():
     """Documents referenced in PROJECT_STATE.md and AGENTS.md must exist."""
@@ -127,6 +127,7 @@ def test_all_referenced_documents_exist():
 
 # ── 4. Version Consistency ──────────────────────────────────────────────────
 
+
 def test_version_consistency_across_surfaces():
     """All package version surfaces match the authoritative APP_VERSION."""
     from src.backend.app.version import APP_VERSION
@@ -137,9 +138,7 @@ def test_version_consistency_across_surfaces():
         "pyproject.toml": _read_version_file("pyproject.toml"),
     }
     for path, ver in surfaces.items():
-        assert ver == APP_VERSION, (
-            f"Version mismatch: {path} = {ver}, expected {APP_VERSION}"
-        )
+        assert ver == APP_VERSION, f"Version mismatch: {path} = {ver}, expected {APP_VERSION}"
 
     # README badge versions should match (shield.io uses -- for -rc suffix)
     for readme in ("README.md", "README_CN.md"):
@@ -148,12 +147,12 @@ def test_version_consistency_across_surfaces():
         if badge:
             badge_ver = badge.group(1).replace("--", "-")
             assert badge_ver == APP_VERSION, (
-                f"README badge version mismatch in {readme}: "
-                f"{badge_ver} != {APP_VERSION}"
+                f"README badge version mismatch in {readme}: {badge_ver} != {APP_VERSION}"
             )
 
 
 # ── 5. agent_routes.py Import Hygiene ────────────────────────────────────────
+
 
 def test_agent_routes_has_no_dead_domain_imports():
     """agent_routes.py must not import models/tools from unrelated domains."""
@@ -167,7 +166,7 @@ def test_agent_routes_has_no_dead_domain_imports():
     # Collect all imported names
     all_imports: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
+        if isinstance(node, ast.Import | ast.ImportFrom):
             for alias in node.names:
                 name = alias.asname or alias.name
                 all_imports.add(name)
@@ -195,6 +194,7 @@ def test_agent_routes_has_no_dead_domain_imports():
 
 # ── 6. Compliance Debt Budget (Tier 2) ──────────────────────────────────────
 
+
 def test_compliance_debt_budget_not_growing():
     """Historical compliance debt must not increase beyond documented baseline.
 
@@ -202,13 +202,13 @@ def test_compliance_debt_budget_not_growing():
     new debt was introduced without a corresponding ADR update.
     """
     # Budgets reflect the ADR-001 baseline (2026-06-20)
-    BUDGET_MOCK_STORE_FILES = 45   # route + service files with mock_store import
+    BUDGET_MOCK_STORE_FILES = 45  # route + service files with mock_store import
     BUDGET_WRITE_TEXT_FILES = 101  # files using write_text(json.dumps(...))
 
     mock_count = 0
     write_text_count = 0
 
-    for root, dirs, files in os.walk(ROOT / "src"):
+    for root, _dirs, files in os.walk(ROOT / "src"):
         if "__pycache__" in root:
             continue
         for f in files:
@@ -221,7 +221,7 @@ def test_compliance_debt_budget_not_growing():
                 continue
             if "from src.backend.app.services.mock_store import mock_store" in text:
                 mock_count += 1
-            if 'write_text(' in text and 'json.dumps(' in text:
+            if "write_text(" in text and "json.dumps(" in text:
                 write_text_count += 1
 
     assert mock_count <= BUDGET_MOCK_STORE_FILES + 5, (

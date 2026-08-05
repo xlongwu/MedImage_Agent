@@ -7,7 +7,9 @@ import pytest
 
 nib = pytest.importorskip("nibabel")
 
-from src.backend.app.native_preproc.stages.temporal_filtering import run_temporal_filtering
+from src.backend.app.native_preproc.stages.temporal_filtering import (  # noqa: E402
+    run_temporal_filtering,  # noqa: E402
+)
 
 
 def _save_bold(path: Path, data: np.ndarray) -> Path:

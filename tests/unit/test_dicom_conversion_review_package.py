@@ -10,8 +10,6 @@ import json
 import zipfile
 from pathlib import Path
 
-import pytest
-
 
 def _make_persisted_package(tmp_path: Path, project_id: str = "test") -> tuple[str, str]:
     """Create a fake persisted review package and return (project_dir, conversion_run_id)."""
@@ -47,10 +45,13 @@ def test_read_package_returns_all_files(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = read_conversion_review_package("test", run_id, project_dir=project_dir)
     assert result.ok is True
-    assert len(result.files) == 17  # 12 recent + 5 Phase 4J-1 (checksum_after, checksum_comparison, rollback_result, audit_start, audit_final)
+    assert (
+        len(result.files) == 17
+    )  # 12 recent + 5 Phase 4J-1 (checksum_after, checksum_comparison, rollback_result, audit_start, audit_final)
     kinds = {f.kind for f in result.files}
     assert "approval_record" in kinds
     assert "readme" in kinds
@@ -60,6 +61,7 @@ def test_read_package_missing_project_dir(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     result = read_conversion_review_package("test", "any", project_dir="")
     assert result.ok is False
 
@@ -68,10 +70,14 @@ def test_read_package_refuses_rawdata_path(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     # Pretend rawdata_dir overlaps — our path safety checks this
     result = read_conversion_review_package(
-        "test", run_id, project_dir=project_dir, rawdata_dir=project_dir,
+        "test",
+        run_id,
+        project_dir=project_dir,
+        rawdata_dir=project_dir,
     )
     assert result.ok is False
 
@@ -80,6 +86,7 @@ def test_read_package_approval_summary(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = read_conversion_review_package("test", run_id, project_dir=project_dir)
     assert result.approval_summary.get("status") == "approved"
@@ -89,6 +96,7 @@ def test_read_package_mapping_count(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = read_conversion_review_package("test", run_id, project_dir=project_dir)
     assert result.mapping_count == 1
@@ -104,6 +112,7 @@ def test_export_contains_metadata_files(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     assert result.ok is True
@@ -117,6 +126,7 @@ def test_export_contains_sha256sums(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     with zipfile.ZipFile(result.export_path) as zf:
@@ -128,6 +138,7 @@ def test_export_uses_relative_paths(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     with zipfile.ZipFile(result.export_path) as zf:
@@ -142,6 +153,7 @@ def test_export_excludes_dcm_files(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     # Plant a fake .dcm file in the run dir
     (Path(project_dir) / "conversion_runs" / run_id / "fake.dcm").write_text("FAKE")
@@ -155,6 +167,7 @@ def test_export_excludes_nifti_files(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     (Path(project_dir) / "conversion_runs" / run_id / "fake.nii").write_text("FAKE")
     (Path(project_dir) / "conversion_runs" / run_id / "fake.nii.gz").write_text("FAKE")
@@ -169,6 +182,7 @@ def test_export_stays_under_project_dir(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     assert result.export_path.startswith(project_dir)
@@ -176,10 +190,12 @@ def test_export_stays_under_project_dir(tmp_path):
 
 def test_export_does_not_call_dcm2niix(tmp_path):
     """Export must not import or call subprocess."""
+    import inspect
+
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
-    import inspect
+
     source = inspect.getsource(export_conversion_review_package)
     assert "import subprocess" not in source
     assert "shell=True" not in source
@@ -189,6 +205,7 @@ def test_export_safety_flags(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     project_dir, run_id = _make_persisted_package(tmp_path)
     result = export_conversion_review_package("test", run_id, project_dir=project_dir)
     assert result.safety_flags["metadata_only"] is True
@@ -207,8 +224,11 @@ def test_read_missing_package_returns_ok_false(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
     )
+
     result = read_conversion_review_package(
-        "test", "nonexistent", project_dir=str(tmp_path / "project"),
+        "test",
+        "nonexistent",
+        project_dir=str(tmp_path / "project"),
     )
     assert result.ok is False
 
@@ -217,7 +237,10 @@ def test_export_missing_package_returns_ok_false(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         export_conversion_review_package,
     )
+
     result = export_conversion_review_package(
-        "test", "nonexistent", project_dir=str(tmp_path / "project"),
+        "test",
+        "nonexistent",
+        project_dir=str(tmp_path / "project"),
     )
     assert result.ok is False

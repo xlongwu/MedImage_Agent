@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.backend.app.runtime.agent_plan import _load_project_config
 from src.backend.app.runtime.node_registry import (
     NodeExecutionContext,
     get_node_runner,
@@ -18,7 +17,6 @@ from src.backend.app.runtime.state_store import (
     now_iso,
     write_node_state,
 )
-
 
 EXECUTABLE_ACTIONS = {"RERUN_ENVIRONMENT_CHECK", "SAFE_RETRY"}
 ALLOWLISTED_RETRY_NODES = {

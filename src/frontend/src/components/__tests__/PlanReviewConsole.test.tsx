@@ -3,9 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ProjectDetail } from "../../lib/types/project";
+import type { PresetPlanDraft } from "../../types";
 import PlanReviewConsole from "../PlanReviewConsole";
 import {
   checkApprovalGate,
+  executeReviewedDryRun,
+  executeReviewedPlan,
   fetchToolCatalog,
   generatePlanFromGoal,
   listProjectReviewedPlans,
@@ -44,13 +47,14 @@ const project: ProjectDetail = {
   },
 };
 
-function renderConsole() {
+function renderConsole(initialPresetDraft: PresetPlanDraft | null = null) {
   render(
     <PlanReviewConsole
       selectedProjectId="project-1"
       selectedProject={project}
       projectConfigPath="work/projects/demo/project_config.yaml"
       rawdataDir="work/projects/demo/rawdata"
+      initialPresetDraft={initialPresetDraft}
     />,
   );
 }
@@ -66,6 +70,173 @@ describe("PlanReviewConsole", () => {
     vi.mocked(generatePlanFromGoal).mockReset();
     vi.mocked(saveReviewedPlan).mockReset();
     vi.mocked(checkApprovalGate).mockReset();
+    vi.mocked(executeReviewedDryRun).mockReset();
+    vi.mocked(executeReviewedPlan).mockReset();
+  });
+
+  it("keeps a restored reviewed-plan ID through dry-run so execution can be confirmed", async () => {
+    const user = userEvent.setup();
+    const reviewedDraft: PresetPlanDraft = {
+      preset_id: "reviewed:reviewed-plan-1",
+      project_id: "project-1",
+      goal: "inspect registered data",
+      plan: {
+        pipeline_id: "data_inspection",
+        project_context: { project_id: "project-1" },
+        goal: "inspect registered data",
+        nodes: [{ id: "data_inspection", backend: "python", params: {}, depends_on: [] }],
+        metadata: {
+          provider: "persisted",
+          external_api_used: false,
+          execution_enabled: true,
+        },
+      },
+      validation: { ok: true, errors: [] },
+      warnings: [],
+      source: "reviewed_plan",
+      reviewed_plan_id: "reviewed-plan-1",
+      plan_hash: "reviewed-plan-hash",
+      goal_contract_status: "reviewed",
+    };
+    vi.mocked(executeReviewedDryRun).mockResolvedValue({
+      ok: true,
+      status: "DRY_RUN_OK",
+      dry_run: true,
+      reviewed_plan_id: "reviewed-plan-1",
+      execution: {
+        executor_called: false,
+        submitted: false,
+        run_id: null,
+      },
+    });
+    vi.mocked(executeReviewedPlan).mockResolvedValue({
+      ok: true,
+      status: "EXECUTION_SUBMITTED",
+      dry_run: false,
+      reviewed_plan_id: "reviewed-plan-1",
+      execution: {
+        executor_called: true,
+        submitted: true,
+        run_id: "run-1",
+      },
+    });
+
+    renderConsole(reviewedDraft);
+
+    await user.click(await screen.findByRole("button", { name: "Dry-run Execution Check" }));
+    await screen.findByText(/Dry-run passed/i);
+
+    await user.click(
+      screen.getByLabelText(/request backend gated execution for the reviewed plan/i),
+    );
+    const executeButton = screen.getByRole("button", { name: "Execute Reviewed Plan" });
+    expect(executeButton).toBeEnabled();
+
+    await user.click(executeButton);
+    await waitFor(() => expect(executeReviewedPlan).toHaveBeenCalledTimes(1));
+    expect(executeReviewedDryRun).toHaveBeenCalledWith(
+      "http://localhost",
+      expect.objectContaining({ reviewed_plan_id: "reviewed-plan-1" }),
+    );
+    expect(executeReviewedPlan).toHaveBeenCalledWith(
+      "http://localhost",
+      expect.objectContaining({ reviewed_plan_id: "reviewed-plan-1" }),
+    );
+  });
+
+  it("requires explicit Goal Contract review before a restored plan can reach dry-run", async () => {
+    const user = userEvent.setup();
+    const candidate = {
+      goal_text: "inspect registered data",
+      goal_kind: "reviewed_execution_boundary",
+      scope: { subject_ids: ["sub-001"], completeness_required: true },
+      criteria: [
+        {
+          criterion_id: "terminal",
+          criterion_type: "pipeline_terminal",
+          target: "pipeline",
+          required_evidence: ["pipeline_summary"],
+          expected: { statuses: ["SUCCESS", "COMPLETED"] },
+          failure_semantics: "indeterminate_if_source_incomplete",
+        },
+      ],
+      minimum_capability_level: "computed",
+      builder_source: "deterministic_goal_contract_builder",
+    };
+    const reviewedDraft: PresetPlanDraft = {
+      preset_id: "reviewed:needs-goal-review",
+      project_id: "project-1",
+      goal: "inspect registered data",
+      plan: {
+        pipeline_id: "data_inspection",
+        project_context: { project_id: "project-1" },
+        goal: "inspect registered data",
+        nodes: [{ id: "data_inspection", backend: "python", params: {}, depends_on: [] }],
+        metadata: {
+          provider: "persisted",
+          external_api_used: false,
+          execution_enabled: true,
+        },
+      },
+      validation: { ok: true, errors: [] },
+      warnings: [],
+      source: "reviewed_plan",
+      reviewed_plan_id: "needs-goal-review",
+      plan_hash: "unreviewed-hash",
+      goal_contract_candidate: candidate,
+      goal_contract_status: "needs_goal_review",
+    };
+    vi.mocked(saveReviewedPlan).mockResolvedValue({
+      ok: true,
+      reviewed_plan: {
+        reviewed_plan_id: "reviewed-with-goal-contract",
+        project_id: "project-1",
+        project_config_path: "work/projects/demo/project_config.yaml",
+        dataset_index_path: null,
+        rawdata_dir: "work/projects/demo/rawdata",
+        plan_hash: "reviewed-hash",
+        plan_path: null,
+        status: "REVIEWED",
+        created_at: "2026-07-25T00:00:00Z",
+        updated_at: "2026-07-25T00:00:00Z",
+        approval_status: "not_requested",
+        execution_status: "not_started",
+        last_audit_id: null,
+        last_execution_id: null,
+        warnings: [],
+        payload: {
+          goal: "inspect registered data",
+          goal_contract_status: "reviewed",
+          goal_contract: { ...candidate, reviewed_actor: "frontend-user" },
+        },
+      },
+    });
+
+    renderConsole(reviewedDraft);
+
+    expect(
+      await screen.findByRole("heading", { name: "Goal Contract Review" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/\"goal_text\": \"inspect registered data\"/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review Goal Contract and Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Dry-run Execution Check" })).toBeDisabled();
+
+    await user.click(
+      screen.getByLabelText(/I reviewed the Goal Contract goal, scope, criteria, and limitations/i),
+    );
+    await user.click(screen.getByRole("button", { name: "Review Goal Contract and Save" }));
+
+    await waitFor(() => expect(saveReviewedPlan).toHaveBeenCalledTimes(1));
+    expect(saveReviewedPlan).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+      expect.objectContaining({
+        goal_contract_candidate: candidate,
+        reviewed_actor: "frontend-user",
+      }),
+    );
+    expect(await screen.findByText("Goal Contract reviewed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Dry-run Execution Check" })).toBeEnabled();
   });
 
   it("does not persist generated plans missing reviewed-plan fields", async () => {

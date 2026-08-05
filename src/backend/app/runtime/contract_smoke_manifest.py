@@ -18,11 +18,10 @@ from src.backend.app.schemas.execution_manifest import (
     build_output_manifest,
 )
 from src.backend.app.schemas.execution_state import (
-    is_node_reuse_eligible,
     is_node_retry_eligible,
+    is_node_reuse_eligible,
     is_node_terminal,
 )
-
 
 _MANIFEST_FILENAME = "contract_smoke_output_manifest.json"
 _PROVENANCE_FILENAME = "contract_smoke_execution_provenance.json"

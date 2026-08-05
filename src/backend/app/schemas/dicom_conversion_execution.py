@@ -15,11 +15,10 @@ Reference:
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath, PureWindowsPath
-from typing import Any, Literal, Mapping
+from collections.abc import Mapping
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Literal type aliases

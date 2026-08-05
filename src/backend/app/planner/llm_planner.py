@@ -11,12 +11,12 @@ keeping the same Planner → Validator → Response pipeline.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.backend.app.planner.plan_validator import validate_plan
 from src.backend.app.planner.goal_contract_builder import build_goal_contract_semantics
-
+from src.backend.app.planner.plan_validator import validate_plan
 
 # ── Dataclasses ──────────────────────────────────────────────────────────────
 
@@ -94,6 +94,78 @@ _NATIVE_FULL_CONFIRMATIONS: dict[str, bool] = {
     "confirm_no_external_tools": True,
     "confirm_research_use_only": True,
     "confirm_no_clinical_use": True,
+}
+
+_PLAN_ONLY_TERMS = (
+    "plan only",
+    "planning only",
+    "do not execute",
+    "don't execute",
+    "no execution",
+    "no computation",
+    "without execution",
+    "仅生成计划",
+    "只生成计划",
+    "仅生成方案",
+    "只生成方案",
+    "不执行任何计算",
+    "不执行计算",
+    "不运行任何计算",
+)
+
+_PREPROCESSING_PLAN_TERMS = (
+    "bids",
+    "rs-fmri",
+    "resting-state",
+    "preprocessing",
+    "preprocess",
+    "静息态",
+    "预处理",
+)
+
+_BIDS_SUBJECT_RE = re.compile(r"(?<![A-Za-z0-9])sub[-_]?([A-Za-z0-9]+)", re.IGNORECASE)
+_SINGLE_SUBJECT_TERMS = (
+    "single subject",
+    "one subject",
+    "select 1 subject",
+    "选择 1 名",
+    "选择1名",
+    "选择一名",
+    "仅对一名",
+    "只对一名",
+)
+_MINIMAL_PREPROCESSING_TERMS = (
+    "minimal preprocessing",
+    "minimum preprocessing",
+    "minimal rs-fmri",
+    "最小预处理",
+    "最小化预处理",
+)
+_MINIMAL_RSFMRI_STAGE_OVERRIDES: dict[str, bool] = {
+    "dicom_to_nifti": False,
+    "input_validation": True,
+    "bids_sidecar_validation": True,
+    "dummy_scan_removal": False,
+    "slice_timing": False,
+    "realignment": True,
+    "motion_qc": True,
+    "coregistration": False,
+    "segmentation": False,
+    "normalization": False,
+    "smoothing": False,
+    "nuisance_regression": True,
+    "detrending": True,
+    "temporal_filtering": True,
+    "alff": False,
+    "falff": False,
+    "reho": False,
+    "atlas_resampling": False,
+    "roi_timeseries": False,
+    "functional_connectivity": False,
+    "subject_qc": True,
+    "group_summary": False,
+    "validation_report": True,
+    "final_report": True,
 }
 
 # Each entry: set of trigger keywords → (pipeline_id, list of node ids)
@@ -207,6 +279,7 @@ def _build_plan(
     for i in range(1, len(nodes)):
         nodes[i]["depends_on"] = [nodes[i - 1]["id"]]
 
+    is_rule_based = provider == "rule_based"
     return {
         "pipeline_id": pipeline_id,
         "project_context": {
@@ -214,13 +287,13 @@ def _build_plan(
             "project_config_path": None,
             "rawdata_dir": None,
             "dataset_index_path": None,
-            "source": "planner_minimal_mock",
+            "source": "planner_rule_based_policy" if is_rule_based else "planner_minimal_mock",
             "diagnostics": {},
         },
         "goal": goal,
         "nodes": nodes,
         "metadata": {
-            "planner": "deterministic_keyword_mock",
+            "planner": "deterministic_stage_policy" if is_rule_based else "deterministic_keyword_mock",
             "provider": provider,
             "capability_level": "metadata_only",
             "external_api_used": False,
@@ -259,6 +332,17 @@ def _has_registered_nifti_evidence(context: dict[str, Any]) -> bool:
         return False
 
 
+def _has_prepared_conversion_evidence(context: dict[str, Any]) -> bool:
+    diagnostics = _diagnostics_from_context(context)
+    return bool(
+        diagnostics.get("agent_conversion_execution_ready") is True
+        and (
+            diagnostics.get("agent_conversion_run_id")
+            or diagnostics.get("conversion_run_id")
+        )
+    )
+
+
 def _matches_native_full_goal(goal_lower: str) -> bool:
     score = sum(1 for term in _NATIVE_FULL_GOAL_TERMS if term.lower() in goal_lower)
     has_preproc_intent = (
@@ -277,7 +361,100 @@ def _matches_native_full_goal(goal_lower: str) -> bool:
             "detrending",
         )
     )
-    return score >= 2 and (has_preproc_intent or has_downstream_intent)
+    has_explicit_execution_intent = any(
+        term in goal_lower
+        for term in (
+            "execute",
+            "run ",
+            "执行",
+            "运行",
+        )
+    )
+    has_registered_rsfmri_scope = any(
+        term in goal_lower
+        for term in (
+            "bids",
+            "registered",
+            "已登记",
+            "rs-fmri",
+            "静息态",
+        )
+    )
+    return (
+        score >= 2 and (has_preproc_intent or has_downstream_intent)
+    ) or (
+        has_explicit_execution_intent
+        and has_registered_rsfmri_scope
+        and has_preproc_intent
+    )
+
+
+def _matches_plan_only_preprocessing_goal(goal_lower: str) -> bool:
+    return any(term in goal_lower for term in _PLAN_ONLY_TERMS) and any(
+        term in goal_lower for term in _PREPROCESSING_PLAN_TERMS
+    )
+
+
+def _matches_native_reho_goal(goal_lower: str) -> bool:
+    return any(term in goal_lower for term in ("reho", "regional homogeneity")) and any(
+        term in goal_lower
+        for term in ("compute", "calculate", "execute", "run ", "计算", "执行", "生成")
+    )
+
+
+def _normalize_subject_id(value: object) -> str:
+    match = _BIDS_SUBJECT_RE.search(str(value or "").strip())
+    return f"sub-{match.group(1).lower()}" if match else ""
+
+
+def _subject_candidates(diagnostics: dict[str, Any]) -> list[str]:
+    raw = diagnostics.get("subject_candidates")
+    if not isinstance(raw, list):
+        return []
+    return sorted(
+        {
+            normalized
+            for item in raw
+            if (normalized := _normalize_subject_id(item))
+        }
+    )
+
+
+def _explicit_subject_id(goal: str) -> str:
+    return _normalize_subject_id(goal)
+
+
+def _requests_single_subject(goal_lower: str) -> bool:
+    return any(term in goal_lower for term in _SINGLE_SUBJECT_TERMS)
+
+
+def _matches_minimal_preprocessing_goal(goal_lower: str) -> bool:
+    return any(term in goal_lower for term in _MINIMAL_PREPROCESSING_TERMS)
+
+
+def _build_plan_only_preprocessing_plan(*, goal: str, provider: str) -> dict[str, Any]:
+    plan = _build_plan(
+        "rsfmri_preproc_mvp",
+        [
+            "data_readiness_check",
+            "bids_validation_check",
+            "rsfmri_bold_reference_check",
+            "rsfmri_motion_qc_plan",
+            "rsfmri_preprocessing_plan_stub",
+            "rsfmri_report_plan_stub",
+        ],
+        goal=goal,
+        provider=provider,
+    )
+    plan["metadata"].update(
+        {
+            "plan_only": True,
+            "execution_enabled": False,
+            "execution_requires_approval_gate": False,
+            "rawdata_read_only": True,
+        }
+    )
+    return plan
 
 
 def _build_native_full_preprocessing_plan(
@@ -287,9 +464,27 @@ def _build_native_full_preprocessing_plan(
     project_context: dict[str, Any],
 ) -> dict[str, Any]:
     diagnostics = _diagnostics_from_context(project_context)
+    goal_lower = goal.lower()
+    candidates = _subject_candidates(diagnostics)
+    requested_subject = _explicit_subject_id(goal)
+    selected_subject = (
+        requested_subject
+        if requested_subject and (not candidates or requested_subject in candidates)
+        else ""
+    )
+    subject_selection_required = bool(
+        candidates
+        and not selected_subject
+        and (_requests_single_subject(goal_lower) or bool(requested_subject))
+    )
+    prepared_conversion_run_id = (
+        str(diagnostics.get("agent_conversion_run_id") or "")
+        if diagnostics.get("agent_conversion_execution_ready") is True
+        else ""
+    )
     conversion_run_id = str(
         diagnostics.get("preprocessing_conversion_run_id")
-        or diagnostics.get("conversion_run_id")
+        or prepared_conversion_run_id
         or ""
     )
     native_params: dict[str, Any] = {
@@ -299,6 +494,80 @@ def _build_native_full_preprocessing_plan(
         "confirmations": dict(_NATIVE_FULL_CONFIRMATIONS),
         "stage_overrides": {},
     }
+    if selected_subject:
+        native_params["subject_id"] = selected_subject
+    minimal_preprocessing = _matches_minimal_preprocessing_goal(goal_lower)
+    if minimal_preprocessing:
+        native_params["stage_overrides"] = dict(_MINIMAL_RSFMRI_STAGE_OVERRIDES)
+    registered_bids_dir = str(
+        diagnostics.get("preprocessing_input_dir")
+        or diagnostics.get("converted_bids_dir")
+        or project_context.get("rawdata_dir")
+        or ""
+    )
+    if registered_bids_dir:
+        native_params["input_bids_dir"] = registered_bids_dir
+    conversion_nodes: list[dict[str, Any]] = []
+    if prepared_conversion_run_id:
+        conversion_nodes.append(
+            {
+                "id": "native_dicom_conversion_execute",
+                "backend": "medimage-native",
+                "depends_on": [],
+                "params": {
+                    "project_id": str(project_context.get("project_id") or ""),
+                    "project_dir": str(diagnostics.get("project_dir") or ""),
+                    "rawdata_dir": str(
+                        diagnostics.get("rawdata_dir")
+                        or project_context.get("rawdata_dir")
+                        or ""
+                    ),
+                    "conversion_run_id": prepared_conversion_run_id,
+                    "output_dir": str(diagnostics.get("converted_bids_dir") or ""),
+                },
+            }
+        )
+    is_rule_based = provider == "rule_based"
+    metadata: dict[str, Any] = {
+        "planner": "deterministic_stage_policy" if is_rule_based else "deterministic_keyword_mock",
+        "provider": provider,
+        "capability_level": "computed",
+        "external_api_used": False,
+        "execution_enabled": False,
+        "execution_requires_approval_gate": True,
+        "native_preprocessing": True,
+        "native_dicom_conversion": bool(conversion_nodes),
+    }
+    if selected_subject:
+        metadata["subject_scope"] = [selected_subject]
+    if subject_selection_required:
+        metadata["science_decisions"] = {
+            "subject_selection_required": True,
+            "subject_candidates": candidates,
+            **(
+                {"requested_subject_id": requested_subject}
+                if requested_subject
+                else {}
+            ),
+        }
+    if minimal_preprocessing:
+        metadata.update(
+            {
+                "stage_profile": "minimal_rsfmri",
+                "required_preprocessing_stages": [
+                    "input_validation",
+                    "bids_sidecar_validation",
+                    "realignment",
+                    "motion_qc",
+                    "nuisance_regression",
+                    "detrending",
+                    "temporal_filtering",
+                    "subject_qc",
+                    "validation_report",
+                    "final_report",
+                ],
+            }
+        )
     return {
         "pipeline_id": "native_full_preprocessing",
         "project_context": {
@@ -306,28 +575,78 @@ def _build_native_full_preprocessing_plan(
             "project_config_path": None,
             "rawdata_dir": None,
             "dataset_index_path": None,
-            "source": "planner_minimal_mock",
+            "source": "planner_rule_based_policy" if is_rule_based else "planner_minimal_mock",
             "diagnostics": {},
         },
         "goal": goal,
         "nodes": [
+            *conversion_nodes,
             {
                 "id": "native_preproc_full_execute",
                 "backend": "native_python",
-                "depends_on": [],
+                "depends_on": ["native_dicom_conversion_execute"] if conversion_nodes else [],
                 "params": native_params,
             }
         ],
-        "metadata": {
-            "planner": "deterministic_keyword_mock",
-            "provider": provider,
-            "capability_level": "computed",
-            "external_api_used": False,
-            "execution_enabled": False,
-            "execution_requires_approval_gate": True,
-            "native_preprocessing": True,
-        },
+        "metadata": metadata,
     }
+
+
+def _build_native_reho_plan(
+    *,
+    goal: str,
+    provider: str,
+    project_context: dict[str, Any],
+) -> dict[str, Any]:
+    plan = _build_native_full_preprocessing_plan(
+        goal=goal,
+        provider=provider,
+        project_context=project_context,
+    )
+    plan["pipeline_id"] = "native_reho"
+    native_node = next(
+        node for node in plan["nodes"] if node["id"] == "native_preproc_full_execute"
+    )
+    native_node["params"]["stage_overrides"] = {
+        "dicom_to_nifti": False,
+        "input_validation": True,
+        "bids_sidecar_validation": True,
+        "dummy_scan_removal": True,
+        "slice_timing": False,
+        "realignment": True,
+        "motion_qc": True,
+        "coregistration": False,
+        "segmentation": False,
+        "normalization": False,
+        "smoothing": False,
+        "nuisance_regression": True,
+        "detrending": True,
+        "temporal_filtering": True,
+        "alff": False,
+        "falff": False,
+        "reho": True,
+        "atlas_resampling": False,
+        "roi_timeseries": False,
+        "functional_connectivity": False,
+        "subject_qc": True,
+        "group_summary": True,
+        "validation_report": True,
+        "final_report": True,
+    }
+    plan["metadata"].update(
+        {
+            "goal_kind": "reho",
+            "goal_artifact_types": ["reho_map"],
+            "required_preprocessing_stages": [
+                "realignment",
+                "motion_qc",
+                "nuisance_regression",
+                "detrending",
+                "temporal_filtering",
+            ],
+        }
+    )
+    return plan
 
 
 def generate_plan_from_goal(
@@ -419,8 +738,57 @@ def generate_plan_from_goal(
     # ── Rule matching ──
     goal_lower = stripped.lower()
     project_context = _project_context_from_constraints(constraints)
+    if _matches_plan_only_preprocessing_goal(goal_lower):
+        plan = _build_plan_only_preprocessing_plan(goal=stripped, provider=provider)
+        validation = validate_plan(plan)
+        goal_contract = build_goal_contract_semantics(plan, goal)
+        return PlannerResponse(
+            ok=validation.ok and goal_contract.ok,
+            provider=provider,
+            goal=goal,
+            plan=plan,
+            validation=validation.to_dict(),
+            messages=[
+                "Prepared a metadata-only preprocessing plan; execution remains disabled."
+            ],
+            warnings=[
+                "Plan-only task: no numerical computation or rawdata modification is authorized."
+            ],
+            errors=([] if goal_contract.ok else [goal_contract.reason or "GOAL_CONTRACT_INVALID"]),
+            confidence=1.0,
+            clarification_required=goal_contract.clarification_required,
+            goal_contract_candidate=goal_contract.semantics,
+        )
+    if _has_registered_nifti_evidence(project_context) and _matches_native_reho_goal(goal_lower):
+        plan = _build_native_reho_plan(
+            goal=stripped,
+            provider=provider,
+            project_context=project_context,
+        )
+        validation = validate_plan(plan)
+        goal_contract = build_goal_contract_semantics(plan, goal)
+        return PlannerResponse(
+            ok=validation.ok and goal_contract.ok,
+            provider=provider,
+            goal=goal,
+            plan=plan,
+            validation=validation.to_dict(),
+            messages=[
+                "Matched ReHo execution to the reviewed native preprocessing chain."
+            ],
+            warnings=[
+                "ReHo execution includes realignment, motion QC, nuisance regression, detrending, and temporal filtering."
+            ],
+            errors=([] if goal_contract.ok else [goal_contract.reason or "GOAL_CONTRACT_INVALID"]),
+            confidence=1.0,
+            clarification_required=goal_contract.clarification_required,
+            goal_contract_candidate=goal_contract.semantics,
+        )
     if (
-        _has_registered_nifti_evidence(project_context)
+        (
+            _has_registered_nifti_evidence(project_context)
+            or _has_prepared_conversion_evidence(project_context)
+        )
         and _matches_native_full_goal(goal_lower)
     ):
         plan = _build_native_full_preprocessing_plan(
@@ -477,7 +845,7 @@ def generate_plan_from_goal(
             plan={},
             validation={},
             errors=[f"UNSUPPORTED_GOAL: could not match goal '{goal}' to any known pipeline."],
-            messages=[f"Supported keywords: motion/realign, alff/falff, reho, smooth, full pipeline"],
+            messages=["Supported keywords: motion/realign, alff/falff, reho, smooth, full pipeline"],
         )
 
     _, pipeline_id, node_ids = best_match

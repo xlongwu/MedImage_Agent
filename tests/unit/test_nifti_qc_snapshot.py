@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -28,7 +29,6 @@ from src.backend.app.services import (
     spm_realign_dry_run,
     spm_realign_wrapper_skeleton,
 )
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -36,26 +36,45 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, nifti_qc_snapshot, qc_evidence_roots, spm_realign_dry_run, spm_realign_wrapper_skeleton,
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+        nifti_qc_snapshot,
+        qc_evidence_roots,
+        spm_realign_dry_run,
+        spm_realign_wrapper_skeleton,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create(client: TestClient, tmp_path: Path, rawdata: Path, suffix: str = "") -> dict:
     tag = suffix or uuid.uuid4().hex[:8]
     proj = tmp_path / f"proj_{tag}"
-    resp = client.post("/api/projects/create", json={
-        "project_name": f"QC-{tag}", "rawdata_dir": str(rawdata),
-        "project_dir": str(proj),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": f"QC-{tag}",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(proj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
 
 # ── 404 ──────────────────────────────────────────────────────────────────────
+
 
 def test_project_not_found_returns_404():
     client = TestClient(app)
@@ -159,6 +178,55 @@ def test_registered_converted_bids_is_used_when_rawdata_has_no_nifti(tmp_path, m
     assert body["four_d_count"] == 1
     assert body["warnings"] == []
     assert body["images"][0]["path"] == str(bold_path.resolve())
+
+
+def test_registered_input_scope_excludes_rawdata_duplicates_and_run_derivatives(
+    tmp_path, monkeypatch
+):
+    try:
+        import nibabel as nib
+    except ImportError:
+        pytest.skip("nibabel not installed")
+
+    rawdata = tmp_path / "rawdata"
+    converted = tmp_path / "converted_bids"
+    derivatives = tmp_path / "project" / "preprocessing_native_runs" / "run-foreign"
+    for root in (rawdata, converted, derivatives):
+        root.mkdir(parents=True)
+    image = nib.Nifti1Image(np.ones((3, 3, 3, 4), dtype=np.float32), np.eye(4))
+    raw_path = rawdata / "sub-001_task-rest_bold.nii.gz"
+    input_path = converted / "sub-001_task-rest_bold.nii.gz"
+    derivative_path = derivatives / "sub-001_desc-filtered_bold.nii.gz"
+    nib.save(image, str(raw_path))
+    nib.save(image, str(input_path))
+    nib.save(image, str(derivative_path))
+
+    store = _isolated_store(tmp_path, monkeypatch)
+    client = TestClient(app)
+    created = _create(client, tmp_path, rawdata, "scoped")
+    project = store.get_project(created["project_id"])
+    assert project is not None
+    metadata = dict(project.metadata or {})
+    metadata.update(
+        {
+            "project_dir": str(tmp_path / "project"),
+            "preprocessing_input_dir": str(converted),
+            "converted_bids_dir": str(converted),
+        }
+    )
+    store.add_project(
+        project.model_copy(update={"metadata": metadata}),
+        health_status="Review",
+        rawdata_dir=str(rawdata),
+        overwrite=True,
+    )
+
+    body = client.get(f"/api/projects/{created['project_id']}/nifti-qc/snapshot").json()
+
+    assert body["image_count"] == 1
+    assert [item["path"] for item in body["images"]] == [str(input_path.resolve())]
+    assert str(raw_path.resolve()) not in {item["path"] for item in body["images"]}
+    assert str(derivative_path.resolve()) not in {item["path"] for item in body["images"]}
 
 
 def test_ignores_arbitrary_path(tmp_path, monkeypatch):

@@ -27,7 +27,8 @@ def test_blank_import_record_is_reported_missing_and_filtered_from_paths(tmp_pat
 
     assert "   " not in store.list_import_paths("brain-tumor-study")
     blank_record = next(
-        item for item in store.list_import_records("brain-tumor-study")
+        item
+        for item in store.list_import_records("brain-tumor-study")
         if item["dataset_id"] == "blank-import"
     )
     assert blank_record["exists"] is False

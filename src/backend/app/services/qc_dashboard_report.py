@@ -7,7 +7,7 @@ Never calls external tools, never modifies rawdata.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,9 +17,8 @@ from src.backend.app.schemas.desktop import (
     QcDashboardReportArtifact,
     QcDashboardReportResponse,
 )
-from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.image_preview import list_image_sources
-from src.backend.app.services.qc_evidence_roots import collect_qc_evidence_roots
+from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.qc_dashboard_fingerprint import (
     collect_qc_dashboard_fingerprint_roots,
 )
@@ -28,6 +27,7 @@ from src.backend.app.services.qc_dashboard_module_cache import (
     load_module_cache,
     save_module_cache,
 )
+from src.backend.app.services.qc_evidence_roots import collect_qc_evidence_roots
 from src.backend.app.services.rawdata_fingerprint import (
     build_rawdata_fingerprint,
 )
@@ -87,7 +87,7 @@ _MODULES = [
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _safe_slug(value: str) -> str:
@@ -149,11 +149,23 @@ _REGISTERED_BIDS_ROOT_FIELDS = (
 def _registered_nifti_evidence(project_id: str) -> dict[str, Any]:
     roots = collect_qc_evidence_roots(project_id, include_native_outputs=False)
     if not roots:
-        return {"available": False, "roots": [], "image_count": 0, "subject_count": 0, "sequence_count": 0}
+        return {
+            "available": False,
+            "roots": [],
+            "image_count": 0,
+            "subject_count": 0,
+            "sequence_count": 0,
+        }
     try:
         sources = list_image_sources(project_id=project_id, search_roots=roots)
     except Exception:
-        return {"available": False, "roots": [str(root) for root in roots], "image_count": 0, "subject_count": 0, "sequence_count": 0}
+        return {
+            "available": False,
+            "roots": [str(root) for root in roots],
+            "image_count": 0,
+            "subject_count": 0,
+            "sequence_count": 0,
+        }
     source_roots = sorted({item.source_root for item in sources.manifest if item.source_root})
     return {
         "available": len(sources.manifest) > 0,
@@ -174,8 +186,7 @@ def _has_subject_dirs(root: Path) -> bool:
 def _looks_like_bids_dataset_root(root: Path) -> bool:
     try:
         return root.is_dir() and (
-            (root / "dataset_description.json").is_file()
-            or _has_subject_dirs(root)
+            (root / "dataset_description.json").is_file() or _has_subject_dirs(root)
         )
     except OSError:
         return False
@@ -223,9 +234,8 @@ def _filter_conversion_guidance(items: list[str]) -> list[str]:
 
 def _is_stale_motion_metrics_warning(text: str) -> bool:
     lowered = text.lower()
-    return (
-        "no valid data rows" in lowered
-        and any(term in lowered for term in _STALE_MOTION_WARNING_TERMS[1:])
+    return "no valid data rows" in lowered and any(
+        term in lowered for term in _STALE_MOTION_WARNING_TERMS[1:]
     )
 
 
@@ -437,26 +447,27 @@ def _normalize_legacy_latest_payload(data: dict[str, Any]) -> dict[str, Any]:
             module["ok"] = True
             if fd_count > 0:
                 module["summary"] = (
-                    f"Candidates: {fd_count}, Parsed: {fd_count}, "
-                    f"FD available: {fd_count}"
+                    f"Candidates: {fd_count}, Parsed: {fd_count}, FD available: {fd_count}"
                 )
                 metrics = module.get("key_metrics")
                 if not isinstance(metrics, dict):
                     metrics = {}
-                metrics.update({
-                    "candidate_count": fd_count,
-                    "parsed_count": fd_count,
-                    "fd_available_count": fd_count,
-                })
+                metrics.update(
+                    {
+                        "candidate_count": fd_count,
+                        "parsed_count": fd_count,
+                        "fd_available_count": fd_count,
+                    }
+                )
                 module["key_metrics"] = metrics
 
     if not changed:
         return data
 
     data["modules"] = modules
-    data["warnings"] = _filter_stale_motion_warnings([
-        str(item) for item in data.get("warnings", []) or []
-    ])
+    data["warnings"] = _filter_stale_motion_warnings(
+        [str(item) for item in data.get("warnings", []) or []]
+    )
 
     essential_ids = {m["id"] for m in _MODULES if m["essential"]}
     ready_count = sum(1 for m in modules if m.get("status") == "ready")
@@ -464,13 +475,10 @@ def _normalize_legacy_latest_payload(data: dict[str, Any]) -> dict[str, Any]:
     blocked_count = sum(
         1
         for m in modules
-        if m.get("status") == "blocked"
-        and m.get("id", m.get("module_id")) in essential_ids
+        if m.get("status") == "blocked" and m.get("id", m.get("module_id")) in essential_ids
     )
     unknown_count = sum(
-        1
-        for m in modules
-        if m.get("status") not in ("ready", "warning", "blocked", "not_run")
+        1 for m in modules if m.get("status") not in ("ready", "warning", "blocked", "not_run")
     )
     if blocked_count > 0:
         overall_status = "blocked"
@@ -491,6 +499,7 @@ def _normalize_legacy_latest_payload(data: dict[str, Any]) -> dict[str, Any]:
 
 def _run_data_readiness(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.data_readiness import build_data_readiness
+
     r = build_data_readiness(project_id)
     d = r.model_dump()
     evidence = _registered_nifti_evidence(project_id)
@@ -510,7 +519,7 @@ def _run_data_readiness(project_id: str) -> dict[str, Any]:
         image_count = evidence["image_count"]
         subject_count = evidence["subject_count"]
         sequence_count = evidence["sequence_count"]
-        summary = f"Registered NIfTI evidence: {image_count}, Subjects: {subject_count}"
+        summary = f"Registered input NIfTI evidence: {image_count}, Subjects: {subject_count}"
         if status in ("blocked", "warning"):
             status = "warning" if warnings else "ready"
     return {
@@ -538,6 +547,7 @@ def _normalize_status(raw: str) -> str:
 
 def _run_bids_validation(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.bids_validation import validate_bids
+
     evidence = _registered_nifti_evidence(project_id)
     project = mock_store.get_project(project_id)
     metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
@@ -586,8 +596,7 @@ def _run_bids_validation(project_id: str) -> dict[str, Any]:
     warning_count = d.get("warning_count")
     if not isinstance(warning_count, int):
         warning_count = sum(
-            1 for issue in d.get("issues", []) or []
-            if issue.get("severity") == "warning"
+            1 for issue in d.get("issues", []) or [] if issue.get("severity") == "warning"
         )
     return {
         "status": _normalize_status(d.get("status", "unknown")),
@@ -618,8 +627,9 @@ def _run_conversion_dry_run(project_id: str) -> dict[str, Any]:
             "errors": [],
             "next_actions": [],
         }
-    from src.backend.app.services.conversion_planner import plan_conversion
     from src.backend.app.schemas.desktop import ConversionDryRunRequest
+    from src.backend.app.services.conversion_planner import plan_conversion
+
     try:
         r = plan_conversion(project_id, ConversionDryRunRequest())
         d = r.model_dump()
@@ -636,18 +646,29 @@ def _run_conversion_dry_run(project_id: str) -> dict[str, Any]:
             "next_actions": d.get("next_actions", [])[:5],
         }
     except Exception as exc:
-        return {"status": "not_run", "ok": False, "summary": str(exc)[:200],
-                "key_metrics": {}, "warnings": [], "errors": [str(exc)], "next_actions": []}
+        return {
+            "status": "not_run",
+            "ok": False,
+            "summary": str(exc)[:200],
+            "key_metrics": {},
+            "warnings": [],
+            "errors": [str(exc)],
+            "next_actions": [],
+        }
 
 
 def _run_nifti_qc_snapshot(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.nifti_qc_snapshot import build_nifti_qc_snapshot
+
     r = build_nifti_qc_snapshot(project_id)
     d = r.model_dump()
     return {
         "status": d.get("status", "unknown"),
         "ok": d.get("ok", False),
-        "summary": f"Images: {d.get('image_count', 0)}, Readable: {d.get('readable_count', 0)}",
+        "summary": (
+            f"Input images: {d.get('image_count', 0)}, "
+            f"Readable: {d.get('readable_count', 0)}"
+        ),
         "key_metrics": {
             "image_count": d.get("image_count", 0),
             "readable_count": d.get("readable_count", 0),
@@ -662,6 +683,7 @@ def _run_nifti_qc_snapshot(project_id: str) -> dict[str, Any]:
 
 def _run_bold_reference_readiness(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.bold_reference_readiness import build_bold_reference_readiness
+
     r = build_bold_reference_readiness(project_id)
     d = r.model_dump()
     return {
@@ -680,6 +702,7 @@ def _run_bold_reference_readiness(project_id: str) -> dict[str, Any]:
 
 def _run_motion_qc_readiness(project_id: str) -> dict[str, Any]:
     from src.backend.app.services.motion_qc_readiness import build_motion_qc_readiness
+
     r = build_motion_qc_readiness(project_id)
     d = r.model_dump()
     return {
@@ -699,6 +722,7 @@ def _run_motion_qc_readiness(project_id: str) -> dict[str, Any]:
 def _run_motion_metrics_draft(project_id: str) -> dict[str, Any]:
     try:
         from src.backend.app.services.motion_metrics_draft import build_motion_metrics_draft
+
         r = build_motion_metrics_draft(project_id)
         d = r.model_dump()
         return {
@@ -714,13 +738,23 @@ def _run_motion_metrics_draft(project_id: str) -> dict[str, Any]:
             "next_actions": d.get("next_actions", [])[:5],
         }
     except Exception as exc:
-        return {"status": "not_run", "ok": False, "summary": str(exc)[:200],
-                "key_metrics": {}, "warnings": [], "errors": [str(exc)], "next_actions": []}
+        return {
+            "status": "not_run",
+            "ok": False,
+            "summary": str(exc)[:200],
+            "key_metrics": {},
+            "warnings": [],
+            "errors": [str(exc)],
+            "next_actions": [],
+        }
 
 
 def _run_rsfmri_qc_planning(project_id: str) -> dict[str, Any]:
     try:
-        from src.backend.app.services.rsfmri_qc_planning_report import build_rsfmri_qc_planning_report
+        from src.backend.app.services.rsfmri_qc_planning_report import (
+            build_rsfmri_qc_planning_report,
+        )
+
         r = build_rsfmri_qc_planning_report(project_id)
         d = r.model_dump()
         return {
@@ -733,20 +767,33 @@ def _run_rsfmri_qc_planning(project_id: str) -> dict[str, Any]:
             "next_actions": d.get("next_actions", [])[:5],
         }
     except Exception as exc:
-        return {"status": "not_run", "ok": False, "summary": str(exc)[:200],
-                "key_metrics": {}, "warnings": [], "errors": [str(exc)], "next_actions": []}
+        return {
+            "status": "not_run",
+            "ok": False,
+            "summary": str(exc)[:200],
+            "key_metrics": {},
+            "warnings": [],
+            "errors": [str(exc)],
+            "next_actions": [],
+        }
 
 
 def _build_markdown(
-    project_id: str, generated_at: str, overall_status: str,
+    project_id: str,
+    generated_at: str,
+    overall_status: str,
     modules: list[dict[str, Any]],
-    ready: int, warning: int, blocked: int, unknown: int,
-    all_warnings: list[str], all_errors: list[str],
+    ready: int,
+    warning: int,
+    blocked: int,
+    unknown: int,
+    all_warnings: list[str],
+    all_errors: list[str],
     next_actions: list[str],
     native_evidence: dict[str, Any] | None = None,
 ) -> str:
     lines = [
-        f"# QC Dashboard Summary Report",
+        "# QC Dashboard Summary Report",
         "",
         f"- **Project**: {project_id}",
         f"- **Generated**: {generated_at}",
@@ -789,34 +836,43 @@ def _build_markdown(
     if not next_actions:
         lines.append("- None")
 
-    lines.extend([
-        "",
-        "## Safety Flags",
-        "",
-        "- read_only_inputs: true",
-        "- rawdata_not_modified: true",
-        "- no_preprocessing_executed: true",
-        "- no_external_tools_executed: true",
-        "- qc_dashboard_report_only: true",
-        "- clinical_use_prohibited: true",
-        "",
-        "## Non-Goals",
-        "",
-        "- No preprocessing was executed.",
-        "- No clinical interpretation was made.",
-        "- No rawdata was modified.",
-        "- No external tools (MATLAB/SPM/DPABI/GPU) were called.",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Safety Flags",
+            "",
+            "- read_only_inputs: true",
+            "- rawdata_not_modified: true",
+            "- no_preprocessing_executed: true",
+            "- no_external_tools_executed: true",
+            "- qc_dashboard_report_only: true",
+            "- clinical_use_prohibited: true",
+            "",
+            "## Non-Goals",
+            "",
+            "- No preprocessing was executed.",
+            "- No clinical interpretation was made.",
+            "- No rawdata was modified.",
+            "- No external tools (MATLAB/SPM/DPABI/GPU) were called.",
+        ]
+    )
 
     return "\n".join(lines) + "\n"
 
 
-def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDashboardReportResponse:
+def build_qc_dashboard_report(
+    project_id: str, cache_mode: str = "off"
+) -> QcDashboardReportResponse:
     project = mock_store.get_project(project_id)
     if project is None:
         return QcDashboardReportResponse(
-            ok=False, project_id=project_id, status="blocked",
-            generated_at=_now_iso(), report_dir="", json_path="", markdown_path="",
+            ok=False,
+            project_id=project_id,
+            status="blocked",
+            generated_at=_now_iso(),
+            report_dir="",
+            json_path="",
+            markdown_path="",
             overall_errors=[f"Project not found: {project_id}"],
             safety_flags=_safety_flags(),
         )
@@ -831,7 +887,9 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
     # Compute fingerprint for caching
     fingerprint_str: str | None = None
     if cache_mode != "off":
-        metadata = (project.metadata if isinstance(project.metadata, dict) else {}) if project else {}
+        metadata = (
+            (project.metadata if isinstance(project.metadata, dict) else {}) if project else {}
+        )
         roots = collect_qc_dashboard_fingerprint_roots(metadata)
         fp = build_rawdata_fingerprint(roots)
         fingerprint_str = fp.fingerprint
@@ -840,77 +898,96 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
         fn_name = mod["fn"]
         fn = globals().get(fn_name)
         if fn is None:
-            modules.append({
-                "id": mod["id"], "name": mod["name"],
-                "status": "not_run", "ok": False,
-                "summary": f"Internal: {fn_name} not found",
-                "key_metrics": {}, "warnings": [], "errors": [],
-                "next_actions": [],
-            })
+            modules.append(
+                {
+                    "id": mod["id"],
+                    "name": mod["name"],
+                    "status": "not_run",
+                    "ok": False,
+                    "summary": f"Internal: {fn_name} not found",
+                    "key_metrics": {},
+                    "warnings": [],
+                    "errors": [],
+                    "next_actions": [],
+                }
+            )
             continue
 
         # ── Module-level caching for nifti_qc_snapshot ──
         cache_rec: Any = None
         if mod["id"] == "nifti_qc_snapshot" and cache_mode != "off":
             cache_key = build_module_cache_key(
-                project_id=project_id, module_id="nifti_qc_snapshot",
+                project_id=project_id,
+                module_id="nifti_qc_snapshot",
                 fingerprint=fingerprint_str,
             )
             if cache_mode == "prefer":
                 cached_payload, cache_rec = load_module_cache(
-                    project_id=project_id, module_id="nifti_qc_snapshot",
+                    project_id=project_id,
+                    module_id="nifti_qc_snapshot",
                     cache_key=cache_key,
                 )
                 if cached_payload is not None:
                     result = cached_payload
                     module_hits["nifti_qc_snapshot"] = True
                     cache_records.append(cache_rec)
-                    modules.append({
-                        "id": mod["id"], "name": mod["name"],
-                        "status": result.get("status", "unknown"),
-                        "ok": result.get("ok", False),
-                        "summary": result.get("summary", ""),
-                        "key_metrics": result.get("key_metrics", {}),
-                        "warnings": result.get("warnings", []),
-                        "errors": result.get("errors", []),
-                        "next_actions": result.get("next_actions", []),
-                    })
+                    modules.append(
+                        {
+                            "id": mod["id"],
+                            "name": mod["name"],
+                            "status": result.get("status", "unknown"),
+                            "ok": result.get("ok", False),
+                            "summary": result.get("summary", ""),
+                            "key_metrics": result.get("key_metrics", {}),
+                            "warnings": result.get("warnings", []),
+                            "errors": result.get("errors", []),
+                            "next_actions": result.get("next_actions", []),
+                        }
+                    )
                     continue  # skip execution for this module
 
         try:
             result = fn(project_id)
         except Exception as exc:
             result = {
-                "status": "unknown", "ok": False,
+                "status": "unknown",
+                "ok": False,
                 "summary": f"Error: {exc}",
-                "key_metrics": {}, "warnings": [], "errors": [str(exc)],
+                "key_metrics": {},
+                "warnings": [],
+                "errors": [str(exc)],
                 "next_actions": [],
             }
 
         # ── Save cache on refresh for nifti_qc_snapshot ──
         if mod["id"] == "nifti_qc_snapshot" and cache_mode == "refresh" and fingerprint_str:
             cache_key = build_module_cache_key(
-                project_id=project_id, module_id="nifti_qc_snapshot",
+                project_id=project_id,
+                module_id="nifti_qc_snapshot",
                 fingerprint=fingerprint_str,
             )
             cache_rec = save_module_cache(
-                project_id=project_id, module_id="nifti_qc_snapshot",
-                cache_key=cache_key, payload=result,
+                project_id=project_id,
+                module_id="nifti_qc_snapshot",
+                cache_key=cache_key,
+                payload=result,
                 fingerprint=fingerprint_str,
             )
             cache_records.append(cache_rec)
 
-        modules.append({
-            "id": mod["id"],
-            "name": mod["name"],
-            "status": result["status"],
-            "ok": result["ok"],
-            "summary": result["summary"],
-            "key_metrics": result["key_metrics"],
-            "warnings": result["warnings"],
-            "errors": result["errors"],
-            "next_actions": result["next_actions"],
-        })
+        modules.append(
+            {
+                "id": mod["id"],
+                "name": mod["name"],
+                "status": result["status"],
+                "ok": result["ok"],
+                "summary": result["summary"],
+                "key_metrics": result["key_metrics"],
+                "warnings": result["warnings"],
+                "errors": result["errors"],
+                "next_actions": result["next_actions"],
+            }
+        )
 
         all_warnings.extend(result["warnings"][:5])
         all_errors.extend(result["errors"][:5])
@@ -920,13 +997,14 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
     # Overall status
     essential_ids = {m["id"] for m in _MODULES if m["essential"]}
     blocked_count = sum(1 for m in modules if m["status"] == "blocked" and m["id"] in essential_ids)
-    non_essential_ready_or_warn = [
-        m for m in modules
-        if m["id"] not in essential_ids and m["status"] in ("ready", "warning")
+    _non_essential_ready_or_warn = [
+        m for m in modules if m["id"] not in essential_ids and m["status"] in ("ready", "warning")
     ]
     warning_count = sum(1 for m in modules if m["status"] == "warning")
     ready_count = sum(1 for m in modules if m["status"] == "ready")
-    unknown_count = sum(1 for m in modules if m["status"] not in ("ready", "warning", "blocked", "not_run"))
+    unknown_count = sum(
+        1 for m in modules if m["status"] not in ("ready", "warning", "blocked", "not_run")
+    )
 
     if blocked_count > 0:
         overall_status = "blocked"
@@ -952,9 +1030,16 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
 
     # Build markdown
     markdown = _build_markdown(
-        project_id, now, overall_status, modules,
-        ready_count, warning_count, blocked_count, unknown_count,
-        all_warnings, all_errors,
+        project_id,
+        now,
+        overall_status,
+        modules,
+        ready_count,
+        warning_count,
+        blocked_count,
+        unknown_count,
+        all_warnings,
+        all_errors,
         next_actions,
         native_evidence=native_evidence,
     )
@@ -984,10 +1069,14 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
 
     model_modules = [
         QcDashboardModuleSummary(
-            module_id=m["id"], name=m["name"], status=m["status"],
-            ok=m["ok"], summary=m["summary"],
+            module_id=m["id"],
+            name=m["name"],
+            status=m["status"],
+            ok=m["ok"],
+            summary=m["summary"],
             key_metrics=m["key_metrics"],
-            warnings=m["warnings"], errors=m["errors"],
+            warnings=m["warnings"],
+            errors=m["errors"],
             next_actions=m["next_actions"],
         )
         for m in modules
@@ -1016,7 +1105,9 @@ def build_qc_dashboard_report(project_id: str, cache_mode: str = "off") -> QcDas
         safety_flags=_safety_flags(),
         report_markdown=markdown,
         cache=_build_cache_summary(
-            cache_mode, cache_records=cache_records, module_hits=module_hits,
+            cache_mode,
+            cache_records=cache_records,
+            module_hits=module_hits,
         ),
     )
 
@@ -1111,8 +1202,15 @@ def load_latest_qc_dashboard_report(project_id: str) -> QcDashboardReportRespons
         json_path=str(json_path),
         markdown_path=str(md_path),
         artifacts=[
-            QcDashboardReportArtifact(kind="json", path=str(json_path), exists=True, size_bytes=json_stat.st_size),
-            QcDashboardReportArtifact(kind="markdown", path=str(md_path), exists=md_path.is_file(), size_bytes=md_stat.st_size if md_stat else None),
+            QcDashboardReportArtifact(
+                kind="json", path=str(json_path), exists=True, size_bytes=json_stat.st_size
+            ),
+            QcDashboardReportArtifact(
+                kind="markdown",
+                path=str(md_path),
+                exists=md_path.is_file(),
+                size_bytes=md_stat.st_size if md_stat else None,
+            ),
         ],
         modules=model_modules,
         ready_count=data.get("ready_count", 0),
@@ -1135,9 +1233,7 @@ def _build_cache_summary(
 ) -> QcDashboardCacheSummary:
     cache_warnings: list[str] = []
     if mode == "prefer" and not cache_records:
-        cache_warnings.append(
-            "Cache mode 'prefer' is accepted, but no cached data was found."
-        )
+        cache_warnings.append("Cache mode 'prefer' is accepted, but no cached data was found.")
     return QcDashboardCacheSummary(
         mode=mode,
         hit=False,

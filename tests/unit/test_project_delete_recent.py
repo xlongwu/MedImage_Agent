@@ -24,7 +24,9 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     return store
 
 
-def _create_project(client: TestClient, tmp_path: Path, name: str = "Delete Recent Project") -> dict:
+def _create_project(
+    client: TestClient, tmp_path: Path, name: str = "Delete Recent Project"
+) -> dict:
     rawdata = tmp_path / "rawdata"
     rawdata.mkdir()
     project_dir = tmp_path / "managed_project"
@@ -40,7 +42,9 @@ def _create_project(client: TestClient, tmp_path: Path, name: str = "Delete Rece
     return response.json()
 
 
-def test_delete_project_removes_recent_dashboard_record_without_deleting_files(tmp_path, monkeypatch):
+def test_delete_project_removes_recent_dashboard_record_without_deleting_files(
+    tmp_path, monkeypatch
+):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created = _create_project(client, tmp_path)

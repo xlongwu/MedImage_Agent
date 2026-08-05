@@ -4,12 +4,14 @@ import json
 import os
 import sqlite3
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator
 from uuid import uuid4
 
+from src.backend.app.planner.audit_record import stable_hash
+from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
 from src.backend.app.schemas.desktop import (
     ApprovalRecord,
     DatasetImportRequest,
@@ -27,9 +29,8 @@ from src.backend.app.schemas.desktop import (
     TaskStatus,
 )
 from src.backend.app.schemas.execution_ticket import ExecutionTicket, ExecutionTicketEvent
-from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
-from src.backend.app.schemas.observation import ObservationRecord
 from src.backend.app.schemas.goal_contract import GoalEvaluationRecord
+from src.backend.app.schemas.observation import ObservationRecord
 from src.backend.app.schemas.recovery import DiagnosisRecord, RecoveryProposal
 from src.backend.app.schemas.recovery_attempt import (
     RecoveryApprovalEvent,
@@ -38,7 +39,6 @@ from src.backend.app.schemas.recovery_attempt import (
     RecoveryAttemptRecord,
     RecoveryQuotaReservation,
 )
-
 
 DEFAULT_STORE_PATH = Path("outputs/work/desktop/desktop_state.sqlite")
 
@@ -51,8 +51,15 @@ def get_desktop_store_path() -> Path:
     return Path(os.environ.get("MEDIMAGE_DESKTOP_STORE_PATH", DEFAULT_STORE_PATH))
 
 
+def should_seed_demo_data() -> bool:
+    value = os.environ.get("MEDIMAGE_DESKTOP_SEED_DEMO_DATA")
+    if value is None:
+        return False
+    return value.strip().casefold() in {"1", "true", "yes", "on"}
+
+
 class SQLiteDesktopStore:
-    """SQLite-backed desktop store with deterministic seed data.
+    """SQLite-backed desktop store with optional deterministic demo data.
 
     The class keeps the old mock-store surface area so existing API routes and
     tests can keep using `mock_store`, while data now survives backend restarts.
@@ -63,7 +70,8 @@ class SQLiteDesktopStore:
         self._lock = threading.RLock()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
-        self._seed_if_empty()
+        if should_seed_demo_data():
+            self._seed_if_empty()
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -319,8 +327,445 @@ class SQLiteDesktopStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_recovery_quota_lifecycle_time
                     ON recovery_quota_reservations(project_id, lifecycle_id, created_at);
+                CREATE TABLE IF NOT EXISTS memory_consent_ledger (
+                    command_id TEXT PRIMARY KEY,
+                    project_id TEXT NOT NULL,
+                    consent_epoch INTEGER NOT NULL,
+                    generate_enabled INTEGER NOT NULL,
+                    use_enabled INTEGER NOT NULL,
+                    outbox_cutoff_sequence INTEGER NOT NULL,
+                    principal TEXT NOT NULL,
+                    payload_hash TEXT NOT NULL,
+                    explicitly_authorized_backfill INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(project_id, consent_epoch)
+                );
+                CREATE INDEX IF NOT EXISTS idx_memory_consent_project_epoch
+                    ON memory_consent_ledger(project_id, consent_epoch DESC);
+                CREATE TABLE IF NOT EXISTS memory_source_outbox (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
+                    source_id TEXT NOT NULL,
+                    source_hash TEXT NOT NULL,
+                    source_trust_class TEXT NOT NULL,
+                    consent_epoch INTEGER NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    UNIQUE(project_id, source_type, source_id, source_hash, consent_epoch)
+                );
+                CREATE INDEX IF NOT EXISTS idx_memory_outbox_project_sequence
+                    ON memory_source_outbox(project_id, sequence);
+                CREATE TABLE IF NOT EXISTS memory_forget_ledger (
+                    forget_ledger_id TEXT PRIMARY KEY,
+                    command_id TEXT NOT NULL UNIQUE,
+                    project_id TEXT NOT NULL,
+                    canonical_key TEXT NOT NULL,
+                    semantic_fingerprint TEXT NOT NULL,
+                    source_lineage_fingerprints_json TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    forget_epoch INTEGER NOT NULL,
+                    forget_outbox_sequence INTEGER NOT NULL,
+                    generation INTEGER NOT NULL,
+                    principal TEXT NOT NULL,
+                    payload_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(project_id, forget_epoch)
+                );
+                CREATE INDEX IF NOT EXISTS idx_memory_forget_project_key_epoch
+                    ON memory_forget_ledger(project_id, canonical_key, forget_epoch DESC);
                 """
             )
+
+    def get_memory_consent(self, project_id: str) -> dict[str, object]:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM memory_consent_ledger
+                WHERE project_id=? ORDER BY consent_epoch DESC LIMIT 1
+                """,
+                (project_id,),
+            ).fetchone()
+        if row is None:
+            return {
+                "project_id": project_id,
+                "generate_enabled": False,
+                "use_enabled": False,
+                "consent_epoch": 0,
+                "outbox_cutoff_sequence": 0,
+                "updated_at": None,
+            }
+        return {
+            "project_id": row["project_id"],
+            "generate_enabled": bool(row["generate_enabled"]),
+            "use_enabled": bool(row["use_enabled"]),
+            "consent_epoch": int(row["consent_epoch"]),
+            "outbox_cutoff_sequence": int(row["outbox_cutoff_sequence"]),
+            "updated_at": row["created_at"],
+        }
+
+    def set_memory_consent(
+        self,
+        *,
+        project_id: str,
+        command_id: str,
+        principal: str,
+        generate_enabled: bool,
+        use_enabled: bool,
+        explicitly_authorized_backfill: bool = False,
+    ) -> dict[str, object]:
+        payload_hash = stable_hash(
+            {
+                "project_id": project_id,
+                "generate_enabled": generate_enabled,
+                "use_enabled": use_enabled,
+                "explicitly_authorized_backfill": explicitly_authorized_backfill,
+            }
+        )
+        with self._lock, self._connect() as conn:
+            project = conn.execute(
+                "SELECT 1 FROM projects WHERE id=?", (project_id,)
+            ).fetchone()
+            if project is None:
+                raise ValueError(f"PROJECT_NOT_FOUND: {project_id}")
+            replay = conn.execute(
+                "SELECT * FROM memory_consent_ledger WHERE command_id=?",
+                (command_id,),
+            ).fetchone()
+            if replay is not None:
+                if replay["principal"] != principal or replay["payload_hash"] != payload_hash:
+                    raise RuntimeError("MEMORY_CONSENT_COMMAND_CONFLICT")
+                return {
+                    "project_id": replay["project_id"],
+                    "generate_enabled": bool(replay["generate_enabled"]),
+                    "use_enabled": bool(replay["use_enabled"]),
+                    "consent_epoch": int(replay["consent_epoch"]),
+                    "outbox_cutoff_sequence": int(replay["outbox_cutoff_sequence"]),
+                    "updated_at": replay["created_at"],
+                }
+            current = conn.execute(
+                "SELECT COALESCE(MAX(consent_epoch), 0) AS value FROM memory_consent_ledger WHERE project_id=?",
+                (project_id,),
+            ).fetchone()
+            cutoff = conn.execute(
+                "SELECT COALESCE(MAX(sequence), 0) AS value FROM memory_source_outbox"
+            ).fetchone()
+            epoch = int(current["value"]) + 1
+            cutoff_sequence = int(cutoff["value"])
+            created_at = utc_now_iso()
+            conn.execute(
+                """
+                INSERT INTO memory_consent_ledger
+                    (command_id, project_id, consent_epoch, generate_enabled,
+                     use_enabled, outbox_cutoff_sequence, principal, payload_hash,
+                     explicitly_authorized_backfill, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    command_id,
+                    project_id,
+                    epoch,
+                    1 if generate_enabled else 0,
+                    1 if use_enabled else 0,
+                    cutoff_sequence,
+                    principal,
+                    payload_hash,
+                    1 if explicitly_authorized_backfill else 0,
+                    created_at,
+                ),
+            )
+        return {
+            "project_id": project_id,
+            "generate_enabled": generate_enabled,
+            "use_enabled": use_enabled,
+            "consent_epoch": epoch,
+            "outbox_cutoff_sequence": cutoff_sequence,
+            "updated_at": created_at,
+        }
+
+    @staticmethod
+    def _append_memory_outbox(
+        conn: sqlite3.Connection,
+        *,
+        project_id: str,
+        source_type: str,
+        source_id: str,
+        source_hash: str,
+        source_trust_class: str,
+        occurred_at: str,
+    ) -> int | None:
+        consent = conn.execute(
+            """
+            SELECT consent_epoch, generate_enabled FROM memory_consent_ledger
+            WHERE project_id=? ORDER BY consent_epoch DESC LIMIT 1
+            """,
+            (project_id,),
+        ).fetchone()
+        if consent is None or not bool(consent["generate_enabled"]):
+            return None
+        cursor = conn.execute(
+            """
+            INSERT OR IGNORE INTO memory_source_outbox
+                (project_id, source_type, source_id, source_hash,
+                 source_trust_class, consent_epoch, occurred_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                source_type,
+                source_id,
+                source_hash,
+                source_trust_class,
+                int(consent["consent_epoch"]),
+                occurred_at,
+            ),
+        )
+        if cursor.rowcount == 1:
+            return int(cursor.lastrowid)
+        row = conn.execute(
+            """
+            SELECT sequence FROM memory_source_outbox
+            WHERE project_id=? AND source_type=? AND source_id=?
+              AND source_hash=? AND consent_epoch=?
+            """,
+            (
+                project_id,
+                source_type,
+                source_id,
+                source_hash,
+                int(consent["consent_epoch"]),
+            ),
+        ).fetchone()
+        return int(row["sequence"]) if row else None
+
+    def list_memory_outbox(
+        self, project_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[dict[str, object]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM memory_source_outbox
+                WHERE project_id=? AND sequence>?
+                ORDER BY sequence LIMIT ?
+                """,
+                (project_id, max(0, after_sequence), max(1, min(limit, 500))),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_memory_outbox_max_sequence(self, project_id: str) -> int:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(sequence), 0) AS value FROM memory_source_outbox WHERE project_id=?",
+                (project_id,),
+            ).fetchone()
+        return int(row["value"])
+
+    def get_memory_source_projection(
+        self, *, project_id: str, source_type: str, source_id: str
+    ) -> dict[str, object] | None:
+        """Return only typed, allowlisted fields for a committed source record."""
+
+        table_specs = {
+            "agent_lifecycle_event": (
+                "agent_lifecycle_events",
+                "event_id",
+                "project_id",
+                ("event_id", "lifecycle_id", "from_state", "to_state", "occurred_at", "payload"),
+            ),
+            "observation": (
+                "observations",
+                "observation_id",
+                "project_id",
+                ("observation_id", "lifecycle_id", "run_id", "observation_hash", "collected_at", "payload"),
+            ),
+            "goal_evaluation": (
+                "goal_evaluations",
+                "goal_evaluation_id",
+                "project_id",
+                (
+                    "goal_evaluation_id",
+                    "lifecycle_id",
+                    "observation_id",
+                    "goal_evaluation_hash",
+                    "status",
+                    "evaluated_at",
+                    "payload",
+                ),
+            ),
+            "run_summary": (
+                "run_links",
+                "run_link_id",
+                "project_id",
+                ("run_link_id", "reviewed_plan_id", "run_id", "updated_at", "payload"),
+            ),
+        }
+        spec = table_specs.get(source_type)
+        if spec is None:
+            return None
+        table, id_column, project_column, columns = spec
+        lifecycle_payload: dict[str, object] | None = None
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                f"SELECT {', '.join(columns)} FROM {table} WHERE {id_column}=? AND {project_column}=?",
+                (source_id, project_id),
+            ).fetchone()
+            if row is not None and source_type == "agent_lifecycle_event":
+                lifecycle_row = conn.execute(
+                    "SELECT payload FROM agent_lifecycles WHERE lifecycle_id=? AND project_id=?",
+                    (row["lifecycle_id"], project_id),
+                ).fetchone()
+                if lifecycle_row is not None:
+                    lifecycle_payload = json.loads(lifecycle_row["payload"])
+        if row is None:
+            return None
+        result = dict(row)
+        payload = result.pop("payload", None)
+        if payload:
+            decoded = json.loads(payload)
+            if source_type == "agent_lifecycle_event":
+                result["source_hash"] = stable_hash(decoded)
+                details = decoded.get("details") or {}
+                answer = details.get("answer")
+                science_answers = (
+                    ((lifecycle_payload or {}).get("command_context") or {}).get(
+                        "science_answers"
+                    )
+                    if lifecycle_payload
+                    else {}
+                )
+                decision_kind = next(
+                    (
+                        str(key)
+                        for key, value in (science_answers or {}).items()
+                        if value == answer
+                    ),
+                    None,
+                )
+                result["event"] = {
+                    "source_command": decoded.get("source_command"),
+                    "details": {
+                        **details,
+                        **({"decision_kind": decision_kind} if decision_kind else {}),
+                    },
+                    "to_state": decoded.get("to_state"),
+                }
+            elif source_type == "observation":
+                result["source_hash"] = result.get("observation_hash")
+                pipeline = decoded.get("pipeline") or {}
+                completeness = decoded.get("completeness") or {}
+                capability = decoded.get("capability") or {}
+                scientific = decoded.get("scientific") or {}
+                result["observation"] = {
+                    "execution_status": pipeline.get("status"),
+                    "errors": pipeline.get("errors") or [],
+                    "warnings": pipeline.get("warnings") or [],
+                    "completeness": completeness.get("status"),
+                    "conflicts": completeness.get("conflicts") or [],
+                    "blocking_facts": completeness.get("blocking_facts") or [],
+                    "capability_level": capability.get("defensible_level"),
+                    "scientific_status": scientific.get("status"),
+                    "limitation_flags": scientific.get("limitation_flags") or [],
+                }
+            elif source_type == "goal_evaluation":
+                result["source_hash"] = result.get("goal_evaluation_hash")
+                criterion_results = decoded.get("criterion_results") or []
+                result["evaluation"] = {
+                    "status": decoded.get("status"),
+                    "failed_criteria": [
+                        item.get("criterion_id")
+                        for item in criterion_results
+                        if isinstance(item, dict) and item.get("status") == "failed"
+                    ],
+                    "reason_codes": [
+                        item.get("reason_code")
+                        for item in criterion_results
+                        if isinstance(item, dict) and item.get("reason_code")
+                    ],
+                    "warnings": decoded.get("warnings") or [],
+                }
+            else:
+                result["source_hash"] = stable_hash(decoded)
+                result["run"] = {
+                    "status": decoded.get("status"),
+                    "warnings": decoded.get("warnings") or [],
+                }
+        return result
+
+    def append_memory_forget_ledger(
+        self,
+        *,
+        project_id: str,
+        command_id: str,
+        principal: str,
+        canonical_key: str,
+        semantic_fingerprint: str,
+        source_lineage_fingerprints: list[str],
+        content_hash: str,
+        forget_outbox_sequence: int,
+        generation: int,
+    ) -> dict[str, object]:
+        command_payload = {
+            "project_id": project_id,
+            "canonical_key": canonical_key,
+            "semantic_fingerprint": semantic_fingerprint,
+            "source_lineage_fingerprints": sorted(source_lineage_fingerprints),
+            "content_hash": content_hash,
+            "forget_outbox_sequence": forget_outbox_sequence,
+            "generation": generation,
+        }
+        payload_hash = stable_hash(command_payload)
+        with self._lock, self._connect() as conn:
+            replay = conn.execute(
+                "SELECT * FROM memory_forget_ledger WHERE command_id=?", (command_id,)
+            ).fetchone()
+            if replay is not None:
+                if replay["principal"] != principal or replay["payload_hash"] != payload_hash:
+                    raise RuntimeError("MEMORY_FORGET_COMMAND_CONFLICT")
+                return dict(replay)
+            current = conn.execute(
+                "SELECT COALESCE(MAX(forget_epoch), 0) AS value FROM memory_forget_ledger WHERE project_id=?",
+                (project_id,),
+            ).fetchone()
+            forget_epoch = int(current["value"]) + 1
+            record = {
+                "forget_ledger_id": f"memory_forget_{uuid4().hex}",
+                "command_id": command_id,
+                "project_id": project_id,
+                "canonical_key": canonical_key,
+                "semantic_fingerprint": semantic_fingerprint,
+                "source_lineage_fingerprints_json": json.dumps(
+                    sorted(source_lineage_fingerprints), ensure_ascii=False
+                ),
+                "content_hash": content_hash,
+                "forget_epoch": forget_epoch,
+                "forget_outbox_sequence": forget_outbox_sequence,
+                "generation": generation,
+                "principal": principal,
+                "payload_hash": payload_hash,
+                "created_at": utc_now_iso(),
+            }
+            conn.execute(
+                """
+                INSERT INTO memory_forget_ledger
+                    (forget_ledger_id, command_id, project_id, canonical_key,
+                     semantic_fingerprint, source_lineage_fingerprints_json,
+                     content_hash, forget_epoch, forget_outbox_sequence, generation,
+                     principal, payload_hash, created_at)
+                VALUES (:forget_ledger_id, :command_id, :project_id, :canonical_key,
+                        :semantic_fingerprint, :source_lineage_fingerprints_json,
+                        :content_hash, :forget_epoch, :forget_outbox_sequence, :generation,
+                        :principal, :payload_hash, :created_at)
+                """,
+                record,
+            )
+            return record
+
+    def list_memory_forget_ledger(self, project_id: str) -> list[dict[str, object]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM memory_forget_ledger WHERE project_id=? ORDER BY forget_epoch",
+                (project_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def _seed_if_empty(self) -> None:
         with self._lock, self._connect() as conn:
@@ -581,6 +1026,26 @@ class SQLiteDesktopStore:
             row = conn.execute("SELECT payload FROM projects WHERE id = ?", (project_id,)).fetchone()
         return self._load_payload(row["payload"], ProjectDetail) if row else None
 
+    def update_project_metadata(
+        self, project_id: str, updates: dict[str, object]
+    ) -> ProjectDetail | None:
+        """Atomically merge project metadata without changing dataset health."""
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT payload FROM projects WHERE id = ?", (project_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            project = self._load_payload(row["payload"], ProjectDetail)
+            metadata = dict(project.metadata or {})
+            metadata.update(updates)
+            updated = project.model_copy(update={"metadata": metadata})
+            conn.execute(
+                "UPDATE projects SET payload = ? WHERE id = ?",
+                (self._dump_model(updated), project_id),
+            )
+        return updated
+
     def add_project(
         self,
         project: ProjectDetail,
@@ -825,6 +1290,24 @@ class SQLiteDesktopStore:
                     record.updated_at,
                 ),
             )
+            if str(record.status).upper() in {
+                "SUCCEEDED",
+                "SUCCESS",
+                "COMPLETED",
+                "FAILED",
+                "CANCELED",
+                "CANCELLED",
+                "PARTIAL",
+            }:
+                self._append_memory_outbox(
+                    conn,
+                    project_id=record.project_id,
+                    source_type="run_summary",
+                    source_id=record.run_link_id,
+                    source_hash=stable_hash(record.model_dump(mode="json")),
+                    source_trust_class="authoritative_structured",
+                    occurred_at=record.updated_at,
+                )
         return record
 
     def get_run_link_by_run_id(
@@ -883,6 +1366,24 @@ class SQLiteDesktopStore:
                 """,
                 (self._dump_model(updated), updated.updated_at, run_link_id),
             )
+            if str(updated.status).upper() in {
+                "SUCCEEDED",
+                "SUCCESS",
+                "COMPLETED",
+                "FAILED",
+                "CANCELED",
+                "CANCELLED",
+                "PARTIAL",
+            }:
+                self._append_memory_outbox(
+                    conn,
+                    project_id=updated.project_id,
+                    source_type="run_summary",
+                    source_id=updated.run_link_id,
+                    source_hash=stable_hash(updated.model_dump(mode="json")),
+                    source_trust_class="authoritative_structured",
+                    occurred_at=updated.updated_at,
+                )
         return updated
 
     def add_execution_ticket(self, ticket: ExecutionTicket) -> ExecutionTicket:
@@ -1032,6 +1533,15 @@ class SQLiteDesktopStore:
                     record.collected_at.isoformat(),
                 ),
             )
+            self._append_memory_outbox(
+                conn,
+                project_id=record.bindings.project_id,
+                source_type="observation",
+                source_id=record.observation_id,
+                source_hash=record.observation_hash,
+                source_trust_class="authoritative_structured",
+                occurred_at=record.collected_at.isoformat(),
+            )
         return record
 
     def get_observation(self, observation_id: str) -> ObservationRecord | None:
@@ -1089,6 +1599,15 @@ class SQLiteDesktopStore:
                     json.dumps(record.model_dump(mode="json"), ensure_ascii=False),
                     record.evaluated_at.isoformat(),
                 ),
+            )
+            self._append_memory_outbox(
+                conn,
+                project_id=record.project_id,
+                source_type="goal_evaluation",
+                source_id=record.goal_evaluation_id,
+                source_hash=record.goal_evaluation_hash,
+                source_trust_class="authoritative_structured",
+                occurred_at=record.evaluated_at.isoformat(),
             )
         return record
 
@@ -1596,8 +2115,8 @@ class SQLiteDesktopStore:
                 raise RuntimeError("RECOVERY_QUOTA_RESERVATION_CONCURRENT_UPDATE")
         return record
 
-    @staticmethod
     def _insert_agent_lifecycle_event(
+        self,
         conn: sqlite3.Connection,
         event: AgentLifecycleEvent,
     ) -> None:
@@ -1618,6 +2137,15 @@ class SQLiteDesktopStore:
                 json.dumps(event.model_dump(mode="json"), ensure_ascii=False),
                 event.occurred_at.isoformat(),
             ),
+        )
+        self._append_memory_outbox(
+            conn,
+            project_id=event.project_id,
+            source_type="agent_lifecycle_event",
+            source_id=event.event_id,
+            source_hash=stable_hash(event.model_dump(mode="json")),
+            source_trust_class="authoritative_structured",
+            occurred_at=event.occurred_at.isoformat(),
         )
 
     def get_agent_lifecycle(self, lifecycle_id: str) -> AgentLifecycleRecord | None:

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-import pytest
-from src.backend.app.tools.gpu_smoke_runner import run_gpu_synthetic_smoke
-from src.backend.app.runtime.node_registry import NODE_REGISTRY
 
+from src.backend.app.runtime.node_registry import NODE_REGISTRY
+from src.backend.app.tools.gpu_smoke_runner import run_gpu_synthetic_smoke
 
 # ── Registry / catalog ──
+
 
 def test_node_registered():
     assert "gpu_synthetic_smoke" in NODE_REGISTRY
@@ -17,11 +16,13 @@ def test_node_registered():
 
 def test_runner_callable():
     from src.backend.app.runtime.node_registry import get_node_runner
+
     runner = get_node_runner("gpu_synthetic_smoke")
     assert callable(runner)
 
 
 # ── Guard behavior ──
+
 
 def test_valid_smoke_ok():
     r = run_gpu_synthetic_smoke()
@@ -62,6 +63,7 @@ def test_require_gpu_false_warns():
 
 # ── No CUDA / no GPU ──
 
+
 def test_no_cuda_gpu_tensor():
     r = run_gpu_synthetic_smoke()
     assert r["cuda_called"] is False
@@ -73,17 +75,21 @@ def test_no_cuda_gpu_tensor():
 
 def test_no_subprocess_import(monkeypatch):
     import builtins
+
     real_import = builtins.__import__
+
     def mock(name, *args, **kw):
         if name == "torch":
             raise ImportError("GPU smoke must not import torch")
         return real_import(name, *args, **kw)
+
     monkeypatch.setattr(builtins, "__import__", mock)
     r = run_gpu_synthetic_smoke()
     assert r["ok"] is True
 
 
 # ── Output scope ──
+
 
 def test_report_written(tmp_path):
     r = run_gpu_synthetic_smoke(reports_dir=str(tmp_path), run_id="test")
@@ -100,8 +106,10 @@ def test_no_rawdata_written(tmp_path):
 
 # ── Policy ──
 
+
 def test_blocked_by_safe_allowlist():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
+
     nid = "gpu_synthetic_smoke"
     plan = {"pipeline_id": "t", "nodes": [{"id": nid, "depends_on": [], "params": {}}]}
     policy = classify_plan_nodes(plan)
@@ -113,6 +121,7 @@ def test_blocked_by_safe_allowlist():
 
 def test_gpu_contract_nodes_allowlisted():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
+
     nid = "alff_falff_gpu_candidate_contract"
     plan = {"pipeline_id": "t", "nodes": [{"id": nid, "depends_on": [], "params": {}}]}
     policy = classify_plan_nodes(plan)
@@ -121,30 +130,46 @@ def test_gpu_contract_nodes_allowlisted():
 
 # ── M8-T006d: synthetic smoke sandbox declaration ──
 
+
 def test_gpu_smoke_sandbox_allowed():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "gpu_synthetic_smoke", "depends_on": [],
-         "params": {"sandbox_mode": True, "synthetic_smoke": True,
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {
+                "id": "gpu_synthetic_smoke",
+                "depends_on": [],
+                "params": {
+                    "sandbox_mode": True,
+                    "synthetic_smoke": True,
                     "device_policy": "guarded_auto_cpu_cuda0",
                     "memory_policy": "bounded_1e6_elements_256mb",
-                    "output_policy": "reports_dir_gpu_smoke_only"}},
-    ]}
+                    "output_policy": "reports_dir_gpu_smoke_only",
+                },
+            },
+        ],
+    }
     policy = classify_plan_nodes(plan)
     assert "gpu_synthetic_smoke" in policy["allowed_gpu_synthetic_smoke_nodes"]
 
 
 def test_gpu_smoke_no_sandbox_blocked():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "gpu_synthetic_smoke", "depends_on": [], "params": {}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {"id": "gpu_synthetic_smoke", "depends_on": [], "params": {}},
+        ],
+    }
     policy = classify_plan_nodes(plan)
     assert "gpu_synthetic_smoke" not in policy["allowed_gpu_synthetic_smoke_nodes"]
 
 
 def test_gpu_subject_exec_still_blocked():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
+
     for nid in ["gpu_alff_subject", "gpu_reho_subject"]:
         plan = {"pipeline_id": "t", "nodes": [{"id": nid, "depends_on": [], "params": {}}]}
         policy = classify_plan_nodes(plan)
@@ -153,6 +178,7 @@ def test_gpu_subject_exec_still_blocked():
 
 
 # ── misc ──
+
 
 def test_json_serializable():
     r = run_gpu_synthetic_smoke()

@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import TypeVar
 
-
 _T = TypeVar("_T")
 
 

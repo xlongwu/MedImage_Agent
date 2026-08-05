@@ -15,15 +15,13 @@ Reference:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.schemas.dicom_conversion_release_approval import (
     DicomConversionReleaseApprovalDecision,
     DicomConversionReleaseApprovalRecord,
-    DicomConversionReleaseApprovalStatus,
-    build_release_approval_summary,
     evaluate_release_approval,
     is_release_approval_complete,
     is_release_approval_valid,
@@ -31,7 +29,7 @@ from src.backend.app.schemas.dicom_conversion_release_approval import (
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _write_json(path: str, data: dict[str, Any]) -> str:

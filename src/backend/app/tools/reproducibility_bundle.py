@@ -6,12 +6,15 @@ import shutil
 import subprocess
 import sys
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from src.backend.app.tools.artifact_utils import is_safe_artifact_id, sha256_file, write_json_artifact
-
+from src.backend.app.tools.artifact_utils import (
+    is_safe_artifact_id,
+    sha256_file,
+    write_json_artifact,
+)
 
 EXCLUDED_PARTS = {
     "third_party",
@@ -41,7 +44,7 @@ ALLOWED_ROOTS = [
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _bundle_id_now() -> str:

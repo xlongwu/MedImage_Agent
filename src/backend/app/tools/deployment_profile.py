@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import os
 import platform
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.tools.artifact_utils import write_json_artifact
-
 
 REQUIRED_DEPLOYMENT_FILES = [
     ".env.example",

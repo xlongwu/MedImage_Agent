@@ -2,6 +2,7 @@
 
 ERROR_KB is a static resource at src/backend/app/resources/error_kb.yaml.
 """
+
 from __future__ import annotations
 
 import os
@@ -39,12 +40,15 @@ def _resolve_kb_path(kb_path: str | None = None) -> Path:
 def _load_error_kb(kb_path: str | None = None) -> dict[str, Any]:
     try:
         import yaml
-    except ImportError:
-        raise RuntimeError("PyYAML required")
+    except ImportError as exc:
+        raise RuntimeError("PyYAML required") from exc
     path = _resolve_kb_path(kb_path)
     if not path.exists():
         return {"version": "0.0.0", "categories": {}}
-    return yaml.safe_load(path.read_text(encoding="utf-8")) or {"version": "0.0.0", "categories": {}}
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {
+        "version": "0.0.0",
+        "categories": {},
+    }
 
 
 def classify_error(

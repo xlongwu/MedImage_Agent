@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse
 from src.backend.app.core.error_codes import ErrorCode
 from src.backend.app.core.exceptions import MedImageError
 
-
 logger = logging.getLogger("src.backend.app.api.errors")
 
 

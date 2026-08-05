@@ -59,7 +59,7 @@ def test_preflight_endpoint_does_not_write_nifti():
     assert resp.status_code == 200
     # Preflight is read-only — no output directory should be written
     payload = resp.json()
-    output_root = payload.get("output_root_preview")
+    _output_root = payload.get("output_root_preview")
     # Just confirm the endpoint didn't crash and returned valid data
     assert "ok" in payload
 
@@ -81,7 +81,12 @@ def test_preflight_endpoint_returns_dcm2niix_status():
     assert "dcm2niix_available" in payload
     # Without env flags, dcm2niix check reports disabled
     assert payload["dcm2niix_status"] in {
-        "disabled", "missing", "available", "version_failed", "unknown", "not_used",
+        "disabled",
+        "missing",
+        "available",
+        "version_failed",
+        "unknown",
+        "not_used",
     }
     assert payload["conversion_backend"] == "medimage-native"
     assert "native_converter_available" in payload

@@ -17,8 +17,8 @@ from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-from tests.goal_contract_helpers import reviewed_goal_candidate
 from src.backend.app.tools.artifact_utils import is_safe_artifact_id
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
@@ -45,7 +45,9 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     return store
 
 
-def _create_project(client: TestClient, tmp_path: Path, name: str = "Artifact Hardening Project") -> dict:
+def _create_project(
+    client: TestClient, tmp_path: Path, name: str = "Artifact Hardening Project"
+) -> dict:
     response = client.post(
         "/api/projects/create",
         json={
@@ -126,6 +128,7 @@ def _execute_plan(
 
 # ── artifact_id safety ──────────────────────────────────────────────────────
 
+
 def test_is_safe_artifact_id_rejects_dot_dot():
     assert not is_safe_artifact_id("../secret")
     assert not is_safe_artifact_id("..%2Fsecret")
@@ -153,6 +156,7 @@ def test_is_safe_artifact_id_accepts_valid():
 
 # ── API-level artifact_id rejection ─────────────────────────────────────────
 
+
 def test_invalid_artifact_id_returns_400(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
@@ -167,15 +171,14 @@ def test_invalid_artifact_id_returns_400(tmp_path, monkeypatch):
 
     # These must return 400 (bad request), not 404 or 500
     for bad_id in ["../secret", "a/b", "a\\b", "a" * 300]:
-        resp = client.get(
-            f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts/{bad_id}"
-        )
+        resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts/{bad_id}")
         assert resp.status_code in (400, 404), (
             f"Expected 400 or 404 for {bad_id!r}, got {resp.status_code}"
         )
 
 
 # ── Missing artifact preview ────────────────────────────────────────────────
+
 
 def test_nonexistent_artifact_preview_returns_404(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
@@ -197,6 +200,7 @@ def test_nonexistent_artifact_preview_returns_404(tmp_path, monkeypatch):
 
 # ── Artifact list includes missing artifacts ────────────────────────────────
 
+
 def test_artifact_list_includes_missing_artifacts(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
@@ -210,9 +214,7 @@ def test_artifact_list_includes_missing_artifacts(tmp_path, monkeypatch):
     assert run_id
 
     # The pipeline_path artifact should exist; summary_path may be present.
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -234,6 +236,7 @@ def test_artifact_list_includes_missing_artifacts(tmp_path, monkeypatch):
 
 # ── Real artifact preview (happy path) ──────────────────────────────────────
 
+
 def test_real_artifact_preview_succeeds(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
@@ -247,9 +250,7 @@ def test_real_artifact_preview_succeeds(tmp_path, monkeypatch):
     assert run_id
 
     # Get artifacts list
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts")
     assert resp.status_code == 200
     artifacts = resp.json()["artifacts"]
 
@@ -270,6 +271,7 @@ def test_real_artifact_preview_succeeds(tmp_path, monkeypatch):
 
 
 # ── Binary artifact is metadata-only ────────────────────────────────────────
+
 
 def test_binary_artifact_is_metadata_only(tmp_path, monkeypatch):
     """Ensure a binary file (e.g. NIfTI test file) returns metadata-only preview."""
@@ -292,9 +294,7 @@ def test_binary_artifact_is_metadata_only(tmp_path, monkeypatch):
     dummy_nii.write_bytes(b"\x00" * 100)
 
     # Re-fetch artifacts (the binary should now appear)
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts")
     artifacts = resp.json()["artifacts"]
     nii_artifact = next(
         (a for a in artifacts if a["name"] == "test.nii"),

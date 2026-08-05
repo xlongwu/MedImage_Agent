@@ -21,6 +21,7 @@ venv/
 .venv311/
 env/
 .env
+.pptx
 
 # IDE
 .idea/

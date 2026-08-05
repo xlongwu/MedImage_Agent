@@ -1,25 +1,25 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.execution_ticket_service as execution_ticket_service_module
 from src.backend.app.api.dependencies import get_project_store
 from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.main import app
-from src.backend.app.schemas.desktop import ProjectDetail
 from src.backend.app.runtime.execution_gateway import (
     ExecutionGateway,
     VerifiedExecutionContext,
     current_safe_allowlist_fingerprint,
 )
+from src.backend.app.schemas.desktop import ProjectDetail
 from src.backend.app.services.execution_ticket_service import (
     ExecutionTicketService,
     calculate_ticket_hash,
 )
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-import src.backend.app.services.execution_ticket_service as execution_ticket_service_module
 
 
 def _service(tmp_path):
@@ -94,13 +94,17 @@ def test_ticket_persists_validates_and_consumes_once(tmp_path):
         ("approval_context_id", "changed", "EXECUTION_TICKET_APPROVAL_MISMATCH"),
         ("safe_allowlist_fingerprint", "changed", "EXECUTION_TICKET_ALLOWLIST_MISMATCH"),
         ("normalized_params_hash", "changed", "EXECUTION_TICKET_PARAMETER_HASH_MISMATCH"),
-        ("contract_versions", {"contract_smoke": "2.0.0"}, "EXECUTION_TICKET_CONTRACT_VERSION_MISMATCH"),
+        (
+            "contract_versions",
+            {"contract_smoke": "2.0.0"},
+            "EXECUTION_TICKET_CONTRACT_VERSION_MISMATCH",
+        ),
         ("goal_contract_hash", "changed", "EXECUTION_TICKET_GOAL_CONTRACT_MISMATCH"),
         ("evaluation_policy_version", "changed", "EXECUTION_TICKET_EVALUATION_POLICY_MISMATCH"),
     ],
 )
 def test_ticket_binding_mismatch_is_rejected_and_audited(tmp_path, monkeypatch, field, value, code):
-    fixed_time = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    fixed_time = datetime(2099, 1, 1, tzinfo=UTC)
 
     class FrozenDateTime(datetime):
         @classmethod
@@ -124,9 +128,7 @@ def test_expired_revoked_and_tampered_tickets_fail_closed(tmp_path):
 
     expired = _issue(service, tmp_path)
     expired_payload = expired.model_dump(mode="json")
-    expired_payload["expires_at"] = (
-        datetime.now(timezone.utc) - timedelta(seconds=1)
-    ).isoformat()
+    expired_payload["expires_at"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
     expired_payload["canonical_hash"] = "pending"
     expired_payload["canonical_hash"] = calculate_ticket_hash(expired_payload)
     expired_payload.pop("execution_ticket_id")

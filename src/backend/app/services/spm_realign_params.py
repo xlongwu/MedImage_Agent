@@ -80,7 +80,7 @@ def validate_spm_realign_params(
             continue
 
         if key == "quality":
-            if not isinstance(value, (int, float)):
+            if not isinstance(value, int | float):
                 errors.append("quality must be a number.")
             elif not (0 < value <= 1):
                 errors.append(f"quality must be in (0, 1], got {value}.")
@@ -88,7 +88,7 @@ def validate_spm_realign_params(
                 cleaned["quality"] = float(value)
 
         elif key == "separation_mm":
-            if not isinstance(value, (int, float)):
+            if not isinstance(value, int | float):
                 errors.append("separation_mm must be a number.")
             elif value <= 0:
                 errors.append(f"separation_mm must be positive, got {value}.")
@@ -96,7 +96,7 @@ def validate_spm_realign_params(
                 cleaned["separation_mm"] = float(value)
 
         elif key == "fwhm_mm":
-            if not isinstance(value, (int, float)):
+            if not isinstance(value, int | float):
                 errors.append("fwhm_mm must be a number.")
             elif value < 0:
                 errors.append(f"fwhm_mm must be non-negative, got {value}.")

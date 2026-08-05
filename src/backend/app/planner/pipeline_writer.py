@@ -8,7 +8,7 @@ Tests monkeypatch REVIEWED_PIPELINE_DIR to use tmp_path.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -34,7 +34,7 @@ def _sanitize_name(name: str) -> str:
 
 
 def _now_stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
 
 def write_reviewed_pipeline_yaml(
@@ -61,8 +61,10 @@ def write_reviewed_pipeline_yaml(
     """
     try:
         import yaml
-    except ImportError:
-        raise ImportError("Missing dependency: PyYAML. Install with: pip install pyyaml")
+    except ImportError as exc:
+        raise ImportError(
+            "Missing dependency: PyYAML. Install with: pip install pyyaml"
+        ) from exc
 
     base = REVIEWED_PIPELINE_DIR.resolve()
     base.mkdir(parents=True, exist_ok=True)

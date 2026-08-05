@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -12,7 +12,6 @@ from typing import Any
 from src.backend.app.schemas.desktop import ProjectDetail, RunLinkRecord
 from src.backend.app.services.run_artifact_preview import json_preview_summary
 from src.backend.app.tools.artifact_utils import read_json_artifact
-
 
 SUMMARY_WARNING_LIMIT = 50
 ARTIFACT_PREVIEW_MAX_BYTES = 80_000
@@ -36,6 +35,7 @@ PATH_SUFFIXES = {
     ".jpg",
     ".jpeg",
 }
+ARTIFACT_REGISTRY_FILENAME = "preprocessing_artifact_registry.json"
 
 
 def _dedupe(messages: list[str]) -> list[str]:
@@ -66,9 +66,12 @@ def _project_summary_roots(project: ProjectDetail, record: RunLinkRecord) -> lis
         roots.extend(
             [
                 base / "work",
+                base / "data",
                 base / "reports",
                 base / "logs",
                 base / "derivatives",
+                base / "preprocessing_runs",
+                base / "preprocessing_native_runs",
             ]
         )
     return _dedupe_paths(roots)
@@ -148,7 +151,7 @@ def _modified_at(path: Path) -> str | None:
         return None
     return datetime.fromtimestamp(
         path.stat().st_mtime,
-        timezone.utc,
+        UTC,
     ).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
@@ -321,7 +324,7 @@ def _looks_like_qc_json_artifact(path: Path, source: str) -> bool:
 def _json_scalar(value: Any) -> str | None:
     if value is None:
         return None
-    if isinstance(value, (str, int, float, bool)):
+    if isinstance(value, str | int | float | bool):
         text = str(value).strip()
         return text if text else None
     return None
@@ -365,7 +368,7 @@ def _message_list(value: Any) -> list[str]:
         if isinstance(item, str):
             if item:
                 messages.append(item)
-        elif isinstance(item, (int, float, bool)):
+        elif isinstance(item, int | float | bool):
             messages.append(str(item))
         elif isinstance(item, dict):
             message = _first_scalar_field(
@@ -382,7 +385,7 @@ def _message_list(value: Any) -> list[str]:
 def _bool_or_none(value: Any) -> bool | None:
     if isinstance(value, bool):
         return value
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return bool(value)
     if isinstance(value, str):
         normalized = value.strip().lower()
@@ -559,11 +562,100 @@ def _artifact_record(
     node_id = _node_id_from_source(source, path)
     if node_id:
         artifact["node_id"] = node_id
+    if "audit_records" in {part.casefold() for part in path.parts}:
+        artifact["artifact_type"] = "audit_record"
+        artifact["registration_status"] = "persisted"
     _enrich_qc_json_artifact(artifact, path, source, warnings)
     error_excerpt = _error_excerpt_for_artifact(path, str(artifact["kind"]))
     if error_excerpt:
         artifact["error_excerpt"] = error_excerpt
     return artifact
+
+
+def _registry_paths(
+    project: ProjectDetail,
+    record: RunLinkRecord,
+) -> list[Path]:
+    metadata = project.metadata if isinstance(project.metadata, dict) else {}
+    project_dir = metadata.get("project_dir")
+    if not project_dir and record.project_config_path:
+        project_dir = str(Path(record.project_config_path).expanduser().resolve().parent)
+    if not project_dir:
+        return []
+    root = Path(str(project_dir)).expanduser().resolve()
+    return _dedupe_paths(
+        [
+            root / "work" / "pipeline_runs" / record.run_id / ARTIFACT_REGISTRY_FILENAME,
+            root / "preprocessing_runs" / record.run_id / ARTIFACT_REGISTRY_FILENAME,
+        ]
+    )
+
+
+def _scoped_registry_candidates(
+    project: ProjectDetail,
+    record: RunLinkRecord,
+    *,
+    base_dirs: list[Path],
+) -> tuple[list[tuple[Path, dict[str, Any]]], list[str]]:
+    candidates: list[tuple[Path, dict[str, Any]]] = []
+    warnings: list[str] = []
+    for registry_path in _registry_paths(project, record):
+        if not registry_path.is_file():
+            continue
+        try:
+            payload = read_json_artifact(registry_path)
+        except Exception as exc:
+            warnings.append(f"ARTIFACT_REGISTRY_READ_FAILED: {registry_path}: {exc}")
+            continue
+        if not isinstance(payload, dict):
+            warnings.append(f"ARTIFACT_REGISTRY_INVALID: {registry_path}")
+            continue
+        registry_run_id = str(payload.get("preprocessing_run_id") or "")
+        if registry_run_id and registry_run_id != record.run_id:
+            warnings.append(
+                f"ARTIFACT_REGISTRY_RUN_MISMATCH: expected {record.run_id}, got {registry_run_id}"
+            )
+            continue
+        for item in payload.get("artifacts", []):
+            if not isinstance(item, dict) or not item.get("path"):
+                continue
+            item_metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            item_run_id = str(
+                item_metadata.get("preprocessing_run_id")
+                or item_metadata.get("pipeline_run_id")
+                or ""
+            )
+            if item_run_id and item_run_id != record.run_id:
+                warnings.append(
+                    "ARTIFACT_REGISTRY_ENTRY_RUN_MISMATCH: "
+                    f"expected {record.run_id}, got {item_run_id}"
+                )
+                continue
+            resolved, warning = _resolve_candidate_path(
+                str(item["path"]),
+                project,
+                record,
+                base_dirs=base_dirs,
+            )
+            if warning:
+                warnings.append(warning)
+                continue
+            assert resolved is not None
+            normalized_parts = [part.casefold() for part in resolved.parts]
+            for run_root_name in ("preprocessing_runs", "preprocessing_native_runs"):
+                if run_root_name not in normalized_parts:
+                    continue
+                run_index = normalized_parts.index(run_root_name) + 1
+                if run_index < len(resolved.parts) and resolved.parts[run_index] != record.run_id:
+                    warnings.append(
+                        "ARTIFACT_REGISTRY_ENTRY_RUN_MISMATCH: "
+                        f"selected {record.run_id}, path belongs to {resolved.parts[run_index]}"
+                    )
+                    resolved = None
+                break
+            if resolved is not None:
+                candidates.append((resolved, item))
+    return candidates, _dedupe(warnings)
 
 
 def _read_node_state_candidates(
@@ -615,6 +707,23 @@ def discover_run_artifacts(
         raw_candidates.append((record.pipeline_path, "run_link.pipeline_path"))
     if record.summary_path:
         raw_candidates.append((record.summary_path, "run_link.summary_path"))
+    if isinstance(record.payload, dict):
+        payload_for_discovery = record.payload
+        audit_payload = record.payload.get("audit")
+        if isinstance(audit_payload, dict) and audit_payload.get("project_audit_path"):
+            # The canonical audit path can point at the execution-audit store outside
+            # the project.  Once a project-scoped projection exists, expose only that
+            # projection in Runs instead of inventing a missing project-relative copy.
+            payload_for_discovery = {
+                **record.payload,
+                "audit": {
+                    key: value
+                    for key, value in audit_payload.items()
+                    if key != "audit_path"
+                },
+            }
+        for candidate in _collect_path_candidates(payload_for_discovery):
+            raw_candidates.append((candidate, "run_link.payload"))
 
     if summary_raw:
         for key in ("outputs", "artifacts", "reports", "report_paths", "node_states"):
@@ -668,6 +777,30 @@ def discover_run_artifacts(
                 f"node_state:{node_state_path.name}",
             )
             discovered_paths.setdefault(str(resolved).casefold(), artifact)
+
+    registry_candidates, registry_warnings = _scoped_registry_candidates(
+        project,
+        record,
+        base_dirs=base_dirs,
+    )
+    warnings.extend(registry_warnings)
+    for resolved, registry_item in registry_candidates:
+        artifact = _artifact_record(
+            resolved,
+            project,
+            record,
+            f"artifact_registry:{record.run_id}",
+        )
+        artifact.update(
+            {
+                "registered_artifact_id": str(registry_item.get("artifact_id") or ""),
+                "artifact_type": str(registry_item.get("artifact_type") or ""),
+                "stage_id": str(registry_item.get("stage_id") or ""),
+                "subject_id": str(registry_item.get("subject_id") or ""),
+                "registration_status": "registered",
+            }
+        )
+        discovered_paths.setdefault(str(resolved).casefold(), artifact)
 
     artifacts = sorted(
         discovered_paths.values(),

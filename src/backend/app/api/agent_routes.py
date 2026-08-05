@@ -21,14 +21,14 @@ from src.backend.app.api.models import (
 )
 from src.backend.app.core.exceptions import ConfigError
 from src.backend.app.runtime.agent_runtime import run_orchestrator_plan
+from src.backend.app.runtime.error_diagnoser import diagnose_run
+from src.backend.app.runtime.retry_runtime import (
+    dry_run_retry_plan,
+)
 from src.backend.app.runtime.run_inspector import (
     inspect_run,
     list_available_runs,
     read_state_detail,
-)
-from src.backend.app.runtime.error_diagnoser import diagnose_run
-from src.backend.app.runtime.retry_runtime import (
-    dry_run_retry_plan,
 )
 from src.backend.app.runtime.scheduler import create_scheduler_plan
 from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
@@ -117,6 +117,7 @@ def get_agent_run(agent_run_id: str) -> dict[str, Any]:
         "agent_summary": agent_summary,
         "review_summary": review_summary,
         "proposed_memory_patch": proposed_memory_patch,
+        "proposed_memory_patch_authority": "compatibility_projection_only",
     }
 
 @router.get("/api/runs")

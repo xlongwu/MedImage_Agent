@@ -1,6 +1,10 @@
 """Preprocessing Pipeline Report Service — Phase 5N."""
+
 from __future__ import annotations
-import json, hashlib
+
+import hashlib
+import json
+from datetime import UTC
 from pathlib import Path
 
 from src.backend.app.runtime.atomic_file import atomic_write_json
@@ -11,16 +15,17 @@ from src.backend.app.schemas.preprocessing_stage_catalog import (
     normalize_stage_execution_status,
     stage_dry_run_manifest_names,
 )
+from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.preprocessing_artifact_registry import (
     REGISTRY_FILENAME,
     load_artifact_registry,
 )
-from src.backend.app.services.mock_store import mock_store
 
 
 def _now_iso() -> str:
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).isoformat()
+    from datetime import datetime
+
+    return datetime.now(UTC).isoformat()
 
 
 def generate_pipeline_report(
@@ -29,14 +34,26 @@ def generate_pipeline_report(
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     effective_pd = project_dir or str(meta.get("project_dir") or "")
-    run_dir = Path(effective_pd) / "preprocessing_runs" / run_id if effective_pd else Path(f"outputs/preprocessing_runs/{run_id}")
+    run_dir = (
+        Path(effective_pd) / "preprocessing_runs" / run_id
+        if effective_pd
+        else Path(f"outputs/preprocessing_runs/{run_id}")
+    )
 
-    report_id = "rpt-" + hashlib.sha256(f"{project_id}:{run_id}:{_now_iso()}".encode()).hexdigest()[:10]
-    report_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "reports" / report_id if effective_pd else Path(f"outputs/reports/{report_id}")
+    report_id = (
+        "rpt-" + hashlib.sha256(f"{project_id}:{run_id}:{_now_iso()}".encode()).hexdigest()[:10]
+    )
+    report_dir = (
+        Path(effective_pd) / "preprocessing_runs" / run_id / "reports" / report_id
+        if effective_pd
+        else Path(f"outputs/reports/{report_id}")
+    )
     report_dir.mkdir(parents=True, exist_ok=True)
 
     # Collect stage statuses from dry-runs, executions, registrations.
-    stages: list[dict] = []; warnings: list[str] = []; registered: list[dict] = []
+    stages: list[dict] = []
+    warnings: list[str] = []
+    registered: list[dict] = []
 
     registry_path = run_dir / REGISTRY_FILENAME
     registry_data: dict = {}
@@ -44,8 +61,7 @@ def generate_pipeline_report(
     if registry_path.exists():
         registry_data = load_artifact_registry(registry_path)
         registry_artifacts = [
-            item for item in registry_data.get("artifacts", [])
-            if isinstance(item, dict)
+            item for item in registry_data.get("artifacts", []) if isinstance(item, dict)
         ]
     manifest_stage_statuses: dict[str, dict] = {}
     manifest_path = run_dir / "preprocessing_run_manifest.json"
@@ -125,8 +141,7 @@ def generate_pipeline_report(
                             st["status"] = "succeeded" if st["execution_ids"] else "preview_only"
                         break
         stage_artifacts = [
-            artifact for artifact in registry_artifacts
-            if artifact.get("stage_id") == stage
+            artifact for artifact in registry_artifacts if artifact.get("stage_id") == stage
         ]
         if stage_artifacts:
             st["artifact_ids"] = [
@@ -135,14 +150,23 @@ def generate_pipeline_report(
                 if artifact.get("artifact_id")
             ]
             if not st["metadata_only"] and not st["preview_only"]:
-                st["status"] = "succeeded" if any(
-                    artifact.get("artifact_type") not in {"stage_manifest", "qc_json", "provenance_json"}
-                    for artifact in stage_artifacts
-                ) else st["status"]
+                st["status"] = (
+                    "succeeded"
+                    if any(
+                        artifact.get("artifact_type")
+                        not in {"stage_manifest", "qc_json", "provenance_json"}
+                        for artifact in stage_artifacts
+                    )
+                    else st["status"]
+                )
         manifest_stage = manifest_stage_statuses.get(stage)
         if manifest_stage:
             manifest_status = str(manifest_stage.get("status", ""))
-            should_overlay = bool(manifest_stage.get("output_manifest")) or manifest_status not in {"", "not_started", "planned"}
+            should_overlay = bool(manifest_stage.get("output_manifest")) or manifest_status not in {
+                "",
+                "not_started",
+                "planned",
+            }
             if should_overlay:
                 st["status"] = normalize_stage_execution_status(manifest_status)
                 st["metadata_only"] = st["status"] == "metadata_only"
@@ -178,29 +202,61 @@ def generate_pipeline_report(
         if reg_dir.exists():
             for r in sorted(reg_dir.iterdir()):
                 if r.is_dir():
-                    registered.append({"stage_output_id": r.name, "artifacts": sorted(str(p) for p in r.rglob("*") if p.is_file())})
+                    registered.append(
+                        {
+                            "stage_output_id": r.name,
+                            "artifacts": sorted(str(p) for p in r.rglob("*") if p.is_file()),
+                        }
+                    )
 
     summary = f"Pipeline report for {project_id}/{run_id}. {len(stages)} stages tracked."
     warnings.append("This report is metadata-only. No raw image data included.")
     lineage_summary = {
         "artifact_count": len(registry_artifacts),
         "lineage_edge_count": sum(
-            len(v) for v in registry_data.get("lineage", {}).values()
-            if isinstance(v, list)
-        ) if registry_data else 0,
+            len(v) for v in registry_data.get("lineage", {}).values() if isinstance(v, list)
+        )
+        if registry_data
+        else 0,
     }
 
     # Write report files
-    report = {"project_id": project_id, "run_id": run_id, "stages": stages,
-              "artifact_registry_path": str(registry_path) if registry_path.exists() else "",
-              "lineage_summary": lineage_summary,
-              "registered_outputs": registered, "safety_flags": {"rawdata_not_modified": True, "no_dpabi": True, "sandbox_only": True, "no_clinical_diagnosis": True}}
+    report = {
+        "project_id": project_id,
+        "run_id": run_id,
+        "stages": stages,
+        "artifact_registry_path": str(registry_path) if registry_path.exists() else "",
+        "lineage_summary": lineage_summary,
+        "registered_outputs": registered,
+        "safety_flags": {
+            "rawdata_not_modified": True,
+            "no_dpabi": True,
+            "sandbox_only": True,
+            "no_clinical_diagnosis": True,
+        },
+    }
     atomic_write_json(report_dir / "preprocessing_pipeline_report.json", report, schema_version=1)
-    (report_dir / "preprocessing_pipeline_report.md").write_text(f"# Pipeline Report: {project_id}/{run_id}\n\n{summary}\n")
+    (report_dir / "preprocessing_pipeline_report.md").write_text(
+        f"# Pipeline Report: {project_id}/{run_id}\n\n{summary}\n"
+    )
 
     return PipelineReportResponse(
-        ok=True, status="generated", project_id=project_id, preprocessing_run_id=run_id,
-        report_id=report_id, report_path=str(report_dir),
-        summary=summary, artifact_registry_path=str(registry_path) if registry_path.exists() else "",
-        lineage_summary=lineage_summary, stage_statuses=stages, registered_outputs=registered,
-        warnings=warnings, safety_flags={"rawdata_not_modified": True, "no_dpabi": True, "no_clinical_diagnosis": True, "research_use_only": True})
+        ok=True,
+        status="generated",
+        project_id=project_id,
+        preprocessing_run_id=run_id,
+        report_id=report_id,
+        report_path=str(report_dir),
+        summary=summary,
+        artifact_registry_path=str(registry_path) if registry_path.exists() else "",
+        lineage_summary=lineage_summary,
+        stage_statuses=stages,
+        registered_outputs=registered,
+        warnings=warnings,
+        safety_flags={
+            "rawdata_not_modified": True,
+            "no_dpabi": True,
+            "no_clinical_diagnosis": True,
+            "research_use_only": True,
+        },
+    )

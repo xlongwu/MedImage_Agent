@@ -9,7 +9,6 @@ from typing import Any
 
 from src.backend.app.runtime.atomic_file import atomic_write_json
 
-
 MODEL_VERSION = 1
 MODEL_FILENAME = "gpu_performance_profiles.json"
 _MAX_SAMPLES_PER_PROFILE = 32
@@ -57,7 +56,7 @@ def record_gpu_measurement(root: str | Path, compute: dict[str, Any]) -> dict[st
         return None
     runtime = compute.get("runtime") if isinstance(compute.get("runtime"), dict) else {}
     total = runtime.get("total_seconds")
-    if not isinstance(total, (float, int)) or total < 0:
+    if not isinstance(total, float | int) or total < 0:
         return None
     path = performance_model_path(root)
     model = _load(path)
@@ -76,7 +75,7 @@ def record_gpu_measurement(root: str | Path, compute: dict[str, Any]) -> dict[st
         "cold": len(samples) == 0,
     })
     del samples[:-_MAX_SAMPLES_PER_PROFILE]
-    totals = [float(sample["total_seconds"]) for sample in samples if isinstance(sample.get("total_seconds"), (int, float))]
+    totals = [float(sample["total_seconds"]) for sample in samples if isinstance(sample.get("total_seconds"), int | float)]
     profile["summary"] = {
         "sample_count": len(totals),
         "median_total_seconds": float(median(totals)) if totals else None,

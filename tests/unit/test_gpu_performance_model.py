@@ -12,15 +12,24 @@ from src.backend.app.native_preproc.orchestrator.gpu_performance_model import (
 def _compute(total: float) -> dict[str, object]:
     return {
         "actual_backend": "gpu-cupy",
-        "runtime": {"total_seconds": total, "transfer_seconds": 0.1, "compute_seconds": total - 0.1},
+        "runtime": {
+            "total_seconds": total,
+            "transfer_seconds": 0.1,
+            "compute_seconds": total - 0.1,
+        },
         "memory": {"estimated_peak_bytes": 1024},
         "validation": {
             "algorithm_version": "native_cupy_tier1_v1",
             "dtype": "float32",
             "plan": {
-                "stage_id": "alff", "device_name": "Test GPU", "cupy_version": "13.6.0",
-                "cuda_runtime_version": 12090, "driver_version": 12080,
-                "estimated_input_bytes": 512, "estimated_peak_bytes": 1024, "chunk_size": 8,
+                "stage_id": "alff",
+                "device_name": "Test GPU",
+                "cupy_version": "13.6.0",
+                "cuda_runtime_version": 12090,
+                "driver_version": 12080,
+                "estimated_input_bytes": 512,
+                "estimated_peak_bytes": 1024,
+                "chunk_size": 8,
             },
         },
     }

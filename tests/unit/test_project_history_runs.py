@@ -19,6 +19,20 @@ from src.backend.app.schemas.desktop import RunLinkRecord
 from src.backend.app.services.mock_store import SQLiteDesktopStore, utc_now_iso
 
 
+def test_build_run_link_preserves_agent_task_lifecycle_association() -> None:
+    record = reviewed_plan_store.build_run_link(
+        project_id="project-1",
+        reviewed_plan_id="reviewed-1",
+        run_link_id="link-1",
+        run_id="run-1",
+        project_config_path="project-1/project_config.yaml",
+        pipeline_path="project-1/work/reviewed.yaml",
+        task_id="lifecycle-1",
+    )
+
+    assert record.task_id == "lifecycle-1"
+
+
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(
@@ -153,7 +167,9 @@ def _add_run_link(
         project_id=created["project_id"],
         reviewed_plan_id=reviewed_plan_id or f"reviewed-{run_id}",
         run_id=run_id,
-        pipeline_path=str(pipeline_path or Path(created["project_dir"]) / "work" / f"{run_id}.yaml"),
+        pipeline_path=str(
+            pipeline_path or Path(created["project_dir"]) / "work" / f"{run_id}.yaml"
+        ),
         summary_path=str(summary_path) if summary_path is not None else None,
         project_config_path=created["project_config_path"],
         status=status,
@@ -199,9 +215,7 @@ def test_real_execution_persists_run_link_before_executor_and_exposes_history(
         tmp_path / "pipelines",
     )
 
-    def fake_executor(
-        *, project_config_path: str, pipeline_path: str, execution_context
-    ) -> dict:
+    def fake_executor(*, project_config_path: str, pipeline_path: str, execution_context) -> dict:
         links = store.list_run_links(created["project_id"])
         assert len(links) == 1
         assert links[0].status == "RUNNING"
@@ -287,7 +301,9 @@ def test_run_detail_wrong_project_returns_not_found(tmp_path, monkeypatch):
     assert response.status_code == 404
 
 
-def test_repeated_real_execution_gets_unique_run_ids(tmp_path, monkeypatch):
+def test_reviewed_plan_console_cannot_retry_agent_bound_execution_without_lifecycle(
+    tmp_path, monkeypatch
+):
     store = _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created = _create_project(client, tmp_path)
@@ -301,9 +317,7 @@ def test_repeated_real_execution_gets_unique_run_ids(tmp_path, monkeypatch):
         tmp_path / "pipelines",
     )
 
-    def fake_executor(
-        *, project_config_path: str, pipeline_path: str, execution_context
-    ) -> dict:
+    def fake_executor(*, project_config_path: str, pipeline_path: str, execution_context) -> dict:
         pipeline = yaml.safe_load(Path(pipeline_path).read_text(encoding="utf-8"))
         return {"status": "SUCCESS", "run_id": pipeline["execution"]["run_id"]}
 
@@ -311,12 +325,24 @@ def test_repeated_real_execution_gets_unique_run_ids(tmp_path, monkeypatch):
         "src.backend.app.runtime.execution_gateway.PIPELINE_EXECUTOR", fake_executor
     )
     body = _execute_body(created, plan, reviewed["reviewed_plan_id"])
-    first = client.post("/api/plans/execute-reviewed", json=body).json()
-    second = client.post("/api/plans/execute-reviewed", json=body).json()
+    first_response = client.post("/api/plans/execute-reviewed", json=body)
+    second_response = client.post("/api/plans/execute-reviewed", json=body)
 
-    assert first["run_id"] != second["run_id"]
-    assert first["run_link_id"] != second["run_link_id"]
-    assert len(store.list_run_links(created["project_id"])) == 2
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    first = first_response.json()
+    second = second_response.json()
+    assert first["ok"] is True
+    assert first["run_id"]
+    assert first["run_link_id"]
+    assert first["lifecycle"]["lifecycle_id"]
+    assert second["ok"] is False
+    assert second["status"] == "AGENT_LIFECYCLE_ID_REQUIRED"
+    assert second["run_id"] is None
+    assert second["run_link_id"] is None
+    links = store.list_run_links(created["project_id"])
+    assert len(links) == 1
+    assert links[0].task_id == first["lifecycle"]["lifecycle_id"]
 
 
 def test_run_link_write_failure_blocks_executor(tmp_path, monkeypatch):

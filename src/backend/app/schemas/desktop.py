@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 TaskStatus = Literal["running", "completed", "failed", "pending", "disconnected"]
 ExecutionMode = Literal["simulated", "external_smoke", "rsfmri_python"]
 ExternalSmokeMode = Literal["manual_package", "approved_smoke"]
@@ -44,6 +43,9 @@ class ReviewedPlanRecord(BaseModel):
     dataset_index_path: str | None = None
     rawdata_dir: str | None = None
     plan_hash: str
+    memory_context_hash: str | None = None
+    memory_context_refs: list[dict[str, Any]] = Field(default_factory=list)
+    memory_retrieval_policy_version: str | None = None
     plan_path: str | None = None
     status: str = "REVIEWED"
     created_at: str
@@ -1139,7 +1141,7 @@ class QcDashboardReportResponse(BaseModel):
     next_actions: list[str] = Field(default_factory=list)
     safety_flags: dict[str, bool] = Field(default_factory=dict)
     report_markdown: str | None = None
-    cache: "QcDashboardCacheSummary" = Field(default_factory=lambda: QcDashboardCacheSummary(mode="off", hit=False))  # noqa: F821
+    cache: QcDashboardCacheSummary = Field(default_factory=lambda: QcDashboardCacheSummary(mode="off", hit=False))  # noqa: F821
 
 
 # ── QC Dashboard Cache Metadata Schemas (future, non-caching) ──────────────

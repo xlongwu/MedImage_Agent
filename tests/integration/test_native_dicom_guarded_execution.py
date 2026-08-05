@@ -8,7 +8,6 @@ import pytest
 
 from tests.unit.test_native_dicom_to_nifti import _write_classic_series
 
-
 pytest.importorskip("pydicom")
 pytest.importorskip("nibabel")
 
@@ -107,7 +106,9 @@ def test_guarded_persisted_execution_uses_native_backend_and_preserves_rawdata(
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("subprocess must not be called")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("subprocess must not be called")
+        ),
     )
     denied = run_internal_user_dicom_conversion_from_persisted_package(
         "project-native",

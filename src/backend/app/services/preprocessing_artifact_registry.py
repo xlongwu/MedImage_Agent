@@ -9,9 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.schemas.preprocessing_artifacts import (
@@ -25,13 +26,12 @@ from src.backend.app.schemas.preprocessing_stage_catalog import (
     get_preprocessing_stage_spec,
 )
 
-
 REGISTRY_FILENAME = "preprocessing_artifact_registry.json"
 _NIFTI_EXTS = (".nii", ".nii.gz")
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _safe_id(value: str, fallback_seed: str) -> str:
@@ -670,6 +670,10 @@ def append_stage_output_artifacts(
         if artifact.artifact_id not in existing_ids
     ]
     data.setdefault("artifacts", []).extend(new_items)
+    if new_items:
+        safety_flags = dict(data.get("safety_flags") or {})
+        safety_flags["no_preprocessing_executed"] = False
+        data["safety_flags"] = safety_flags
     lineage = data.setdefault("lineage", {})
     for artifact in appended:
         lineage[artifact.artifact_id] = artifact.source_artifact_ids

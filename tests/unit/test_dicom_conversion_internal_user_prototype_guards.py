@@ -6,9 +6,6 @@ subprocess guardrails WITHOUT calling real dcm2niix on user data.
 
 from __future__ import annotations
 
-import pytest
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Group 1 — Missing env flags
 # ═══════════════════════════════════════════════════════════════════════
@@ -18,8 +15,11 @@ def test_missing_internal_flag_returns_blocked():
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env={},
+        "test",
+        "conv-test",
+        env={},
     )
     assert result.status == "disabled"
     assert result.safety_flags.conversion_disabled_by_default is True
@@ -46,10 +46,12 @@ def test_native_internal_conversion_uses_only_dicom_specific_flags():
 
 def test_missing_flags_no_subprocess(monkeypatch):
     """Ensure no subprocess when flags are missing."""
+    import subprocess as sp
+
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
-    import subprocess as sp
+
     called = []
 
     def fake_run(*args, **kwargs):
@@ -58,7 +60,9 @@ def test_missing_flags_no_subprocess(monkeypatch):
 
     monkeypatch.setattr(sp, "run", fake_run)
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env={},
+        "test",
+        "conv-test",
+        env={},
     )
     assert result.status == "disabled"
     assert len(called) == 0
@@ -73,9 +77,13 @@ def test_missing_package_blocks(tmp_path):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     env = _all_internal_flags()
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "nonexistent", env=env, project_dir=str(tmp_path),
+        "test",
+        "nonexistent",
+        env=env,
+        project_dir=str(tmp_path),
     )
     assert result.status == "blocked"
 
@@ -89,6 +97,7 @@ def test_output_root_under_rawdata_blocks(tmp_path):
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
+
     rawdata = tmp_path / "rawdata"
     rawdata.mkdir()
     run_dir = rawdata / "conversion_runs" / "conv-test"
@@ -96,7 +105,10 @@ def test_output_root_under_rawdata_blocks(tmp_path):
 
     env = _all_internal_flags()
     result = run_internal_user_dicom_conversion_from_persisted_package(
-        "test", "conv-test", env=env, project_dir=str(tmp_path),
+        "test",
+        "conv-test",
+        env=env,
+        project_dir=str(tmp_path),
         rawdata_dir=str(rawdata),
     )
     assert result.status == "blocked"
@@ -108,32 +120,37 @@ def test_output_root_under_rawdata_blocks(tmp_path):
 
 
 def test_user_conversion_still_disabled():
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+
     result = run_conversion_execute("test", DicomConversionExecutionRequest())
     assert result.conversion_disabled is True
 
 
 def test_no_shell_true_in_internal_function():
+    import inspect
+
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
-    import inspect
+
     source = inspect.getsource(run_internal_user_dicom_conversion_from_persisted_package)
-    lines = [l for l in source.splitlines() if '"""' not in l]
+    lines = [line for line in source.splitlines() if '"""' not in line]
     code = "\n".join(lines)
     assert "shell=True" not in code
 
 
 def test_spm_dpabi_matlab_still_disabled():
+    import inspect
+
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
-    import inspect
+
     source = inspect.getsource(run_internal_user_dicom_conversion_from_persisted_package)
     assert "import spm" not in source.lower()
     assert "import matlab" not in source.lower()
@@ -143,6 +160,7 @@ def test_spm_dpabi_matlab_still_disabled():
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _all_internal_flags() -> dict[str, str]:
     return {

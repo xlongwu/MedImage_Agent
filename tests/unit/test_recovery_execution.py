@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -143,19 +143,19 @@ def test_child_ticket_rejects_cross_project_and_duplicate_consumption_with_audit
     child = fixture.store.get_execution_ticket(attempt.child_execution_ticket_id or "")
     assert child is not None
     ticket_service = ExecutionTicketService(fixture.store)
-    common = dict(
-        execution_ticket_id=child.execution_ticket_id,
-        reviewed_plan_id=child.reviewed_plan_id,
-        plan_hash=child.plan_hash,
-        goal_contract_hash=child.goal_contract_hash,
-        evaluation_policy_version=child.evaluation_policy_version,
-        approval_context_id=child.approval_context_id,
-        safe_allowlist_fingerprint=current_safe_allowlist_fingerprint(),
-        normalized_params_hash=child.normalized_params_hash,
-        contract_versions=child.contract_versions,
-        project_config_path=child.project_config_path,
-        pipeline_path=child.pipeline_path,
-    )
+    common = {
+        "execution_ticket_id": child.execution_ticket_id,
+        "reviewed_plan_id": child.reviewed_plan_id,
+        "plan_hash": child.plan_hash,
+        "goal_contract_hash": child.goal_contract_hash,
+        "evaluation_policy_version": child.evaluation_policy_version,
+        "approval_context_id": child.approval_context_id,
+        "safe_allowlist_fingerprint": current_safe_allowlist_fingerprint(),
+        "normalized_params_hash": child.normalized_params_hash,
+        "contract_versions": child.contract_versions,
+        "project_config_path": child.project_config_path,
+        "pipeline_path": child.pipeline_path,
+    }
     with pytest.raises(SafetyError, match="EXECUTION_TICKET_PROJECT_MISMATCH"):
         ticket_service.validate(project_id="other-project", **common)
     with pytest.raises(SafetyError, match="EXECUTION_TICKET_REPLAYED"):
@@ -272,7 +272,7 @@ def test_ticket_audit_failure_after_consumption_still_handoffs_before_runner(tmp
             "RECOVERY_CHILD_ATTEMPT_INVALID",
         ),
         (
-            {"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)},
+            {"expires_at": datetime.now(UTC) - timedelta(seconds=1)},
             "EXECUTION_TICKET_EXPIRED",
         ),
     ],

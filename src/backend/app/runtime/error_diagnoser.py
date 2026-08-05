@@ -4,11 +4,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.backend.app.tools.error_classifier import classify_error
 from src.backend.app.runtime.run_inspector import inspect_run
 from src.backend.app.schemas.recovery import DiagnosisRecord, RecoveryBindings
 from src.backend.app.services.run_diagnosis_service import adapt_legacy_diagnosis
-
+from src.backend.app.tools.error_classifier import classify_error
 
 LOG_READ_LIMIT = 20_000
 

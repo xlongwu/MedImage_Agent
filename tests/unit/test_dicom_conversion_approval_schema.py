@@ -7,8 +7,6 @@ execution, no SPM/DPABI/MATLAB.
 
 from __future__ import annotations
 
-import pytest
-
 from src.backend.app.schemas.dicom_conversion_approval import (
     DicomConversionApprovalRecord,
     DicomConversionGateDecision,
@@ -166,6 +164,7 @@ def test_not_approved_record_is_rejected():
 def test_gate_decision_is_pure_function():
     """Gate decision must not import or call subprocess or dcm2niix."""
     import inspect
+
     source = inspect.getsource(evaluate_conversion_approval_gate)
     # Only check for actual import/usage patterns, not docstring content
     assert "import subprocess" not in source
@@ -178,6 +177,7 @@ def test_gate_decision_is_pure_function():
 
 def test_approval_schema_has_no_subprocess():
     import src.backend.app.schemas.dicom_conversion_approval as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -187,6 +187,7 @@ def test_approval_schema_has_no_subprocess():
 
 def test_approval_schema_has_no_spm_dpabi_matlab():
     import src.backend.app.schemas.dicom_conversion_approval as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -255,14 +256,22 @@ def test_approval_record_has_all_17_fields():
     record = _make_approved_record()
     d = record.model_dump()
     required = {
-        "approved", "approved_by", "mappings_reviewed",
-        "output_root_confirmed", "output_root_under_project",
-        "output_root_not_rawdata", "rawdata_read_only_confirmed",
-        "command_templates_reviewed", "no_shell_string_confirmed",
-        "dcm2niix_availability_confirmed", "env_flags_confirmed",
-        "overwrite_policy", "rollback_policy_acknowledged",
+        "approved",
+        "approved_by",
+        "mappings_reviewed",
+        "output_root_confirmed",
+        "output_root_under_project",
+        "output_root_not_rawdata",
+        "rawdata_read_only_confirmed",
+        "command_templates_reviewed",
+        "no_shell_string_confirmed",
+        "dcm2niix_availability_confirmed",
+        "env_flags_confirmed",
+        "overwrite_policy",
+        "rollback_policy_acknowledged",
         "clinical_use_prohibited_acknowledged",
-        "external_tool_acknowledgement", "risk_acknowledgement",
+        "external_tool_acknowledgement",
+        "risk_acknowledgement",
         "confirm_execution",
     }
     for field in required:

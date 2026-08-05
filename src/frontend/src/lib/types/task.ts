@@ -8,6 +8,9 @@ export type TaskStatus =
 
 export interface TaskLogEntry {
   id: string;
+  run_link_id?: string;
+  reviewed_plan_id?: string;
+  agent_task_id?: string | null;
   run_name: string;
   pipeline: string;
   dataset: string;
@@ -18,6 +21,7 @@ export interface TaskLogEntry {
   owner: string;
   logs: string[];
   result_path?: string | null;
+  updated_at?: string;
   execution_mode?: "simulated" | "external_smoke" | "rsfmri_python";
 }
 

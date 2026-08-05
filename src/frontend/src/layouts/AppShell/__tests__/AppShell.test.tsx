@@ -7,6 +7,9 @@ describe("AppShell", () => {
   it("renders stable shell landmarks and slots", () => {
     render(
       <AppShell
+        contextSidebar={<aside aria-label="Project context">Projects</aside>}
+        preset="project-dashboard"
+        rail={<nav aria-label="Primary navigation">Rail</nav>}
         topBar={<header>Top bar</header>}
         systemMessages={<div>Backend offline</div>}
         lifecycle={<nav aria-label="Project lifecycle">Lifecycle</nav>}
@@ -19,6 +22,8 @@ describe("AppShell", () => {
     );
 
     expect(screen.getByText("Top bar")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Project context")).toBeInTheDocument();
     expect(screen.getByLabelText("System messages")).toHaveTextContent("Backend offline");
     expect(screen.getByRole("navigation", { name: "Project lifecycle" })).toBeInTheDocument();
     expect(screen.getByRole("main")).toHaveTextContent("Workspace");

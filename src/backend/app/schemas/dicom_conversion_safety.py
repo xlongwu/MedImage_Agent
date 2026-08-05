@@ -382,7 +382,7 @@ def classify_rollback_candidate(
 
 
 def build_rollback_result_summary(
-    result: "DicomConversionRollbackExecResult",
+    result: DicomConversionRollbackExecResult,
 ) -> dict[str, Any]:
     """Summarize a rollback execution result."""
     return {

@@ -13,27 +13,28 @@ import pytest
 from pydantic import ValidationError
 
 from src.backend.app.schemas.execution_manifest import (
-    OutputManifestItem,
-    OutputManifest,
-    ExecutionProvenance,
     ExecutionFailureRecord,
+    ExecutionProvenance,
+    OutputManifestItem,
     build_output_manifest,
-    summarize_output_manifest,
-    count_missing_required,
-    count_verified,
-    count_manifest_warnings,
     count_manifest_errors,
+    count_manifest_warnings,
+    count_missing_required,
+    summarize_output_manifest,
 )
-
 
 # ═══════════════════════════════════════════════════════════════
 # OutputManifestItem tests
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_valid_item_serializes():
     item = OutputManifestItem(
-        kind="json", path="/tmp/report.json",
-        exists=True, verified=True, verification_status="verified",
+        kind="json",
+        path="/tmp/report.json",
+        exists=True,
+        verified=True,
+        verification_status="verified",
         size_bytes=2048,
     )
     d = item.model_dump()
@@ -64,7 +65,9 @@ def test_verified_requires_exists():
 
 
 def test_verification_status_verified_requires_exists():
-    with pytest.raises(ValidationError, match="verification_status='verified' requires exists=True"):
+    with pytest.raises(
+        ValidationError, match="verification_status='verified' requires exists=True"
+    ):
         OutputManifestItem(path="/t", verification_status="verified", exists=False)
 
 
@@ -102,9 +105,12 @@ def test_defaults():
 # OutputManifest tests
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_build_auto_computes_counts():
     items = [
-        OutputManifestItem(path="/a", required=True, exists=True, verified=True, verification_status="verified"),
+        OutputManifestItem(
+            path="/a", required=True, exists=True, verified=True, verification_status="verified"
+        ),
         OutputManifestItem(path="/b", required=True, exists=False),
         OutputManifestItem(path="/c", required=False, exists=False, previewable=True),
     ]
@@ -138,7 +144,9 @@ def test_previewable_appears_in_summary():
 
 def test_model_serializes_cleanly():
     m = build_output_manifest(
-        project_id="p1", run_id="r1", node_id="n1",
+        project_id="p1",
+        run_id="r1",
+        node_id="n1",
         items=[OutputManifestItem(path="/a")],
         subject_id="sub-01",
     )
@@ -178,6 +186,7 @@ def test_summarize_counts_all_fields():
 # ExecutionProvenance tests
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_minimal_provenance_instantiates():
     p = ExecutionProvenance(project_id="p1", run_id="r1", node_id="n1")
     d = p.model_dump()
@@ -189,8 +198,12 @@ def test_minimal_provenance_instantiates():
 
 def test_full_provenance_serializes():
     p = ExecutionProvenance(
-        project_id="p1", reviewed_plan_id="rp1", run_id="r1", node_id="n1",
-        backend="python", command_template_id="tpl_v1",
+        project_id="p1",
+        reviewed_plan_id="rp1",
+        run_id="r1",
+        node_id="n1",
+        backend="python",
+        command_template_id="tpl_v1",
         params={"quality": 0.9},
         input_paths=["/in/file.nii"],
         input_checksums={"/in/file.nii": "abc123"},
@@ -222,7 +235,9 @@ def test_no_shell_command_field():
     """ExecutionProvenance has no shell command field."""
     with pytest.raises(ValidationError):
         ExecutionProvenance(
-            project_id="p1", run_id="r1", node_id="n1",
+            project_id="p1",
+            run_id="r1",
+            node_id="n1",
             shell_command="rm -rf /",  # type: ignore[call-arg]
         )
 
@@ -230,8 +245,11 @@ def test_no_shell_command_field():
 def test_external_backend_without_enabling_execution():
     """External backend can be represented without enabling execution."""
     p = ExecutionProvenance(
-        project_id="p1", run_id="r1", node_id="spm_realign",
-        backend="matlab-spm", command_template_id="spm12_realign_estwrite_v1",
+        project_id="p1",
+        run_id="r1",
+        node_id="spm_realign",
+        backend="matlab-spm",
+        command_template_id="spm12_realign_estwrite_v1",
     )
     assert p.backend == "matlab-spm"
     assert p.command_template_id == "spm12_realign_estwrite_v1"
@@ -242,7 +260,9 @@ def test_external_backend_without_enabling_execution():
 def test_command_template_id_is_plain_identifier():
     """command_template_id is accepted as a plain identifier string."""
     p = ExecutionProvenance(
-        project_id="p1", run_id="r1", node_id="n1",
+        project_id="p1",
+        run_id="r1",
+        node_id="n1",
         command_template_id="tpl_nifti_qc_v1",
     )
     assert p.command_template_id == "tpl_nifti_qc_v1"
@@ -252,17 +272,29 @@ def test_command_template_id_is_plain_identifier():
 # ExecutionFailureRecord tests
 # ═══════════════════════════════════════════════════════════════
 
+
 def test_all_failure_stages_instantiate():
-    for stage in ["preflight", "approval", "audit", "execution", "timeout",
-                  "output_verification", "artifact_discovery", "provenance", "unknown"]:
+    for stage in [
+        "preflight",
+        "approval",
+        "audit",
+        "execution",
+        "timeout",
+        "output_verification",
+        "artifact_discovery",
+        "provenance",
+        "unknown",
+    ]:
         r = ExecutionFailureRecord(stage=stage, message=f"Failure at {stage}")  # type: ignore[arg-type]
         assert r.stage == stage
 
 
 def test_retryable_resume_eligible_serialize():
     r = ExecutionFailureRecord(
-        stage="execution", message="Node failed",
-        retryable=True, resume_eligible=True,
+        stage="execution",
+        message="Node failed",
+        retryable=True,
+        resume_eligible=True,
     )
     d = r.model_dump()
     assert d["retryable"] is True
@@ -276,15 +308,16 @@ def test_next_action_is_optional():
 
 def test_failure_record_creates_no_files(tmp_path):
     """ExecutionFailureRecord is a pure model — no file I/O."""
-    before = set(str(p) for p in tmp_path.iterdir()) if tmp_path.exists() else set()
+    before = {str(p) for p in tmp_path.iterdir()} if tmp_path.exists() else set()
     _r = ExecutionFailureRecord(stage="execution", message="test")
-    after = set(str(p) for p in tmp_path.iterdir()) if tmp_path.exists() else set()
+    after = {str(p) for p in tmp_path.iterdir()} if tmp_path.exists() else set()
     assert before == after
 
 
 # ═══════════════════════════════════════════════════════════════
 # Safety tests
 # ═══════════════════════════════════════════════════════════════
+
 
 def test_import_does_not_pull_pipeline_executor():
     """Importing execution_manifest must not import pipeline_executor."""
@@ -300,7 +333,9 @@ def test_helper_functions_create_no_files(tmp_path):
     """build_output_manifest and helpers create no files."""
     before = list(tmp_path.iterdir())
     _m = build_output_manifest(
-        project_id="p1", run_id="r1", node_id="n1",
+        project_id="p1",
+        run_id="r1",
+        node_id="n1",
         items=[OutputManifestItem(path="/tmp/test.json")],
     )
     _s = summarize_output_manifest([OutputManifestItem(path="/t")])
@@ -311,6 +346,7 @@ def test_helper_functions_create_no_files(tmp_path):
 def test_no_rawdata_or_outputs_path_touched():
     """Module does not reference rawdata or outputs directories."""
     import src.backend.app.schemas.execution_manifest as em
+
     source = str(getattr(em, "__file__", ""))
     # source should be under src/backend/app/schemas/
     assert "schemas" in source

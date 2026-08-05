@@ -206,7 +206,7 @@ NATIVE_FULL_STAGE_GRAPH: tuple[NativeFullStageSpec, ...] = (
         "Group summary",
         "native_preproc_group_summary",
         depends_on=("subject_qc",),
-        produced_outputs=("final_report",),
+        produced_outputs=("group_summary",),
     ),
     NativeFullStageSpec(
         "validation_report",

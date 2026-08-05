@@ -1,12 +1,20 @@
 """ALFF/ReHo Sandbox Execution Service — Phase 5M. Python-only, metadata-first."""
+
 from __future__ import annotations
-import os, json, hashlib, shutil
+
+import hashlib
+import json
+import os
+import shutil
+from datetime import UTC
 from pathlib import Path
 
 from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.schemas.preprocessing_alff_reho_execution import (
-    AlffRehoSandboxExecutionRequest, AlffRehoSandboxExecutionResponse,
-    validate_alff_reho_env, alff_reho_exec_safety_flags,
+    AlffRehoSandboxExecutionRequest,
+    AlffRehoSandboxExecutionResponse,
+    alff_reho_exec_safety_flags,
+    validate_alff_reho_env,
 )
 from src.backend.app.services.mock_store import mock_store
 
@@ -50,8 +58,9 @@ def bids_prefix_from_path(path: Path) -> str:
 
 
 def _now_iso() -> str:
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).isoformat()
+    from datetime import datetime
+
+    return datetime.now(UTC).isoformat()
 
 
 def _write_json(path: Path, data: dict) -> None:
@@ -59,43 +68,86 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def run_alff_reho_sandbox_execution(
-    project_id: str, run_id: str, request: AlffRehoSandboxExecutionRequest,
-    *, project_dir: str = "", env: dict[str, str] | None = None
+    project_id: str,
+    run_id: str,
+    request: AlffRehoSandboxExecutionRequest,
+    *,
+    project_dir: str = "",
+    env: dict[str, str] | None = None,
 ) -> AlffRehoSandboxExecutionResponse:
     eff_env = env or dict(os.environ)
     ok_flags, missing = validate_alff_reho_env(eff_env)
     if not ok_flags:
-        return AlffRehoSandboxExecutionResponse(ok=False, status="disabled", project_id=project_id,
-            blocking_issues=[f"Missing env flags: {missing}"], safety_flags=alff_reho_exec_safety_flags())
+        return AlffRehoSandboxExecutionResponse(
+            ok=False,
+            status="disabled",
+            project_id=project_id,
+            blocking_issues=[f"Missing env flags: {missing}"],
+            safety_flags=alff_reho_exec_safety_flags(),
+        )
 
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     effective_pd = project_dir or str(meta.get("project_dir") or "")
 
-    dry_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "spm_dry_runs" / request.dry_run_id if effective_pd else None
+    dry_dir = (
+        Path(effective_pd) / "preprocessing_runs" / run_id / "spm_dry_runs" / request.dry_run_id
+        if effective_pd
+        else None
+    )
     if not dry_dir or not dry_dir.exists():
-        return AlffRehoSandboxExecutionResponse(ok=False, status="blocked", project_id=project_id,
-            blocking_issues=[f"Dry-run not found: {request.dry_run_id}"], safety_flags=alff_reho_exec_safety_flags())
+        return AlffRehoSandboxExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            blocking_issues=[f"Dry-run not found: {request.dry_run_id}"],
+            safety_flags=alff_reho_exec_safety_flags(),
+        )
 
     func_input = request.functional_input_dir or str(meta.get("current_functional_input_dir") or "")
     func_path = Path(func_input) if func_input else None
     if not func_path or not func_path.exists():
-        return AlffRehoSandboxExecutionResponse(ok=False, status="blocked", project_id=project_id,
-            blocking_issues=["Functional input not found."], safety_flags=alff_reho_exec_safety_flags())
+        return AlffRehoSandboxExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            blocking_issues=["Functional input not found."],
+            safety_flags=alff_reho_exec_safety_flags(),
+        )
 
-    bold_files = [p for p in sorted(func_path.rglob("*.nii*")) if p.is_file() and ("bold" in p.name.lower() or "rest" in p.name.lower())]
+    bold_files = [
+        p
+        for p in sorted(func_path.rglob("*.nii*"))
+        if p.is_file() and ("bold" in p.name.lower() or "rest" in p.name.lower())
+    ]
     if not bold_files:
-        return AlffRehoSandboxExecutionResponse(ok=False, status="blocked", project_id=project_id,
-            blocking_issues=["No functional files found."], safety_flags=alff_reho_exec_safety_flags())
+        return AlffRehoSandboxExecutionResponse(
+            ok=False,
+            status="blocked",
+            project_id=project_id,
+            blocking_issues=["No functional files found."],
+            safety_flags=alff_reho_exec_safety_flags(),
+        )
 
-    exec_id = "ar-ex-" + hashlib.sha256(f"{project_id}:{run_id}:{_now_iso()}".encode()).hexdigest()[:10]
-    exec_dir = Path(effective_pd) / "preprocessing_runs" / run_id / "spm_exec" / exec_id if effective_pd else Path(f"outputs/spm_exec/{exec_id}")
+    exec_id = (
+        "ar-ex-" + hashlib.sha256(f"{project_id}:{run_id}:{_now_iso()}".encode()).hexdigest()[:10]
+    )
+    exec_dir = (
+        Path(effective_pd) / "preprocessing_runs" / run_id / "spm_exec" / exec_id
+        if effective_pd
+        else Path(f"outputs/spm_exec/{exec_id}")
+    )
     exec_dir.mkdir(parents=True, exist_ok=True)
-    sandbox_in = exec_dir / "sandbox_input"; sandbox_in.mkdir()
-    sandbox_out = exec_dir / "sandbox_output"; sandbox_out.mkdir()
-    logs_dir = exec_dir / "logs"; logs_dir.mkdir()
+    sandbox_in = exec_dir / "sandbox_input"
+    sandbox_in.mkdir()
+    sandbox_out = exec_dir / "sandbox_output"
+    sandbox_out.mkdir()
+    logs_dir = exec_dir / "logs"
+    logs_dir.mkdir()
 
-    warnings: list[str] = []; copied = []; designs = []
+    warnings: list[str] = []
+    copied = []
+    designs = []
     files_discovered = len(bold_files)
     files_selected = (
         min(files_discovered, request.preview_limit)
@@ -106,39 +158,59 @@ def run_alff_reho_sandbox_execution(
     if not dataset_complete:
         warnings.append(
             f"Found {files_discovered} BOLD files but only processing first "
-            f"{files_selected} because preview_limit={request.preview_limit}.")
+            f"{files_selected} because preview_limit={request.preview_limit}."
+        )
     for bf in bold_files[:files_selected]:
         subj = "sub-unknown"
         for part in bf.parts:
-            if part.startswith("sub-"): subj = part; break
+            if part.startswith("sub-"):
+                subj = part
+                break
         bids_prefix = bids_prefix_from_path(bf)
-        dest = sandbox_in / bids_prefix; dest.mkdir(parents=True, exist_ok=True)
+        dest = sandbox_in / bids_prefix
+        dest.mkdir(parents=True, exist_ok=True)
         shutil.copy2(bf, dest / bf.name)
         # Copy BIDS JSON sidecar alongside NIfTI so TR can be read correctly.
         sidecar = bids_sidecar_for(bf)
         if sidecar and sidecar.exists():
             shutil.copy2(sidecar, dest / sidecar.name)
         copied.append(dest / bf.name)
-        designs.append({"subject": subj, "bids_prefix": bids_prefix,
-                        "functional": str(dest / bf.name),
-                        "alff_computed": False, "falff_computed": False,
-                        "reho_computed": False, "tr_source": "unknown"})
+        designs.append(
+            {
+                "subject": subj,
+                "bids_prefix": bids_prefix,
+                "functional": str(dest / bf.name),
+                "alff_computed": False,
+                "falff_computed": False,
+                "reho_computed": False,
+                "tr_source": "unknown",
+            }
+        )
 
     # Numerical ALFF/fALFF via the unified FFT kernel and ReHo via the unified
     # KCC kernel. No inline math: both metrics delegate to tools/*_compute.py.
     metadata_only = True
-    alff_status = "metadata_only"; falff_status = "metadata_only"; reho_status = "metadata_only"
+    alff_status = "metadata_only"
+    falff_status = "metadata_only"
+    reho_status = "metadata_only"
     # reho_validation_status describes the scientific confidence level of the
     # algorithm *implementation* (property of the configured backend), not
     # whether this particular run succeeded. The formal service always uses
     # the CPU ReHo backend which is golden-validated.
-    reho_validation_status = "golden_validated"; reho_backend = "none"
-    any_alff = False; any_falff = False; any_reho = False
-    alff_succeeded = 0; reho_succeeded = 0
-    subjects_complete = 0; subjects_partial = 0
+    reho_validation_status = "golden_validated"
+    reho_backend = "none"
+    any_alff = False
+    any_falff = False
+    any_reho = False
+    alff_succeeded = 0
+    reho_succeeded = 0
+    subjects_complete = 0
+    subjects_partial = 0
     _NUMPY_OK = False
     try:
-        import numpy as _np; import nibabel as _nib
+        import nibabel as _nib
+        import numpy as _np
+
         _NUMPY_OK = True
     except ImportError:
         warnings.append("numpy/nibabel not available; metadata-only execution.")
@@ -158,13 +230,13 @@ def run_alff_reho_sandbox_execution(
             if sidecar and sidecar.exists():
                 try:
                     sc = json.loads(sidecar.read_text())
-                    if isinstance(sc, dict) and isinstance(sc.get("RepetitionTime"), (int, float)):
+                    if isinstance(sc, dict) and isinstance(sc.get("RepetitionTime"), int | float):
                         return float(sc["RepetitionTime"]), "bids_json"
                 except Exception:
                     pass
             return 2.0, "default"
 
-        for cp, design in zip(copied, designs):
+        for cp, design in zip(copied, designs, strict=False):
             try:
                 img = _nib.load(str(cp))
                 data = img.get_fdata()
@@ -175,14 +247,15 @@ def run_alff_reho_sandbox_execution(
                     warnings.append(f"{design['subject']}: too few timepoints ({T})")
                     continue
                 tr, tr_source = _read_tr(cp)
-                design['tr_source'] = tr_source
+                design["tr_source"] = tr_source
                 if tr_source == "default":
                     warnings.append(
                         f"{design['subject']}: TR sidecar not found or invalid; "
-                        f"falling back to default TR=2.0s")
+                        f"falling back to default TR=2.0s"
+                    )
                 freq_band = (0.01, 0.08)
                 alff_res = compute_alff_backend(data, tr=tr, freq_band=freq_band, prefer_gpu=True)
-                out_path = sandbox_out / design['bids_prefix']
+                out_path = sandbox_out / design["bids_prefix"]
                 out_path.mkdir(parents=True, exist_ok=True)
                 if alff_res.get("ok") and alff_res.get("alff") is not None:
                     alff_map = _np.asarray(alff_res["alff"]).astype(_np.float32)
@@ -193,17 +266,27 @@ def run_alff_reho_sandbox_execution(
                     _nib.save(_nib.Nifti1Image(falff_map, img.affine, img.header), str(falff_out))
                     _write_json(
                         out_path / f"{design['subject']}_desc-alff_provenance.json",
-                        {"tr": tr, "tr_source": tr_source,
-                         "freq_band": list(freq_band),
-                         "algorithm": "fft", "backend": alff_res.get("backend"),
-                         "input_shape": [int(s) for s in data.shape]},
+                        {
+                            "tr": tr,
+                            "tr_source": tr_source,
+                            "freq_band": list(freq_band),
+                            "algorithm": "fft",
+                            "backend": alff_res.get("backend"),
+                            "input_shape": [int(s) for s in data.shape],
+                        },
                     )
-                    design['alff_computed'] = True; design['alff_output'] = str(alff_out)
-                    design['falff_computed'] = True; design['falff_output'] = str(falff_out)
-                    any_alff = True; any_falff = True
-                    alff_succeeded += 1; metadata_only = False
+                    design["alff_computed"] = True
+                    design["alff_output"] = str(alff_out)
+                    design["falff_computed"] = True
+                    design["falff_output"] = str(falff_out)
+                    any_alff = True
+                    any_falff = True
+                    alff_succeeded += 1
+                    metadata_only = False
                 else:
-                    warnings.append(f"{design['subject']}: ALFF kernel failed: {alff_res.get('errors')}")
+                    warnings.append(
+                        f"{design['subject']}: ALFF kernel failed: {alff_res.get('errors')}"
+                    )
 
                 # ReHo via unified KCC kernel (27-neighborhood, no GM mask in sandbox).
                 # ReHo: use CPU path (prefer_gpu=False) because the GPU
@@ -218,15 +301,23 @@ def run_alff_reho_sandbox_execution(
                     _nib.save(_nib.Nifti1Image(reho_map, img.affine, img.header), str(reho_out))
                     _write_json(
                         out_path / f"{design['subject']}_desc-reho_provenance.json",
-                        {"neighborhood": 27, "method": "kcc",
-                         "backend": reho_res.get("backend"),
-                         "valid_voxel_count": int(reho_res.get("valid_voxel_count", 0)),
-                         "input_shape": [int(s) for s in data.shape]},
+                        {
+                            "neighborhood": 27,
+                            "method": "kcc",
+                            "backend": reho_res.get("backend"),
+                            "valid_voxel_count": int(reho_res.get("valid_voxel_count", 0)),
+                            "input_shape": [int(s) for s in data.shape],
+                        },
                     )
-                    design['reho_computed'] = True; design['reho_output'] = str(reho_out)
-                    any_reho = True; reho_succeeded += 1; metadata_only = False
+                    design["reho_computed"] = True
+                    design["reho_output"] = str(reho_out)
+                    any_reho = True
+                    reho_succeeded += 1
+                    metadata_only = False
                 else:
-                    warnings.append(f"{design['subject']}: ReHo kernel failed: {reho_res.get('errors')}")
+                    warnings.append(
+                        f"{design['subject']}: ReHo kernel failed: {reho_res.get('errors')}"
+                    )
             except Exception as exc:
                 warnings.append(f"{design['subject']}: {exc}")
 
@@ -246,9 +337,13 @@ def run_alff_reho_sandbox_execution(
 
     # Per-subject aggregation: classify each subject as complete/partial/failed.
     for d in designs:
-        metrics_ok = sum([d.get("alff_computed", False),
-                          d.get("falff_computed", False),
-                          d.get("reho_computed", False)])
+        metrics_ok = sum(
+            [
+                d.get("alff_computed", False),
+                d.get("falff_computed", False),
+                d.get("reho_computed", False),
+            ]
+        )
         if metrics_ok == 3:
             subjects_complete += 1
         elif metrics_ok > 0:
@@ -274,7 +369,8 @@ def run_alff_reho_sandbox_execution(
             warnings.append(
                 "Overall status downgraded to 'partial' because TR source is "
                 "'default' (BIDS sidecar not found). ALFF/fALFF frequency axis "
-                "may be inaccurate.")
+                "may be inaccurate."
+            )
         else:
             result_status = "succeeded"
     elif subjects_complete > 0 or subjects_partial > 0:
@@ -289,87 +385,153 @@ def run_alff_reho_sandbox_execution(
         result_status = "partial"
         warnings.append(
             f"Overall status downgraded to 'partial' because only {files_selected} "
-            f"of {files_discovered} discovered BOLD files were processed (preview mode).")
+            f"of {files_discovered} discovered BOLD files were processed (preview mode)."
+        )
 
     mp_path = exec_dir / "metric_plan.json"
-    _write_json(mp_path, {"designs": designs, "metadata_only": metadata_only,
-                          "alff_status": alff_status, "reho_status": reho_status,
-                          "reho_validation_status": reho_validation_status,
-                          "reho_backend": reho_backend,
-                          "subjects_complete": subjects_complete,
-                          "subjects_partial": subjects_partial})
+    _write_json(
+        mp_path,
+        {
+            "designs": designs,
+            "metadata_only": metadata_only,
+            "alff_status": alff_status,
+            "reho_status": reho_status,
+            "reho_validation_status": reho_validation_status,
+            "reho_backend": reho_backend,
+            "subjects_complete": subjects_complete,
+            "subjects_partial": subjects_partial,
+        },
+    )
 
-    stdout_log = logs_dir / "stdout.log"; stderr_log = logs_dir / "stderr.log"
+    stdout_log = logs_dir / "stdout.log"
+    stderr_log = logs_dir / "stderr.log"
     stdout_log.write_text(
         f"ALFF/ReHo: status={result_status}, complete={subjects_complete}, "
         f"partial={subjects_partial}, failed={total_subjects - subjects_complete - subjects_partial}, "
-        f"alff_succeeded={alff_succeeded}, reho_succeeded={reho_succeeded}\n")
+        f"alff_succeeded={alff_succeeded}, reho_succeeded={reho_succeeded}\n"
+    )
     stderr_log.write_text("")
 
-    _write_json(exec_dir / "manifest.json", {
-        "status": result_status, "metadata_only": metadata_only,
-        "subjects": {"total": total_subjects, "complete": subjects_complete,
-                     "partial": subjects_partial,
-                     "failed": total_subjects - subjects_complete - subjects_partial},
-        "alff": {"computed": any_alff, "status": alff_status, "subject_count": alff_succeeded},
-        "falff": {"computed": any_falff, "status": falff_status, "subject_count": alff_succeeded},
-        "reho": {"computed": any_reho, "subject_count": reho_succeeded,
-                  "execution_status": reho_status,
-                  "validation_status": reho_validation_status,
-                  "backend": reho_backend,
-                  "external_reference_validated": False,
-                  "gpu_validated": False,
-                  "note": "CPU Kendall's W implementation is golden validated and agrees with an independent in-repository NumPy reference. External reference validation remains pending. GPU backend remains unvalidated."}})
-    _write_json(exec_dir / "provenance.json", {
-        "sandbox_only": True, "metadata_only": metadata_only,
-        "alff_status": alff_status, "reho_status": reho_status,
-        "reho_validation_status": reho_validation_status, "reho_backend": reho_backend,
-        "tr_source": agg_tr_source,
-        "dataset_selection": {"files_discovered": files_discovered,
-                              "files_selected": files_selected,
-                              "selection_policy": "explicit_preview_limit" if not dataset_complete else "all",
-                              "preview_limit": request.preview_limit,
-                              "dataset_complete": dataset_complete},
-        "kernels": ["tools/alff_compute.py::compute_alff_backend",
-                    "tools/reho_compute.py::compute_reho_backend"]})
+    _write_json(
+        exec_dir / "manifest.json",
+        {
+            "status": result_status,
+            "metadata_only": metadata_only,
+            "subjects": {
+                "total": total_subjects,
+                "complete": subjects_complete,
+                "partial": subjects_partial,
+                "failed": total_subjects - subjects_complete - subjects_partial,
+            },
+            "alff": {"computed": any_alff, "status": alff_status, "subject_count": alff_succeeded},
+            "falff": {
+                "computed": any_falff,
+                "status": falff_status,
+                "subject_count": alff_succeeded,
+            },
+            "reho": {
+                "computed": any_reho,
+                "subject_count": reho_succeeded,
+                "execution_status": reho_status,
+                "validation_status": reho_validation_status,
+                "backend": reho_backend,
+                "external_reference_validated": False,
+                "gpu_validated": False,
+                "note": "CPU Kendall's W implementation is golden validated and agrees with an independent in-repository NumPy reference. External reference validation remains pending. GPU backend remains unvalidated.",
+            },
+        },
+    )
+    _write_json(
+        exec_dir / "provenance.json",
+        {
+            "sandbox_only": True,
+            "metadata_only": metadata_only,
+            "alff_status": alff_status,
+            "reho_status": reho_status,
+            "reho_validation_status": reho_validation_status,
+            "reho_backend": reho_backend,
+            "tr_source": agg_tr_source,
+            "dataset_selection": {
+                "files_discovered": files_discovered,
+                "files_selected": files_selected,
+                "selection_policy": "explicit_preview_limit" if not dataset_complete else "all",
+                "preview_limit": request.preview_limit,
+                "dataset_complete": dataset_complete,
+            },
+            "kernels": [
+                "tools/alff_compute.py::compute_alff_backend",
+                "tools/reho_compute.py::compute_reho_backend",
+            ],
+        },
+    )
     _write_json(
         exec_dir / "subject_status.json",
-        {"total": total_subjects, "complete": subjects_complete,
-         "partial": subjects_partial,
-         "failed": total_subjects - subjects_complete - subjects_partial,
-         "metadata_only": metadata_only,
-         "alff_succeeded": alff_succeeded, "reho_succeeded": reho_succeeded,
-         "alff_status": alff_status, "reho_status": reho_status,
-         "reho_validation_status": reho_validation_status, "reho_backend": reho_backend,
-         "per_subject": [{"subject": d["subject"],
-                          "alff_computed": d.get("alff_computed", False),
-                          "falff_computed": d.get("falff_computed", False),
-                          "reho_computed": d.get("reho_computed", False),
-                          "tr_source": d.get("tr_source", "unknown")}
-                         for d in designs]},
+        {
+            "total": total_subjects,
+            "complete": subjects_complete,
+            "partial": subjects_partial,
+            "failed": total_subjects - subjects_complete - subjects_partial,
+            "metadata_only": metadata_only,
+            "alff_succeeded": alff_succeeded,
+            "reho_succeeded": reho_succeeded,
+            "alff_status": alff_status,
+            "reho_status": reho_status,
+            "reho_validation_status": reho_validation_status,
+            "reho_backend": reho_backend,
+            "per_subject": [
+                {
+                    "subject": d["subject"],
+                    "alff_computed": d.get("alff_computed", False),
+                    "falff_computed": d.get("falff_computed", False),
+                    "reho_computed": d.get("reho_computed", False),
+                    "tr_source": d.get("tr_source", "unknown"),
+                }
+                for d in designs
+            ],
+        },
     )
     (exec_dir / "README.md").write_text(
         f"# ALFF/ReHo Sandbox\nStatus: {result_status}. "
         f"Complete: {subjects_complete}/{total_subjects}, Partial: {subjects_partial}.\n"
         f"ALFF/fALFF: {alff_status} ({alff_succeeded} subjects). "
-        f"ReHo: {reho_status} ({reho_succeeded} subjects).\n")
+        f"ReHo: {reho_status} ({reho_succeeded} subjects).\n"
+    )
 
     return AlffRehoSandboxExecutionResponse(
-        ok=True, status=result_status, project_id=project_id, preprocessing_run_id=run_id,
-        dry_run_id=request.dry_run_id, execution_id=exec_id, execution_dir=str(exec_dir),
-        sandbox_input_dir=str(sandbox_in), sandbox_output_dir=str(sandbox_out),
-        subjects_total=total_subjects, subjects_succeeded=subjects_complete,
+        ok=True,
+        status=result_status,
+        project_id=project_id,
+        preprocessing_run_id=run_id,
+        dry_run_id=request.dry_run_id,
+        execution_id=exec_id,
+        execution_dir=str(exec_dir),
+        sandbox_input_dir=str(sandbox_in),
+        sandbox_output_dir=str(sandbox_out),
+        subjects_total=total_subjects,
+        subjects_succeeded=subjects_complete,
         subjects_failed=total_subjects - subjects_complete - subjects_partial,
         subjects_partial=subjects_partial,
-        files_discovered=files_discovered, files_selected=files_selected,
+        files_discovered=files_discovered,
+        files_selected=files_selected,
         dataset_complete=dataset_complete,
-        metric_plan_path=str(mp_path), stdout_log_path=str(stdout_log),
-        stderr_log_path=str(stderr_log), manifest_path=str(exec_dir / "manifest.json"),
+        metric_plan_path=str(mp_path),
+        stdout_log_path=str(stdout_log),
+        stderr_log_path=str(stderr_log),
+        manifest_path=str(exec_dir / "manifest.json"),
         provenance_path=str(exec_dir / "provenance.json"),
         subject_status_path=str(exec_dir / "subject_status.json"),
-        alff_computed=any_alff, alff_status=alff_status, falff_computed=any_falff,
-        reho_computed=any_reho, reho_status=reho_status,
-        reho_validation_status=reho_validation_status, reho_backend=reho_backend,
+        alff_computed=any_alff,
+        alff_status=alff_status,
+        falff_computed=any_falff,
+        reho_computed=any_reho,
+        reho_status=reho_status,
+        reho_validation_status=reho_validation_status,
+        reho_backend=reho_backend,
         tr_source=agg_tr_source,
-        warnings=warnings, next_actions=["Review ALFF/fALFF/ReHo maps.", "External ReHo validation and GPU ties-correct implementation remain pending."],
-        safety_flags=alff_reho_exec_safety_flags())
+        warnings=warnings,
+        next_actions=[
+            "Review ALFF/fALFF/ReHo maps.",
+            "External ReHo validation and GPU ties-correct implementation remain pending.",
+        ],
+        safety_flags=alff_reho_exec_safety_flags(),
+    )

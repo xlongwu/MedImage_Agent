@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 @dataclass
@@ -38,7 +38,7 @@ class ExternalToolRunResult:
         returncode: int | None = None,
         duration_seconds: float | None = None,
         errors: list[str] | None = None,
-    ) -> "ExternalToolRunResult":
+    ) -> ExternalToolRunResult:
         if returncode is not None:
             self.returncode = returncode
         if duration_seconds is not None:

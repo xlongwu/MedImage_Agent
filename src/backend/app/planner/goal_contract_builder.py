@@ -14,7 +14,6 @@ from src.backend.app.schemas.goal_contract import (
 )
 from src.backend.app.schemas.node_contract import CapabilityLevel
 
-
 _METADATA_GOAL_NODES = {
     "contract_smoke",
     "create_synthetic_bids",
@@ -22,6 +21,15 @@ _METADATA_GOAL_NODES = {
     "dataset_evaluation",
     "environment_check",
     "native_preproc_full_dry_run",
+}
+
+_NATIVE_STAGE_ARTIFACT_TYPES = {
+    "nuisance_regression": "residual_bold",
+    "temporal_filtering": "filtered_bold",
+    "alff": "alff_map",
+    "falff": "falff_map",
+    "reho": "reho_map",
+    "functional_connectivity": "fc_matrix",
 }
 
 
@@ -48,18 +56,38 @@ def _scope(plan: dict[str, Any]) -> GoalScope:
     metadata = plan.get("metadata") if isinstance(plan.get("metadata"), dict) else {}
     subjects: list[str] = []
     sessions: list[str] = []
-    for key, target in (("subject_ids", subjects), ("subjects", subjects), ("session_ids", sessions), ("sessions", sessions)):
+    for key, target in (
+        ("subject_ids", subjects),
+        ("subjects", subjects),
+        ("subject_scope", subjects),
+        ("session_ids", sessions),
+        ("sessions", sessions),
+        ("session_scope", sessions),
+    ):
         value = metadata.get(key)
         if isinstance(value, list):
             target.extend(str(item) for item in value if str(item))
+    for key, target in (("subject_id", subjects), ("session_id", sessions)):
+        value = metadata.get(key)
+        if isinstance(value, str) and value:
+            target.append(value)
     for node in plan.get("nodes", []):
         if not isinstance(node, dict) or not isinstance(node.get("params"), dict):
             continue
         params = node["params"]
-        for key, target in (("subject_ids", subjects), ("subjects", subjects), ("session_ids", sessions), ("sessions", sessions)):
+        for key, target in (
+            ("subject_ids", subjects),
+            ("subjects", subjects),
+            ("session_ids", sessions),
+            ("sessions", sessions),
+        ):
             value = params.get(key)
             if isinstance(value, list):
                 target.extend(str(item) for item in value if str(item))
+        for key, target in (("subject_id", subjects), ("session_id", sessions)):
+            value = params.get(key)
+            if isinstance(value, str) and value:
+                target.append(value)
     return GoalScope(
         subject_ids=tuple(sorted(set(subjects))),
         session_ids=tuple(sorted(set(sessions))),
@@ -109,9 +137,39 @@ def build_goal_contract_semantics(
         )
 
     node_set = set(nodes)
+    plan_metadata = plan.get("metadata") if isinstance(plan.get("metadata"), dict) else {}
+    plan_only = (
+        plan_metadata.get("plan_only") is True
+        and plan_metadata.get("execution_enabled") is False
+        and plan_metadata.get("capability_level") == "metadata_only"
+    )
     artifact_types: tuple[str, ...] = ()
     minimum: CapabilityLevel
-    if "functional_connectivity_subject" in node_set:
+    requested_goal_kind = str(plan_metadata.get("goal_kind") or "")
+    requested_artifacts = plan_metadata.get("goal_artifact_types")
+    native_goal_artifacts = {
+        "reho": {"reho_map"},
+        "alff_falff": {"alff_map", "falff_map"},
+        "functional_connectivity": {"fc_matrix"},
+    }
+    requested_artifact_set = (
+        {str(item) for item in requested_artifacts}
+        if isinstance(requested_artifacts, list)
+        else set()
+    )
+    trusted_native_goal = (
+        "native_preproc_full_execute" in node_set
+        and requested_goal_kind in native_goal_artifacts
+        and requested_artifact_set == native_goal_artifacts.get(requested_goal_kind)
+    )
+    if plan_only:
+        goal_kind = "rsfmri_preprocessing_plan"
+        minimum = "metadata_only"
+    elif trusted_native_goal:
+        goal_kind = requested_goal_kind
+        artifact_types = tuple(str(item) for item in requested_artifacts)
+        minimum = "computed"
+    elif "functional_connectivity_subject" in node_set:
         goal_kind = "functional_connectivity"
         artifact_types = ("fc_matrix",)
         minimum = "computed"
@@ -125,15 +183,37 @@ def build_goal_contract_semantics(
         minimum = "computed"
     elif "native_preproc_full_execute" in node_set:
         goal_kind = "native_full_preprocessing"
-        artifact_types = (
-            "residual_bold",
-            "filtered_bold",
-            "alff_map",
-            "falff_map",
-            "reho_map",
-            "fc_matrix",
+        native_node = next(
+            (
+                node
+                for node in plan.get("nodes", [])
+                if isinstance(node, dict)
+                and node.get("id") == "native_preproc_full_execute"
+            ),
+            None,
         )
-        minimum = "computed"
+        native_params = (
+            native_node.get("params")
+            if isinstance(native_node, dict)
+            and isinstance(native_node.get("params"), dict)
+            else {}
+        )
+        stage_overrides = native_params.get("stage_overrides")
+        if isinstance(stage_overrides, dict) and any(
+            stage_id in stage_overrides
+            for stage_id in _NATIVE_STAGE_ARTIFACT_TYPES
+        ):
+            artifact_types = tuple(
+                artifact_type
+                for stage_id, artifact_type in _NATIVE_STAGE_ARTIFACT_TYPES.items()
+                if stage_overrides.get(stage_id) is True
+            )
+        else:
+            # Plans created before reviewed stage scoping did not persist a
+            # complete override map. Preserve their historical contract rather
+            # than silently weakening already-reviewed expectations.
+            artifact_types = tuple(_NATIVE_STAGE_ARTIFACT_TYPES.values())
+        minimum = "computed" if artifact_types else "metadata_only"
     elif node_set.issubset(_METADATA_GOAL_NODES):
         goal_kind = "contract_smoke"
         minimum = "metadata_only"
@@ -144,24 +224,38 @@ def build_goal_contract_semantics(
             reason="GOAL_KIND_UNSUPPORTED_OR_AMBIGUOUS",
         )
 
-    criteria: list[GoalCriterion] = [
-        _criterion(
-            kind="pipeline_terminal",
-            target="pipeline",
-            index=0,
-            required_evidence=("pipeline_summary", "node_states"),
-            expected={"statuses": ["SUCCESS", "COMPLETED"], "active_nodes": 0},
-            failure_semantics="indeterminate_if_source_incomplete",
-        ),
-        _criterion(
-            kind="node_status",
-            target="required_nodes",
-            index=1,
-            required_evidence=("node_states",),
-            expected={"node_ids": list(nodes), "statuses": ["SUCCESS", "COMPLETED"]},
-            failure_semantics="indeterminate_if_source_incomplete",
-        ),
+    criteria: list[GoalCriterion] = []
+    allowed_limitation_flags = (
+        ["simplified"]
+        if not plan_only and "native_preproc_full_execute" in node_set
+        else []
+    )
+    forbidden_limitation_flags = [
+        flag
+        for flag in ("simplified", "preview_only", "partial")
+        if flag not in allowed_limitation_flags
     ]
+    if not plan_only:
+        criteria.extend(
+            [
+                _criterion(
+                    kind="pipeline_terminal",
+                    target="pipeline",
+                    index=0,
+                    required_evidence=("pipeline_summary", "node_states"),
+                    expected={"statuses": ["SUCCESS", "COMPLETED"], "active_nodes": 0},
+                    failure_semantics="indeterminate_if_source_incomplete",
+                ),
+                _criterion(
+                    kind="node_status",
+                    target="required_nodes",
+                    index=1,
+                    required_evidence=("node_states",),
+                    expected={"node_ids": list(nodes), "statuses": ["SUCCESS", "COMPLETED"]},
+                    failure_semantics="indeterminate_if_source_incomplete",
+                ),
+            ]
+        )
     index = len(criteria)
     for artifact_type in artifact_types:
         for criterion_type in (
@@ -180,7 +274,7 @@ def build_goal_contract_semantics(
                 )
             )
             index += 1
-    if artifact_types:
+    if artifact_types and not plan_only:
         criteria.extend(
             [
                 _criterion(
@@ -202,36 +296,39 @@ def build_goal_contract_semantics(
             ]
         )
         index += 2
-    criteria.extend(
-        [
-            _criterion(
-                kind="capability_at_least",
-                target=minimum,
-                index=index,
-                required_evidence=("node_contract", "artifact_discovery"),
-                expected={"minimum": minimum},
-                failure_semantics="indeterminate_if_source_incomplete",
-            ),
-            _criterion(
-                kind="scientific_status_allowed",
-                target="scientific_status",
-                index=index + 1,
-                required_evidence=("artifact_registry", "validation"),
-                expected={
-                    "minimum": minimum,
-                    "forbidden_limitation_flags": ["simplified", "preview_only", "partial"],
-                },
-                failure_semantics="indeterminate_if_source_incomplete",
-            ),
-            _criterion(
-                kind="no_blocking_issue",
-                target="observation",
-                index=index + 2,
-                required_evidence=("pipeline_summary", "node_states", "artifact_discovery"),
-                expected={"blocking_facts": 0},
-            ),
-        ]
+    criteria.append(
+        _criterion(
+            kind="capability_at_least",
+            target=minimum,
+            index=index,
+            required_evidence=(("reviewed_plan",) if plan_only else ("node_contract", "artifact_discovery")),
+            expected={"minimum": minimum},
+            failure_semantics="indeterminate_if_source_incomplete",
+        )
     )
+    if not plan_only:
+        criteria.extend(
+            [
+                _criterion(
+                    kind="scientific_status_allowed",
+                    target="scientific_status",
+                    index=index + 1,
+                    required_evidence=("artifact_registry", "validation"),
+                    expected={
+                        "minimum": minimum,
+                        "forbidden_limitation_flags": forbidden_limitation_flags,
+                    },
+                    failure_semantics="indeterminate_if_source_incomplete",
+                ),
+                _criterion(
+                    kind="no_blocking_issue",
+                    target="observation",
+                    index=index + 2,
+                    required_evidence=("pipeline_summary", "node_states", "artifact_discovery"),
+                    expected={"blocking_facts": 0},
+                ),
+            ]
+        )
     semantics = {
         "schema_version": 1,
         "goal_text": goal,
@@ -239,8 +336,8 @@ def build_goal_contract_semantics(
         "scope": _scope(plan).model_dump(mode="json"),
         "criteria": [criterion.model_dump(mode="json") for criterion in criteria],
         "minimum_capability_level": minimum,
-        "allowed_limitation_flags": [],
-        "forbidden_limitation_flags": ["simplified", "preview_only", "partial"],
+        "allowed_limitation_flags": allowed_limitation_flags,
+        "forbidden_limitation_flags": forbidden_limitation_flags,
         "evaluation_policy_version": "goal-evaluator-v1",
         "builder_source": "deterministic_contract_builder",
         "warnings": [],

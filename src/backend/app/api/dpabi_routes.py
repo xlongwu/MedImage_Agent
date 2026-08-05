@@ -8,17 +8,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 
 from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.api.models import (
-    AgentExecuteRequest,
-    AgentPlanRequest,
-    RetryDryRunRequest,
-    RetryExecuteRequest,
-    SchedulerPlanRequest,
-    GpuBenchmarkRequest,
     DpabiCapabilityRequest,
     DpabiPreflightRequest,
     DpabiRunPlanRequest,
@@ -27,68 +21,29 @@ from src.backend.app.api.models import (
     DpabiSingleFunctionRequest,
     DpabiSubjectSmoothRequest,
     DpabiSubjectWrapperReportRequest,
-    DpabiWrapperValidationRequest,
-    DpabiTemplateInstantiateRequest,
     DpabiTemplateExecuteRequest,
+    DpabiTemplateInstantiateRequest,
     DpabiTemplateWizardRequest,
-    ArtifactPreviewRequest,
-    BundleCreateRequest,
-    RsfmriSpmRealignMotionQcRequest,
-    RsfmriSpmSliceTimingRequest,
-    RsfmriStRealignMotionQcRequest,
-    RsfmriCoregistrationQcRequest,
-    RsfmriSegmentationTissueQcRequest,
-    RsfmriNormalizationQcRequest,
-    RsfmriSmoothingQcRequest,
-    RsfmriNuisanceRegressionRequest,
-    RsfmriTemporalFilteringRequest,
-    RsfmriAlffFalffRequest,
-    RsfmriRehoRequest,
-    RsfmriFunctionalConnectivityRequest,
-    RsfmriGroupSummaryRequest,
-    RsfmriReportExportRequest,
-    RsfmriReportValidationRequest,
-    ReleaseReadinessRequest,
+    DpabiWrapperValidationRequest,
 )
 from src.backend.app.core.exceptions import ConfigError
-from src.backend.app.tools.report_exporter import get_latest_rsfmri_report_export, list_rsfmri_report_exports
-from src.backend.app.tools.report_package_validator import get_latest_rsfmri_report_validation, list_rsfmri_report_validations
-from src.backend.app.runtime.path_safety import PathSafetyError, read_safe_text_file
-from src.backend.app.runtime.run_inspector import (
-    inspect_run,
-    list_available_runs,
-    read_state_detail,
-)
-from src.backend.app.runtime.error_diagnoser import diagnose_run
-from src.backend.app.runtime.scheduler import create_scheduler_plan
-from src.backend.app.schemas.pipeline_schema import load_pipeline_yaml
-from src.backend.app.tools.gpu_utils import detect_gpu
-from src.backend.app.tools.gpu_alff_runner import run_alff_subject
-from src.backend.app.tools.dpabi_runner import run_dpabi_capability_inspection
-from src.backend.app.tools.dpabi_config import write_dpabi_wrapper_scaffold
 from src.backend.app.tools.dpabi_adapter import build_dpabi_input_manifest
+from src.backend.app.tools.dpabi_config import write_dpabi_wrapper_scaffold
+from src.backend.app.tools.dpabi_contract_registry import write_dpabi_wrapper_contracts
 from src.backend.app.tools.dpabi_preflight import run_dpabi_preflight
 from src.backend.app.tools.dpabi_run_plan import create_dpabi_run_plan
-from src.backend.app.tools.dpabi_sandbox_runner import run_dpabi_sandbox_smoke
-from src.backend.app.tools.dpabi_signature_runner import run_dpabi_signature_probe
-from src.backend.app.tools.dpabi_contract_registry import write_dpabi_wrapper_contracts
-from src.backend.app.tools.dpabi_single_function_runner import run_dpabi_single_function_sandbox
-from src.backend.app.tools.dpabi_subject_wrapper import run_dpabi_subject_smooth
 from src.backend.app.tools.dpabi_subject_wrapper_report import write_dpabi_subject_wrapper_report
-from src.backend.app.tools.dpabi_wrapper_validation import write_dpabi_wrapper_validation_matrix
-from src.backend.app.tools.dpabi_template_library import write_dpabi_template_library
 from src.backend.app.tools.dpabi_template_instantiator import (
     instantiate_dpabi_template,
-    execute_dpabi_template_instance,
     list_dpabi_templates,
 )
+from src.backend.app.tools.dpabi_template_library import write_dpabi_template_library
 from src.backend.app.tools.dpabi_template_wizard import (
+    create_dpabi_template_instance_from_wizard,
     get_dpabi_template_wizard_options,
     preview_dpabi_template_instance,
-    create_dpabi_template_instance_from_wizard,
 )
-from src.backend.app.tools.rsfmri_plan_tool import write_rsfmri_preprocessing_plan
-from src.backend.app.version import APP_VERSION
+from src.backend.app.tools.dpabi_wrapper_validation import write_dpabi_wrapper_validation_matrix
 
 router = APIRouter()
 

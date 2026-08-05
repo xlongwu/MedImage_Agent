@@ -26,7 +26,7 @@ def _list_records() -> list[dict[str, Any]]:
     for f in sorted(AUDIT_RECORD_DIR.glob("*.json"), key=lambda p: -p.stat().st_mtime):
         try:
             data = json.loads(f.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             continue
         records.append({
             "audit_id": data.get("audit_id"),

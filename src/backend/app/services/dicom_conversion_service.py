@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ def run_conversion_dry_run(
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _is_relative_to(path: Path, parent: Path) -> bool:
@@ -194,7 +194,7 @@ def run_get_latest_conversion_dry_run(
         checked_at = str(
             preflight_snapshot.get("checked_at")
             or mapping_snapshot.get("created_at")
-            or datetime.fromtimestamp(mapping_path.stat().st_mtime, timezone.utc).isoformat()
+            or datetime.fromtimestamp(mapping_path.stat().st_mtime, UTC).isoformat()
         )
         output_root_name = str(preflight_snapshot.get("output_root_name") or "converted_bids")
         status = str(preflight_snapshot.get("status") or "warning")
@@ -315,7 +315,6 @@ def run_conversion_persist_plan(
 ) -> dict[str, Any]:
     from src.backend.app.schemas.dicom_conversion_approval import (
         DicomConversionApprovalRecord,
-        evaluate_conversion_approval_gate,
     )
     from src.backend.app.services.dicom_conversion_plan_persistence import (
         persist_conversion_plan,
@@ -428,17 +427,18 @@ def run_conversion_execute(
     This is a verbatim extraction of the execute body from dashboard_routes
     with ``mock_store`` replaced by the injected ``store``.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        validate_output_root_not_under_rawdata,
+        validate_output_root_under_project,
+    )
     from src.backend.app.schemas.dicom_conversion_public_execution import (
         DicomConversionPublicExecutionRequest,
         DicomConversionPublicExecutionResponse,
         DicomConversionPublicExecutionSafetyFlags,
         validate_public_execution_env_flags,
         validate_public_execution_request_acknowledgements,
-    )
-    from src.backend.app.schemas.dicom_conversion_release_approval import (
-        is_release_approval_complete,
     )
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
@@ -448,10 +448,6 @@ def run_conversion_execute(
     )
     from src.backend.app.services.dicom_conversion_review_package import (
         read_conversion_review_package,
-    )
-    from src.backend.app.schemas.dicom_conversion_execution import (
-        validate_output_root_not_under_rawdata,
-        validate_output_root_under_project,
     )
 
     project = store.get_project(project_id)
@@ -717,10 +713,10 @@ def run_conversion_execute(
         ).model_dump()
 
     # ── 13. Execute ─────────────────────────────────────────────────────
-    started_at = datetime.now(timezone.utc).isoformat()
+    started_at = datetime.now(UTC).isoformat()
     execution_id = (
         f"pubexec-{project_id}-{req.conversion_run_id}"
-        f"-{int(datetime.now(timezone.utc).timestamp())}"
+        f"-{int(datetime.now(UTC).timestamp())}"
     )
     try:
         internal_result = run_internal_user_dicom_conversion_from_persisted_package(
@@ -738,7 +734,7 @@ def run_conversion_execute(
             conversion_run_id=req.conversion_run_id,
             execution_id=execution_id,
             started_at=started_at,
-            finished_at=datetime.now(timezone.utc).isoformat(),
+            finished_at=datetime.now(UTC).isoformat(),
             output_root=output_root,
             errors=[f"Internal execution failed: {exc}"],
             safety_flags=DicomConversionPublicExecutionSafetyFlags(
@@ -761,7 +757,7 @@ def run_conversion_execute(
             ),
         ).model_dump()
 
-    finished_at = datetime.now(timezone.utc).isoformat()
+    finished_at = datetime.now(UTC).isoformat()
     internal_status = getattr(internal_result, "status", "failed")
     status_map = {
         "succeeded": "succeeded",

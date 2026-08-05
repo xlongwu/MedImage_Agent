@@ -37,7 +37,9 @@ def _exists_and_type(path_str: str) -> tuple[bool, str | None]:
         return False, None
 
 
-def _try_matlab_version(command: str, timeout_seconds: int = 5) -> tuple[str | None, list[str], list[str]]:
+def _try_matlab_version(
+    command: str, timeout_seconds: int = 5
+) -> tuple[str | None, list[str], list[str]]:
     """Try to get MATLAB version via -batch.  Returns (version, warnings, errors)."""
     warnings: list[str] = []
     errors: list[str] = []
@@ -51,7 +53,7 @@ def _try_matlab_version(command: str, timeout_seconds: int = 5) -> tuple[str | N
         if result.returncode == 0:
             output = result.stdout.strip()
             if output:
-                lines = [l.strip() for l in output.splitlines() if l.strip()]
+                lines = [line.strip() for line in output.splitlines() if line.strip()]
                 version = lines[-1] if lines else None
                 return version, warnings, errors
             else:

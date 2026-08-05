@@ -1,13 +1,18 @@
-"""Memory store -- uses configured MemoryProvider backend."""
+"""Deprecated run-history compatibility store.
+
+This module is not the project-scoped long-term Memory Domain and must not be
+used by planner or execution code as a memory authority. New long-term memory
+code uses ``services.memory_repository``. These wrappers remain only for
+tracked run-history/background-review compatibility until those consumers move
+to the project-history domain.
+"""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.runtime.memory_provider import MemoryProvider
 from src.backend.app.runtime.memory_providers.file_provider import FileMemoryProvider  # noqa: F401
-
 
 _default_provider: MemoryProvider | None = None
 

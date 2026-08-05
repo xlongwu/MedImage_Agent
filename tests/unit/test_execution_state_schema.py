@@ -9,14 +9,12 @@ from __future__ import annotations
 import inspect
 
 from src.backend.app.schemas.execution_state import (
-    NODE_ALLOWED_TRANSITIONS,
     NODE_FAILURE_STATES,
     NODE_NON_TERMINAL_STATES,
     NODE_RETRY_ELIGIBLE_STATES,
     NODE_REUSE_ELIGIBLE_STATES,
     NODE_SUCCESS_STATES,
     NODE_TERMINAL_STATES,
-    RUN_ALLOWED_TRANSITIONS,
     RUN_FAILURE_STATES,
     RUN_NON_TERMINAL_STATES,
     RUN_RESUME_ELIGIBLE_STATES,
@@ -29,23 +27,35 @@ from src.backend.app.schemas.execution_state import (
     RunStateTransition,
     can_transition_node,
     can_transition_run,
-    is_node_reuse_eligible,
     is_node_retry_eligible,
+    is_node_reuse_eligible,
     is_node_terminal,
     is_run_resume_eligible,
     is_run_retry_eligible,
     is_run_terminal,
 )
 
-
 # ── 1. State definitions ─────────────────────────────────────────────────────
+
 
 def test_all_run_states_present():
     """All 15 run states from the contract are defined in RunState."""
     expected = {
-        "created", "queued", "preflight", "approval_required",
-        "audit_required", "ready", "running", "succeeded", "failed",
-        "blocked", "cancelled", "timeout", "partial", "interrupted", "unknown",
+        "created",
+        "queued",
+        "preflight",
+        "approval_required",
+        "audit_required",
+        "ready",
+        "running",
+        "succeeded",
+        "failed",
+        "blocked",
+        "cancelled",
+        "timeout",
+        "partial",
+        "interrupted",
+        "unknown",
     }
     actual = set(RunState.__args__)  # type: ignore[attr-defined]
     assert actual == expected, f"Missing: {expected - actual}, Extra: {actual - expected}"
@@ -54,9 +64,19 @@ def test_all_run_states_present():
 def test_all_node_states_present():
     """All 13 node states from the contract are defined in NodeState."""
     expected = {
-        "pending", "skipped", "preflight", "ready", "running",
-        "succeeded", "failed", "blocked", "cancelled", "timeout",
-        "reused", "invalidated", "unknown",
+        "pending",
+        "skipped",
+        "preflight",
+        "ready",
+        "running",
+        "succeeded",
+        "failed",
+        "blocked",
+        "cancelled",
+        "timeout",
+        "reused",
+        "invalidated",
+        "unknown",
     }
     actual = set(NodeState.__args__)  # type: ignore[attr-defined]
     assert actual == expected, f"Missing: {expected - actual}, Extra: {actual - expected}"
@@ -64,42 +84,63 @@ def test_all_node_states_present():
 
 # ── 2. Terminal states ───────────────────────────────────────────────────────
 
+
 def test_run_terminal_states_correct():
     """RUN_TERMINAL_STATES matches the contract: 8 terminal states."""
     expected = {
-        "succeeded", "failed", "blocked", "cancelled",
-        "timeout", "partial", "interrupted",
+        "succeeded",
+        "failed",
+        "blocked",
+        "cancelled",
+        "timeout",
+        "partial",
+        "interrupted",
     }
     # unknown may or may not be terminal; assert at least the core set
-    assert expected <= RUN_TERMINAL_STATES, \
+    assert expected <= RUN_TERMINAL_STATES, (
         f"Missing terminal states: {expected - RUN_TERMINAL_STATES}"
+    )
 
 
 def test_run_non_terminal_states_correct():
     """RUN_NON_TERMINAL_STATES covers created/queued/preflight/approval_required/audit_required/ready/running."""
     expected = {
-        "created", "queued", "preflight", "approval_required",
-        "audit_required", "ready", "running",
+        "created",
+        "queued",
+        "preflight",
+        "approval_required",
+        "audit_required",
+        "ready",
+        "running",
     }
-    assert expected <= RUN_NON_TERMINAL_STATES, \
+    assert expected <= RUN_NON_TERMINAL_STATES, (
         f"Missing non-terminal states: {expected - RUN_NON_TERMINAL_STATES}"
+    )
 
 
 def test_node_terminal_states_correct():
     """NODE_TERMINAL_STATES matches the contract: 8 terminal states."""
     expected = {
-        "skipped", "succeeded", "failed", "blocked",
-        "cancelled", "timeout", "reused", "invalidated",
+        "skipped",
+        "succeeded",
+        "failed",
+        "blocked",
+        "cancelled",
+        "timeout",
+        "reused",
+        "invalidated",
     }
-    assert expected <= NODE_TERMINAL_STATES, \
+    assert expected <= NODE_TERMINAL_STATES, (
         f"Missing terminal states: {expected - NODE_TERMINAL_STATES}"
+    )
 
 
 def test_node_non_terminal_states_correct():
     """NODE_NON_TERMINAL_STATES covers pending/preflight/ready/running."""
     expected = {"pending", "preflight", "ready", "running"}
-    assert expected <= NODE_NON_TERMINAL_STATES, \
+    assert expected <= NODE_NON_TERMINAL_STATES, (
         f"Missing non-terminal states: {expected - NODE_NON_TERMINAL_STATES}"
+    )
 
 
 def test_is_run_terminal_true():
@@ -128,6 +169,7 @@ def test_is_node_terminal_false():
 
 # ── 3. Success / failure sets ────────────────────────────────────────────────
 
+
 def test_run_success_states():
     """RUN_SUCCESS_STATES contains succeeded."""
     assert "succeeded" in RUN_SUCCESS_STATES
@@ -153,11 +195,13 @@ def test_node_failure_states():
 
 # ── 4. Retry eligibility ─────────────────────────────────────────────────────
 
+
 def test_run_retry_eligible():
     """RUN_RETRY_ELIGIBLE_STATES matches contract: failed, blocked, timeout, partial, interrupted."""
     expected = {"failed", "blocked", "timeout", "partial", "interrupted"}
-    assert expected == RUN_RETRY_ELIGIBLE_STATES, \
+    assert expected == RUN_RETRY_ELIGIBLE_STATES, (
         f"Expected {expected}, got {RUN_RETRY_ELIGIBLE_STATES}"
+    )
 
 
 def test_is_run_retry_eligible_true():
@@ -176,8 +220,9 @@ def test_is_run_retry_eligible_false():
 def test_node_retry_eligible():
     """NODE_RETRY_ELIGIBLE_STATES matches contract: failed, blocked, timeout, invalidated."""
     expected = {"failed", "blocked", "timeout", "invalidated"}
-    assert expected == NODE_RETRY_ELIGIBLE_STATES, \
+    assert expected == NODE_RETRY_ELIGIBLE_STATES, (
         f"Expected {expected}, got {NODE_RETRY_ELIGIBLE_STATES}"
+    )
 
 
 def test_is_node_retry_eligible_true():
@@ -195,11 +240,13 @@ def test_is_node_retry_eligible_false():
 
 # ── 5. Resume eligibility ────────────────────────────────────────────────────
 
+
 def test_run_resume_eligible():
     """RUN_RESUME_ELIGIBLE_STATES matches contract: failed, timeout, partial, interrupted."""
     expected = {"failed", "timeout", "partial", "interrupted"}
-    assert expected == RUN_RESUME_ELIGIBLE_STATES, \
+    assert expected == RUN_RESUME_ELIGIBLE_STATES, (
         f"Expected {expected}, got {RUN_RESUME_ELIGIBLE_STATES}"
+    )
 
 
 def test_is_run_resume_eligible_true():
@@ -216,6 +263,7 @@ def test_is_run_resume_eligible_false():
 
 
 # ── 6. Node reuse eligibility ────────────────────────────────────────────────
+
 
 def test_node_reuse_eligible():
     """NODE_REUSE_ELIGIBLE_STATES: succeeded, reused."""
@@ -236,6 +284,7 @@ def test_is_node_reuse_eligible_false():
 
 
 # ── 7. Transition helpers ────────────────────────────────────────────────────
+
 
 def test_can_transition_run_allowed():
     """Allowed transitions return True."""
@@ -259,8 +308,7 @@ def test_can_transition_run_allowed():
         ("partial", "interrupted"),
     ]
     for from_s, to_s in allowed_pairs:
-        assert can_transition_run(from_s, to_s) is True, \
-            f"Expected {from_s} -> {to_s} allowed"
+        assert can_transition_run(from_s, to_s) is True, f"Expected {from_s} -> {to_s} allowed"
 
 
 def test_can_transition_run_disallowed():
@@ -274,8 +322,7 @@ def test_can_transition_run_disallowed():
         ("created", "succeeded"),
     ]
     for from_s, to_s in disallowed_pairs:
-        assert can_transition_run(from_s, to_s) is False, \
-            f"Expected {from_s} -> {to_s} disallowed"
+        assert can_transition_run(from_s, to_s) is False, f"Expected {from_s} -> {to_s} disallowed"
 
 
 def test_terminal_succeeded_no_outgoing_transition():
@@ -283,8 +330,9 @@ def test_terminal_succeeded_no_outgoing_transition():
     for to_state in RunState.__args__:  # type: ignore[attr-defined]
         if to_state == "succeeded":
             continue
-        assert can_transition_run("succeeded", to_state) is False, \
+        assert can_transition_run("succeeded", to_state) is False, (
             f"succeeded should not transition to {to_state}"
+        )
 
 
 def test_can_transition_node_allowed():
@@ -312,8 +360,7 @@ def test_can_transition_node_allowed():
         ("reused", "invalidated"),
     ]
     for from_s, to_s in allowed_pairs:
-        assert can_transition_node(from_s, to_s) is True, \
-            f"Expected {from_s} -> {to_s} allowed"
+        assert can_transition_node(from_s, to_s) is True, f"Expected {from_s} -> {to_s} allowed"
 
 
 def test_can_transition_node_disallowed():
@@ -327,8 +374,7 @@ def test_can_transition_node_disallowed():
         ("running", "pending"),
     ]
     for from_s, to_s in disallowed_pairs:
-        assert can_transition_node(from_s, to_s) is False, \
-            f"Expected {from_s} -> {to_s} disallowed"
+        assert can_transition_node(from_s, to_s) is False, f"Expected {from_s} -> {to_s} disallowed"
 
 
 def test_succeeded_node_can_transition_to_reused_or_invalidated():
@@ -338,6 +384,7 @@ def test_succeeded_node_can_transition_to_reused_or_invalidated():
 
 
 # ── 8. Unknown string safety ─────────────────────────────────────────────────
+
 
 def test_unknown_string_terminal_returns_false():
     """Unknown strings return False for all terminal/eligibility functions."""
@@ -367,9 +414,11 @@ def test_empty_string_transition_returns_false():
 
 # ── 9. Purity / no runtime imports ────────────────────────────────────────────
 
+
 def test_module_imports_no_runtime_executor():
     """Schema module must not import from pipeline_executor, state_store, or execute_reviewed_routes."""
     import src.backend.app.schemas.execution_state as es
+
     source = inspect.getsource(es)
     forbidden = [
         "pipeline_executor",
@@ -384,6 +433,7 @@ def test_module_imports_no_runtime_executor():
 def test_module_does_no_file_io():
     """Schema module must not perform file I/O on import."""
     import src.backend.app.schemas.execution_state as es
+
     source = inspect.getsource(es)
     iowords = ["open(", "Path(", "write_text", "read_text", "json.dump", "json.load"]
     for word in iowords:
@@ -391,6 +441,7 @@ def test_module_does_no_file_io():
 
 
 # ── 10. Pydantic models ──────────────────────────────────────────────────────
+
 
 def test_run_state_transition_model():
     """RunStateTransition model works correctly."""
@@ -400,7 +451,9 @@ def test_run_state_transition_model():
     assert t.allowed is True
     assert t.reason is None
 
-    t2 = RunStateTransition(from_state="succeeded", to_state="running", allowed=False, reason="terminal")
+    t2 = RunStateTransition(
+        from_state="succeeded", to_state="running", allowed=False, reason="terminal"
+    )
     assert t2.allowed is False
     assert t2.reason == "terminal"
 

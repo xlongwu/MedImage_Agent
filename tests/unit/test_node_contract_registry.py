@@ -58,12 +58,8 @@ def test_strict_contract_rejects_type_range_unknown_fields_and_normalizes_defaul
     assert "must be number" in " ".join(errors)
     assert "must be <=" in " ".join(errors)
 
-    first = validate_plan(
-        _plan("temporal_filtering_subject", backend="python", params={})
-    )
-    second = validate_plan(
-        _plan("temporal_filtering_subject", backend="python", params={})
-    )
+    first = validate_plan(_plan("temporal_filtering_subject", backend="python", params={}))
+    second = validate_plan(_plan("temporal_filtering_subject", backend="python", params={}))
     assert first.ok and second.ok
     params = first.normalized_plan["nodes"][0]["params"]
     assert params["low_hz"] == 0.01
@@ -93,6 +89,47 @@ def test_invalid_artifact_type_precondition_and_backend_are_rejected_before_revi
 
     backend = validate_plan(_plan("data_inspection", backend="gpu"))
     assert any(error.code == "BACKEND_MISMATCH" for error in backend.errors)
+
+
+def test_native_dry_run_contract_accepts_registered_bids_input():
+    result = validate_plan(
+        _plan(
+            "native_preproc_full_dry_run",
+            backend="native_python",
+            params={"input_bids_dir": "C:/research/demo/rawdata"},
+        )
+    )
+
+    assert result.ok is True
+    assert result.normalized_plan["nodes"][0]["params"]["input_bids_dir"] == (
+        "C:/research/demo/rawdata"
+    )
+
+
+def test_native_execution_hash_binds_reviewed_subject_scope():
+    common = {
+        "input_bids_dir": "C:/research/demo/rawdata",
+        "confirmations": {},
+    }
+    sub_001 = validate_plan(
+        _plan(
+            "native_preproc_full_execute",
+            backend="native_python",
+            params={**common, "subject_id": "sub-001"},
+        )
+    )
+    sub_002 = validate_plan(
+        _plan(
+            "native_preproc_full_execute",
+            backend="native_python",
+            params={**common, "subject_id": "sub-002"},
+        )
+    )
+
+    assert sub_001.ok is True
+    assert sub_002.ok is True
+    assert sub_001.normalized_plan["nodes"][0]["params"]["subject_id"] == "sub-001"
+    assert sub_001.normalized_params_hash != sub_002.normalized_params_hash
 
 
 def test_fallback_contract_is_unavailable_while_legacy_compatibility_is_versioned():

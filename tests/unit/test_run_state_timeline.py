@@ -30,36 +30,37 @@ from src.backend.app.services import (
     motion_qc_readiness,
 )
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-from tests.goal_contract_helpers import reviewed_goal_candidate
 from src.backend.app.services.run_state_timeline import (
-    NodeStateTimelineRecord,
-    ProjectRunStateTimelineResponse,
-    RunStateTimelineEvent,
     build_run_state_timeline,
     normalize_node_state,
     normalize_run_state,
 )
-
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
-    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH",
-                        tmp_path / "cfg.json")
-    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT",
-                        tmp_path / "prj")
-    for mod in (project_routes, dashboard_routes, project_context,
-                reviewed_plan_store, project_history_routes,
-                execute_reviewed_routes, bold_reference_readiness,
-                motion_qc_readiness):
+    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "cfg.json")
+    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "prj")
+    for mod in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+    ):
         monkeypatch.setattr(mod, "mock_store", store)
-    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
-                        tmp_path / "audit")
+    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR", tmp_path / "audit")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
-        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
@@ -71,12 +72,17 @@ def _create_project(client: TestClient, tmp_path: Path) -> dict:
     rd = tmp_path / "rawdata"
     rd.mkdir(parents=True, exist_ok=True)
     (rd / "dataset_description.json").write_text(
-        '{"Name":"test","BIDSVersion":"1.8.0"}', encoding="utf-8")
+        '{"Name":"test","BIDSVersion":"1.8.0"}', encoding="utf-8"
+    )
     pj = tmp_path / "project"
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Timeline Test",
-        "rawdata_dir": str(rd), "project_dir": str(pj),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Timeline Test",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -93,8 +99,7 @@ def _make_plan(created: dict) -> dict:
             "diagnostics": created.get("diagnostics", {}),
         },
         "nodes": [
-            {"id": "contract_smoke", "backend": "python",
-             "depends_on": [], "params": {}},
+            {"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}},
         ],
     }
 
@@ -117,22 +122,26 @@ def _save_plan(client: TestClient, created: dict, plan: dict) -> str:
     return resp.json()["reviewed_plan"]["reviewed_plan_id"]
 
 
-def _execute(client: TestClient, created: dict, plan: dict,
-             reviewed_plan_id: str) -> dict:
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": {
-            "approved": True, "approved_by": "test",
-            "approved_nodes": ["*"], "rejected_nodes": [],
+def _execute(client: TestClient, created: dict, plan: dict, reviewed_plan_id: str) -> dict:
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": {
+                "approved": True,
+                "approved_by": "test",
+                "approved_nodes": ["*"],
+                "rejected_nodes": [],
+            },
+            "project_id": created["project_id"],
+            "reviewed_plan_id": reviewed_plan_id,
+            "project_config_path": created["project_config_path"],
+            "dry_run": False,
+            "confirm_execution": True,
+            "persist_audit": True,
+            "write_pipeline_yaml": True,
         },
-        "project_id": created["project_id"],
-        "reviewed_plan_id": reviewed_plan_id,
-        "project_config_path": created["project_config_path"],
-        "dry_run": False,
-        "confirm_execution": True,
-        "persist_audit": True,
-        "write_pipeline_yaml": True,
-    })
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -148,6 +157,7 @@ def _setup_executed(tmp_path, monkeypatch, client):
 # ═══════════════════════════════════════════════════════════════════════
 # Group 1 — State normalization
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_normalize_run_state_known_values():
     assert normalize_run_state("COMPLETED") == "succeeded"
@@ -190,6 +200,7 @@ def test_normalize_node_state_known_values():
 # Group 2 — Pure timeline builder
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_timeline_builder_minimal():
     t = build_run_state_timeline(project_id="p1", run_id="r1")
     assert t.ok is True
@@ -201,7 +212,8 @@ def test_timeline_builder_minimal():
 
 def test_timeline_builder_with_status():
     t = build_run_state_timeline(
-        project_id="p1", run_id="r1",
+        project_id="p1",
+        run_id="r1",
         run_link_status="SUCCESS",
     )
     assert t.current_run_state == "succeeded"
@@ -210,7 +222,8 @@ def test_timeline_builder_with_status():
 
 def test_timeline_builder_with_summary_preview():
     t = build_run_state_timeline(
-        project_id="p1", run_id="r1",
+        project_id="p1",
+        run_id="r1",
         summary_preview={
             "status": "SUCCESS",
             "started_at": "2026-01-01T00:00:00Z",
@@ -228,9 +241,47 @@ def test_timeline_builder_with_summary_preview():
     assert t.nodes[0].state == "succeeded"
 
 
+def test_timeline_events_are_chronological_even_when_sources_arrive_out_of_order():
+    timeline = build_run_state_timeline(
+        project_id="p1",
+        run_id="r1",
+        created_at="2026-01-01T00:00:00Z",
+        summary_preview={
+            "status": "SUCCESS",
+            "started_at": "2026-01-01T00:01:00Z",
+            "finished_at": "2026-01-01T00:05:00Z",
+        },
+        run_events=[
+            {"timestamp": "2026-01-01T00:04:00Z", "message": "almost done"},
+            {"timestamp": "2026-01-01T00:02:00Z", "message": "node started"},
+        ],
+    )
+
+    timestamps = [event.timestamp for event in timeline.events if event.timestamp]
+    assert timestamps == sorted(timestamps)
+    assert timeline.events[0].state == "created"
+    assert timeline.events[1].state == "running"
+
+
+def test_timeline_events_compare_mixed_utc_iso_formats_by_instant():
+    timeline = build_run_state_timeline(
+        project_id="p1",
+        run_id="r1",
+        created_at="2026-07-26T07:48:47Z",
+        summary_preview={
+            "status": "SUCCESS",
+            "started_at": "2026-07-26T07:48:47.978398+00:00",
+            "finished_at": "2026-07-26T07:48:49.080719+00:00",
+        },
+    )
+
+    assert [event.state for event in timeline.events] == ["created", "running", "succeeded"]
+
+
 def test_timeline_builder_failed_run():
     t = build_run_state_timeline(
-        project_id="p1", run_id="r1",
+        project_id="p1",
+        run_id="r1",
         run_link_status="FAILED",
     )
     assert t.current_run_state == "failed"
@@ -242,6 +293,7 @@ def test_timeline_builder_failed_run():
 # Group 3 — Endpoint integration
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_timeline_endpoint_project_not_found():
     client = TestClient(app)
     resp = client.get("/api/projects/nonexistent/runs/r1/state-timeline")
@@ -252,9 +304,7 @@ def test_timeline_endpoint_run_not_found(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created = _create_project(client, tmp_path)
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/nonexistent/state-timeline"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/nonexistent/state-timeline")
     assert resp.status_code == 404
 
 
@@ -268,9 +318,7 @@ def test_contract_smoke_timeline_after_execution(tmp_path, monkeypatch):
     run_id = exec_data.get("run_id")
     assert run_id is not None
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["ok"] is True
@@ -279,12 +327,23 @@ def test_contract_smoke_timeline_after_execution(tmp_path, monkeypatch):
 
     # Current run state should be a valid Phase 3 state
     valid_states = {
-        "created", "queued", "preflight", "approval_required",
-        "audit_required", "ready", "running", "succeeded", "failed",
-        "blocked", "cancelled", "timeout", "partial", "interrupted", "unknown",
+        "created",
+        "queued",
+        "preflight",
+        "approval_required",
+        "audit_required",
+        "ready",
+        "running",
+        "succeeded",
+        "failed",
+        "blocked",
+        "cancelled",
+        "timeout",
+        "partial",
+        "interrupted",
+        "unknown",
     }
-    assert data["current_run_state"] in valid_states, \
-        f"Got: {data['current_run_state']}"
+    assert data["current_run_state"] in valid_states, f"Got: {data['current_run_state']}"
 
     # Terminal/retry/resume should be booleans
     assert isinstance(data["terminal"], bool)
@@ -300,9 +359,7 @@ def test_timeline_uses_execution_state_helpers(tmp_path, monkeypatch):
     created, exec_data = _setup_executed(tmp_path, monkeypatch, client)
 
     run_id = exec_data.get("run_id")
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
     data = resp.json()
 
     state = data["current_run_state"]
@@ -320,9 +377,7 @@ def test_timeline_includes_node_records(tmp_path, monkeypatch):
     created, exec_data = _setup_executed(tmp_path, monkeypatch, client)
 
     run_id = exec_data.get("run_id")
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
     data = resp.json()
     nodes = data.get("nodes", [])
     assert isinstance(nodes, list)
@@ -338,8 +393,7 @@ def test_timeline_ignores_path_query(tmp_path, monkeypatch):
 
     run_id = exec_data.get("run_id")
     resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-        "?path=../../secret"
+        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline?path=../../secret"
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
@@ -349,6 +403,7 @@ def test_timeline_ignores_path_query(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 # Group 4 — Safety boundaries
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_timeline_read_only_no_rawdata_change(tmp_path, monkeypatch):
     """Timeline endpoint does not modify rawdata."""
@@ -363,10 +418,14 @@ def test_timeline_read_only_no_rawdata_change(tmp_path, monkeypatch):
     mtime_before = sentinel.stat().st_mtime
 
     pj = tmp_path / "pj_tl"
-    create_resp = client.post("/api/projects/create", json={
-        "project_name": "TL Safety",
-        "rawdata_dir": str(rd), "project_dir": str(pj),
-    })
+    create_resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "TL Safety",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert create_resp.status_code == 200
     created = create_resp.json()
     plan = _make_plan(created)
@@ -374,9 +433,7 @@ def test_timeline_read_only_no_rawdata_change(tmp_path, monkeypatch):
     exec_data = _execute(client, created, plan, rpid)
 
     run_id = exec_data.get("run_id")
-    client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
 
     mtime_after = sentinel.stat().st_mtime
     assert mtime_before == mtime_after
@@ -388,6 +445,7 @@ def test_timeline_no_external_subprocess(tmp_path, monkeypatch):
     _enable_env(monkeypatch)
 
     import subprocess
+
     original_run = subprocess.run
     called_matlab = []
 
@@ -406,14 +464,11 @@ def test_timeline_no_external_subprocess(tmp_path, monkeypatch):
     exec_data = _execute(client, created, plan, rpid)
 
     run_id = exec_data.get("run_id")
-    client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
 
     # Only count MATLAB calls during timeline endpoint (execution may have
     # already legitimately called it for spm_smoke_test nodes)
-    matlab_from_timeline = [c for c in called_matlab
-                            if "state-timeline" in str(c).lower()]
+    matlab_from_timeline = [c for c in called_matlab if "state-timeline" in str(c).lower()]
     assert len(matlab_from_timeline) == 0
 
 
@@ -426,28 +481,17 @@ def test_timeline_does_not_modify_run_history(tmp_path, monkeypatch):
 
     run_id = exec_data.get("run_id")
     # Get run detail before
-    before = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}"
-    ).json()
+    _before = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}").json()
 
     # Call timeline
-    client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
 
     # Get run detail after
-    after = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}"
-    ).json()
+    _after = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}").json()
 
     # Run list count should be unchanged
-    runs_before = client.get(
-        f"/api/projects/{created['project_id']}/runs"
-    ).json()
-    runs_after = client.get(
-        f"/api/projects/{created['project_id']}/runs"
-    ).json()
+    runs_before = client.get(f"/api/projects/{created['project_id']}/runs").json()
+    runs_after = client.get(f"/api/projects/{created['project_id']}/runs").json()
     runs_b = runs_before if isinstance(runs_before, list) else runs_before.get("runs", [])
     runs_a = runs_after if isinstance(runs_after, list) else runs_after.get("runs", [])
-    assert len(runs_b) == len(runs_a), \
-        f"Run list changed: {len(runs_b)} → {len(runs_a)}"
+    assert len(runs_b) == len(runs_a), f"Run list changed: {len(runs_b)} → {len(runs_a)}"

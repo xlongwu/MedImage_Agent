@@ -5,9 +5,8 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from src.backend.app.api.models import GpuBenchmarkRequest
 from src.backend.app.api.execution_contract import reject_execution_contract
-from src.backend.app.tools.gpu_alff_runner import run_alff_subject
+from src.backend.app.api.models import GpuBenchmarkRequest
 from src.backend.app.tools.gpu_utils import detect_gpu
 
 router = APIRouter()

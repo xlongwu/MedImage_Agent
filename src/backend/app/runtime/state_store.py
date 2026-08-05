@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.core.exceptions import StateStoreError
 from src.backend.app.runtime.atomic_file import atomic_write_json
 
-
 STATE_SCHEMA_VERSION = "state-store-v1"
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def determine_status_from_result(result: dict[str, Any]) -> str:

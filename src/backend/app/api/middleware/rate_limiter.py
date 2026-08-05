@@ -4,12 +4,10 @@ import os
 import threading
 import time
 from collections import defaultdict, deque
-from typing import Deque
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-
 
 DEFAULT_RATE_LIMIT_PER_MINUTE = 6000
 
@@ -27,7 +25,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 limit_per_minute = DEFAULT_RATE_LIMIT_PER_MINUTE
         self.limit_per_minute = max(0, limit_per_minute)
         self._lock = threading.Lock()
-        self._hits: dict[str, Deque[float]] = defaultdict(deque)
+        self._hits: dict[str, deque[float]] = defaultdict(deque)
 
     async def dispatch(self, request: Request, call_next) -> Response:
         if self.limit_per_minute <= 0:

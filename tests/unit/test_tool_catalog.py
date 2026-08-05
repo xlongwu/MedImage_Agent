@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+
 from src.backend.app.runtime.tool_catalog import (
     ToolCatalogItem,
     build_tool_catalog,
@@ -12,8 +13,8 @@ from src.backend.app.runtime.tool_catalog import (
     get_tool_catalog_item,
 )
 
-
 # ── Module-level cache ──
+
 
 @pytest.fixture(scope="module")
 def catalog() -> list[ToolCatalogItem]:
@@ -26,6 +27,7 @@ def catalog_by_id(catalog: list[ToolCatalogItem]) -> dict[str, ToolCatalogItem]:
 
 
 # ── Structural ──
+
 
 def test_catalog_non_empty(catalog: list[ToolCatalogItem]):
     assert len(catalog) > 0
@@ -53,14 +55,23 @@ def test_catalog_covers_all_registered_nodes(catalog: list[ToolCatalogItem]):
 
 
 def test_every_item_has_required_fields(catalog: list[ToolCatalogItem]):
-    required = ["id", "name", "backend", "parallel_level", "description",
-                "requires_approval", "manual_required", "risk_level"]
+    required = [
+        "id",
+        "name",
+        "backend",
+        "parallel_level",
+        "description",
+        "requires_approval",
+        "manual_required",
+        "risk_level",
+    ]
     for item in catalog:
         for field in required:
             assert hasattr(item, field), f"{item.id} missing field '{field}'"
 
 
 # ── Specific node metadata ──
+
 
 def test_spm_realign_requires_approval(catalog_by_id: dict[str, ToolCatalogItem]):
     item = catalog_by_id["spm_realign_subject"]
@@ -80,10 +91,10 @@ def test_report_exporter_has_report_tag(catalog_by_id: dict[str, ToolCatalogItem
 
 # ── Fallback coverage ──
 
+
 def test_fallback_nodes_exist_and_dont_crash(catalog: list[ToolCatalogItem]):
     """Every node gets metadata — either explicit or fallback."""
-    fallback = [item for item in catalog
-                if item.description.startswith("No catalog metadata yet")]
+    fallback = [item for item in catalog if item.description.startswith("No catalog metadata yet")]
     # All should be valid items
     for fb in fallback:
         assert fb.id, "fallback item missing id"
@@ -94,8 +105,12 @@ def test_fallback_nodes_exist_and_dont_crash(catalog: list[ToolCatalogItem]):
 
 def test_fallback_dpabi_contract_is_low_risk(catalog_by_id: dict[str, ToolCatalogItem]):
     """DPABI contract/capability/preflight nodes should be low risk."""
-    for nid in ["dpabi_capability_inspection", "dpabi_preflight",
-                "dpabi_alff_falff_contract", "dpabi_wrapper_scaffold"]:
+    for nid in [
+        "dpabi_capability_inspection",
+        "dpabi_preflight",
+        "dpabi_alff_falff_contract",
+        "dpabi_wrapper_scaffold",
+    ]:
         item = catalog_by_id.get(nid)
         if item:
             assert item.risk_level in ("low", "medium"), (
@@ -115,6 +130,7 @@ def test_fallback_spm_nodes_are_high_risk(catalog_by_id: dict[str, ToolCatalogIt
 
 # ── get_tool_catalog_item ──
 
+
 def test_get_item_for_existing_node():
     item = get_tool_catalog_item("spm_realign_subject")
     assert isinstance(item, ToolCatalogItem)
@@ -128,6 +144,7 @@ def test_get_item_for_nonexistent_node_raises():
 
 # ── Serialization ──
 
+
 def test_catalog_as_dicts_is_json_serializable():
     dicts = catalog_as_dicts()
     assert isinstance(dicts, list)
@@ -140,6 +157,7 @@ def test_catalog_as_dicts_is_json_serializable():
 
 
 # ── No side effects ──
+
 
 def test_build_catalog_does_not_execute_runners():
     """Building the catalog must not call any node runner functions."""

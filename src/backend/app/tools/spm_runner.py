@@ -6,7 +6,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from src.backend.app.runtime.external_tool_result import from_subprocess_result, standard_external_safety
+from src.backend.app.runtime.external_tool_result import (
+    from_subprocess_result,
+    standard_external_safety,
+)
 
 
 def _matlab_quote(value: str) -> str:

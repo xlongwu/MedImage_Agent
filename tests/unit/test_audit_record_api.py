@@ -33,6 +33,7 @@ def _write_dummy_audit(audit_dir: Path, audit_id: str, event_type: str = "dry_ru
 
 # ── 1. List returns 200 ──
 
+
 def test_list_returns_200():
     resp = client.get("/api/audit/records")
     assert resp.status_code == 200
@@ -40,12 +41,14 @@ def test_list_returns_200():
 
 # ── 2. Empty returns ok=true ──
 
+
 def test_list_ok_true():
     resp = client.get("/api/audit/records")
     assert resp.json()["ok"] is True
 
 
 # ── 3. List with records (patch dir) ──
+
 
 def test_list_with_records(monkeypatch, tmp_path):
     monkeypatch.setattr("src.backend.app.api.audit_record_routes.AUDIT_RECORD_DIR", tmp_path)
@@ -59,6 +62,7 @@ def test_list_with_records(monkeypatch, tmp_path):
 
 # ── 4. Item has required fields ──
 
+
 def test_item_has_fields(monkeypatch, tmp_path):
     monkeypatch.setattr("src.backend.app.api.audit_record_routes.AUDIT_RECORD_DIR", tmp_path)
     _write_dummy_audit(tmp_path, "audit_001")
@@ -70,6 +74,7 @@ def test_item_has_fields(monkeypatch, tmp_path):
 
 # ── 5. Get single record ──
 
+
 def test_get_single_record(monkeypatch, tmp_path):
     monkeypatch.setattr("src.backend.app.api.audit_record_routes.AUDIT_RECORD_DIR", tmp_path)
     _write_dummy_audit(tmp_path, "audit_001")
@@ -80,6 +85,7 @@ def test_get_single_record(monkeypatch, tmp_path):
 
 # ── 6. Nonexistent → 404 ──
 
+
 def test_nonexistent_404(monkeypatch, tmp_path):
     monkeypatch.setattr("src.backend.app.api.audit_record_routes.AUDIT_RECORD_DIR", tmp_path)
     resp = client.get("/api/audit/records/nonexistent_xyz")
@@ -88,12 +94,14 @@ def test_nonexistent_404(monkeypatch, tmp_path):
 
 # ── 7. Invalid audit_id → 400 ──
 
+
 def test_invalid_audit_id_400():
     resp = client.get("/api/audit/records/../../etc/passwd")
     assert resp.status_code in (400, 404)
 
 
 # ── 8. Path traversal blocked ──
+
 
 def test_path_traversal_blocked():
     resp = client.get("/api/audit/records/../rawdata")
@@ -102,6 +110,7 @@ def test_path_traversal_blocked():
 
 # ── 9. No rawdata reads ──
 
+
 def test_no_rawdata_read():
     resp = client.get("/api/audit/records")
     assert resp.status_code == 200
@@ -109,17 +118,20 @@ def test_no_rawdata_read():
 
 # ── 10. No executor ──
 
+
 def test_no_executor():
     client.get("/api/audit/records")
 
 
 # ── 11. No runner ──
 
+
 def test_no_runner():
     client.get("/api/audit/records")
 
 
 # ── 12. JSON serializable ──
+
 
 def test_json_serializable():
     resp = client.get("/api/audit/records")

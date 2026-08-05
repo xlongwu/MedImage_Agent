@@ -17,7 +17,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Literal type aliases
 # ═══════════════════════════════════════════════════════════════════════
@@ -94,7 +93,7 @@ class OutputManifestItem(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def _verified_implies_exists(self) -> "OutputManifestItem":
+    def _verified_implies_exists(self) -> OutputManifestItem:
         if self.verified and not self.exists:
             raise ValueError("verified=True requires exists=True")
         if self.verification_status == "verified" and not self.exists:
@@ -104,13 +103,13 @@ class OutputManifestItem(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _path_not_empty(self) -> "OutputManifestItem":
+    def _path_not_empty(self) -> OutputManifestItem:
         if not self.path.strip():
             raise ValueError("path must be non-empty")
         return self
 
     @model_validator(mode="after")
-    def _size_bytes_non_negative(self) -> "OutputManifestItem":
+    def _size_bytes_non_negative(self) -> OutputManifestItem:
         if self.size_bytes is not None and self.size_bytes < 0:
             raise ValueError("size_bytes cannot be negative")
         return self

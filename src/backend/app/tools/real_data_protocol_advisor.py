@@ -21,7 +21,7 @@ def recommend_protocol_from_inventory(
             return {"ok": False, "errors": [f"Inventory not found: {inventory_path}"]}
         try:
             inventory = json.loads(inv_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             return {"ok": False, "errors": [f"Failed to load inventory: {e}"]}
 
     subjects = inventory.get("subjects", [])

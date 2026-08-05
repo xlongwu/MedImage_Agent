@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -216,7 +216,7 @@ class ReplanService:
                 "REPLAN_PERSISTENCE_FAILED",
             )
             raise StateStoreError("REPLAN_PERSISTENCE_FAILED") from exc
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         attempt = RecoveryAttemptRecord(
             recovery_attempt_id=attempt_id,
             project_id=project_id,

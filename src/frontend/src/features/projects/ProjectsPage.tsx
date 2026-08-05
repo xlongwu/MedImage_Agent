@@ -6,6 +6,7 @@ import type { ProjectSummary } from "../../lib/types/project";
 import styles from "./ProjectsPage.module.css";
 
 type ProjectFilter = "all" | "needs_setup" | "pipeline" | "rsfmri" | "mri";
+type ProjectSort = "recent" | "name" | "subjects";
 
 export interface ProjectsPageProps {
   deletingProjectId: string | null;
@@ -33,6 +34,7 @@ export function ProjectsPage({
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<ProjectFilter>("all");
+  const [sortBy, setSortBy] = useState<ProjectSort>("recent");
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null);
   const filters: Array<{ id: ProjectFilter; label: string }> = [
     { id: "all", label: t("projects.all") },
@@ -44,26 +46,32 @@ export function ProjectsPage({
 
   const filteredProjects = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return projects.filter((project) => {
-      const hasPipeline = hasReviewedPipelineReference(project);
-      const haystack = [
-        project.name,
-        project.study_id,
-        project.modality,
-        project.current_pipeline_id,
-      ]
-        .join(" ")
-        .toLowerCase();
-      return (
-        (!needle || haystack.includes(needle)) &&
-        (activeFilter === "all" ||
-          (activeFilter === "needs_setup" && !hasPipeline) ||
-          (activeFilter === "pipeline" && hasPipeline) ||
-          (activeFilter === "rsfmri" && project.modality.toLowerCase().includes("rs-fmri")) ||
-          (activeFilter === "mri" && project.modality.toLowerCase().includes("mri")))
-      );
-    });
-  }, [activeFilter, projects, query]);
+    return projects
+      .filter((project) => {
+        const hasPipeline = hasReviewedPipelineReference(project);
+        const haystack = [
+          project.name,
+          project.study_id,
+          project.modality,
+          project.current_pipeline_id,
+        ]
+          .join(" ")
+          .toLowerCase();
+        return (
+          (!needle || haystack.includes(needle)) &&
+          (activeFilter === "all" ||
+            (activeFilter === "needs_setup" && !hasPipeline) ||
+            (activeFilter === "pipeline" && hasPipeline) ||
+            (activeFilter === "rsfmri" && project.modality.toLowerCase().includes("rs-fmri")) ||
+            (activeFilter === "mri" && project.modality.toLowerCase().includes("mri")))
+        );
+      })
+      .sort((left, right) => {
+        if (sortBy === "name") return left.name.localeCompare(right.name);
+        if (sortBy === "subjects") return right.subjects_count - left.subjects_count;
+        return String(right.created_date).localeCompare(String(left.created_date));
+      });
+  }, [activeFilter, projects, query, sortBy]);
 
   const selectProject = (projectId: string) => {
     onSelectProject(projectId);
@@ -112,6 +120,18 @@ export function ProjectsPage({
             </button>
           ))}
         </div>
+        <label className={styles.sort}>
+          <span>{t("projects.sort.label")}</span>
+          <select
+            aria-label={t("projects.sort.label")}
+            onChange={(event) => setSortBy(event.target.value as ProjectSort)}
+            value={sortBy}
+          >
+            <option value="recent">{t("projects.sort.recent")}</option>
+            <option value="name">{t("projects.sort.name")}</option>
+            <option value="subjects">{t("projects.sort.subjects")}</option>
+          </select>
+        </label>
       </div>
 
       {error && projects.length > 0 ? (
@@ -121,9 +141,9 @@ export function ProjectsPage({
       ) : null}
 
       {loading ? (
-        <div aria-label={t("projects.loading")} className={styles.grid} role="status">
+        <div aria-label={t("projects.loading")} className={styles.list} role="status">
           {Array.from({ length: 6 }).map((_, index) => (
-            <span className={styles.skeletonCard} key={index} />
+            <span className={styles.skeletonRow} key={index} />
           ))}
         </div>
       ) : error && projects.length === 0 ? (
@@ -151,37 +171,46 @@ export function ProjectsPage({
       ) : filteredProjects.length === 0 ? (
         <EmptyState title={t("projects.noMatches")} />
       ) : (
-        <div className={styles.grid}>
+        <div className={styles.list} role="list">
+          <div className={styles.listHeader} aria-hidden="true">
+            <span>{t("projects.column.project")}</span>
+            <span>{t("projects.column.dataset")}</span>
+            <span>{t("projects.column.status")}</span>
+            <span>{t("projects.column.updated")}</span>
+            <span />
+          </div>
           {filteredProjects.map((project) => {
             const hasPipeline = hasReviewedPipelineReference(project);
             return (
-              <article className={styles.card} key={project.id}>
+              <article
+                className={styles.row}
+                data-selected={project.id === selectedProjectId}
+                key={project.id}
+                role="listitem"
+              >
                 <button
-                  className={styles.cardMain}
+                  className={styles.rowMain}
                   onClick={() => selectProject(project.id)}
                   type="button"
                 >
-                  <div className={styles.cardMeta}>
+                  <span className={styles.projectIcon}>
+                    <Icon height={18} name="folder" width={18} />
+                  </span>
+                  <span className={styles.projectIdentity}>
+                    <h2>{project.name}</h2>
+                    <span>{project.study_id}</span>
+                  </span>
+                  <span className={styles.datasetFacts}>
                     <Badge tone="neutral">{project.modality || t("common.unavailable")}</Badge>
-                    <span className={styles.state} data-state={hasPipeline ? "ready" : "setup"}>
-                      <i aria-hidden="true" />
-                      {hasPipeline ? t("projects.pipelineSet") : t("projects.needsSetup")}
-                    </span>
-                  </div>
-                  <h2>{project.name}</h2>
-                  <p className={styles.studyId}>{project.study_id}</p>
-                  <dl className={styles.cardFacts}>
-                    <div>
-                      <dt>{t("projects.subjects")}</dt>
-                      <dd>{project.subjects_count}</dd>
-                    </div>
-                    <div>
-                      <dt>{t("projects.lastActivity")}</dt>
-                      <dd>{project.created_date || t("common.unavailable")}</dd>
-                    </div>
-                  </dl>
+                    <small>{t("projects.subjectCount", { count: project.subjects_count })}</small>
+                  </span>
+                  <span className={styles.state} data-state={hasPipeline ? "ready" : "setup"}>
+                    <i aria-hidden="true" />
+                    {hasPipeline ? t("projects.pipelineSet") : t("projects.needsSetup")}
+                  </span>
+                  <time>{project.created_date || t("common.unavailable")}</time>
                 </button>
-                <div className={styles.cardActions}>
+                <div className={styles.rowActions}>
                   <Button
                     onClick={() => selectProject(project.id)}
                     size="sm"

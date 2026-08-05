@@ -1,13 +1,17 @@
 """Artifact validation helpers for native preprocessing."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
 
 from src.backend.app.native_preproc.io.nifti_io import nifti_summary
-from src.backend.app.schemas.native_preproc import NativePreprocArtifactRef, NativePreprocStageResult
+from src.backend.app.schemas.native_preproc import (
+    NativePreprocArtifactRef,
+    NativePreprocStageResult,
+)
 
 _NIFTI_TYPES = {
     "bold_4d",

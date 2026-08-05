@@ -1,12 +1,14 @@
 import type { ProjectDataState, WorkflowLifecycleState } from "../../lib/projectWorkflow";
 
-export type PrimaryWorkspace = "overview" | "data" | "plan" | "preprocessing" | "qc" | "results";
-export type UtilityWorkspace = "runs" | "settings";
-export type ProjectWorkspace = PrimaryWorkspace | UtilityWorkspace;
+export type LegacyWorkspace = "overview" | "data" | "plan" | "preprocessing" | "qc" | "results";
+export type PrimaryWorkspace = LegacyWorkspace;
+export type ProjectWorkspace = "agent" | "runs" | "settings";
+export type UtilityWorkspace = Exclude<ProjectWorkspace, "agent">;
 
 export type AppLocation =
   | { kind: "projects" }
-  | { kind: "project"; projectId: string; workspace: ProjectWorkspace };
+  | { kind: "project"; projectId: string; workspace: ProjectWorkspace }
+  | { kind: "legacy"; projectId: string; workspace: LegacyWorkspace };
 
 export type LifecycleItem = {
   id: PrimaryWorkspace;
@@ -24,12 +26,22 @@ export const primaryWorkspaces: PrimaryWorkspace[] = [
 ];
 
 export const utilityWorkspaces: UtilityWorkspace[] = ["runs", "settings"];
+export const projectWorkspaces: ProjectWorkspace[] = ["agent", "runs", "settings"];
 
 export function locationForProject(projectId: string): AppLocation {
-  return { kind: "project", projectId, workspace: "overview" };
+  return { kind: "project", projectId, workspace: "agent" };
 }
 
-export function isPrimaryWorkspace(workspace: ProjectWorkspace): workspace is PrimaryWorkspace {
+export function legacyLocationForProject(
+  projectId: string,
+  workspace: LegacyWorkspace,
+): AppLocation {
+  return { kind: "legacy", projectId, workspace };
+}
+
+export function isPrimaryWorkspace(
+  workspace: ProjectWorkspace | LegacyWorkspace,
+): workspace is PrimaryWorkspace {
   return primaryWorkspaces.includes(workspace as PrimaryWorkspace);
 }
 
@@ -38,7 +50,7 @@ export function buildLifecycleItems({
   dataState,
   hasPreprocessingRun,
 }: {
-  activeWorkspace: ProjectWorkspace;
+  activeWorkspace: ProjectWorkspace | LegacyWorkspace;
   dataState: ProjectDataState | undefined;
   hasPreprocessingRun: boolean;
 }): LifecycleItem[] {
@@ -85,7 +97,7 @@ export function buildLifecycleItems({
 
 export function canNavigateToWorkspace(
   items: LifecycleItem[],
-  workspace: ProjectWorkspace,
+  workspace: ProjectWorkspace | LegacyWorkspace,
 ): boolean {
   if (!isPrimaryWorkspace(workspace)) return true;
   return items.find((item) => item.id === workspace)?.state !== "blocked";

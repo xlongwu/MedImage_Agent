@@ -10,7 +10,6 @@ from typing import Any
 from src.backend.app.schemas.desktop import ProjectDetail, RunLinkRecord
 from src.backend.app.tools.artifact_utils import read_json_artifact
 
-
 RAW_SUMMARY_MAX_CHARS = 20_000
 SUMMARY_WARNING_LIMIT = 50
 OUTPUT_ITEM_LIMIT = 50

@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
+from src.backend.app.runtime.gui_model_audit_contract import (
+    allowed_model_audit_metadata_declaration,
+    validate_and_build_model_audit_record,
+)
+from src.backend.app.runtime.gui_model_input_redaction import (
+    allowed_minimal_prompt_input_declaration,
+    validate_and_build_model_prompt_envelope,
+)
 from src.backend.app.runtime.gui_model_provider_policy import (
     allowed_fixture_provider_declaration,
     validate_model_provider_policy,
@@ -15,18 +22,11 @@ from src.backend.app.runtime.gui_model_source_policy import (
     allowed_fixture_model_source_declaration,
     validate_model_source_policy,
 )
-from src.backend.app.runtime.gui_model_input_redaction import (
-    allowed_minimal_prompt_input_declaration,
-    validate_and_build_model_prompt_envelope,
-)
-from src.backend.app.runtime.gui_model_audit_contract import (
-    allowed_model_audit_metadata_declaration,
-    validate_and_build_model_audit_record,
-)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Prefix and status consistency
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_blocked_code_prefix():
     r = validate_model_provider_policy(provider_type="local_allowlisted")
@@ -45,15 +45,19 @@ def test_source_blocked_code_prefix():
 
 def test_input_blocked_code_prefix():
     r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration(), raw_screenshot_present=True,
+        **allowed_minimal_prompt_input_declaration(),
+        raw_screenshot_present=True,
     )
     assert r.error_code and r.error_code.startswith("MODEL_INPUT_")
 
 
 def test_audit_blocked_code_prefix():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_text": "x"},
     )
     assert r.error_code and r.error_code.startswith("MODEL_AUDIT_")
 
@@ -78,7 +82,8 @@ def test_source_blocked_status_pair():
 
 def test_input_blocked_status_pair():
     r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration(), raw_screenshot_present=True,
+        **allowed_minimal_prompt_input_declaration(),
+        raw_screenshot_present=True,
     )
     assert r.status == "MODEL_INPUT_BLOCKED"
     assert r.error_code and r.error_code.startswith("MODEL_INPUT_")
@@ -86,8 +91,11 @@ def test_input_blocked_status_pair():
 
 def test_audit_blocked_status_pair():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_text": "x"},
     )
     assert r.status == "MODEL_AUDIT_BLOCKED"
     assert r.error_code and r.error_code.startswith("MODEL_AUDIT_")
@@ -96,6 +104,7 @@ def test_audit_blocked_status_pair():
 # ══════════════════════════════════════════════════════════════════════════════
 # B. Missing / unknown
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_missing_code():
     r = validate_model_provider_policy(provider_type=None)
@@ -119,7 +128,9 @@ def test_input_schema_invalid_code():
 
 def test_audit_event_unknown():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
+        audit_id="a",
+        run_id="r",
+        session_id="s",
         event_type="UNKNOWN_EVENT",
     )
     assert r.error_code and "UNKNOWN" in r.error_code
@@ -128,6 +139,7 @@ def test_audit_event_unknown():
 # ══════════════════════════════════════════════════════════════════════════════
 # C. Permission escalation
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _provider_extra():
     d = allowed_fixture_provider_declaration()
@@ -155,7 +167,9 @@ def _input_extra():
 
 def _audit_extra():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
+        audit_id="a",
+        run_id="r",
+        session_id="s",
         event_type="MODEL_OUTPUT_NORMALIZED",
         extra={"provider_call_allowed": True},
     )
@@ -193,14 +207,14 @@ def test_audit_extra_permission():
 
 
 def test_all_extra_permission_provider_call_false():
-    for r in [_provider_extra(), _runtime_extra(), _source_extra(),
-              _input_extra(), _audit_extra()]:
+    for r in [_provider_extra(), _runtime_extra(), _source_extra(), _input_extra(), _audit_extra()]:
         assert r.provider_call_allowed is False
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # D. Network / path / sensitive category
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_runtime_network_violation():
     d = allowed_fixture_runtime_declaration()
@@ -210,15 +224,15 @@ def test_runtime_network_violation():
 
 
 def test_source_rawdata_path():
-    r = validate_model_source_policy(model_source="local_allowlisted",
-                                     model_dir="rawdata/models/")
+    r = validate_model_source_policy(model_source="local_allowlisted", model_dir="rawdata/models/")
     assert not r.ok
     assert r.error_code is not None
 
 
 def test_source_derivatives_path():
-    r = validate_model_source_policy(model_source="local_allowlisted",
-                                     model_dir="derivatives/models/")
+    r = validate_model_source_policy(
+        model_source="local_allowlisted", model_dir="derivatives/models/"
+    )
     assert not r.ok
     assert r.error_code is not None
 
@@ -239,15 +253,20 @@ def test_input_credential():
 
 def test_audit_forbidden_field():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_text": "x"},
     )
     assert r.error_code and "FORBIDDEN_FIELD" in r.error_code
 
 
 def test_audit_path_traversal():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
+        audit_id="a",
+        run_id="r",
+        session_id="s",
         event_type="MODEL_OUTPUT_NORMALIZED",
         audit_root="../escape",
     )
@@ -258,17 +277,22 @@ def test_audit_path_traversal():
 # E. Fail-closed semantics
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _all_blocked():
     return [
         validate_model_provider_policy(provider_type="local_allowlisted"),
         validate_model_runtime_declaration(runtime_type="local_worker"),
         validate_model_source_policy(model_source="local_allowlisted"),
         validate_and_build_model_prompt_envelope(
-            **allowed_minimal_prompt_input_declaration(), raw_screenshot_present=True,
+            **allowed_minimal_prompt_input_declaration(),
+            raw_screenshot_present=True,
         ),
         validate_and_build_model_audit_record(
-            audit_id="a", run_id="r", session_id="s",
-            event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "x"},
+            audit_id="a",
+            run_id="r",
+            session_id="s",
+            event_type="MODEL_OUTPUT_NORMALIZED",
+            extra={"raw_text": "x"},
         ),
     ]
 
@@ -305,23 +329,30 @@ def test_all_blocked_no_network():
 
 def test_audit_blocked_no_write():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_text": "x"},
     )
     assert r.audit_written is False
 
 
 def test_input_blocked_null_envelope():
     r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration(), raw_screenshot_present=True,
+        **allowed_minimal_prompt_input_declaration(),
+        raw_screenshot_present=True,
     )
     assert r.prompt_envelope is None
 
 
 def test_audit_blocked_null_record():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_text": "x"},
     )
     assert r.audit_record is None
 
@@ -329,6 +360,7 @@ def test_audit_blocked_null_record():
 # ══════════════════════════════════════════════════════════════════════════════
 # F. Error inventory sanity
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_no_empty_error_code():
     for r in _all_blocked():
@@ -376,6 +408,7 @@ def test_blocked_status_end():
 # G. Regression
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_schema_consistency_pass():
     pass
 
@@ -410,24 +443,47 @@ def test_gui_blocklist_pass():
 
 def test_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]

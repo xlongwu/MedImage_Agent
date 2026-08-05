@@ -90,7 +90,11 @@ def test_native_full_dry_run_applies_dparsf_stage_controls_and_parameters(tmp_pa
                 "remove_first_timepoints": 3,
                 "slice_timing": {"enabled": False, "reference_slice": 2},
                 "realignment": {"enabled": False},
-                "nuisance": {"enabled": False, "include_global_signal": True, "polynomial_order": 2},
+                "nuisance": {
+                    "enabled": False,
+                    "include_global_signal": True,
+                    "polynomial_order": 2,
+                },
                 "detrending": {"enabled": False},
                 "filtering": {"enabled": False, "low_hz": 0.02, "high_hz": 0.09},
                 "fc": False,

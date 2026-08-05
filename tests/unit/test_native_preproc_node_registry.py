@@ -35,7 +35,12 @@ def test_legacy_spm_and_dpabi_execution_nodes_do_not_launch_external_tools(tmp_p
         dpabi_dir="must-not-run",
         derivatives_dir=str(tmp_path / "derivatives"),
     )
-    for node_id in ("spm_realign_subject", "spm_smooth_subject", "dpabi_subject_smooth", "dpabi_template_execute"):
+    for node_id in (
+        "spm_realign_subject",
+        "spm_smooth_subject",
+        "dpabi_subject_smooth",
+        "dpabi_template_execute",
+    ):
         result = registry[node_id](
             context,
             PipelineNode(id=node_id, name=node_id, agent="system", backend="native_python"),
@@ -162,10 +167,13 @@ def test_reviewed_conversion_handoff_precedes_native_preprocessing(
     monkeypatch.setattr(
         native_preproc_nodes,
         "ensure_reviewed_native_conversion_handoff",
-        lambda *args, **kwargs: calls.append("conversion") or {
-            "ok": True,
-            "status": "registered",
-        },
+        lambda *args, **kwargs: (
+            calls.append("conversion")
+            or {
+                "ok": True,
+                "status": "registered",
+            }
+        ),
     )
     monkeypatch.setattr(
         native_preproc_nodes,
@@ -173,9 +181,7 @@ def test_reviewed_conversion_handoff_precedes_native_preprocessing(
         lambda _project_id, request, **kwargs: (
             calls.append("preprocessing"),
             captured_request.append(request),
-            SimpleNamespace(
-                model_dump=lambda mode: {"ok": True, "status": "succeeded"}
-            ),
+            SimpleNamespace(model_dump=lambda mode: {"ok": True, "status": "succeeded"}),
         )[-1],
     )
 

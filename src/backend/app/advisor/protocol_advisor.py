@@ -4,10 +4,10 @@ from __future__ import annotations
 from typing import Any
 
 from src.backend.app.advisor.advisor_safety import (
-    is_llm_enabled,
-    get_llm_config,
-    wrap_advisor_response,
     advisor_fallback,
+    get_llm_config,
+    is_llm_enabled,
+    wrap_advisor_response,
 )
 
 
@@ -79,7 +79,7 @@ def _llm_protocol_advice(
     modality: str, task_goal: str, tr: float, slice_count: int,
     has_fieldmap: bool, available_data: list[str], constraints: list[str],
 ) -> dict[str, Any]:
-    import json, os, urllib.request
+    import json
 
     config = get_llm_config()
     prompt = f"""You are a medical imaging protocol advisor. Recommend ONLY, never execute.
@@ -102,7 +102,8 @@ Respond with JSON containing: recommended_pipeline_template, parameter_suggestio
 
 
 def _call_llm(config: dict, prompt: str) -> str:
-    import json, urllib.request
+    import json
+    import urllib.request
 
     api_key = __import__("os").environ.get("MEDIMAGE_LLM_API_KEY", "")
     base_url = config.get("base_url") or "https://api.openai.com/v1"

@@ -200,7 +200,7 @@
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.86), rgba(240, 245, 253, 0.94));
+  background: var(--color-surface-primary);
 }
 
 .diamond-mark {
@@ -208,7 +208,7 @@
   height: 28px;
   margin-bottom: 10px;
   border-radius: 7px;
-  background: linear-gradient(135deg, var(--violet), var(--teal));
+  background: var(--color-accent);
   transform: rotate(45deg);
 }
 
@@ -236,7 +236,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--blue), var(--teal));
+  background: var(--color-accent);
 }
 
 /* Lifecycle Rail — continuous research trajectory per design 2.8.6 / 2.8.3 */
@@ -959,7 +959,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--blue), var(--teal));
+  background: var(--color-accent);
 }
 
 .assistant-card,

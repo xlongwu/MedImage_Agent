@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.backend.app.runtime.node_registry import NodeExecutionContext
@@ -10,7 +10,7 @@ from src.backend.app.tools.gpu_reho_runner import run_reho_subject
 
 
 def gpu_reho_subject_node(
-    context: "NodeExecutionContext",
+    context: NodeExecutionContext,
     node: Any,
     subject_record: dict[str, Any] | None = None,
     subject_id: str | None = None,

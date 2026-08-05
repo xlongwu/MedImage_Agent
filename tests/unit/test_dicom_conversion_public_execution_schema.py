@@ -9,12 +9,9 @@ Design-only phase — no endpoint exists.  No dcm2niix is called.
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 from src.backend.app.schemas.dicom_conversion_public_execution import (
-    DicomConversionPublicExecutionGateDecision,
     DicomConversionPublicExecutionRequest,
     DicomConversionPublicExecutionResponse,
     DicomConversionPublicExecutionSafetyFlags,
@@ -25,7 +22,6 @@ from src.backend.app.schemas.dicom_conversion_public_execution import (
     validate_public_execution_env_flags,
     validate_public_execution_request_acknowledgements,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -311,17 +307,13 @@ class TestCompletePreconditions:
 
     def test_all_preconditions_met_proceed(self):
         """All preconditions met → preconditions.ok=True, decision is proceed in 4L-2."""
-        decision = evaluate_public_execution_preconditions(
-            **_all_preconditions()
-        )
+        decision = evaluate_public_execution_preconditions(**_all_preconditions())
         assert decision.ok
         assert decision.decision == "proceed"
 
     def test_public_execution_allowed_true_when_all_met(self):
         """In Phase 4L-2, public_execution_allowed is True when preconditions pass."""
-        decision = evaluate_public_execution_preconditions(
-            **_all_preconditions()
-        )
+        decision = evaluate_public_execution_preconditions(**_all_preconditions())
         assert decision.safety_flags.public_execution_allowed is True
 
     def test_is_public_execution_design_only_returns_false(self):
@@ -330,9 +322,7 @@ class TestCompletePreconditions:
 
     def test_all_safety_flags_set_correctly_when_preconditions_met(self):
         """Safety flags reflect preconditions even in design-only phase."""
-        decision = evaluate_public_execution_preconditions(
-            **_all_preconditions()
-        )
+        decision = evaluate_public_execution_preconditions(**_all_preconditions())
         flags = decision.safety_flags
         assert flags.release_approval_obtained is True
         assert flags.release_readiness_ready is True
@@ -351,9 +341,7 @@ class TestCompletePreconditions:
 
     def test_blocker_summary_accurate(self):
         """summarize_public_execution_blockers() returns correct structure."""
-        decision = evaluate_public_execution_preconditions(
-            **_all_preconditions(gates_met=30)
-        )
+        decision = evaluate_public_execution_preconditions(**_all_preconditions(gates_met=30))
         summary = summarize_public_execution_blockers(decision)
         assert summary["ok"] is False
         assert summary["decision"] == "blocked"
@@ -372,7 +360,9 @@ class TestSchemaPurity:
     def test_schema_imports_no_subprocess(self):
         """Schema module must not import subprocess."""
         import importlib
+
         import src.backend.app.schemas.dicom_conversion_public_execution as m
+
         importlib.reload(m)
         assert "subprocess" not in dir(m)
         # Verify no subprocess in module's sys.modules footprint by checking
@@ -389,6 +379,7 @@ class TestSchemaPurity:
         """Verify no public /conversion/execute route is registered."""
         try:
             from src.backend.app.api.routes import router
+
             found = False
             for route in router.routes:
                 rp = str(getattr(route, "path", ""))
@@ -397,15 +388,14 @@ class TestSchemaPurity:
                     if "POST" in methods:
                         found = True
                         break
-            assert not found, (
-                "Public POST /conversion/execute route must NOT exist in Phase 4L-1"
-            )
+            assert not found, "Public POST /conversion/execute route must NOT exist in Phase 4L-1"
         except ImportError:
             pytest.skip("API routes not importable in this test context")
 
     def test_no_frontend_run_conversion_onclick(self):
         """Verify no frontend 'Run Conversion' onClick handler exists."""
         import os
+
         panel_path = os.path.join(
             os.getcwd(),
             "src/frontend/src/components/DicomConversionReviewPanel.tsx",

@@ -183,6 +183,11 @@ export default function PlanReviewConsole({
   const [planHistoryLoading, setPlanHistoryLoading] = useState(false);
   const [planHistoryError, setPlanHistoryError] = useState("");
   const [planSaveStatus, setPlanSaveStatus] = useState("");
+  const [goalContractJson, setGoalContractJson] = useState("");
+  const [goalContractStatus, setGoalContractStatus] = useState("");
+  const [goalContractReviewConfirmed, setGoalContractReviewConfirmed] = useState(false);
+  const [goalContractReviewLoading, setGoalContractReviewLoading] = useState(false);
+  const [goalContractReviewError, setGoalContractReviewError] = useState("");
 
   // ── Node detail panel ──
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -270,6 +275,10 @@ export default function PlanReviewConsole({
     setRecentPlans([]);
     setPlanHistoryError("");
     setPlanSaveStatus("");
+    setGoalContractJson("");
+    setGoalContractStatus("");
+    setGoalContractReviewConfirmed(false);
+    setGoalContractReviewError("");
     setLoadedPresetBanner(null);
     setExternalToolAcknowledgement(false);
     setRawdataReadOnlyConfirmed(false);
@@ -306,7 +315,19 @@ export default function PlanReviewConsole({
     setDryRunResult(null);
     setExecutionResult(null);
     setConfirmExecution(false);
-    setReviewedPlanId(null);
+    setReviewedPlanId(
+      initialPresetDraft.source === "reviewed_plan"
+        ? (initialPresetDraft.reviewed_plan_id ?? null)
+        : null,
+    );
+    setGoalContractJson(
+      initialPresetDraft.goal_contract_candidate
+        ? JSON.stringify(initialPresetDraft.goal_contract_candidate, null, 2)
+        : "",
+    );
+    setGoalContractStatus(initialPresetDraft.goal_contract_status ?? "");
+    setGoalContractReviewConfirmed(false);
+    setGoalContractReviewError("");
     setPlanSaveStatus("");
     setLoadedPresetBanner(
       `Loaded preset draft: ${initialPresetDraft.preset_id}. This is a contract MVP and does not run real SPM/DPABI preprocessing yet.`,
@@ -342,6 +363,10 @@ export default function PlanReviewConsole({
   async function persistReviewedPlan(
     plan: Record<string, unknown>,
     validationResult: Record<string, unknown>,
+    review?: {
+      goalContractCandidate: Record<string, unknown>;
+      reviewedActor: string;
+    },
   ) {
     const planIssues = reviewedPlanIssues(plan);
     if (planIssues.length > 0) {
@@ -360,17 +385,42 @@ export default function PlanReviewConsole({
         validation: validationResult,
         goal: goal.trim() || undefined,
         provider,
+        goal_contract_candidate: review?.goalContractCandidate,
+        reviewed_actor: review?.reviewedActor,
       });
       setReviewedPlanId(data.reviewed_plan.reviewed_plan_id);
       setPlanSaveStatus(`Saved ${data.reviewed_plan.reviewed_plan_id}`);
+      applyGoalContractRecord(data.reviewed_plan);
       await refreshRecentPlans(selectedProjectId);
+      return data.reviewed_plan;
     } catch (e) {
       setReviewedPlanId(null);
       setPlanSaveStatus("");
       setPlanHistoryError(
         `Plan generated but could not be persisted: ${e instanceof Error ? e.message : String(e)}`,
       );
+      return null;
     }
+  }
+
+  function applyGoalContractRecord(record: ReviewedPlanRecord) {
+    const status =
+      typeof record.payload.goal_contract_status === "string"
+        ? record.payload.goal_contract_status
+        : record.status.toLowerCase() === "reviewed"
+          ? "reviewed"
+          : "";
+    const candidate = isRecord(record.payload.goal_contract_candidate)
+      ? record.payload.goal_contract_candidate
+      : null;
+    setGoalContractStatus(status);
+    if (candidate) {
+      setGoalContractJson(JSON.stringify(candidate, null, 2));
+    } else if (status === "reviewed") {
+      setGoalContractJson("");
+    }
+    setGoalContractReviewConfirmed(false);
+    setGoalContractReviewError("");
   }
 
   function restoreReviewedPlan(record: ReviewedPlanRecord) {
@@ -398,6 +448,7 @@ export default function PlanReviewConsole({
     setReValidation(restoredValidation);
     setReviewedPlanId(record.reviewed_plan_id);
     setGoal(typeof record.payload.goal === "string" ? record.payload.goal : "");
+    applyGoalContractRecord(record);
     setPlanSaveStatus(`Restored ${record.reviewed_plan_id}`);
     setPlanHistoryError("");
     setDryRunResult(null);
@@ -440,6 +491,10 @@ export default function PlanReviewConsole({
     setReValidation(null);
     setJsonError("");
     setSelectedNodeId(null);
+    setGoalContractJson("");
+    setGoalContractStatus("");
+    setGoalContractReviewConfirmed(false);
+    setGoalContractReviewError("");
     if (!goal.trim()) {
       setError("Please enter a goal.");
       return;
@@ -469,6 +524,11 @@ export default function PlanReviewConsole({
         return;
       }
       setPlanJson(JSON.stringify(plan, null, 2));
+      const candidate = isRecord(data?.goal_contract_candidate)
+        ? data.goal_contract_candidate
+        : null;
+      setGoalContractJson(candidate ? JSON.stringify(candidate, null, 2) : "");
+      setGoalContractStatus(candidate ? "needs_goal_review" : "");
       await persistReviewedPlan(plan, (data?.validation ?? {}) as Record<string, unknown>);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -501,6 +561,51 @@ export default function PlanReviewConsole({
       setJsonError(e instanceof Error ? e.message : String(e));
     } finally {
       setValidateLoading(false);
+    }
+  }
+
+  async function handleReviewGoalContract() {
+    setGoalContractReviewError("");
+    if (!goalContractReviewConfirmed) return;
+    let plan: Record<string, unknown>;
+    let candidate: Record<string, unknown>;
+    try {
+      const parsedPlan = JSON.parse(planJson || "{}");
+      const parsedCandidate = JSON.parse(goalContractJson || "{}");
+      if (!isRecord(parsedPlan) || !isRecord(parsedCandidate)) {
+        throw new Error(t("technical.PlanReviewConsole.goalContractObjectRequired"));
+      }
+      plan = parsedPlan;
+      candidate = parsedCandidate;
+    } catch (reviewError) {
+      setGoalContractReviewError(
+        reviewError instanceof Error ? reviewError.message : String(reviewError),
+      );
+      return;
+    }
+    if (!selectedProjectId || explicitDemoMode) {
+      setGoalContractReviewError(t("technical.PlanReviewConsole.goalContractProjectRequired"));
+      return;
+    }
+    setGoalContractReviewLoading(true);
+    try {
+      const record = await persistReviewedPlan(plan, validation, {
+        goalContractCandidate: candidate,
+        reviewedActor: actorName.trim() || "frontend-user",
+      });
+      if (!record) return;
+      if (
+        record.payload.goal_contract_status !== "reviewed" &&
+        record.status.toLowerCase() !== "reviewed"
+      ) {
+        setGoalContractReviewError(t("technical.PlanReviewConsole.goalContractReviewNotAccepted"));
+        return;
+      }
+      setDryRunResult(null);
+      setExecutionResult(null);
+      setConfirmExecution(false);
+    } finally {
+      setGoalContractReviewLoading(false);
     }
   }
 
@@ -688,6 +793,10 @@ export default function PlanReviewConsole({
       setDryRunError(projectContextError);
       return;
     }
+    if (!explicitDemoMode && goalContractStatus !== "reviewed") {
+      setDryRunError(t("technical.PlanReviewConsole.goalContractDryRunBlocked"));
+      return;
+    }
     let plan: Record<string, unknown>;
     try {
       plan = JSON.parse(planJson || "{}");
@@ -742,6 +851,10 @@ export default function PlanReviewConsole({
     setExecutionResult(null);
     if (projectContextError) {
       setExecutionError(projectContextError);
+      return;
+    }
+    if (!explicitDemoMode && goalContractStatus !== "reviewed") {
+      setExecutionError(t("technical.PlanReviewConsole.goalContractExecutionBlocked"));
       return;
     }
     let plan: Record<string, unknown>;
@@ -1020,12 +1133,89 @@ export default function PlanReviewConsole({
               setReviewedPlanId(null);
               setPlanSaveStatus(t("technical.PlanReviewConsole.038"));
               setJsonError("");
+              setGoalContractJson("");
+              setGoalContractStatus("needs_goal_review");
+              setGoalContractReviewConfirmed(false);
+              setGoalContractReviewError(
+                t("technical.PlanReviewConsole.goalContractRegenerateAfterEdit"),
+              );
             }}
             rows={14}
             className={styles.planTextarea}
             spellCheck={false}
           />
         </div>
+      )}
+
+      {result && !explicitDemoMode && (
+        <section className={styles.goalContractReview}>
+          <div className={styles.goalContractHeader}>
+            <div>
+              <h4>{t("technical.PlanReviewConsole.goalContractTitle")}</h4>
+              <p>{t("technical.PlanReviewConsole.goalContractDescription")}</p>
+            </div>
+            <span
+              className={
+                goalContractStatus === "reviewed"
+                  ? styles.goalContractReviewed
+                  : styles.goalContractPending
+              }
+            >
+              {goalContractStatus === "reviewed"
+                ? t("technical.PlanReviewConsole.goalContractReviewed")
+                : t("technical.PlanReviewConsole.goalContractPending")}
+            </span>
+          </div>
+          {goalContractStatus !== "reviewed" && (
+            <>
+              {goalContractJson ? (
+                <textarea
+                  aria-label={t("technical.PlanReviewConsole.goalContractCandidate")}
+                  value={goalContractJson}
+                  onChange={(event) => {
+                    setGoalContractJson(event.target.value);
+                    setGoalContractReviewConfirmed(false);
+                    setGoalContractReviewError("");
+                  }}
+                  rows={12}
+                  className={styles.goalContractTextarea}
+                  spellCheck={false}
+                />
+              ) : (
+                <p className={styles.goalContractNotice}>
+                  {t("technical.PlanReviewConsole.goalContractCandidateMissing")}
+                </p>
+              )}
+              <label className={styles.goalContractConfirmation}>
+                <input
+                  type="checkbox"
+                  checked={goalContractReviewConfirmed}
+                  disabled={!goalContractJson}
+                  onChange={(event) => setGoalContractReviewConfirmed(event.target.checked)}
+                />{" "}
+                {t("technical.PlanReviewConsole.goalContractConfirm")}
+              </label>
+              <button
+                type="button"
+                onClick={handleReviewGoalContract}
+                disabled={
+                  goalContractReviewLoading ||
+                  !goalContractReviewConfirmed ||
+                  !goalContractJson ||
+                  Boolean(projectContextError)
+                }
+                className={styles.goalContractReviewButton}
+              >
+                {goalContractReviewLoading
+                  ? t("technical.PlanReviewConsole.goalContractSaving")
+                  : t("technical.PlanReviewConsole.goalContractSave")}
+              </button>
+              {goalContractReviewError && (
+                <div className={styles.goalContractError}>{goalContractReviewError}</div>
+              )}
+            </>
+          )}
+        </section>
       )}
 
       {/* ── Approval Gate ── */}
@@ -1288,15 +1478,18 @@ export default function PlanReviewConsole({
             disabled={
               dryRunLoading ||
               Boolean(projectContextError) ||
+              (!explicitDemoMode && goalContractStatus !== "reviewed") ||
               (externalToolReq.required && !externalToolApprovalComplete) ||
               (nativePreprocReq.required && !nativePreprocApprovalComplete)
             }
             title={
-              externalToolReq.required && !externalToolApprovalComplete
-                ? "Complete the External Tool Safety Acknowledgement before dry-run."
-                : nativePreprocReq.required && !nativePreprocApprovalComplete
-                  ? "Complete the Native Preprocessing Safety Acknowledgement before dry-run."
-                  : ""
+              !explicitDemoMode && goalContractStatus !== "reviewed"
+                ? t("technical.PlanReviewConsole.goalContractDryRunBlocked")
+                : externalToolReq.required && !externalToolApprovalComplete
+                  ? "Complete the External Tool Safety Acknowledgement before dry-run."
+                  : nativePreprocReq.required && !nativePreprocApprovalComplete
+                    ? "Complete the Native Preprocessing Safety Acknowledgement before dry-run."
+                    : ""
             }
             className={styles.style057}
           >
@@ -1480,26 +1673,29 @@ export default function PlanReviewConsole({
               !confirmExecution ||
               !effectiveProjectConfigPath ||
               (!explicitDemoMode && !reviewedPlanId) ||
+              (!explicitDemoMode && goalContractStatus !== "reviewed") ||
               Boolean(projectContextError) ||
               (externalToolReq.required && !externalToolApprovalComplete) ||
               (nativePreprocReq.required && !nativePreprocApprovalComplete)
             }
             title={
-              externalToolReq.required && !externalToolApprovalComplete
-                ? "Complete the External Tool Safety Acknowledgement before execute."
-                : nativePreprocReq.required && !nativePreprocApprovalComplete
-                  ? "Complete the Native Preprocessing Safety Acknowledgement before execute."
-                  : dryRunResult?.status !== "DRY_RUN_OK"
-                    ? "Run Dry-run Execution Check first"
-                    : !confirmExecution
-                      ? "Check the confirmation box"
-                      : !effectiveProjectConfigPath
-                        ? "Enter a project config path"
-                        : !explicitDemoMode && !reviewedPlanId
-                          ? "Save or re-validate this plan before execution"
-                          : projectContextError
-                            ? projectContextError
-                            : ""
+              !explicitDemoMode && goalContractStatus !== "reviewed"
+                ? t("technical.PlanReviewConsole.goalContractExecutionBlocked")
+                : externalToolReq.required && !externalToolApprovalComplete
+                  ? "Complete the External Tool Safety Acknowledgement before execute."
+                  : nativePreprocReq.required && !nativePreprocApprovalComplete
+                    ? "Complete the Native Preprocessing Safety Acknowledgement before execute."
+                    : dryRunResult?.status !== "DRY_RUN_OK"
+                      ? "Run Dry-run Execution Check first"
+                      : !confirmExecution
+                        ? "Check the confirmation box"
+                        : !effectiveProjectConfigPath
+                          ? "Enter a project config path"
+                          : !explicitDemoMode && !reviewedPlanId
+                            ? "Save or re-validate this plan before execution"
+                            : projectContextError
+                              ? projectContextError
+                              : ""
             }
             style={{
               padding: "8px 20px",
@@ -1508,6 +1704,7 @@ export default function PlanReviewConsole({
                 confirmExecution &&
                 effectiveProjectConfigPath &&
                 (explicitDemoMode || reviewedPlanId) &&
+                (explicitDemoMode || goalContractStatus === "reviewed") &&
                 !projectContextError &&
                 !(externalToolReq.required && !externalToolApprovalComplete) &&
                 !(nativePreprocReq.required && !nativePreprocApprovalComplete)
@@ -1518,6 +1715,7 @@ export default function PlanReviewConsole({
                 confirmExecution &&
                 effectiveProjectConfigPath &&
                 (explicitDemoMode || reviewedPlanId) &&
+                (explicitDemoMode || goalContractStatus === "reviewed") &&
                 !projectContextError &&
                 !(externalToolReq.required && !externalToolApprovalComplete) &&
                 !(nativePreprocReq.required && !nativePreprocApprovalComplete)

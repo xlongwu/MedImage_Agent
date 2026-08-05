@@ -1,0 +1,79 @@
+.rail {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 7px 10px;
+  border-right: 1px solid var(--color-divider-strong);
+  background: var(--color-material-sidebar);
+  backdrop-filter: saturate(180%) blur(18px);
+}
+
+.items {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.item {
+  position: relative;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  transition:
+    background var(--motion-duration-fast) var(--ease-standard),
+    color var(--motion-duration-fast) var(--ease-standard),
+    transform var(--motion-duration-fast) var(--ease-standard);
+}
+
+.item:hover:not(:disabled) {
+  background: var(--color-selection);
+  color: var(--color-accent);
+}
+
+.item[data-selected="true"] {
+  background: var(--color-selection-strong);
+  color: var(--color-accent);
+}
+
+.item[data-selected="true"]::before {
+  position: absolute;
+  left: -7px;
+  width: 3px;
+  height: 20px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent);
+  content: "";
+}
+
+.item:disabled {
+  color: var(--color-text-disabled);
+}
+
+.divider {
+  position: absolute;
+  right: 5px;
+  bottom: -3px;
+  left: 5px;
+  height: 1px;
+  background: var(--color-divider);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .rail {
+    background: var(--color-bg-sidebar);
+  }
+}

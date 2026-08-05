@@ -13,7 +13,6 @@ from src.backend.app.runtime.external_tool_result import (
 from src.backend.app.tools.dpabi_wrapper import run_dpabi_single_function, run_dpabi_smoke_test
 from src.backend.app.tools.spm_runner import run_spm_smoke_test
 
-
 REPORT_DIR = Path("outputs/reports/external_smoke")
 VALID_TARGETS = {"spm", "dpabi", "all"}
 VALID_MODES = {"preflight", "manual_package", "approved_smoke"}

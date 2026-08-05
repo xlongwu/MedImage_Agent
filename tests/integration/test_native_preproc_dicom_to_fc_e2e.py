@@ -29,14 +29,14 @@ def test_native_preproc_dicom_handoff_to_fc_does_not_write_rawdata(tmp_path) -> 
         "blocked_stages": result.blocked_stages,
         "failed_stages": result.failed_stages,
         "stage_errors": {
-            stage.stage_id: stage.errors
-            for stage in result.stage_results
-            if stage.errors
+            stage.stage_id: stage.errors for stage in result.stage_results if stage.errors
         },
     }
     assert result.status == "succeeded"
     assert file_digest(dicom) == raw_digest
-    dicom_stage = next(stage for stage in result.stage_results if stage.stage_id == "dicom_to_nifti")
+    dicom_stage = next(
+        stage for stage in result.stage_results if stage.stage_id == "dicom_to_nifti"
+    )
     assert dicom_stage.status == "skipped"
     assert "conversion domain" in " ".join(dicom_stage.warnings)
     for stage in result.stage_results:

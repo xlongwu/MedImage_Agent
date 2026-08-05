@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
+
 from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.schemas.native_preproc_api import (
     NativeFullPreprocConfirmations,
@@ -102,7 +104,9 @@ def _write_registered_input_files(project_dir: Path) -> None:
 
 def test_registered_conversion_inputs_run_all_subjects(monkeypatch, tmp_path) -> None:
     project_dir = tmp_path / "project"
-    registry_path = project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    registry_path = (
+        project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    )
     registry_path.parent.mkdir(parents=True)
     _write_conversion_registry(project_dir, registry_path)
 
@@ -117,6 +121,14 @@ def test_registered_conversion_inputs_run_all_subjects(monkeypatch, tmp_path) ->
         calls.append(request)
         run_dir = Path(request.output_dir)
         run_dir.mkdir(parents=True, exist_ok=True)
+        reho_path = (
+            run_dir
+            / "artifacts"
+            / "reho"
+            / f"{request.subject_id}_task-rest_desc-reho_map.npy"
+        )
+        reho_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(reho_path, np.ones((2, 2, 2), dtype=np.float32))
         manifest_path = run_dir / "native_full_run_manifest.json"
         response = NativeFullPreprocResponse(
             ok=True,
@@ -126,12 +138,18 @@ def test_registered_conversion_inputs_run_all_subjects(monkeypatch, tmp_path) ->
             run_dir=str(run_dir),
             stage_results=[
                 NativeFullStageApiResult(
-                    stage_id="input_validation",
+                    stage_id="reho",
                     status="succeeded",
+                    output_artifacts=[
+                        {
+                            "artifact_type": "reho_map",
+                            "path": str(reho_path),
+                        }
+                    ],
                     result={"input_bold": request.input_bold},
                 )
             ],
-            completed_stages=["input_validation"],
+            completed_stages=["reho"],
             manifest_path=str(manifest_path),
             safety_flags={"no_external_tools_executed": True},
         )
@@ -177,19 +195,230 @@ def test_registered_conversion_inputs_run_all_subjects(monkeypatch, tmp_path) ->
     assert Path(result.manifest_path).exists()
     group_summary = json.loads(
         (
-            Path(result.run_dir)
-            / "artifacts"
-            / "group_summary"
-            / "native_group_summary.json"
+            Path(result.run_dir) / "artifacts" / "group_summary" / "native_group_summary.json"
         ).read_text(encoding="utf-8")
     )
     assert group_summary["subject_count"] == 3
     assert group_summary["completed_subject_count"] == 3
+    registry = json.loads(
+        (
+            project_dir
+            / "work"
+            / "pipeline_runs"
+            / "native-batch"
+            / "preprocessing_artifact_registry.json"
+        ).read_text(encoding="utf-8")
+    )
+    reho_artifacts = [
+        item for item in registry["artifacts"] if item["artifact_type"] == "reho_map"
+    ]
+    assert len(reho_artifacts) == 3
+    assert {item["subject_id"] for item in reho_artifacts} == {
+        "sub-001",
+        "sub-002",
+        "sub-003",
+    }
+    assert all(item["path_kind"] == "project_relative" for item in reho_artifacts)
+
+
+def test_registered_conversion_inputs_filter_to_reviewed_subject(monkeypatch, tmp_path) -> None:
+    project_dir = tmp_path / "project"
+    registry_path = (
+        project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    )
+    registry_path.parent.mkdir(parents=True)
+    _write_conversion_registry(project_dir, registry_path)
+    calls: list[NativeFullPreprocRequest] = []
+
+    def _fake_execute(
+        project_id: str,
+        request: NativeFullPreprocRequest,
+        *,
+        project_dir: str = "",
+    ) -> NativeFullPreprocResponse:
+        calls.append(request)
+        return NativeFullPreprocResponse(
+            ok=True,
+            status="succeeded",
+            project_id=project_id,
+            run_id=request.run_id,
+            run_dir=request.output_dir,
+            completed_stages=["realignment"],
+            safety_flags={"rawdata_readonly_confirmed": True},
+        )
+
+    monkeypatch.setattr(service, "execute_native_full_preproc", _fake_execute)
+
+    result = service.run_native_full_execute(
+        "demo-project",
+        NativeFullPreprocRequest(
+            run_id="native-registry-sub-001",
+            subject_id="sub-001",
+            conversion_run_id="conv-001",
+            confirmations=_confirmations(),
+        ),
+        project_dir=str(project_dir),
+        project_metadata={
+            "project_dir": str(project_dir),
+            "preprocessing_conversion_run_id": "conv-001",
+            "preprocessing_input_registry_path": str(registry_path),
+        },
+    )
+
+    assert result.ok is True
+    assert [request.subject_id for request in calls] == ["sub-001"]
+    assert Path(calls[0].input_bold).name == "sub-001_task-rest_bold.nii.gz"
+    assert Path(calls[0].sidecar_json).name == "sub-001_task-rest_bold.json"
+    assert Path(calls[0].t1w).name == "sub-001_T1w.nii.gz"
+
+
+def test_registered_batch_omits_unreviewed_group_summary_and_duplicate_reports(
+    monkeypatch, tmp_path
+) -> None:
+    project_dir = tmp_path / "project"
+    registry_path = (
+        project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    )
+    registry_path.parent.mkdir(parents=True)
+    _write_conversion_registry(project_dir, registry_path)
+
+    def _fake_execute(
+        project_id: str,
+        request: NativeFullPreprocRequest,
+        *,
+        project_dir: str = "",
+    ) -> NativeFullPreprocResponse:
+        run_dir = Path(request.output_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+        assert request.stage_overrides["group_summary"] is False
+        assert request.stage_overrides["validation_report"] is False
+        assert request.stage_overrides["final_report"] is False
+        return NativeFullPreprocResponse(
+            ok=True,
+            status="succeeded",
+            project_id=project_id,
+            run_id=request.run_id,
+            run_dir=str(run_dir),
+            safety_flags={"rawdata_readonly_confirmed": True},
+        )
+
+    monkeypatch.setattr(service, "execute_native_full_preproc", _fake_execute)
+
+    result = service.run_native_full_execute(
+        "demo-project",
+        NativeFullPreprocRequest(
+            run_id="native-no-group",
+            subject_id="sub-001",
+            conversion_run_id="conv-001",
+            stage_overrides={"group_summary": False},
+            confirmations=_confirmations(),
+        ),
+        project_dir=str(project_dir),
+        project_metadata={
+            "project_dir": str(project_dir),
+            "preprocessing_conversion_run_id": "conv-001",
+            "preprocessing_input_registry_path": str(registry_path),
+        },
+    )
+
+    run_dir = Path(result.run_dir)
+    assert not (run_dir / "artifacts" / "group_summary").exists()
+    registry = json.loads(
+        (
+            project_dir
+            / "work"
+            / "pipeline_runs"
+            / "native-no-group"
+            / "preprocessing_artifact_registry.json"
+        ).read_text(encoding="utf-8")
+    )
+    artifact_types = [item["artifact_type"] for item in registry["artifacts"]]
+    assert artifact_types.count("validation_report") == 1
+    assert artifact_types.count("final_report") == 1
+    assert "group_summary" not in artifact_types
+
+
+def test_registered_bids_directory_runs_all_subjects_without_writing_source(monkeypatch, tmp_path) -> None:
+    bids_dir = tmp_path / "converted_bids"
+    project_dir = tmp_path / "project"
+    _write_registered_input_files(tmp_path)
+    before = sorted(str(path.relative_to(bids_dir)) for path in bids_dir.rglob("*"))
+    calls: list[NativeFullPreprocRequest] = []
+
+    def _fake_execute(project_id: str, request: NativeFullPreprocRequest, *, project_dir: str = ""):
+        calls.append(request)
+        return NativeFullPreprocResponse(
+            ok=True,
+            status="succeeded",
+            project_id=project_id,
+            run_id=request.run_id,
+            run_dir=request.output_dir,
+            completed_stages=["realignment", "reho"],
+            safety_flags={"rawdata_readonly_confirmed": True},
+        )
+
+    monkeypatch.setattr(service, "execute_native_full_preproc", _fake_execute)
+    result = service.run_native_full_execute(
+        "demo-project",
+        NativeFullPreprocRequest(
+            run_id="native-bids-reho",
+            input_bids_dir=str(bids_dir),
+            stage_overrides={"reho": True, "alff": False, "falff": False},
+            confirmations=_confirmations(),
+        ),
+        project_dir=str(project_dir),
+        project_metadata={"project_dir": str(project_dir), "rawdata_dir": str(bids_dir)},
+    )
+
+    assert result.ok is True
+    assert [request.subject_id for request in calls] == ["sub-001", "sub-002", "sub-003"]
+    assert all(Path(request.input_bold).is_relative_to(bids_dir) for request in calls)
+    assert sorted(str(path.relative_to(bids_dir)) for path in bids_dir.rglob("*")) == before
+
+
+def test_registered_bids_directory_filters_to_reviewed_subject(monkeypatch, tmp_path) -> None:
+    bids_dir = tmp_path / "converted_bids"
+    project_dir = tmp_path / "project"
+    _write_registered_input_files(tmp_path)
+    calls: list[NativeFullPreprocRequest] = []
+
+    def _fake_execute(project_id: str, request: NativeFullPreprocRequest, *, project_dir: str = ""):
+        calls.append(request)
+        return NativeFullPreprocResponse(
+            ok=True,
+            status="succeeded",
+            project_id=project_id,
+            run_id=request.run_id,
+            run_dir=request.output_dir,
+            completed_stages=["realignment"],
+            safety_flags={"rawdata_readonly_confirmed": True},
+        )
+
+    monkeypatch.setattr(service, "execute_native_full_preproc", _fake_execute)
+
+    result = service.run_native_full_execute(
+        "demo-project",
+        NativeFullPreprocRequest(
+            run_id="native-bids-sub-001",
+            subject_id="sub-001",
+            input_bids_dir=str(bids_dir),
+            stage_overrides={"realignment": True},
+            confirmations=_confirmations(),
+        ),
+        project_dir=str(project_dir),
+        project_metadata={"project_dir": str(project_dir), "rawdata_dir": str(bids_dir)},
+    )
+
+    assert result.ok is True
+    assert [request.subject_id for request in calls] == ["sub-001"]
+    assert all("sub-001" in request.input_bold for request in calls)
 
 
 def test_registered_conversion_dry_run_discovers_unique_project_resources(tmp_path) -> None:
     project_dir = tmp_path / "project"
-    registry_path = project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    registry_path = (
+        project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    )
     registry_path.parent.mkdir(parents=True)
     _write_conversion_registry(project_dir, registry_path)
     _write_registered_input_files(project_dir)
@@ -221,7 +450,9 @@ def test_registered_conversion_dry_run_discovers_unique_project_resources(tmp_pa
 
 def test_registered_conversion_dry_run_blocks_ambiguous_project_atlases(tmp_path) -> None:
     project_dir = tmp_path / "project"
-    registry_path = project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    registry_path = (
+        project_dir / "preprocessing_inputs" / "conv-001" / "preprocessing_artifact_registry.json"
+    )
     registry_path.parent.mkdir(parents=True)
     _write_conversion_registry(project_dir, registry_path)
     _write_registered_input_files(project_dir)
@@ -267,19 +498,9 @@ def test_explicit_input_dry_run_discovers_resources_without_registry(tmp_path) -
                 / "sub-001_task-rest_bold.nii.gz"
             ),
             sidecar_json=str(
-                project_dir
-                / "converted_bids"
-                / "sub-001"
-                / "func"
-                / "sub-001_task-rest_bold.json"
+                project_dir / "converted_bids" / "sub-001" / "func" / "sub-001_task-rest_bold.json"
             ),
-            t1w=str(
-                project_dir
-                / "converted_bids"
-                / "sub-001"
-                / "anat"
-                / "sub-001_T1w.nii.gz"
-            ),
+            t1w=str(project_dir / "converted_bids" / "sub-001" / "anat" / "sub-001_T1w.nii.gz"),
             confirmations=_confirmations(),
         ),
         project_dir=str(project_dir),

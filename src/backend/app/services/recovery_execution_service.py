@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
+from collections.abc import Callable
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Callable
 from uuid import uuid4
 
 import yaml
@@ -24,7 +23,6 @@ from src.backend.app.schemas.recovery_attempt import (
 from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.execution_ticket_service import ExecutionTicketService
 from src.backend.app.services.recovery_policy_service import RecoveryPolicyService
-
 
 _ATTEMPT_TRANSITIONS = {
     "PROPOSED": {"APPROVED", "HANDOFF"},
@@ -43,7 +41,9 @@ _ATTEMPT_TRANSITIONS = {
 def calculate_recovery_attempt_hash(
     value: RecoveryAttemptRecord | dict[str, object],
 ) -> str:
-    payload = value.model_dump(mode="json") if isinstance(value, RecoveryAttemptRecord) else dict(value)
+    payload = (
+        value.model_dump(mode="json") if isinstance(value, RecoveryAttemptRecord) else dict(value)
+    )
     payload.pop("recovery_attempt_hash", None)
     return stable_hash(payload)
 
@@ -94,7 +94,9 @@ class RecoveryExecutionService:
                         details={"approval_mode": approval.approval_mode},
                     )
                 return lifecycle, approval
-            raise SafetyError("RECOVERY_APPROVAL_STATE_INVALID", code="RECOVERY_APPROVAL_STATE_INVALID")
+            raise SafetyError(
+                "RECOVERY_APPROVAL_STATE_INVALID", code="RECOVERY_APPROVAL_STATE_INVALID"
+            )
         approval = self.policy.approve(
             project_id=project_id,
             lifecycle_id=lifecycle_id,
@@ -104,7 +106,7 @@ class RecoveryExecutionService:
             actor=actor,
             expires_in_seconds=expires_in_seconds,
         )
-        waiting = orchestrator.transition(
+        _waiting = orchestrator.transition(
             project_id=project_id,
             lifecycle_id=lifecycle_id,
             to_state="WAITING_FOR_RECOVERY_APPROVAL",
@@ -143,7 +145,7 @@ class RecoveryExecutionService:
             event_type=event_type,
             from_status=from_status,
             to_status=record.status,
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             audit_id=record.audit_id,
             reason_code=reason_code,
             attempt_hash=record.recovery_attempt_hash,
@@ -159,12 +161,14 @@ class RecoveryExecutionService:
         updates: dict[str, object] | None = None,
     ) -> RecoveryAttemptRecord:
         if to_status not in _ATTEMPT_TRANSITIONS[record.status]:
-            raise SafetyError("RECOVERY_ATTEMPT_TRANSITION_INVALID", code="RECOVERY_ATTEMPT_TRANSITION_INVALID")
+            raise SafetyError(
+                "RECOVERY_ATTEMPT_TRANSITION_INVALID", code="RECOVERY_ATTEMPT_TRANSITION_INVALID"
+            )
         updated = record.model_copy(
             update={
                 **(updates or {}),
                 "status": to_status,
-                "updated_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(UTC),
                 "recovery_attempt_hash": "pending",
             }
         )
@@ -206,7 +210,7 @@ class RecoveryExecutionService:
             }
         )
         attempt_id = f"recovery_attempt_{identity[:20]}"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         record = RecoveryAttemptRecord(
             recovery_attempt_id=attempt_id,
             project_id=proposal.bindings.project_id,
@@ -257,19 +261,29 @@ class RecoveryExecutionService:
     @staticmethod
     def _safe_child_paths(parent, attempt: RecoveryAttemptRecord) -> tuple[Path, Path, Path]:
         if not parent.output_roots:
-            raise SafetyError("RECOVERY_PARENT_OUTPUT_ROOT_REQUIRED", code="RECOVERY_PARENT_OUTPUT_ROOT_REQUIRED")
-        root = (Path(parent.output_roots[0]) / "recovery_attempts" / attempt.recovery_attempt_id).resolve()
+            raise SafetyError(
+                "RECOVERY_PARENT_OUTPUT_ROOT_REQUIRED", code="RECOVERY_PARENT_OUTPUT_ROOT_REQUIRED"
+            )
+        root = (
+            Path(parent.output_roots[0]) / "recovery_attempts" / attempt.recovery_attempt_id
+        ).resolve()
         parent_root = Path(parent.output_roots[0]).resolve()
         try:
             root.relative_to(parent_root)
         except ValueError as exc:
-            raise SafetyError("RECOVERY_OUTPUT_PATH_ESCAPE", code="RECOVERY_OUTPUT_PATH_ESCAPE") from exc
+            raise SafetyError(
+                "RECOVERY_OUTPUT_PATH_ESCAPE", code="RECOVERY_OUTPUT_PATH_ESCAPE"
+            ) from exc
         return root, root / "control" / "project_config.yaml", root / "control" / "pipeline.yaml"
 
     @staticmethod
-    def _write_child_files(parent, candidate, attempt, root: Path, config_path: Path, pipeline_path: Path) -> None:
+    def _write_child_files(
+        parent, candidate, attempt, root: Path, config_path: Path, pipeline_path: Path
+    ) -> None:
         if root.exists():
-            raise SafetyError("RECOVERY_OUTPUT_NAMESPACE_COLLISION", code="RECOVERY_OUTPUT_NAMESPACE_COLLISION")
+            raise SafetyError(
+                "RECOVERY_OUTPUT_NAMESPACE_COLLISION", code="RECOVERY_OUTPUT_NAMESPACE_COLLISION"
+            )
         source_config = Path(parent.project_config_path)
         source_pipeline = Path(parent.pipeline_path)
         config = yaml.safe_load(source_config.read_text(encoding="utf-8")) or {}
@@ -280,7 +294,9 @@ class RecoveryExecutionService:
             if isinstance(node, dict) and str(node.get("id")) in candidate.target_node_ids
         ]
         if {str(node.get("id")) for node in nodes} != set(candidate.target_node_ids):
-            raise SafetyError("RECOVERY_PIPELINE_SCOPE_MISSING", code="RECOVERY_PIPELINE_SCOPE_MISSING")
+            raise SafetyError(
+                "RECOVERY_PIPELINE_SCOPE_MISSING", code="RECOVERY_PIPELINE_SCOPE_MISSING"
+            )
         target_nodes = set(candidate.target_node_ids)
         for node in nodes:
             node["depends_on"] = [
@@ -336,9 +352,7 @@ class RecoveryExecutionService:
         lifecycle = orchestrator.get(project_id=project_id, lifecycle_id=lifecycle_id)
         existing = [
             item
-            for item in self.store.list_recovery_attempts(
-                project_id, lifecycle_id=lifecycle_id
-            )
+            for item in self.store.list_recovery_attempts(project_id, lifecycle_id=lifecycle_id)
             if item.command_id == command_id
             and item.recovery_proposal_id == proposal_id
             and item.candidate_id == candidate_id
@@ -362,7 +376,9 @@ class RecoveryExecutionService:
         if len(existing) > 1:
             raise StateStoreError("RECOVERY_IDEMPOTENCY_COLLISION")
         if lifecycle.state != "RECOVERY_READY" or lifecycle.recovery_approval_id is None:
-            raise SafetyError("RECOVERY_EXECUTION_STATE_INVALID", code="RECOVERY_EXECUTION_STATE_INVALID")
+            raise SafetyError(
+                "RECOVERY_EXECUTION_STATE_INVALID", code="RECOVERY_EXECUTION_STATE_INVALID"
+            )
         proposal, candidate, parent, policy_and_quota = self.policy.authorize_candidate(
             project_id=project_id,
             lifecycle_id=lifecycle_id,
@@ -397,13 +413,19 @@ class RecoveryExecutionService:
             if attempt.child_execution_ticket_id
             else None
         )
-        if child is not None and child.status == "consumed" and attempt.status in {"TICKET_ISSUED", "RUNNING"}:
+        if (
+            child is not None
+            and child.status == "consumed"
+            and attempt.status in {"TICKET_ISSUED", "RUNNING"}
+        ):
             attempt = self._handoff(
                 attempt,
                 command_id=f"{command_id}:crash-handoff",
                 reason="DISPATCH_OUTCOME_UNKNOWN_AFTER_RESTART",
             )
-            lifecycle = self._lifecycle_handoff(orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons)
+            lifecycle = self._lifecycle_handoff(
+                orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons
+            )
             return lifecycle, attempt, None
         if attempt.status == "EXECUTION_SUCCEEDED" and close_loop:
             return self._close_loop(orchestrator, attempt, command_id, actor, None)
@@ -421,7 +443,9 @@ class RecoveryExecutionService:
                     command_id=f"{command_id}:quota-handoff",
                     reason=str(getattr(exc, "code", None) or exc),
                 )
-                lifecycle = self._lifecycle_handoff(orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons)
+                lifecycle = self._lifecycle_handoff(
+                    orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons
+                )
                 return lifecycle, attempt, None
             attempt = self._transition_attempt(
                 attempt,
@@ -430,13 +454,19 @@ class RecoveryExecutionService:
                 updates={"quota_reservation_id": reservation.reservation_id},
             )
         else:
-            reservation = self.store.get_recovery_quota_reservation(attempt.quota_reservation_id or "")
+            reservation = self.store.get_recovery_quota_reservation(
+                attempt.quota_reservation_id or ""
+            )
             if reservation is None:
-                raise SafetyError("RECOVERY_RESERVATION_NOT_FOUND", code="RECOVERY_RESERVATION_NOT_FOUND")
+                raise SafetyError(
+                    "RECOVERY_RESERVATION_NOT_FOUND", code="RECOVERY_RESERVATION_NOT_FOUND"
+                )
         root, config_path, pipeline_path = self._safe_child_paths(parent, attempt)
         if attempt.status == "APPROVED":
             try:
-                self._write_child_files(parent, candidate, attempt, root, config_path, pipeline_path)
+                self._write_child_files(
+                    parent, candidate, attempt, root, config_path, pipeline_path
+                )
                 child = self.ticket_service.issue_recovery_child(
                     parent=parent,
                     proposal=proposal,
@@ -464,7 +494,9 @@ class RecoveryExecutionService:
                     command_id=f"{command_id}:issue-handoff",
                     reason=str(getattr(exc, "code", None) or exc),
                 )
-                lifecycle = self._lifecycle_handoff(orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons)
+                lifecycle = self._lifecycle_handoff(
+                    orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons
+                )
                 return lifecycle, attempt, None
         assert child is not None
         if lifecycle.state == "RECOVERY_READY":
@@ -489,7 +521,7 @@ class RecoveryExecutionService:
                 attempt,
                 "RUNNING",
                 command_id=f"{command_id}:running",
-                updates={"dispatch_started_at": datetime.now(timezone.utc)},
+                updates={"dispatch_started_at": datetime.now(UTC)},
             )
         runner_started = False
         if executor is None:
@@ -522,7 +554,11 @@ class RecoveryExecutionService:
         except Exception as exc:
             refreshed_child = self.store.get_execution_ticket(child.execution_ticket_id)
             error_code = str(getattr(exc, "code", None) or "RECOVERY_DISPATCH_FAILED")
-            if not runner_started or refreshed_child is None or refreshed_child.status != "consumed":
+            if (
+                not runner_started
+                or refreshed_child is None
+                or refreshed_child.status != "consumed"
+            ):
                 attempt = self._handoff(
                     attempt,
                     command_id=f"{command_id}:dispatch-handoff",
@@ -540,7 +576,7 @@ class RecoveryExecutionService:
                 updates={
                     "execution_status": "FAILED",
                     "error_codes": (error_code,),
-                    "dispatch_completed_at": datetime.now(timezone.utc),
+                    "dispatch_completed_at": datetime.now(UTC),
                 },
             )
             failure_result = {
@@ -560,7 +596,10 @@ class RecoveryExecutionService:
                 attempt = self._handoff(
                     attempt,
                     command_id=f"{command_id}:persistence-handoff",
-                    reason=str(getattr(persistence_exc, "code", None) or "RECOVERY_POST_DISPATCH_PERSISTENCE_FAILED"),
+                    reason=str(
+                        getattr(persistence_exc, "code", None)
+                        or "RECOVERY_POST_DISPATCH_PERSISTENCE_FAILED"
+                    ),
                 )
                 lifecycle = self._lifecycle_handoff(
                     orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons
@@ -569,11 +608,13 @@ class RecoveryExecutionService:
         execution_status = str(result.get("status") or "UNKNOWN")
         attempt = self._transition_attempt(
             attempt,
-            "EXECUTION_SUCCEEDED" if execution_status in {"SUCCESS", "COMPLETED"} else "EXECUTION_FAILED",
+            "EXECUTION_SUCCEEDED"
+            if execution_status in {"SUCCESS", "COMPLETED"}
+            else "EXECUTION_FAILED",
             command_id=f"{command_id}:execution-complete",
             updates={
                 "execution_status": execution_status,
-                "dispatch_completed_at": datetime.now(timezone.utc),
+                "dispatch_completed_at": datetime.now(UTC),
             },
         )
         try:
@@ -585,15 +626,19 @@ class RecoveryExecutionService:
             attempt = self._handoff(
                 attempt,
                 command_id=f"{command_id}:persistence-handoff",
-                reason=str(getattr(exc, "code", None) or "RECOVERY_POST_DISPATCH_PERSISTENCE_FAILED"),
+                reason=str(
+                    getattr(exc, "code", None) or "RECOVERY_POST_DISPATCH_PERSISTENCE_FAILED"
+                ),
             )
             lifecycle = self._lifecycle_handoff(
                 orchestrator, lifecycle, command_id, actor, attempt.handoff_reasons
             )
             return lifecycle, attempt, result
 
-    def _register_run_link(self, attempt, child, result, config_path: Path, pipeline_path: Path) -> None:
-        now = datetime.now(timezone.utc).isoformat()
+    def _register_run_link(
+        self, attempt, child, result, config_path: Path, pipeline_path: Path
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
         run_started = (attempt.dispatch_started_at or attempt.created_at).isoformat()
         record = RunLinkRecord(
             run_link_id=f"runlink_{uuid4().hex}",
@@ -680,11 +725,11 @@ class RecoveryExecutionService:
             command_id=command_id,
             reason_code=reason,
             updates={
-                "handoff_reasons": tuple(sorted(set((*attempt.handoff_reasons, reason)))),
+                "handoff_reasons": tuple(sorted({*attempt.handoff_reasons, reason})),
                 "prior_recovery_attempt_ids": prior_attempts,
-                "remaining_goal_gap_ids": tuple(
-                    gap.criterion_id for gap in diagnosis.goal_gaps
-                ) if diagnosis is not None else (),
+                "remaining_goal_gap_ids": tuple(gap.criterion_id for gap in diagnosis.goal_gaps)
+                if diagnosis is not None
+                else (),
                 "safe_human_actions": (
                     "inspect_recovery_evidence_and_audit_timeline",
                     "review_remaining_goal_gaps",

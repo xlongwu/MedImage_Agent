@@ -1,9 +1,6 @@
 # Optional dependencies for capabilities that are intentionally not required
 # for the core deterministic pipeline/runtime test suite.
 
-# DICOM real-data inspection/import helpers
-pydicom>=2.4.0
-
 # GPU acceleration. Install the variant matching the local CUDA runtime.
 # Target desktop validation chain: NVIDIA CUDA 12.x / RTX 4060 (8 GiB).
 # This remains optional so CPU-only installations retain their existing start

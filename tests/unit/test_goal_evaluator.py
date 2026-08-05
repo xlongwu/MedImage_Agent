@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -10,8 +10,8 @@ from src.backend.app.planner.goal_contract_builder import (
 )
 from src.backend.app.planner.plan_validator import validate_goal_contract_reachability
 from src.backend.app.planner.reviewed_plan_store import reviewed_plan_identity
-from src.backend.app.schemas.desktop import ReviewedPlanRecord
 from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
+from src.backend.app.schemas.desktop import ReviewedPlanRecord
 from src.backend.app.schemas.goal_contract import GoalCriterion
 from src.backend.app.schemas.observation import (
     ArtifactObservation,
@@ -25,12 +25,12 @@ from src.backend.app.schemas.observation import (
     ScientificObservation,
     ValidationObservation,
 )
+from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.goal_evaluator import (
     GoalEvaluator,
     calculate_goal_evaluation_hash,
     evaluate_criterion,
 )
-from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 from src.backend.app.services.observation_collector import calculate_observation_hash
 
@@ -64,7 +64,7 @@ def _contract(plan=None, goal="Compute atlas-grounded FC for every reviewed subj
 
 
 def _observation(contract, *, include_fc=True, artifact_source_ok=True, subjects=("sub-01",)):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     sources = [
         ObservationSourceRef(
             source_id="source-summary",
@@ -109,25 +109,29 @@ def _observation(contract, *, include_fc=True, artifact_source_ok=True, subjects
             freshness="fresh",
         ),
     ]
-    artifacts = tuple(
-        ArtifactObservation(
-            artifact_id=f"fc-{subject}",
-            artifact_type="fc_matrix",
-            owner_node_id="functional_connectivity_subject",
-            subject_id=subject,
-            relative_path=f"derivatives/{subject}/fc.npy",
-            exists=True,
-            size_bytes=64,
-            checksum_sha256="a" * 64,
-            shape=(4, 4),
-            dtype="float32",
-            reload_status="passed",
-            provenance_id=f"prov-{subject}",
-            registration_status="registered",
-            evidence_ids=("source-artifacts", "source-registry"),
+    artifacts = (
+        tuple(
+            ArtifactObservation(
+                artifact_id=f"fc-{subject}",
+                artifact_type="fc_matrix",
+                owner_node_id="functional_connectivity_subject",
+                subject_id=subject,
+                relative_path=f"derivatives/{subject}/fc.npy",
+                exists=True,
+                size_bytes=64,
+                checksum_sha256="a" * 64,
+                shape=(4, 4),
+                dtype="float32",
+                reload_status="passed",
+                provenance_id=f"prov-{subject}",
+                registration_status="registered",
+                evidence_ids=("source-artifacts", "source-registry"),
+            )
+            for subject in subjects
         )
-        for subject in subjects
-    ) if include_fc else ()
+        if include_fc
+        else ()
+    )
     nodes = tuple(
         NodeObservation(
             node_id="functional_connectivity_subject",
@@ -173,7 +177,9 @@ def _observation(contract, *, include_fc=True, artifact_source_ok=True, subjects
                 status="passed",
                 evidence_ids=("source-validation",),
             ),
-        ) if artifact_source_ok else (),
+        )
+        if artifact_source_ok
+        else (),
         capability=CapabilityObservation(
             declared_level="computed",
             observed_level="computed" if include_fc else "metadata_only",
@@ -204,7 +210,11 @@ def _store_with(contract, observation, tmp_path):
             plan_hash=contract.plan_hash,
             created_at="2026-07-14T00:00:00Z",
             updated_at="2026-07-14T00:00:00Z",
-            payload={"plan": _plan(), "goal_contract": contract.model_dump(mode="json"), "goal_contract_status": "reviewed"},
+            payload={
+                "plan": _plan(),
+                "goal_contract": contract.model_dump(mode="json"),
+                "goal_contract_status": "reviewed",
+            },
         )
     )
     store.add_observation(observation)
@@ -238,18 +248,20 @@ def test_goal_contract_is_hash_bound_and_reachable():
         ),
     ],
 )
-def test_first_batch_scientific_goal_artifacts_are_contract_reachable(
-    node_id, expected_artifacts
-):
+def test_first_batch_scientific_goal_artifacts_are_contract_reachable(node_id, expected_artifacts):
     plan = {
         "pipeline_id": f"{node_id}-plan",
-        "nodes": [{"id": node_id, "backend": "native_python" if node_id.startswith("native_") else "python", "params": {}}],
+        "nodes": [
+            {
+                "id": node_id,
+                "backend": "native_python" if node_id.startswith("native_") else "python",
+                "params": {},
+            }
+        ],
     }
     built = build_goal_contract_semantics(plan, f"Review {node_id} outputs")
     assert built.ok and built.semantics is not None
-    reviewed_plan_id, plan_hash = reviewed_plan_identity(
-        "project-1", plan, built.semantics
-    )
+    reviewed_plan_id, plan_hash = reviewed_plan_identity("project-1", plan, built.semantics)
     contract = finalize_goal_contract(
         semantics=built.semantics,
         project_id="project-1",
@@ -265,6 +277,150 @@ def test_first_batch_scientific_goal_artifacts_are_contract_reachable(
     assert not validate_goal_contract_reachability(plan, contract)
 
 
+def test_native_minimal_goal_contract_uses_reviewed_scope_and_enabled_outputs():
+    plan = {
+        "pipeline_id": "native_full_preprocessing",
+        "nodes": [
+            {
+                "id": "native_preproc_full_execute",
+                "backend": "native_python",
+                "params": {
+                    "subject_id": "sub-001",
+                    "stage_overrides": {
+                        "nuisance_regression": True,
+                        "temporal_filtering": True,
+                        "alff": False,
+                        "falff": False,
+                        "reho": False,
+                        "functional_connectivity": False,
+                    },
+                },
+            }
+        ],
+        "metadata": {
+            "subject_scope": ["sub-001"],
+            "required_preprocessing_stages": [
+                "nuisance_regression",
+                "temporal_filtering",
+            ],
+        },
+    }
+
+    built = build_goal_contract_semantics(
+        plan,
+        "Only preprocess sub-001 with the reviewed minimal rs-fMRI stage profile",
+    )
+
+    assert built.ok and built.semantics is not None
+    assert built.semantics["scope"]["subject_ids"] == ["sub-001"]
+    artifact_targets = {
+        criterion["target"]
+        for criterion in built.semantics["criteria"]
+        if criterion["criterion_type"] == "artifact_present"
+    }
+    assert artifact_targets == {"residual_bold", "filtered_bold"}
+    assert built.semantics["allowed_limitation_flags"] == ["simplified"]
+    assert built.semantics["forbidden_limitation_flags"] == ["preview_only", "partial"]
+    scope_criterion = next(
+        criterion
+        for criterion in built.semantics["criteria"]
+        if criterion["criterion_type"] == "scope_complete"
+    )
+    assert set(scope_criterion["expected"]["artifact_types"]) == artifact_targets
+    scientific_criterion = next(
+        criterion
+        for criterion in built.semantics["criteria"]
+        if criterion["criterion_type"] == "scientific_status_allowed"
+    )
+    assert scientific_criterion["expected"]["forbidden_limitation_flags"] == [
+        "preview_only",
+        "partial",
+    ]
+
+
+def test_native_minimal_computed_outputs_allow_reviewed_simplified_limitation(tmp_path):
+    plan = {
+        "pipeline_id": "native_full_preprocessing",
+        "nodes": [
+            {
+                "id": "native_preproc_full_execute",
+                "backend": "native_python",
+                "params": {
+                    "subject_id": "sub-001",
+                    "stage_overrides": {
+                        "nuisance_regression": True,
+                        "temporal_filtering": True,
+                        "group_summary": False,
+                    },
+                },
+            }
+        ],
+    }
+    _, contract = _contract(
+        plan=plan,
+        goal="Preprocess sub-001 with the reviewed native minimal profile",
+    )
+    observation = _observation(contract).model_copy(
+        update={
+            "nodes": (
+                NodeObservation(
+                    node_id="native_preproc_full_execute",
+                    subject_id="sub-001",
+                    status="SUCCESS",
+                    backend="native_python",
+                    contract_version="1.0.0",
+                    evidence_ids=("source-nodes",),
+                ),
+            ),
+            "artifacts": tuple(
+                ArtifactObservation(
+                    artifact_id=f"artifact-{artifact_type}",
+                    artifact_type=artifact_type,
+                    owner_node_id="native_preproc_full_execute",
+                    subject_id="sub-001",
+                    relative_path=f"derivatives/sub-001/{artifact_type}.nii.gz",
+                    exists=True,
+                    size_bytes=64,
+                    checksum_sha256="a" * 64,
+                    shape=(2, 2, 2, 4),
+                    dtype="float32",
+                    reload_status="passed",
+                    provenance_id=f"provenance-{artifact_type}",
+                    registration_status="registered",
+                    evidence_ids=("source-artifacts", "source-registry"),
+                )
+                for artifact_type in ("residual_bold", "filtered_bold")
+            ),
+            "capability": CapabilityObservation(
+                declared_level="computed",
+                observed_level="computed",
+                defensible_level="computed",
+            ),
+            "scientific": ScientificObservation(
+                status="computed",
+                limitation_flags=("simplified",),
+                backend_ids=("native_python",),
+            ),
+        }
+    )
+    observation = observation.model_copy(
+        update={"observation_hash": calculate_observation_hash(observation)}
+    )
+
+    store = _store_with(contract, observation, tmp_path)
+    evaluation = GoalEvaluator(store).evaluate(
+        project_id="project-1",
+        lifecycle_id="lifecycle-1",
+        observation_id=observation.observation_id,
+    )
+
+    assert evaluation.status == "satisfied"
+    assert all(
+        item.reason_code not in {"CAPABILITY_BELOW_MINIMUM", "SCIENTIFIC_STATUS_NOT_ALLOWED"}
+        for item in evaluation.criterion_results
+    )
+
+
 def test_metadata_helper_does_not_lower_scientific_goal_reachability():
     plan = _plan()
     plan["nodes"].insert(
@@ -277,9 +433,7 @@ def test_metadata_helper_does_not_lower_scientific_goal_reachability():
     )
     built = build_goal_contract_semantics(plan, "Compute reviewed FC")
     assert built.ok and built.semantics is not None
-    reviewed_plan_id, plan_hash = reviewed_plan_identity(
-        "project-1", plan, built.semantics
-    )
+    reviewed_plan_id, plan_hash = reviewed_plan_identity("project-1", plan, built.semantics)
     contract = finalize_goal_contract(
         semantics=built.semantics,
         project_id="project-1",
@@ -301,7 +455,10 @@ def test_fc_success_requires_real_artifact_and_is_persisted(tmp_path):
     assert evaluation.status == "satisfied"
     assert all(result.status == "passed" for result in evaluation.criterion_results)
     assert calculate_goal_evaluation_hash(evaluation) == evaluation.goal_evaluation_hash
-    assert SQLiteDesktopStore(store.db_path).get_goal_evaluation(evaluation.goal_evaluation_id) == evaluation
+    assert (
+        SQLiteDesktopStore(store.db_path).get_goal_evaluation(evaluation.goal_evaluation_id)
+        == evaluation
+    )
 
 
 def test_runtime_success_with_missing_fc_is_not_satisfied(tmp_path):
@@ -327,7 +484,10 @@ def test_missing_artifact_source_is_indeterminate_not_false_missing(tmp_path):
         observation_id=observation.observation_id,
     )
     assert evaluation.status == "indeterminate"
-    assert any(result.reason_code == "ARTIFACT_SOURCE_INCOMPLETE" for result in evaluation.criterion_results)
+    assert any(
+        result.reason_code == "ARTIFACT_SOURCE_INCOMPLETE"
+        for result in evaluation.criterion_results
+    )
 
 
 def test_conflicting_observation_is_indeterminate_not_false_missing(tmp_path):
@@ -351,7 +511,9 @@ def test_conflicting_observation_is_indeterminate_not_false_missing(tmp_path):
         observation_id=observation.observation_id,
     )
     assert evaluation.status == "indeterminate"
-    assert not any(result.reason_code == "ARTIFACT_MISSING" for result in evaluation.criterion_results)
+    assert not any(
+        result.reason_code == "ARTIFACT_MISSING" for result in evaluation.criterion_results
+    )
 
 
 @pytest.mark.parametrize(
@@ -412,7 +574,7 @@ def test_lifecycle_reaches_goal_satisfied_only_after_persisted_evaluation(tmp_pa
     _, contract = _contract()
     observation = _observation(contract)
     store = _store_with(contract, observation, tmp_path)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     lifecycle = AgentLifecycleRecord(
         lifecycle_id="lifecycle-1",
         project_id="project-1",

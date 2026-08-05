@@ -4,6 +4,7 @@ import { useDatasetSummary } from "./hooks/useDatasetSummary";
 import { useModelStatus } from "./hooks/useModelStatus";
 import { useProject } from "./hooks/useProjects";
 import { useProjectOverview } from "./hooks/useProjectOverview";
+import { useProjectBidsValidation } from "./hooks/useProjectBidsValidation";
 import { useTaskStream } from "./hooks/useTaskStream";
 import { useAppState } from "./hooks/useAppState";
 import { buildProjectInventory } from "./lib/projectWorkflow";
@@ -25,6 +26,7 @@ import { AppShellView } from "./features/app/AppShellView";
 import { useWorkspaceNavigation } from "./features/navigation/useWorkspaceNavigation";
 import { I18nProvider } from "./i18n/I18nProvider";
 import { useImageWorkspaceController } from "./features/app/useImageWorkspaceController";
+import { useAgentTaskController } from "./features/agent/useAgentTaskController";
 
 export default function App() {
   const appState = useAppState();
@@ -32,6 +34,7 @@ export default function App() {
   const navigation = useWorkspaceNavigation();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const executionMode: ExecutionMode = "simulated";
   const externalSmokeApprovedRun = false;
@@ -54,6 +57,7 @@ export default function App() {
       setSelectedPlanNode(null);
       setSelectedArtifact(null);
       setSelectedTaskId(null);
+      setSelectedRunId(null);
       if (navigation.location.kind === "project") {
         if (projectId) navigation.openProject(projectId);
         else navigation.openProjects();
@@ -79,8 +83,26 @@ export default function App() {
   ) as TaskController;
 
   const project = useProject(selectedProjectId);
-  const activeProjectId = selectedProjectId && !project.fromFallback ? project.data.id : null;
-  const activeStudyId = !project.fromFallback ? project.data.study_id : null;
+  const selectedProjectSummary = useMemo(
+    () => projectController.projects.data.find((item) => item.id === selectedProjectId) ?? null,
+    [projectController.projects.data, selectedProjectId],
+  );
+  const effectiveProject = useMemo(
+    () =>
+      project.fromFallback && selectedProjectSummary
+        ? { ...project.data, ...selectedProjectSummary }
+        : project.data,
+    [project.data, project.fromFallback, selectedProjectSummary],
+  );
+  const activeProjectId = selectedProjectId;
+  const activeStudyId =
+    !project.fromFallback && project.data.id === selectedProjectId
+      ? project.data.study_id
+      : (selectedProjectSummary?.study_id ?? null);
+  const agentTaskController = useAgentTaskController({
+    baseUrl: app.baseUrl,
+    projectId: activeProjectId,
+  });
   const selectedProjectForPlanReview = useMemo(
     () =>
       selectedProjectId && !project.fromFallback && project.data.id === selectedProjectId
@@ -100,14 +122,21 @@ export default function App() {
   }, [projectController.projectCreateResult, selectedProjectId, selectedProjectMetadata]);
 
   const overview = useProjectOverview(activeStudyId);
+  const bidsValidation = useProjectBidsValidation(app.baseUrl, activeProjectId);
   const projectInventory = useMemo(
-    () => buildProjectInventory(project.data, overview.data, projectDiagnostics),
-    [project.data, overview.data, projectDiagnostics],
+    () =>
+      buildProjectInventory(
+        effectiveProject,
+        overview.data,
+        projectDiagnostics,
+        bidsValidation.data,
+      ),
+    [bidsValidation.data, effectiveProject, overview.data, projectDiagnostics],
   );
 
   const dataset = useDatasetSummary(activeProjectId);
   const model = useModelStatus(activeProjectId);
-  const image = useImageWorkspaceController(activeProjectId, project.data);
+  const image = useImageWorkspaceController(activeProjectId, effectiveProject);
 
   useEffect(() => {
     taskController.setAuditPackage?.(null);
@@ -221,10 +250,13 @@ export default function App() {
       },
       planNode: selectedPlanNode,
       run: {
-        id: selectedTaskId,
-        name: taskController.selectedTask?.run_name ?? null,
-        pipeline: taskController.selectedTask?.pipeline ?? null,
-        status: taskController.selectedTask?.status ?? null,
+        id: agentTaskController.task?.technical_details?.run_id ?? selectedRunId,
+        name:
+          agentTaskController.task?.goal_summary ?? taskController.selectedTask?.run_name ?? null,
+        pipeline: agentTaskController.task
+          ? "Agent Task"
+          : (taskController.selectedTask?.pipeline ?? null),
+        status: agentTaskController.task?.state ?? taskController.selectedTask?.status ?? null,
       },
     }),
     [
@@ -237,6 +269,8 @@ export default function App() {
       selectedDataSeries,
       selectedPlanNode,
       selectedTaskId,
+      selectedRunId,
+      agentTaskController.task,
       taskController.selectedTask?.pipeline,
       taskController.selectedTask?.run_name,
       taskController.selectedTask?.status,
@@ -252,12 +286,14 @@ export default function App() {
         selectedProjectId={selectedProjectId}
         onSelectProject={openSelectedProject}
         navigation={navigation}
-        project={project}
+        project={{ ...project, data: effectiveProject }}
         projectInventory={projectInventory}
+        bidsValidation={bidsValidation}
         projectController={projectController}
         taskController={taskController}
         taskStream={taskStream}
         app={app}
+        agentTaskController={agentTaskController}
         appState={appState}
         image={image}
         assistant={{
@@ -287,8 +323,8 @@ export default function App() {
         handleReconnectTaskStream={handleReconnectTaskStream}
         handleAssistantSubmit={handleAssistantSubmit}
         onNewChat={() => setChatMessages(fallbackChat)}
-        selectedTaskId={selectedTaskId}
-        setSelectedTaskId={setSelectedTaskId}
+        selectedRunId={selectedRunId}
+        setSelectedRunId={setSelectedRunId}
         selectionContext={selectionContext}
         onSelectedArtifactChange={setSelectedArtifact}
         onSelectedDataSeriesChange={setSelectedDataSeries}

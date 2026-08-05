@@ -34,8 +34,15 @@ def test_motion_qc_computes_fd_friston24_and_threshold_report(tmp_path: Path) ->
     assert result.qc.metrics["fd_first_frame"] == 0.0
     assert result.qc.metrics["friston24_shape"] == [3, 24]
     assert result.qc.metrics["high_motion_frame_count"] == 0
-    fd_artifact = next(artifact for artifact in result.output_artifacts if artifact.artifact_type == "fd_timeseries")
-    assert Path(fd_artifact.path).read_text(encoding="utf-8").splitlines()[0] == "framewise_displacement"
+    fd_artifact = next(
+        artifact
+        for artifact in result.output_artifacts
+        if artifact.artifact_type == "fd_timeseries"
+    )
+    assert (
+        Path(fd_artifact.path).read_text(encoding="utf-8").splitlines()[0]
+        == "framewise_displacement"
+    )
 
 
 def test_motion_qc_flags_fd_threshold_without_hiding_warning(tmp_path: Path) -> None:

@@ -6,8 +6,8 @@ Uses gpu_safety.py guards for device, memory, timeout, concurrency.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from src.backend.app.tools.gpu_utils import (
     apply_gpu_guard,
@@ -75,19 +75,19 @@ def run_gpu_alff_subject(
         return result
 
     # ── TR ──
-    if not isinstance(tr, (int, float)) or tr != tr or tr == float("inf") or tr <= 0 or tr < 0.1 or tr > 10.0:
+    if not isinstance(tr, int | float) or tr != tr or tr == float("inf") or tr <= 0 or tr < 0.1 or tr > 10.0:
         result["ok"] = False
         result["errors"].append(f"Invalid TR: {tr}. Must be 0.1 <= TR <= 10.0.")
         return result
 
     # ── Frequency band ──
-    if not isinstance(frequency_band, (list, tuple)) or len(frequency_band) != 2:
+    if not isinstance(frequency_band, list | tuple) or len(frequency_band) != 2:
         result["ok"] = False
         result["errors"].append("frequency_band must be [low, high].")
         return result
     low, high = frequency_band
     nyquist = 1.0 / (2.0 * tr)
-    if not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+    if not isinstance(low, int | float) or not isinstance(high, int | float):
         result["ok"] = False
         result["errors"].append("Frequency band values must be numeric.")
         return result

@@ -1,12 +1,21 @@
 # MedImage Agent 前端 Agent 化与交互收敛总体计划
 
-> 状态：Proposed — Blocked by Phase 9 `G9-6`
+> 当前结果（2026-07-16）：10A–10E 与 10F 的 source/docs 范围已实现并完成当时的
+> 自动化验证；exact-SHA 打包、可见 Electron 真实流程、安装器和发布版本对齐延期。
+> 本文以下内容是实施前方案和风险登记，不再作为当前阻塞状态或待办来源。当前事实见
+> [阶段十 README](README.md) 与[验收记录](evidence/阶段十_E2E验收记录.md)。
+
+> 历史启动状态：Proposed — Blocked by Phase 9 `G9-6`
 >
 > 日期：2026-07-15
 >
 > 任务模式：Feature Bundle Mode + Architecture and Refactor Mode；10E 与 10F 的真实执行部分叠加 Scientific Validation Mode。
 >
 > 交付目标：以既有 Agent Lifecycle 和受控执行链为唯一事实来源，交付 Agent-first、Workflow-second、Details-on-demand 的项目主流程。
+
+> 实施更新（2026-07-16）：维护者已明确授权独立分支源码实施。10A–10E 和 10F
+> source/docs 子范围已完成验证；packaged GUI、exact-SHA、安装器与发布关卡延期，不能从
+> 本次 source 结果推断通过 G10-6。
 
 ## 1. Scope Anchor
 
@@ -414,10 +423,10 @@ npm --prefix src/frontend run build
 
 ## Handoff
 
-当前文档可进入维护者评审，但不可进入源码实施。
+源码实施范围已交付；后续只在形成 clean exact-SHA 候选后继续 packaged/release 验收。
 
 - Proof Obligations：10
 - Hazards Mitigated：15/15
 - Implementation Tasks：6
 - Critical RFIs：3
-- 当前状态：Blocked by Phase 9 `G9-6`
+- 当前状态：source implemented；packaged/release acceptance deferred

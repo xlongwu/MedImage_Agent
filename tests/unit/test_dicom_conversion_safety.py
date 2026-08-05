@@ -7,13 +7,8 @@ No file deletion.
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
 from src.backend.app.schemas.dicom_conversion_safety import (
     DicomConversionRollbackPlan,
-    RawdataChecksumComparison,
     RawdataChecksumSnapshot,
     build_conversion_rollback_plan,
     build_rawdata_checksum_snapshot,
@@ -115,7 +110,9 @@ def test_rollback_plan_excludes_rawdata_paths(tmp_path):
 
     rawdata_roots = [str(tmp_path / "rawdata")]
     plan = build_conversion_rollback_plan(
-        str(output_root), project_dir=str(tmp_path), rawdata_roots=rawdata_roots,
+        str(output_root),
+        project_dir=str(tmp_path),
+        rawdata_roots=rawdata_roots,
     )
     assert len(plan.removable_paths) >= 1
     assert len(plan.protected_paths) == 0
@@ -127,7 +124,9 @@ def test_rollback_plan_blocks_rawdata_root(tmp_path):
     (rawdata_dir / "test.dcm").write_text("fake")
 
     plan = build_conversion_rollback_plan(
-        str(rawdata_dir), project_dir=str(tmp_path), rawdata_roots=[str(rawdata_dir)],
+        str(rawdata_dir),
+        project_dir=str(tmp_path),
+        rawdata_roots=[str(rawdata_dir)],
     )
     assert len(plan.removable_paths) == 0
     assert len(plan.protected_paths) >= 1
@@ -168,6 +167,7 @@ def test_rollback_summary():
 
 def test_schema_has_no_subprocess():
     import src.backend.app.schemas.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -176,6 +176,7 @@ def test_schema_has_no_subprocess():
 
 def test_service_has_no_subprocess():
     import src.backend.app.services.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -184,6 +185,7 @@ def test_service_has_no_subprocess():
 
 def test_service_has_no_subprocess_import():
     import src.backend.app.services.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -193,6 +195,7 @@ def test_service_has_no_subprocess_import():
 
 def test_no_spm_dpabi_matlab():
     import src.backend.app.schemas.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()

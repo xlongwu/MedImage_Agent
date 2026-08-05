@@ -7,12 +7,12 @@ from typing import Any
 
 import numpy as np
 
-from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.core.compute_backend import (
     GpuComputeError,
     compute_temporal_filter_gpu,
     cpu_compute_provenance,
 )
+from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.dpabi_compat.qc_rules import validate_frequency_rule
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
 from src.backend.app.native_preproc.io.nifti_io import ensure_4d, load_nifti, save_nifti

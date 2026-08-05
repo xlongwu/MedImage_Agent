@@ -1,4 +1,5 @@
 """Insights engine -- generate operational metrics from SessionDB."""
+
 from __future__ import annotations
 
 import json
@@ -18,7 +19,7 @@ def build_insights(
     stats = db.stats()
 
     runs = db.query_runs(limit=200)
-    errors = db.query_errors(limit=500)
+    _errors = db.query_errors(limit=500)
     error_cats = db.error_categories()
 
     # Success/failure breakdown
@@ -51,23 +52,38 @@ def build_insights(
                 node_stats[nid]["durations"].append(n["duration_seconds"])
 
     slowest_nodes = sorted(
-        [{"node_id": k, "avg_duration": round(mean(v["durations"]), 1),
-          "count": v["total"], "failure_rate": round(v["failed"] / max(v["total"], 1) * 100, 1)}
-         for k, v in node_stats.items() if v["durations"]],
+        [
+            {
+                "node_id": k,
+                "avg_duration": round(mean(v["durations"]), 1),
+                "count": v["total"],
+                "failure_rate": round(v["failed"] / max(v["total"], 1) * 100, 1),
+            }
+            for k, v in node_stats.items()
+            if v["durations"]
+        ],
         key=lambda x: -x["avg_duration"],
     )[:5]
 
     most_failed = sorted(
-        [{"node_id": k, "failed": v["failed"], "total": v["total"],
-          "failure_rate": round(v["failed"] / max(v["total"], 1) * 100, 1)}
-         for k, v in node_stats.items()],
+        [
+            {
+                "node_id": k,
+                "failed": v["failed"],
+                "total": v["total"],
+                "failure_rate": round(v["failed"] / max(v["total"], 1) * 100, 1),
+            }
+            for k, v in node_stats.items()
+        ],
         key=lambda x: -x["failed"],
     )[:5]
 
     # Recent trend (last 10 runs)
     recent = runs[:10]
-    trend = [{"run_id": r["run_id"], "status": r["status"],
-              "started_at": r.get("started_at")} for r in recent]
+    trend = [
+        {"run_id": r["run_id"], "status": r["status"], "started_at": r.get("started_at")}
+        for r in recent
+    ]
 
     # Subject failure map
     subject_failures: dict[str, int] = {}
@@ -96,9 +112,7 @@ def build_insights(
         "most_failed_nodes": most_failed,
         "top_error_categories": error_cats[:5],
         "recent_trend": trend,
-        "subject_failure_map": {
-            k: v for k, v in sorted(subject_failures.items(), key=lambda x: -x[1])[:20]
-        },
+        "subject_failure_map": dict(sorted(subject_failures.items(), key=lambda x: -x[1])[:20]),
     }
 
     db.close()
@@ -130,7 +144,9 @@ def build_insights(
         "|------|-----------------:|------:|-------------:|",
     ]
     for n in slowest_nodes:
-        lines.append(f"| {n['node_id']} | {n['avg_duration']} | {n['count']} | {n['failure_rate']}% |")
+        lines.append(
+            f"| {n['node_id']} | {n['avg_duration']} | {n['count']} | {n['failure_rate']}% |"
+        )
 
     lines += [
         "",
@@ -152,8 +168,12 @@ def build_insights(
     for c in error_cats[:5]:
         lines.append(f"| {c['category']} | {c['count']} |")
 
-    lines += ["", "## Safety Note", "",
-              "Insights are generated from run history only. No rawdata is accessed."]
+    lines += [
+        "",
+        "## Safety Note",
+        "",
+        "Insights are generated from run history only. No rawdata is accessed.",
+    ]
     (report_out / "insights_report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     return insights

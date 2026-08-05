@@ -7,12 +7,12 @@ Uses gpu_safety.py guards for device, memory, timeout, concurrency validation.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from src.backend.app.safety.gpu_safety import (
-    validate_gpu_runtime_request,
     validate_gpu_concurrency,
+    validate_gpu_runtime_request,
 )
 
 

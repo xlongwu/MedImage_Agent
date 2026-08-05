@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -16,14 +17,13 @@ from src.backend.app.api import (
     project_routes,
 )
 from src.backend.app.main import app
-from src.backend.app.planner import project_context, reviewed_plan_store, pipeline_presets
+from src.backend.app.planner import pipeline_presets, project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import (
     bold_reference_readiness,
     motion_qc_readiness,
     qc_evidence_roots,
 )
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -31,17 +31,34 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, qc_evidence_roots, mock_store_module):
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+        qc_evidence_roots,
+        mock_store_module,
+    ):
         monkeypatch.setattr(module, "mock_store", store)
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create_project(client: TestClient, tmp_path: Path) -> dict:
-    resp = client.post("/api/projects/create", json={
-        "project_name": "BOLD Ref Project", "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
-        "project_dir": str(tmp_path / "bold_ref_proj"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "BOLD Ref Project",
+            "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
+            "project_dir": str(tmp_path / "bold_ref_proj"),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -116,11 +133,14 @@ def test_registered_converted_bids_provides_bold_candidates(tmp_path, monkeypatc
         encoding="utf-8",
     )
 
-    created = client.post("/api/projects/create", json={
-        "project_name": "Converted BOLD Ref",
-        "rawdata_dir": str(rawdata),
-        "project_dir": str(tmp_path / "proj_converted_bold"),
-    }).json()
+    created = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Converted BOLD Ref",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(tmp_path / "proj_converted_bold"),
+        },
+    ).json()
     project = store.get_project(created["project_id"])
     assert project is not None
     metadata = dict(project.metadata or {})
@@ -141,7 +161,9 @@ def test_endpoint_ignores_arbitrary_path_query(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created = _create_project(client, tmp_path)
-    resp = client.get(f"/api/projects/{created['project_id']}/bold-reference/readiness?path=../../etc")
+    resp = client.get(
+        f"/api/projects/{created['project_id']}/bold-reference/readiness?path=../../etc"
+    )
     assert resp.status_code == 200
 
 

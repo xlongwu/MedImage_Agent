@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import os
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from threading import Event, Thread
 from typing import Any
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _set_thread_budget(threads: int) -> None:

@@ -3,15 +3,13 @@
 Compares MedImage Agent algorithm outputs against NumPy reference
 implementations with tolerance < 1e-4.
 """
+
 from __future__ import annotations
 
-import time
-
 import numpy as np
-import pytest
-
 
 # ── Utilities ──
+
 
 def _make_4d_synthetic(shape=(10, 10, 10, 50), seed: int = 42) -> np.ndarray:
     rng = np.random.default_rng(seed)
@@ -23,6 +21,7 @@ def _make_4d_synthetic(shape=(10, 10, 10, 50), seed: int = 42) -> np.ndarray:
 
 
 # ── ALFF / fALFF golden tests ──
+
 
 def _reference_alff(data: np.ndarray, tr: float, freq_band: tuple[float, float]):
     """NumPy reference ALFF implementation."""
@@ -75,6 +74,7 @@ def test_alff_standardize():
 
 # ── ReHo golden test ──
 
+
 def test_reho_golden():
     """ReHo (KCC) must produce consistent output within tolerance."""
     from src.backend.app.tools.reho_compute import compute_reho_numpy
@@ -93,10 +93,12 @@ def test_reho_golden():
 
 # ── FC golden test ──
 
+
 def test_fc_golden():
     """Functional connectivity must produce valid correlation matrix."""
     from src.backend.app.tools.functional_connectivity_compute import (
-        compute_fc_numpy, _generate_atlas,
+        _generate_atlas,
+        compute_fc_numpy,
     )
 
     data = _make_4d_synthetic(shape=(16, 16, 16, 60))
@@ -113,10 +115,13 @@ def test_fc_golden():
     # Symmetric
     assert np.allclose(corr, corr.T, atol=1e-4), "Matrix not symmetric"
     # Values approximately in [-1, 1.02] (allow floating point overflow in Pearson)
-    assert np.min(corr) >= -1.02 and np.max(corr) <= 1.02, f"Values out of range: min={np.min(corr)}, max={np.max(corr)}"
+    assert np.min(corr) >= -1.02 and np.max(corr) <= 1.02, (
+        f"Values out of range: min={np.min(corr)}, max={np.max(corr)}"
+    )
 
 
 # ── Nuisance regression golden test ──
+
 
 def test_nuisance_regression_basic():
     """Nuisance regression must reduce data variance."""
@@ -135,19 +140,22 @@ def test_nuisance_regression_basic():
         # Create synthetic 4D data
         data = _make_4d_synthetic(shape=(8, 8, 8, 40)) * 100 + 500
         import nibabel as nib
+
         nii_path = func_dir / "swr_sub-001_task-rest_bold.nii"
         nib.save(nib.Nifti1Image(data, np.eye(4)), str(nii_path))
 
         # Create confounds file
         rng = np.random.default_rng(123)
         n_t = data.shape[3]
-        confounds = np.column_stack([
-            rng.normal(0, 0.1, n_t),  # motion x
-            rng.normal(0, 0.1, n_t),  # motion y
-            rng.normal(0, 0.1, n_t),  # motion z
-            rng.normal(0, 0.05, n_t),  # white matter
-            rng.normal(0, 0.05, n_t),  # CSF
-        ])
+        confounds = np.column_stack(
+            [
+                rng.normal(0, 0.1, n_t),  # motion x
+                rng.normal(0, 0.1, n_t),  # motion y
+                rng.normal(0, 0.1, n_t),  # motion z
+                rng.normal(0, 0.05, n_t),  # white matter
+                rng.normal(0, 0.05, n_t),  # CSF
+            ]
+        )
         conf_path = func_dir / "confounds.tsv"
         header = "motion_x\tmotion_y\tmotion_z\twm\tcsf"
         np.savetxt(str(conf_path), confounds, delimiter="\t", header=header, comments="")

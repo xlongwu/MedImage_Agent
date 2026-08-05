@@ -16,10 +16,11 @@ from typing import Any
 import nibabel as nib
 import numpy as np
 import pytest
+
 from src.backend.app.tools.spm_realign_runner import run_spm_realign_subject
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _subject_dirs(tmp_path: Path) -> dict[str, Path]:
     return {
@@ -71,7 +72,9 @@ def _fake_subprocess_run(
                 str(result_json.parent / "rsub-001_task-rest_bold.nii"),
             ]
             payload["mean_file"] = str(result_json.parent / "meansub-001_task-rest_bold.nii")
-            payload["motion_parameter_file"] = str(result_json.parent / "rp_sub-001_task-rest_bold.txt")
+            payload["motion_parameter_file"] = str(
+                result_json.parent / "rp_sub-001_task-rest_bold.txt"
+            )
             if create_outputs:
                 (result_json.parent / "rsub-001_task-rest_bold.nii").write_text("fake")
                 (result_json.parent / "meansub-001_task-rest_bold.nii").write_text("fake")
@@ -88,6 +91,7 @@ def _fake_subprocess_run(
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── 1. synthetic BIDS input passes ──
+
 
 def test_synthetic_input_passes(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
@@ -106,6 +110,7 @@ def test_synthetic_input_passes(monkeypatch, tmp_path):
 
 
 # ── 2. slice-timing derivatives input passes ──
+
 
 def test_derivatives_input_passes(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
@@ -130,6 +135,7 @@ def test_derivatives_input_passes(monkeypatch, tmp_path):
 
 # ── 3. arbitrary input path rejected ──
 
+
 def test_arbitrary_input_rejected(tmp_path):
     result = run_spm_realign_subject(
         matlab_command="matlab",
@@ -146,6 +152,7 @@ def test_arbitrary_input_rejected(tmp_path):
 
 
 # ── 4. non-synthetic rawdata rejected ──
+
 
 def test_real_rawdata_rejected(tmp_path):
     raw = tmp_path / "data" / "sub-001" / "func" / "sub-001_bold.nii"
@@ -165,6 +172,7 @@ def test_real_rawdata_rejected(tmp_path):
 
 
 # ── 5. path traversal in input rejected ──
+
 
 def test_path_traversal_input_rejected(tmp_path):
     result = run_spm_realign_subject(
@@ -186,6 +194,7 @@ def test_path_traversal_input_rejected(tmp_path):
 
 # ── 6. output goes to derivatives ──
 
+
 def test_output_in_derivatives(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     bold = _make_synthetic_bold(tmp_path)
@@ -206,6 +215,7 @@ def test_output_in_derivatives(monkeypatch, tmp_path):
 
 
 # ── 7. output does not write to rawdata ──
+
 
 def test_output_no_rawdata(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
@@ -232,6 +242,7 @@ def test_output_no_rawdata(monkeypatch, tmp_path):
 
 # ── 8. approved=False blocks before MATLAB ──
 
+
 def test_not_approved_blocks(tmp_path):
     result = run_spm_realign_subject(
         matlab_command="matlab",
@@ -248,6 +259,7 @@ def test_not_approved_blocks(tmp_path):
 
 
 # ── 9. unsafe matlab command blocks before MATLAB ──
+
 
 def test_unsafe_matlab_blocks_before_subprocess(monkeypatch, tmp_path):
     called = []
@@ -277,6 +289,7 @@ def test_unsafe_matlab_blocks_before_subprocess(monkeypatch, tmp_path):
 
 # ── 10. fake MATLAB success returns ok=True ──
 
+
 def test_fake_matlab_success(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     result = run_spm_realign_subject(
@@ -293,6 +306,7 @@ def test_fake_matlab_success(monkeypatch, tmp_path):
 
 
 # ── 11. fake MATLAB success returns expected outputs ──
+
 
 def test_fake_matlab_success_has_outputs(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
@@ -311,6 +325,7 @@ def test_fake_matlab_success_has_outputs(monkeypatch, tmp_path):
 
 # ── 12. fake MATLAB missing output returns ok=False ──
 
+
 def test_fake_matlab_missing_output(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch, returncode=0, create_outputs=False)
     result = run_spm_realign_subject(
@@ -327,6 +342,7 @@ def test_fake_matlab_missing_output(monkeypatch, tmp_path):
 
 
 # ── 13. missing output error includes expected message ──
+
 
 def test_fake_matlab_missing_output_message(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch, returncode=0, create_outputs=False)
@@ -347,6 +363,7 @@ def test_fake_matlab_missing_output_message(monkeypatch, tmp_path):
 
 # ── 14. fake MATLAB nonzero returncode returns ok=False ──
 
+
 def test_fake_matlab_nonzero_returncode(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch, returncode=7)
     result = run_spm_realign_subject(
@@ -364,6 +381,7 @@ def test_fake_matlab_nonzero_returncode(monkeypatch, tmp_path):
 
 # ── 15. nonzero returncode result includes returncode ──
 
+
 def test_fake_matlab_nonzero_has_returncode(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch, returncode=7)
     result = run_spm_realign_subject(
@@ -380,6 +398,7 @@ def test_fake_matlab_nonzero_has_returncode(monkeypatch, tmp_path):
 
 
 # ── 16. log files are recorded ──
+
 
 def test_fake_matlab_logs_preserved(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
@@ -402,6 +421,7 @@ def test_fake_matlab_logs_preserved(monkeypatch, tmp_path):
 
 # ── 17. safety preflight errors appear ──
 
+
 def test_safety_errors_in_result(tmp_path):
     result = run_spm_realign_subject(
         matlab_command="python",  # blocked
@@ -419,6 +439,7 @@ def test_safety_errors_in_result(tmp_path):
 
 
 # ── 18. safety warnings appear ──
+
 
 def test_safety_warnings_in_result(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
@@ -441,6 +462,7 @@ def test_safety_warnings_in_result(monkeypatch, tmp_path):
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── 19. subprocess.run not called on safety error ──
+
 
 def test_subprocess_not_called_on_safety_error(monkeypatch, tmp_path):
     calls = []
@@ -465,6 +487,7 @@ def test_subprocess_not_called_on_safety_error(monkeypatch, tmp_path):
 
 # ── 20. no rawdata written ──
 
+
 def test_no_rawdata_written_sandbox(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     run_spm_realign_subject(
@@ -483,6 +506,7 @@ def test_no_rawdata_written_sandbox(monkeypatch, tmp_path):
 
 # ── 21. result JSON serializable ──
 
+
 def test_result_json_serializable_sandbox(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     result = run_spm_realign_subject(
@@ -499,6 +523,7 @@ def test_result_json_serializable_sandbox(monkeypatch, tmp_path):
 
 
 # ── 22. reviewed execution allowlist NOT changed ──
+
 
 def test_allowlist_not_changed():
     """spm_realign_subject is NOT in the reviewed execution allowlist."""

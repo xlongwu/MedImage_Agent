@@ -35,13 +35,11 @@ class TestFrontendExecuteTextAbsence:
             if stripped.startswith("//") or stripped.startswith("/*"):
                 continue
             if "Run Conversion" in stripped and ("button" in stripped.lower() or ">" in stripped):
-                pytest.fail(
-                    f"Found 'Run Conversion' at line {i}: {stripped[:120]}"
-                )
-            if "Execute Conversion" in stripped and ("button" in stripped.lower() or ">" in stripped):
-                pytest.fail(
-                    f"Found 'Execute Conversion' at line {i}: {stripped[:120]}"
-                )
+                pytest.fail(f"Found 'Run Conversion' at line {i}: {stripped[:120]}")
+            if "Execute Conversion" in stripped and (
+                "button" in stripped.lower() or ">" in stripped
+            ):
+                pytest.fail(f"Found 'Execute Conversion' at line {i}: {stripped[:120]}")
 
     def test_no_run_conversion_text_in_release_readiness_panel(self):
         """ReleaseReadinessPanel must not contain execution button text."""
@@ -57,9 +55,7 @@ class TestFrontendExecuteTextAbsence:
             if stripped.startswith("//") or stripped.startswith("/*"):
                 continue
             if "Run Conversion" in stripped or "Execute Conversion" in stripped:
-                pytest.fail(
-                    f"Found execution button text at line {i}: {stripped[:120]}"
-                )
+                pytest.fail(f"Found execution button text at line {i}: {stripped[:120]}")
 
     def test_no_conversion_execute_in_app_tsx(self):
         """App.tsx must not wire a conversion execute UI."""
@@ -92,9 +88,7 @@ class TestFrontendOnClickAbsence:
                 or "runProjectDicomConversionExecute" in stripped
                 or ("handleExecute" in stripped and "handleExecutePreflight" not in stripped)
             ):
-                pytest.fail(
-                    f"Execute onClick found at line {i}: {stripped[:120]}"
-                )
+                pytest.fail(f"Execute onClick found at line {i}: {stripped[:120]}")
 
     def test_release_readiness_panel_has_no_execute_onclick(self):
         """ReleaseReadinessPanel must not have an execute onClick handler."""
@@ -174,6 +168,7 @@ class TestBackendEndpointDefaultBlocked:
         """POST /conversion/execute returns 200 with ok=false when flags missing."""
         try:
             from fastapi.testclient import TestClient
+
             from src.backend.app.main import app
 
             client = TestClient(app)
@@ -192,6 +187,7 @@ class TestBackendEndpointDefaultBlocked:
         """Specifically check MEDIMAGE_ALLOW_PUBLIC_DICOM_CONVERSION_ENDPOINT gating."""
         try:
             from fastapi.testclient import TestClient
+
             from src.backend.app.main import app
 
             client = TestClient(app)

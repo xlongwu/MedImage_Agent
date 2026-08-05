@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import sqlite3
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,9 +11,9 @@ from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.main import app
 from src.backend.app.planner.audit_record import stable_hash
 from src.backend.app.runtime.node_contract_registry import get_node_contract
-from src.backend.app.schemas.execution_ticket import ExecutionRetryPolicy, ExecutionTicket
 from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
 from src.backend.app.schemas.desktop import ProjectDetail, ReviewedPlanRecord
+from src.backend.app.schemas.execution_ticket import ExecutionRetryPolicy, ExecutionTicket
 from src.backend.app.schemas.goal_contract import CriterionResult, GoalEvaluationRecord
 from src.backend.app.schemas.observation import (
     CapabilityObservation,
@@ -33,8 +34,7 @@ from src.backend.app.services.run_diagnosis_service import (
     calculate_diagnosis_hash,
 )
 
-
-NOW = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 14, 12, 0, tzinfo=UTC)
 
 
 def _ticket() -> ExecutionTicket:
@@ -245,7 +245,7 @@ def test_legacy_advisory_is_read_only_unknown_and_never_authority(tmp_path):
     store = SQLiteDesktopStore(tmp_path / "state.sqlite")
     store.add_recovery_diagnosis(record)
     assert SQLiteDesktopStore(store.db_path).get_recovery_diagnosis(record.diagnosis_id) == record
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.IntegrityError):
         store.add_recovery_diagnosis(record)
 
 
@@ -350,7 +350,10 @@ def test_recovery_command_persists_references_without_executing(tmp_path):
         body = response.json()
         assert body["lifecycle"]["state"] == "RECOVERY_PROPOSED"
         assert body["lifecycle"]["diagnosis_id"] == body["diagnosis"]["diagnosis_id"]
-        assert body["lifecycle"]["recovery_proposal_id"] == body["recovery_proposal"]["recovery_proposal_id"]
+        assert (
+            body["lifecycle"]["recovery_proposal_id"]
+            == body["recovery_proposal"]["recovery_proposal_id"]
+        )
         assert store.list_execution_ticket_events(ticket.execution_ticket_id) == []
     finally:
         app.dependency_overrides.pop(get_project_store, None)

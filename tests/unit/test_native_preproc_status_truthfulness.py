@@ -104,7 +104,9 @@ def test_native_full_execute_generates_truthful_artifact_backed_status(tmp_path)
     assert result.artifact_count >= 20
     assert result.safety_flags["no_external_tools_executed"] is True
     assert result.safety_flags["third_party_runtime_not_used"] is True
-    fc = next(stage for stage in result.stage_results if stage.stage_id == "functional_connectivity")
+    fc = next(
+        stage for stage in result.stage_results if stage.stage_id == "functional_connectivity"
+    )
     assert fc.status == "succeeded"
     assert {artifact["artifact_type"] for artifact in fc.output_artifacts} >= {
         "fc_matrix",

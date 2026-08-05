@@ -9,12 +9,11 @@ all MEDIMAGE_* flags before each test to ensure deterministic behavior.
 
 from __future__ import annotations
 
-from src.backend.app.services.dicom_conversion_smoke_evidence import (
-    capture_synthetic_smoke_evidence,
-)
-
 from src.backend.app.services.dicom_conversion_execution import (
     REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS,
+)
+from src.backend.app.services.dicom_conversion_smoke_evidence import (
+    capture_synthetic_smoke_evidence,
 )
 
 _REQUIRED_FLAGS = list(REAL_DCM2NIIX_SYNTHETIC_SMOKE_REQUIRED_FLAGS)
@@ -45,6 +44,7 @@ def test_capture_reports_required_flags(monkeypatch):
 def test_capture_is_import_safe():
     """Verify the module imports without errors."""
     import src.backend.app.services.dicom_conversion_smoke_evidence as mod
+
     assert mod.capture_synthetic_smoke_evidence is not None
 
 

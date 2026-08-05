@@ -22,8 +22,9 @@ Pipeline Runtime 和注册节点 runner 内。
 ### 环境要求
 
 - Python 3.11+
-- Node.js 20+
-- `pydicom` 和 `nibabel` 可选，项目内置 DICOM 转换需要这两个依赖
+- Node.js `^20.19.0` 或 `>=22.12.0`（Vite 8 engine 要求）
+- `nibabel` 与 `pydicom` 已包含在核心依赖中，用于项目内置 NIfTI 与
+  DICOM 路径
 - CuPy 可选，仅用于 GPU 路径
 
 ### 安装
@@ -96,31 +97,41 @@ Agent Runtime (Plan-then-Execute + Approval Gate)
 artifact。运行时状态写入使用原子文件写入。Pipeline Runtime 是唯一 pipeline
 执行路径。
 
+项目记忆是默认关闭的可选功能。只有安装级门控和项目授权同时启用后，经过
+审核的偏好与项目经验才会写入独立的本地 Memory SQLite，并在规划前以有界、
+强类型上下文注入。科学记忆永远不是执行约束，必须在当前任务中重新确认，且
+实际使用的快照会绑定 Reviewed Plan 和 Approval Summary。详见
+[记忆系统设计方案](docs/架构与决策/记忆系统设计方案.md)。
+
 当前 router、service、schema、node registry、前端 API、存储和桌面边界见
 [架构文档](docs/架构与决策/系统架构.md)。
 
-## 当前稳定工作流
+## 当前源码工作流
 
 ```text
 选择 BIDS/rawdata 或 converted BIDS
 -> 创建项目
 -> 生成 project_config.yaml 和 dataset_index.json
--> 注入项目上下文并审查计划
--> 保存 reviewed plan
--> 通过审批门执行 reviewed plan
--> 可选执行 DICOM 转换 dry-run、审查、readiness 和审批后的转换
--> 将转换输出注册为预处理输入
--> 创建预处理 run 并执行 Python preflight
--> 提交 reviewed preprocessing / Minimal FC 执行
--> 查看 stage status、validation、report、logs、artifacts 和 metadata 链接
+-> 在项目 Agent 工作区描述目标
+-> 回答必要的数据或科学决策
+-> 审查一份带哈希的 Approval Summary
+-> 审批未发生变化的计划和执行范围
+-> 查看有界进度和结果
+-> 通过 Runs 或技术详情查看 validation、logs、artifacts 和 provenance
 ```
 
-DICOM/FunRaw/T1Raw 数据支持只读检测和转换 dry-run 预览。公共 DICOM 转换执行
-路径是 fail-closed 的环境变量、审批和 readiness 门控路径，不会自动执行。
+Agent Task API 和源码界面只是既有 lifecycle、Reviewed Plan、Approval Gate、
+Execution Ticket、唯一 Execution Gateway、Pipeline Runtime 和 artifact 证据之上的
+投影与命令入口，不建立第二条执行路径。该源码能力尚不代表已经打包或发布
+`v0.7.0`；当前各版本面仍为 `v0.6.0-rc1`。
+
+DICOM/FunRaw/T1Raw 数据支持只读检测和转换 dry-run 预览。只有存在有效的 release
+readiness 证据时，原生转换才能进入受审网关路径；旧公共转换端点继续 fail-closed，
+系统不会仅凭发现 rawdata 就自动转换。
 
 Reviewed preprocessing 工作流运行在 converted/sandboxed 输入上，仍然需要显式确认和
-环境变量门控。当前 stage catalog 会区分 metadata-only、planned、blocked、computed
-和 preview 状态，避免 UI 将占位或预览结果呈现为已完成的数值输出。
+环境变量门控。当前 stage catalog 会区分 metadata-only、planned、blocked、computed、
+partial 和 preview 状态，避免 UI 将占位或预览结果呈现为已完成的数值输出。
 
 ## 项目结构
 
@@ -174,6 +185,7 @@ tests/
 | 防目录穿越 | `path_safety.py` 和 project/run artifact ID |
 | 前端隔离 | HTTP API modules 和受控 Electron bridge |
 | 执行限定在项目内 | 注册 Python runner、approval/readiness、audit records |
+| 记忆仅作项目级建议 | 安装/项目授权、来源追溯、科学二次确认、计划哈希绑定、墓碑遗忘 |
 | 仅研究用途 | UI 和文档警示 |
 
 ## 已知限制
@@ -193,6 +205,7 @@ tests/
 
 - [当前项目状态](PROJECT_STATE.md)
 - [架构文档](docs/架构与决策/系统架构.md)
+- [记忆系统设计方案](docs/架构与决策/记忆系统设计方案.md)
 - [发布说明 v0.6.0-rc1](docs/发布记录/v0.6.0-rc1.md)
 - [发布说明 v0.4.0-rc1](docs/发布记录/v0.4.0-rc1.md)
 - [发布说明 v0.3.0-rc1](docs/发布记录/v0.3.0-rc1.md)

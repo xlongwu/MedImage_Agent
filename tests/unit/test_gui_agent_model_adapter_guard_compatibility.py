@@ -13,13 +13,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.backend.app.main import app
-from src.backend.app.runtime.gui_agent_model_adapter import (
-    ModelOutputValidationResult,
-    validate_and_normalize_model_output,
-)
 from src.backend.app.runtime.gui_agent_guard import (
     classify_gui_action_tier,
     validate_gui_action_declaration,
+)
+from src.backend.app.runtime.gui_agent_model_adapter import (
+    validate_and_normalize_model_output,
 )
 
 client = TestClient(app)
@@ -38,6 +37,7 @@ def _adapt(raw_text, raw_json=None, **kw):
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Normalized Action → Guard Compatibility
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_safe_obs_maps_to_record_obs():
     r = _adapt("observe current state")
@@ -67,18 +67,37 @@ def test_normalized_action_no_approved_field():
 
 def test_normalized_action_no_session_fields():
     a = _adapt("observe").normalized_action
-    for field in ("session_id", "target_app", "target_window",
-                  "screenshot_policy", "clipboard_policy", "network_policy"):
+    for field in (
+        "session_id",
+        "target_app",
+        "target_window",
+        "screenshot_policy",
+        "clipboard_policy",
+        "network_policy",
+    ):
         assert field not in a, f"Normalized action must not contain '{field}'"
 
 
-@pytest.mark.parametrize("field", [
-    "action_type", "action_tier", "read_only", "uses_screenshot",
-    "uses_clipboard", "uses_keyboard", "uses_mouse", "network_access",
-    "input_paths", "output_paths", "expected_side_effects",
-    "requires_per_action_confirmation", "approval_id", "rollback_plan",
-    "stop_conditions",
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "action_type",
+        "action_tier",
+        "read_only",
+        "uses_screenshot",
+        "uses_clipboard",
+        "uses_keyboard",
+        "uses_mouse",
+        "network_access",
+        "input_paths",
+        "output_paths",
+        "expected_side_effects",
+        "requires_per_action_confirmation",
+        "approval_id",
+        "rollback_plan",
+        "stop_conditions",
+    ],
+)
 def test_normalized_action_has_guard_field(field):
     a = _adapt("observe").normalized_action
     assert field in a, f"Missing guard field: {field}"
@@ -148,6 +167,7 @@ def test_stop_conditions_non_empty():
 # B. Adapter Safety Flags
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_adapter_provider_call_not_allowed():
     r = _adapt("observe")
     assert r.safety_flags["provider_call_allowed"] is False
@@ -175,8 +195,15 @@ def test_adapter_keyboard_used_false():
 
 def test_no_adapter_sets_provider_call_allowed_true():
     """No adapter result path can set provider_call_allowed=true."""
-    for text in ("observe", "click Run", "save file", "use pywinauto",
-                 "", "continue", "take screenshot"):
+    for text in (
+        "observe",
+        "click Run",
+        "save file",
+        "use pywinauto",
+        "",
+        "continue",
+        "take screenshot",
+    ):
         r = _adapt(text)
         assert r.safety_flags["provider_call_allowed"] is False, (
             f"Adapter must not grant provider permission for: '{text}'"
@@ -186,6 +213,7 @@ def test_no_adapter_sets_provider_call_allowed_true():
 # ══════════════════════════════════════════════════════════════════════════════
 # C. Rejected Output Must Not Reach Guard
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_rejected_ambiguous_status():
     r = _adapt("continue")
@@ -230,24 +258,28 @@ def test_rejected_safety_flags_all_false():
 # D. Rejection Category Compatibility
 # ══════════════════════════════════════════════════════════════════════════════
 
-@pytest.mark.parametrize("text, expected_reason", [
-    ("click at 100,200", "raw_coordinate_click_blocked"),
-    ("use pywinauto", "provider_selection_blocked"),
-    ("approved=true", "approval_override_blocked"),
-    ("disable guard", "policy_override_attempt"),
-    ("take screenshot", "screenshot_request_blocked"),
-    ("read clipboard", "clipboard_request_blocked"),
-    ("open rawdata/sub-001", "rawdata_path_blocked"),
-    ("write derivatives output", "derivatives_write_blocked"),
-    ("upload file", "network_request_blocked"),
-    ("open browser", "network_request_blocked"),
-    ("enter password", "credential_request_blocked"),
-    ("save file", "tier_3_action_blocked"),
-    ("delete file", "tier_3_action_blocked"),
-    ("scroll down", "tier_1_action_blocked"),
-    ("focus window", "tier_1_action_blocked"),
-    ("continue", "ambiguous_intent"),
-])
+
+@pytest.mark.parametrize(
+    "text, expected_reason",
+    [
+        ("click at 100,200", "raw_coordinate_click_blocked"),
+        ("use pywinauto", "provider_selection_blocked"),
+        ("approved=true", "approval_override_blocked"),
+        ("disable guard", "policy_override_attempt"),
+        ("take screenshot", "screenshot_request_blocked"),
+        ("read clipboard", "clipboard_request_blocked"),
+        ("open rawdata/sub-001", "rawdata_path_blocked"),
+        ("write derivatives output", "derivatives_write_blocked"),
+        ("upload file", "network_request_blocked"),
+        ("open browser", "network_request_blocked"),
+        ("enter password", "credential_request_blocked"),
+        ("save file", "tier_3_action_blocked"),
+        ("delete file", "tier_3_action_blocked"),
+        ("scroll down", "tier_1_action_blocked"),
+        ("focus window", "tier_1_action_blocked"),
+        ("continue", "ambiguous_intent"),
+    ],
+)
 def test_rejection_category(text, expected_reason):
     r = _adapt(text)
     assert r.ok is False, f"'{text}' should be rejected"
@@ -268,6 +300,7 @@ def test_unsafe_rationale_still_rejected():
 # ══════════════════════════════════════════════════════════════════════════════
 # E. No Chain-of-Thought / Sensitive Logging
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_no_chain_of_thought():
     for text in ("observe", "click Run"):
@@ -313,15 +346,19 @@ def test_raw_json_not_copied_to_action():
 # F. API Smoke — Adapter Output → Guard API (Mock-Only)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _create_mock_session():
-    resp = client.post("/api/gui-agent/sessions", json={
-        "provider": "mock",
-        "target_app": "MATLAB",
-        "target_window": "SPM.*",
-        "allowed_action_tiers": [0],
-        "file_scope": ["outputs/work/gui_agent/"],
-        "approved": True,
-    })
+    resp = client.post(
+        "/api/gui-agent/sessions",
+        json={
+            "provider": "mock",
+            "target_app": "MATLAB",
+            "target_window": "SPM.*",
+            "allowed_action_tiers": [0],
+            "file_scope": ["outputs/work/gui_agent/"],
+            "approved": True,
+        },
+    )
     assert resp.status_code == 200
     return resp.json()["session_id"]
 
@@ -330,20 +367,23 @@ def test_adapter_output_posts_to_step():
     """Normalized action from adapter can be submitted to the guarded API."""
     a = _adapt("observe").normalized_action
     sid = _create_mock_session()
-    resp = client.post(f"/api/gui-agent/sessions/{sid}/step", json={
-        "action": a["action_type"],
-        "action_tier": a["action_tier"],
-        "read_only": a["read_only"],
-        "uses_screenshot": a["uses_screenshot"],
-        "uses_clipboard": a["uses_clipboard"],
-        "uses_keyboard": a["uses_keyboard"],
-        "uses_mouse": a["uses_mouse"],
-        "network_access": a["network_access"],
-        "input_paths": a["input_paths"],
-        "output_paths": a["output_paths"],
-        "expected_side_effects": a["expected_side_effects"],
-        "stop_conditions": a["stop_conditions"],
-    })
+    resp = client.post(
+        f"/api/gui-agent/sessions/{sid}/step",
+        json={
+            "action": a["action_type"],
+            "action_tier": a["action_tier"],
+            "read_only": a["read_only"],
+            "uses_screenshot": a["uses_screenshot"],
+            "uses_clipboard": a["uses_clipboard"],
+            "uses_keyboard": a["uses_keyboard"],
+            "uses_mouse": a["uses_mouse"],
+            "network_access": a["network_access"],
+            "input_paths": a["input_paths"],
+            "output_paths": a["output_paths"],
+            "expected_side_effects": a["expected_side_effects"],
+            "stop_conditions": a["stop_conditions"],
+        },
+    )
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
 
@@ -357,17 +397,25 @@ def test_rejected_output_not_posted():
 
 def test_mock_provider_called_for_adapter_action(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda self, s, act, p: calls.append(act) or {
-                            "executed": False, "provider_status": "MOCK_RECORDED"})
+    monkeypatch.setattr(
+        MockGuiProvider,
+        "perform_step",
+        lambda self, s, act, p: (
+            calls.append(act) or {"executed": False, "provider_status": "MOCK_RECORDED"}
+        ),
+    )
     a = _adapt("observe").normalized_action
     sid = _create_mock_session()
-    resp = client.post(f"/api/gui-agent/sessions/{sid}/step", json={
-        "action": a["action_type"],
-        "action_tier": a["action_tier"],
-        "stop_conditions": a["stop_conditions"],
-    })
+    resp = client.post(
+        f"/api/gui-agent/sessions/{sid}/step",
+        json={
+            "action": a["action_type"],
+            "action_tier": a["action_tier"],
+            "stop_conditions": a["stop_conditions"],
+        },
+    )
     assert resp.status_code == 200
     assert len(calls) >= 1
     assert calls[0] == "record_observation"
@@ -377,11 +425,13 @@ def test_mock_provider_called_for_adapter_action(monkeypatch):
 # G. Regression
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_t003_validator_tests_pass():
     """Marker: test_gui_agent_model_output_validator.py 58/58 passed."""
     from tests.unit.test_gui_agent_model_output_validator import (
         test_observe_maps_to_record_observation,
     )
+
     test_observe_maps_to_record_observation()
 
 
@@ -402,11 +452,13 @@ def test_provider_gate_tests_pass():
 
 def test_no_pywinauto_import():
     import sys
+
     assert "pywinauto" not in sys.modules
 
 
 def test_gui_reviewed_execution_still_blocked():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
+
     plan = {"pipeline_id": "t", "nodes": [{"id": "gui_t004", "depends_on": []}]}
     policy = classify_plan_nodes(plan)
     assert "gui_t004" in policy["blocked_unknown_nodes"]
@@ -414,27 +466,44 @@ def test_gui_reviewed_execution_still_blocked():
 
 def test_spm_allowlist_still_works():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {
+                "id": "spm_realign_subject",
+                "depends_on": [],
+                "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+            },
+        ],
+    }
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" not in policy["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+    assert (
+        "spm_realign_subject" not in policy["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_allowlist_still_works():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+        ],
+    }
     policy = classify_plan_nodes(plan)
     assert "dpabi_capability_inspection" in policy["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_allowlist_still_works():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+        ],
+    }
     policy = classify_plan_nodes(plan)
     assert "gpu_alff_subject" in policy["allowed_gpu_nodes"]

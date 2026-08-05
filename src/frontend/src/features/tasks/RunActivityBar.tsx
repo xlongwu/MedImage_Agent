@@ -137,7 +137,7 @@ export const RunActivityBar = memo(function RunActivityBar({
           title={primaryTask.run_name}
         >
           <span className={styles.name}>{primaryTask.run_name}</span>
-          <span className={styles.pipeline}>{primaryTask.pipeline}</span>
+          <span className={styles.pipeline}>{t("activity.agentManaged")}</span>
         </button>
         {primaryTask.status === "running" ? (
           <div

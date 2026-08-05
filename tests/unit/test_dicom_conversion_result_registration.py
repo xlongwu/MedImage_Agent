@@ -59,7 +59,9 @@ def test_register_conversion_result_updates_project_closure_metadata(tmp_path):
     (anat_dir / "sub-001_T1w.nii.gz").write_bytes(b"FAKE_NIFTI")
     (anat_dir / "sub-001_T1w.json").write_text("{}", encoding="utf-8")
     manifest_path = tmp_path / "project" / "conversion_runs" / "conv-1" / "output_manifest.json"
-    provenance_path = tmp_path / "project" / "conversion_runs" / "conv-1" / "execution_provenance.json"
+    provenance_path = (
+        tmp_path / "project" / "conversion_runs" / "conv-1" / "execution_provenance.json"
+    )
     manifest_path.parent.mkdir(parents=True)
     manifest_path.write_text("{}", encoding="utf-8")
     provenance_path.write_text("{}", encoding="utf-8")
@@ -87,7 +89,9 @@ def test_register_conversion_result_updates_project_closure_metadata(tmp_path):
     assert metadata["last_conversion_manifest_path"] == str(manifest_path)
     assert metadata["last_conversion_provenance_path"] == str(provenance_path)
     assert Path(metadata["preprocessing_input_registry_path"]).exists()
-    assert result["preprocessing_input_registry_path"] == metadata["preprocessing_input_registry_path"]
+    assert (
+        result["preprocessing_input_registry_path"] == metadata["preprocessing_input_registry_path"]
+    )
     assert metadata["native_full_preproc_handoff"] == {
         "conversion_run_id": "conv-1",
         "artifact_registry_path": metadata["preprocessing_input_registry_path"],
@@ -101,3 +105,24 @@ def test_register_conversion_result_updates_project_closure_metadata(tmp_path):
     assert str(manifest_path) in artifact_paths
     assert str(provenance_path) in artifact_paths
     assert metadata["preprocessing_input_source"] == "converted_bids"
+
+
+def test_partial_conversion_never_becomes_preprocessing_input(tmp_path):
+    project = _make_project(tmp_path)
+    store = _FakeStore(project)
+    output_root = tmp_path / "project" / "converted_bids"
+    output_root.mkdir(parents=True)
+    (output_root / "partial.nii.gz").write_bytes(b"PARTIAL")
+
+    result = register_conversion_result(
+        store,
+        "proj-1",
+        conversion_run_id="conv-partial",
+        output_root=str(output_root),
+        execution_status="partial",
+        checksum_verified=True,
+    )
+
+    assert result["preprocessing_registered"] is False
+    assert store.project.metadata["converted_bids_available"] is False
+    assert "preprocessing_conversion_run_id" not in store.project.metadata

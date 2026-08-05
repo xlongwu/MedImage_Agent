@@ -197,6 +197,10 @@ describe("MedicalImageViewer", () => {
     );
     expect(screen.queryByLabelText("Synthetic MRI scan preview")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Viewer status")).toHaveTextContent("5 / 32");
+    expect(screen.getByLabelText("Image controls")).toBeInTheDocument();
+    expect(screen.getByLabelText("Brightness")).toHaveValue("100");
+    expect(screen.getByLabelText("Contrast")).toHaveValue("105");
+    expect(screen.getByLabelText("Activation map")).toBeDisabled();
   });
 
   it("shows a visible loading state and pauses slice shortcuts while previews change", async () => {
@@ -340,6 +344,8 @@ describe("MedicalImageViewer", () => {
     expect(screen.getByRole("tablist", { name: "解剖平面" })).toBeInTheDocument();
     expect(screen.getByLabelText("查看器状态")).toHaveTextContent("层面");
     expect(screen.getByLabelText("影像元数据与验证")).toHaveTextContent("检查器");
-    expect(screen.getByRole("toolbar", { name: "查看器画布工具" })).toBeInTheDocument();
+    expect(screen.getByLabelText("亮度")).toBeInTheDocument();
+    expect(screen.getByLabelText("激活图")).toBeDisabled();
+    expect(screen.queryByRole("toolbar", { name: "查看器画布工具" })).not.toBeInTheDocument();
   });
 });

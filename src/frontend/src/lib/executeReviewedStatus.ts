@@ -93,6 +93,18 @@ const STATUS_MAP: Record<string, StatusEntry> = {
     canAttemptExecute: false,
   },
 
+  AGENT_LIFECYCLE_ID_REQUIRED: {
+    title: "Open this plan from its Agent Task",
+    severity: "warning",
+    explanation:
+      "This reviewed plan is already bound to an Agent Task. The technical plan console cannot create a second lifecycle or impersonate an Agent retry.",
+    nextAction: "Return to the Agent workspace and approve or retry the bound task there.",
+    safetyNote:
+      "The existing lifecycle, reviewed plan, approval summary, ticket, and run association remain authoritative.",
+    canRetryDryRun: true,
+    canAttemptExecute: false,
+  },
+
   CONFIRMATION_REQUIRED: {
     title: "Confirmation required",
     severity: "warning",
@@ -319,6 +331,17 @@ const STATUS_MAP: Record<string, StatusEntry> = {
       "Inspect the executor result details below. Check run history for node-level state and logs. Fix the failing node and retry.",
     canRetryDryRun: true,
     canAttemptExecute: true,
+  },
+
+  REVIEWED_PLAN_NEEDS_GOAL_REVIEW: {
+    title: "Goal Contract review required",
+    severity: "warning",
+    explanation:
+      "The persisted plan has a candidate Goal Contract, but a human has not explicitly reviewed and hash-bound it to this exact plan.",
+    nextAction:
+      "Review the Goal Contract goal, scope, success criteria, evidence requirements, and limitations. Save the reviewed contract, then run the dry-run again.",
+    canRetryDryRun: false,
+    canAttemptExecute: false,
   },
 };
 

@@ -1,11 +1,14 @@
 """Preprocessing Pipeline Validation Service — Phase 5O."""
+
 from __future__ import annotations
-import json, os
+
+import json
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.schemas.preprocessing_pipeline_validation import (
-    PipelineValidationResponse, validation_safety_flags,
+    PipelineValidationResponse,
+    validation_safety_flags,
 )
 from src.backend.app.schemas.preprocessing_stage_catalog import (
     contains_stage_marker,
@@ -13,12 +16,11 @@ from src.backend.app.schemas.preprocessing_stage_catalog import (
     normalize_stage_execution_status,
     stage_dry_run_manifest_names,
 )
+from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.preprocessing_artifact_registry import (
     REGISTRY_FILENAME,
     load_artifact_registry,
 )
-from src.backend.app.services.mock_store import mock_store
-
 
 _RELOAD_REQUIRED_TYPES = {
     "alff_map",
@@ -77,16 +79,27 @@ def validate_preprocessing_pipeline(
     effective_pd = project_dir or str(meta.get("project_dir") or "")
     run_dir = Path(effective_pd) / "preprocessing_runs" / run_id if effective_pd else None
 
-    warnings: list[str] = []; errors: list[str] = []; stage_summary: list[dict] = []
-    completed: list[str] = []; dry_run_only: list[str] = []; sandbox_executed: list[str] = []
-    registered: list[str] = []; metadata_only: list[str] = []; preview_only: list[str] = []; blocked: list[str] = []
+    warnings: list[str] = []
+    errors: list[str] = []
+    stage_summary: list[dict] = []
+    completed: list[str] = []
+    dry_run_only: list[str] = []
+    sandbox_executed: list[str] = []
+    registered: list[str] = []
+    metadata_only: list[str] = []
+    preview_only: list[str] = []
+    blocked: list[str] = []
 
     if not run_dir or not run_dir.exists():
-        return PipelineValidationResponse(ok=False, status="not_started", project_id=project_id,
+        return PipelineValidationResponse(
+            ok=False,
+            status="not_started",
+            project_id=project_id,
             preprocessing_run_id=run_id,
             warnings=["Preprocessing run directory not found."],
             next_actions=["Create a preprocessing run and execute Python preflight."],
-            safety_flags=validation_safety_flags())
+            safety_flags=validation_safety_flags(),
+        )
 
     # Check converted BIDS input registration
     input_dir = str(meta.get("preprocessing_input_dir", ""))
@@ -98,8 +111,7 @@ def validate_preprocessing_pipeline(
     if registry_path.exists():
         registry_data = load_artifact_registry(registry_path)
         registry_artifacts = [
-            item for item in registry_data.get("artifacts", [])
-            if isinstance(item, dict)
+            item for item in registry_data.get("artifacts", []) if isinstance(item, dict)
         ]
     project_root = Path(effective_pd).resolve() if effective_pd else None
     manifest_stage_statuses: dict[str, dict] = {}
@@ -123,7 +135,7 @@ def validate_preprocessing_pipeline(
 
     has_dry_runs = dry_dir.exists() and any(dry_dir.iterdir())
     has_execs = exec_dir.exists() and any(exec_dir.iterdir())
-    has_regs = bool(registry_artifacts) or (reg_dir.exists() and any(reg_dir.iterdir()))
+    _has_regs = bool(registry_artifacts) or (reg_dir.exists() and any(reg_dir.iterdir()))
     has_reports = report_dir.exists() and any(report_dir.iterdir())
 
     if not has_dry_runs and not has_execs:
@@ -191,10 +203,11 @@ def validate_preprocessing_pipeline(
                         if jf.exists() and contains_stage_marker(jf.read_text().lower(), sid):
                             stage_info["registered"] = True
                             if not stage_info["metadata_only"] and not stage_info["preview_only"]:
-                                stage_info["status"] = "succeeded" if stage_info["executed"] else "preview_only"
+                                stage_info["status"] = (
+                                    "succeeded" if stage_info["executed"] else "preview_only"
+                                )
         stage_artifacts = [
-            artifact for artifact in registry_artifacts
-            if artifact.get("stage_id") == sid
+            artifact for artifact in registry_artifacts if artifact.get("stage_id") == sid
         ]
         if stage_artifacts:
             stage_info["registered"] = True
@@ -210,27 +223,38 @@ def validate_preprocessing_pipeline(
                     continue
                 artifact_path = _resolve_registry_path(artifact, project_root)
                 ok, message = _reload_artifact(artifact_path)
-                reload_checks.append({
-                    "artifact_id": str(artifact.get("artifact_id") or ""),
-                    "artifact_type": artifact_type,
-                    "path": str(artifact_path),
-                    "ok": ok,
-                    "message": message,
-                })
+                reload_checks.append(
+                    {
+                        "artifact_id": str(artifact.get("artifact_id") or ""),
+                        "artifact_type": artifact_type,
+                        "path": str(artifact_path),
+                        "ok": ok,
+                        "message": message,
+                    }
+                )
                 if not ok:
                     errors.append(f"{sid}:{artifact_type}: {message}")
             if reload_checks:
                 stage_info["reload_checks"] = reload_checks
                 stage_info["reload_validated"] = all(item["ok"] for item in reload_checks)
             if not stage_info["metadata_only"] and not stage_info["preview_only"]:
-                stage_info["status"] = "succeeded" if any(
-                    artifact.get("artifact_type") not in {"stage_manifest", "qc_json", "provenance_json"}
-                    for artifact in stage_artifacts
-                ) else stage_info["status"]
+                stage_info["status"] = (
+                    "succeeded"
+                    if any(
+                        artifact.get("artifact_type")
+                        not in {"stage_manifest", "qc_json", "provenance_json"}
+                        for artifact in stage_artifacts
+                    )
+                    else stage_info["status"]
+                )
         manifest_stage = manifest_stage_statuses.get(sid)
         if manifest_stage:
             manifest_status = str(manifest_stage.get("status", ""))
-            should_overlay = bool(manifest_stage.get("output_manifest")) or manifest_status not in {"", "not_started", "planned"}
+            should_overlay = bool(manifest_stage.get("output_manifest")) or manifest_status not in {
+                "",
+                "not_started",
+                "planned",
+            }
             if should_overlay:
                 stage_info["status"] = normalize_stage_execution_status(manifest_status)
                 stage_info["metadata_only"] = stage_info["status"] == "metadata_only"
@@ -238,7 +262,9 @@ def validate_preprocessing_pipeline(
                 stage_info["manifest_status"] = manifest_status
                 stage_info["error_message"] = manifest_stage.get("error_message")
                 stage_info["orchestrator_result"] = manifest_stage.get("output_manifest", {})
-                scope = stage_info["orchestrator_result"].get("result", {}).get("execution_scope", {})
+                scope = (
+                    stage_info["orchestrator_result"].get("result", {}).get("execution_scope", {})
+                )
                 if isinstance(scope, dict):
                     stage_info["execution_scope"] = scope
         stage_summary.append(stage_info)
@@ -303,11 +329,21 @@ def validate_preprocessing_pipeline(
         status = "not_started"
 
     return PipelineValidationResponse(
-        ok=True, status=status, project_id=project_id, preprocessing_run_id=run_id,
+        ok=True,
+        status=status,
+        project_id=project_id,
+        preprocessing_run_id=run_id,
         artifact_registry_path=str(registry_path) if registry_path.exists() else "",
-        stage_summary=stage_summary, completed_stages=completed,
-        dry_run_only_stages=dry_run_only, sandbox_executed_stages=sandbox_executed,
-        registered_outputs=registered, metadata_only_stages=metadata_only,
-        preview_only_stages=preview_only, blocked_stages=blocked, warnings=warnings, errors=errors,
+        stage_summary=stage_summary,
+        completed_stages=completed,
+        dry_run_only_stages=dry_run_only,
+        sandbox_executed_stages=sandbox_executed,
+        registered_outputs=registered,
+        metadata_only_stages=metadata_only,
+        preview_only_stages=preview_only,
+        blocked_stages=blocked,
+        warnings=warnings,
+        errors=errors,
         next_actions=["Review validation results.", "Generate pipeline report."],
-        safety_flags=validation_safety_flags())
+        safety_flags=validation_safety_flags(),
+    )

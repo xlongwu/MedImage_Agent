@@ -16,7 +16,7 @@ def test_group_summary_is_metadata_only_and_lists_subject_status(tmp_path: Path)
 
     assert result.status == "metadata_only"
     assert result.capability_level == "metadata_only"
-    assert result.output_artifacts[0].artifact_type == "final_report"
+    assert result.output_artifacts[0].artifact_type == "group_summary"
     report = Path(result.output_artifacts[0].path)
     text = report.read_text(encoding="utf-8")
     assert '"subject_count": 2' in text

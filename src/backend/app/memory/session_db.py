@@ -1,11 +1,15 @@
-"""SessionDB -- SQLite-backed run memory with FTS5 full-text search."""
+"""Deprecated SQLite run-history index with FTS5 search.
+
+SessionDB stores operational run facts for compatibility. It is not the
+project-scoped long-term Memory Domain and is never a planner context source.
+New run-history readers belong in the project-history domain.
+"""
 from __future__ import annotations
 
 import json
 import sqlite3
 from pathlib import Path
 from typing import Any
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -184,6 +188,11 @@ class SessionDB:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def query_nodes(self, *, run_id: str) -> list[dict[str, Any]]:
+        """Deprecated compatibility alias for the run-history SessionDB."""
+
+        return self.query_nodes_by_run(run_id)
+
     def query_nodes_by_subject(self, subject_id: str) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             "SELECT * FROM nodes WHERE subject_id=? ORDER BY run_id DESC", (subject_id,),
@@ -217,6 +226,11 @@ class SessionDB:
             return [dict(r) for r in rows]
         except Exception:
             return []
+
+    def fts_search(self, *, query: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Deprecated compatibility alias; unrelated to L3 project memory."""
+
+        return self.search(query=query, limit=limit)
 
     def stats(self) -> dict[str, Any]:
         total_runs = self.conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]

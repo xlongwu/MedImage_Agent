@@ -15,9 +15,9 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
-
+from typing import Any
 
 # ── Config / Result dataclasses ──────────────────────────────────────────────
 
@@ -175,7 +175,7 @@ def parse_llm_plan_json(content: str) -> dict[str, Any]:
     confidence = data.get("confidence")
     if confidence is not None and (
         isinstance(confidence, bool)
-        or not isinstance(confidence, (int, float))
+        or not isinstance(confidence, int | float)
         or not 0 <= float(confidence) <= 1
     ):
         raise ValueError("LLM_PLAN_SCHEMA_ERROR: confidence must be between 0 and 1")

@@ -46,7 +46,7 @@ def _mapping(value: Any) -> dict[str, Any]:
 
 
 def _path(value: Any) -> Path | None:
-    if not isinstance(value, (str, Path)) or not str(value).strip():
+    if not isinstance(value, str | Path) or not str(value).strip():
         return None
     return Path(value).expanduser().resolve()
 
@@ -87,6 +87,7 @@ def _augment_diagnostics_with_registered_outputs(
     diagnostics: dict[str, Any],
     metadata: dict[str, Any],
     project_dir: Path | None,
+    rawdata_dir: Path | None,
 ) -> dict[str, Any]:
     enriched = dict(diagnostics)
     if project_dir is not None:
@@ -121,14 +122,55 @@ def _augment_diagnostics_with_registered_outputs(
                 }
             )
 
+    # A created project may directly reference an already registered BIDS/NIfTI
+    # dataset rather than a project-local conversion output.  This is still a
+    # read-only input: expose it to planning so execution can select the
+    # reviewed native preprocessing chain, but never treat it as a write root.
+    if (
+        not enriched.get("converted_bids_available")
+        and rawdata_dir is not None
+        and rawdata_dir.is_dir()
+    ):
+        nifti_files = _iter_nifti_files(rawdata_dir)
+        bold_files = [path for path in nifti_files if "_bold" in path.name]
+        if bold_files:
+            subjects = _bids_subjects_from_nifti_files(nifti_files)
+            enriched.update(
+                {
+                    "status": "BIDS",
+                    "registered_bids_available": True,
+                    "preprocessing_input_dir": str(rawdata_dir),
+                    "nifti_file_count": len(nifti_files),
+                    "nifti_files": len(nifti_files),
+                    "bold_nifti_count": len(bold_files),
+                    "t1w_nifti_count": sum(
+                        1 for path in nifti_files if "_T1w" in path.name
+                    ),
+                    "subjects_total": len(subjects)
+                    or enriched.get("subjects_total", 0),
+                    "subject_candidates": subjects
+                    or enriched.get("subject_candidates", []),
+                }
+            )
+
     for key in (
         "preprocessing_conversion_run_id",
         "preprocessing_input_registry_path",
         "preprocessing_input_source",
+        "agent_conversion_run_id",
+        "agent_conversion_execution_ready",
+        "agent_conversion_output_root",
     ):
         value = metadata.get(key)
         if value:
             enriched[key] = value
+
+    if (
+        enriched.get("agent_conversion_execution_ready") is True
+        and enriched.get("agent_conversion_run_id")
+    ):
+        enriched.setdefault("conversion_run_id", enriched["agent_conversion_run_id"])
+        enriched.setdefault("converted_bids_dir", enriched.get("agent_conversion_output_root"))
 
     handoff = metadata.get("native_full_preproc_handoff")
     if isinstance(handoff, dict):
@@ -249,6 +291,7 @@ def load_project_context(
         diagnostics,
         stored_metadata,
         project_dir,
+        rawdata_dir,
     )
 
     if source == "created":
@@ -315,11 +358,17 @@ def apply_project_context_to_plan(
                 params["rawdata_dir"] = str(context.rawdata_dir)
             if context.dataset_index_path is not None:
                 params["output_dir"] = str(context.dataset_index_path.parent)
-        if node_id in {"native_preproc_full_dry_run", "native_preproc_full_execute"}:
+        if node_id in {
+            "native_dicom_conversion_execute",
+            "native_preproc_full_dry_run",
+            "native_preproc_full_execute",
+        }:
             if context.project_id:
                 params.setdefault("project_id", context.project_id)
             if context.project_dir is not None:
                 params.setdefault("project_dir", str(context.project_dir))
+            if context.rawdata_dir is not None and node_id == "native_dicom_conversion_execute":
+                params.setdefault("rawdata_dir", str(context.rawdata_dir))
             conversion_run_id = str(
                 context.diagnostics.get("preprocessing_conversion_run_id")
                 or context.diagnostics.get("conversion_run_id")
@@ -327,6 +376,14 @@ def apply_project_context_to_plan(
             )
             if conversion_run_id:
                 params.setdefault("conversion_run_id", conversion_run_id)
+            if node_id == "native_dicom_conversion_execute":
+                output_dir = str(
+                    context.diagnostics.get("agent_conversion_output_root")
+                    or context.diagnostics.get("converted_bids_dir")
+                    or ""
+                )
+                if output_dir:
+                    params.setdefault("output_dir", output_dir)
 
         is_subject_level = (
             node_id in subject_nodes or node.get("parallel_level") == "subject"

@@ -16,9 +16,7 @@ import pytest
 from pydantic import ValidationError
 
 from src.backend.app.schemas.execution_consistency import (
-    ConsistencyIssue,
     ExecutionConsistencyInput,
-    ExecutionConsistencyReport,
     verify_execution_consistency,
 )
 from src.backend.app.schemas.execution_manifest import (
@@ -39,6 +37,7 @@ from src.backend.app.schemas.execution_state import (
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _ci(**kw) -> ExecutionConsistencyInput:
     """Build a consistency input with plausible defaults."""
@@ -64,6 +63,7 @@ def _ci(**kw) -> ExecutionConsistencyInput:
 # ═══════════════════════════════════════════════════════════════════════
 # Group 1 — Execution state contract
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_run_state_succeeded_terminal_not_eligible():
     """succeeded is terminal and not retry- or resume-eligible."""
@@ -111,6 +111,7 @@ def test_unknown_state_strings_return_false():
 # Group 2 — Output manifest contract
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_output_manifest_item_validation():
     """OutputManifestItem rejects empty path, negative size, verified→exists."""
     with pytest.raises(ValidationError, match="path must be non-empty"):
@@ -124,8 +125,9 @@ def test_output_manifest_item_validation():
 def test_build_output_manifest_auto_computes_counts():
     """build_output_manifest sets missing_required_count and verified_count."""
     items = [
-        OutputManifestItem(path="/a", required=True, exists=True, verified=True,
-                           verification_status="verified"),
+        OutputManifestItem(
+            path="/a", required=True, exists=True, verified=True, verification_status="verified"
+        ),
         OutputManifestItem(path="/b", required=True, exists=False, warnings=["w"]),
         OutputManifestItem(path="/c", required=False, exists=False, errors=["e"]),
     ]
@@ -150,6 +152,7 @@ def test_optional_missing_not_counted_as_required():
 # Group 3 — Provenance / failure record contract
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_provenance_minimal_serializes_rejects_shell_command():
     """Minimal provenance serializes; shell_command is rejected."""
     p = ExecutionProvenance(project_id="p1", run_id="r1", node_id="n1")
@@ -161,7 +164,9 @@ def test_provenance_minimal_serializes_rejects_shell_command():
     # shell_command must be rejected (extra='forbid')
     with pytest.raises(ValidationError):
         ExecutionProvenance(
-            project_id="p1", run_id="r1", node_id="n1",
+            project_id="p1",
+            run_id="r1",
+            node_id="n1",
             shell_command="rm -rf /",  # type: ignore[call-arg]
         )
 
@@ -169,7 +174,9 @@ def test_provenance_minimal_serializes_rejects_shell_command():
 def test_external_backend_metadata_only():
     """External backend can be recorded as metadata without enabling execution."""
     p = ExecutionProvenance(
-        project_id="p1", run_id="r1", node_id="spm_realign",
+        project_id="p1",
+        run_id="r1",
+        node_id="spm_realign",
         backend="matlab-spm",
         command_template_id="spm12_realign_estwrite_v1",
     )
@@ -181,8 +188,10 @@ def test_external_backend_metadata_only():
 def test_failure_record_retryable_resume_eligible():
     """ExecutionFailureRecord supports retryable and resume_eligible flags."""
     r = ExecutionFailureRecord(
-        stage="execution", message="Node failed",
-        retryable=True, resume_eligible=False,
+        stage="execution",
+        message="Node failed",
+        retryable=True,
+        resume_eligible=False,
     )
     d = r.model_dump()
     assert d["retryable"] is True
@@ -192,6 +201,7 @@ def test_failure_record_retryable_resume_eligible():
 # ═══════════════════════════════════════════════════════════════════════
 # Group 4 — Dry-run / execute consistency contract
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_identical_inputs_pass():
     """Identical reviewed/dry_run/execution inputs pass consistency."""
@@ -220,12 +230,18 @@ def test_missing_approval_and_audit_detected():
     base = _ci()
 
     r1 = verify_execution_consistency(
-        reviewed=base, dry_run=base, execution=e_no_appr, require_approval=True,
+        reviewed=base,
+        dry_run=base,
+        execution=e_no_appr,
+        require_approval=True,
     )
     assert "APPROVAL_CONTEXT_MISSING" in {i.code for i in r1.issues}
 
     r2 = verify_execution_consistency(
-        reviewed=base, dry_run=base, execution=e_no_aud, require_audit=True,
+        reviewed=base,
+        dry_run=base,
+        execution=e_no_aud,
+        require_audit=True,
     )
     assert "AUDIT_CONTEXT_MISSING" in {i.code for i in r2.issues}
 
@@ -240,8 +256,12 @@ def test_bad_dry_run_status_and_optional_flags():
     # Optional flags allow missing contexts
     e = _ci(approval_context_id=None, audit_id=None, output_manifest_ids=[])
     report2 = verify_execution_consistency(
-        reviewed=_ci(), dry_run=_ci(), execution=e,
-        require_approval=False, require_audit=False, require_output_manifest=False,
+        reviewed=_ci(),
+        dry_run=_ci(),
+        execution=e,
+        require_approval=False,
+        require_audit=False,
+        require_output_manifest=False,
     )
     assert report2.ok is True
 
@@ -250,11 +270,12 @@ def test_bad_dry_run_status_and_optional_flags():
 # Group 5 — Purity / safety checks
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_no_runtime_executor_imports():
     """Phase 3 schema modules must not import pipeline_executor or state_store."""
-    import src.backend.app.schemas.execution_state as es
-    import src.backend.app.schemas.execution_manifest as em
     import src.backend.app.schemas.execution_consistency as ec
+    import src.backend.app.schemas.execution_manifest as em
+    import src.backend.app.schemas.execution_state as es
 
     for mod in (es, em, ec):
         source = inspect.getsource(mod)
@@ -271,7 +292,9 @@ def test_helpers_create_no_files(tmp_path):
 
     # execution_manifest helpers
     _ = build_output_manifest(
-        project_id="p1", run_id="r1", node_id="n1",
+        project_id="p1",
+        run_id="r1",
+        node_id="n1",
         items=[OutputManifestItem(path="/tmp/t.json")],
     )
 
@@ -285,9 +308,9 @@ def test_helpers_create_no_files(tmp_path):
 
 def test_no_rawdata_outputs_paths_referenced():
     """Phase 3 schema modules do not reference rawdata or outputs paths."""
-    import src.backend.app.schemas.execution_state as es
-    import src.backend.app.schemas.execution_manifest as em
     import src.backend.app.schemas.execution_consistency as ec
+    import src.backend.app.schemas.execution_manifest as em
+    import src.backend.app.schemas.execution_state as es
 
     for mod in (es, em, ec):
         source = inspect.getsource(mod)
@@ -296,9 +319,9 @@ def test_no_rawdata_outputs_paths_referenced():
 
 def test_no_subprocess_imports():
     """Phase 3 schema modules must not import subprocess."""
-    import src.backend.app.schemas.execution_state as es
-    import src.backend.app.schemas.execution_manifest as em
     import src.backend.app.schemas.execution_consistency as ec
+    import src.backend.app.schemas.execution_manifest as em
+    import src.backend.app.schemas.execution_state as es
 
     for mod in (es, em, ec):
         # Check actual import statements (not docstring mentions)

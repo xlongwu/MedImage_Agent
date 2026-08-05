@@ -3,17 +3,19 @@
 
   /* Background tokens */
   --bg: #f5f5f7;
-  --bg-deep: #e9edf3;
+  --bg-deep: #f2f3f5;
   --color-bg-app: #f5f5f7;
-  --color-bg-sidebar: #f2f2f5;
-  --surface: rgba(255, 255, 255, 0.92);
+  --color-bg-sidebar: #f7f7f9;
+  --surface: rgba(255, 255, 255, 0.94);
   --surface-solid: #ffffff;
   --surface-muted: #f6f7f9;
   --color-surface-primary: #ffffff;
   --color-surface-secondary: #f7f7f9;
-  --color-surface-elevated: rgba(255, 255, 255, 0.82);
-  --color-divider: rgba(60, 60, 67, 0.14);
-  --color-divider-strong: rgba(60, 60, 67, 0.22);
+  --color-surface-elevated: rgba(255, 255, 255, 0.94);
+  --color-material-sidebar: rgba(242, 242, 247, 0.86);
+  --color-material-toolbar: rgba(255, 255, 255, 0.78);
+  --color-divider: rgba(60, 60, 67, 0.1);
+  --color-divider-strong: rgba(60, 60, 67, 0.16);
 
   /* Text tokens */
   --text: #1d1d1f;
@@ -22,33 +24,34 @@
   --color-text-secondary: #6e6e73;
   --color-text-tertiary: #8e8e93;
   --color-text-disabled: rgba(60, 60, 67, 0.3);
-  --border: rgba(115, 123, 138, 0.22);
-  --border-strong: rgba(80, 94, 118, 0.18);
+  --border: rgba(60, 60, 67, 0.1);
+  --border-strong: rgba(60, 60, 67, 0.16);
 
   /* Brand and interaction */
-  --blue: #0a84ff;
-  --color-accent: #0a84ff;
-  --color-accent-hover: #0077ed;
+  --blue: #007aff;
+  --color-accent: #007aff;
+  --color-accent-hover: #006ee6;
   --color-neuro-cyan: #32b8d8;
-  --color-selection: rgba(10, 132, 255, 0.12);
-  --color-focus-ring: rgba(10, 132, 255, 0.38);
+  --color-selection: rgba(0, 122, 255, 0.1);
+  --color-selection-strong: rgba(0, 122, 255, 0.14);
+  --color-focus-ring: rgba(0, 122, 255, 0.34);
   --teal: #0f9f8a;
-  --green: #248a3d;
+  --green: #34c759;
   --color-success: #248a3d;
-  --amber: #b96e00;
-  --color-warning: #b96b00;
-  --red: #d92d20;
-  --color-danger: #d92d20;
-  --color-info: #0a84ff;
-  --color-neutral: #6e6e73;
-  --ink: #0b1220;
+  --amber: #ff9f0a;
+  --color-warning: #9a5d00;
+  --red: #ff3b30;
+  --color-danger: #d72c25;
+  --color-info: #007aff;
+  --color-neutral: #8e8e93;
+  --ink: #1d1d1f;
   --violet: #5856d6;
 
   /* Typography */
   --font-family-ui:
-    -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI",
-    "Aptos", "Bahnschrift", sans-serif;
-  --font-family-mono: "Cascadia Mono", "Consolas", "SFMono-Regular", monospace;
+    "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  --font-family-mono: "SF Mono", "SFMono-Regular", "Cascadia Mono", "Consolas", monospace;
   --font-size-display: 32px;
   --font-size-page: 26px;
   --font-size-section: 18px;
@@ -61,8 +64,8 @@
   --line-height-body: 1.5;
   --letter-spacing-ui: 0;
   --font-weight-regular: 400;
-  --font-weight-medium: 600;
-  --font-weight-strong: 800;
+  --font-weight-medium: 500;
+  --font-weight-strong: 600;
 
   /* Controls */
   --control-height-sm: 32px;
@@ -70,19 +73,21 @@
   --control-height-lg: 40px;
 
   /* Radii */
-  --radius: 8px;
-  --radius-control: 8px;
+  --radius: 10px;
+  --radius-control: 10px;
   --radius-button: 10px;
   --radius-card: 14px;
-  --radius-panel: 18px;
-  --radius-modal: 20px;
+  --radius-panel: 16px;
+  --radius-modal: 16px;
+  --radius-lg: var(--radius-panel);
   --radius-pill: 999px;
 
   /* Shadows */
-  --shadow-soft: 0 18px 42px rgba(24, 39, 75, 0.08);
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.04);
-  --shadow-popover: 0 14px 40px rgba(0, 0, 0, 0.14);
-  --shadow-modal: 0 24px 70px rgba(0, 0, 0, 0.2);
+  --shadow-soft: 0 6px 20px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03), 0 6px 20px rgba(0, 0, 0, 0.04);
+  --shadow-popover: 0 12px 36px rgba(0, 0, 0, 0.1);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.14);
+  --shadow-elevated: var(--shadow-popover);
 
   /* Motion */
   --motion-duration-fast: 120ms;
@@ -92,8 +97,12 @@
   --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Shell layout tokens */
-  --shell-topbar-height: 48px;
+  --shell-topbar-height: 52px;
   --shell-lifecycle-height: 48px;
+  --shell-global-rail-width: 56px;
+  --shell-context-sidebar-width: 280px;
+  --shell-inspector-width: 336px;
+  --shell-statusbar-height: 40px;
   --shell-content-max-width: 1180px;
   --shell-min-desktop-width: 1024px;
   --shell-gap: 16px;
@@ -120,6 +129,8 @@
   --color-surface-primary: #1b1d22;
   --color-surface-secondary: #22252b;
   --color-surface-elevated: rgba(36, 39, 45, 0.9);
+  --color-material-sidebar: rgba(28, 28, 30, 0.9);
+  --color-material-toolbar: rgba(28, 28, 30, 0.82);
   --color-divider: rgba(235, 235, 245, 0.14);
   --color-divider-strong: rgba(235, 235, 245, 0.24);
   --text: #f5f5f7;
@@ -131,6 +142,7 @@
   --border: rgba(235, 235, 245, 0.2);
   --border-strong: rgba(235, 235, 245, 0.28);
   --color-selection: rgba(82, 166, 255, 0.18);
+  --color-selection-strong: rgba(82, 166, 255, 0.24);
   --color-focus-ring: rgba(82, 166, 255, 0.46);
   --shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.34);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.28), 0 12px 28px rgba(0, 0, 0, 0.22);

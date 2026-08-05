@@ -10,20 +10,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 
 from src.backend.app.api._errors import raise_api_error
 from src.backend.app.api.dependencies import ProjectStore, get_project_store
 from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.core.exceptions import NotFoundError, PipelineError, SafetyError
-from src.backend.app.schemas.preprocessing_handoff import (
-    PreprocessingInputRegistrationRequest,
-    PreprocessingInputRegistrationResponse,
-)
 from src.backend.app.schemas.native_preproc_api import (
     NativeFullPreprocRequest,
     NativeFullPreprocResponse,
+)
+from src.backend.app.schemas.preprocessing_handoff import (
+    PreprocessingInputRegistrationRequest,
+    PreprocessingInputRegistrationResponse,
 )
 from src.backend.app.schemas.preprocessing_pipeline import (
     PreprocessingPipelineExecuteRequest,
@@ -83,9 +83,8 @@ def preview_preprocessing_plan(
     from src.backend.app.services.preprocessing_adapter import (
         build_preprocessing_plan_preview,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
     project_dir = str(metadata.get("project_dir") or "")
     return build_preprocessing_plan_preview(
@@ -140,9 +139,8 @@ def execute_python_preflight_endpoint(
     from src.backend.app.services.preprocessing_adapter import (
         execute_python_preflight,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
     project_dir = str(metadata.get("project_dir") or "")
     return execute_python_preflight(
@@ -182,9 +180,8 @@ def get_preprocessing_run(
     from src.backend.app.services.preprocessing_adapter import (
         get_preprocessing_run_status,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     metadata = project.metadata if project and isinstance(project.metadata, dict) else {}
     project_dir = str(metadata.get("project_dir") or "")
     return get_preprocessing_run_status(
@@ -231,9 +228,8 @@ def spm_synthetic_smoke(
 
     from src.backend.app.schemas.spm_runtime import SpmSyntheticSmokeRequest
     from src.backend.app.services.spm_runtime import run_synthetic_spm_smoke as _run
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SpmSyntheticSmokeRequest(
         confirm_synthetic_only=bool(body.get("confirm_synthetic_only", False)),
@@ -267,9 +263,8 @@ def slice_timing_realign_dry_run(
     from src.backend.app.services.preprocessing_spm_dry_run import (
         run_slice_timing_realign_dry_run as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SliceTimingRealignDryRunRequest(
         tr=body.get("tr"),
@@ -303,9 +298,8 @@ def slice_timing_realign_sandbox(
     from src.backend.app.services.preprocessing_spm_execution import (
         run_sandbox_spm_execution as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SpmSandboxExecutionRequest(
         dry_run_id=str(body.get("dry_run_id", "")),
@@ -344,9 +338,8 @@ def coreg_norm_dry_run(
     from src.backend.app.services.preprocessing_coreg_norm_dry_run import (
         run_coreg_norm_dry_run as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = CoregNormDryRunRequest(
         registered_stage_output_id=str(body.get("registered_stage_output_id", "")),
@@ -378,13 +371,14 @@ def coreg_norm_sandbox(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
-    from src.backend.app.schemas.preprocessing_coreg_norm_execution import CoregNormSandboxExecutionRequest
+    from src.backend.app.schemas.preprocessing_coreg_norm_execution import (
+        CoregNormSandboxExecutionRequest,
+    )
     from src.backend.app.services.preprocessing_coreg_norm_execution import (
         run_coreg_norm_sandbox_execution as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = CoregNormSandboxExecutionRequest(
         dry_run_id=str(body.get("dry_run_id", "")),
@@ -424,9 +418,8 @@ def smoothing_dry_run(
     from src.backend.app.services.preprocessing_smoothing_dry_run import (
         run_smoothing_dry_run as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SmoothingDryRunRequest(
         registered_stage_output_id=str(body.get("registered_stage_output_id", "")),
@@ -456,13 +449,14 @@ def smoothing_sandbox(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
-    from src.backend.app.schemas.preprocessing_smoothing_execution import SmoothingSandboxExecutionRequest
+    from src.backend.app.schemas.preprocessing_smoothing_execution import (
+        SmoothingSandboxExecutionRequest,
+    )
     from src.backend.app.services.preprocessing_smoothing_execution import (
         run_smoothing_sandbox_execution as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SmoothingSandboxExecutionRequest(
         dry_run_id=str(body.get("dry_run_id", "")),
@@ -502,9 +496,8 @@ def register_sandbox_spm_outputs(
     from src.backend.app.services.preprocessing_stage_outputs import (
         register_sandbox_spm_outputs as _register,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
         execution_id=str(body.get("execution_id", "")),
@@ -535,9 +528,8 @@ def register_coreg_norm_outputs(
     from src.backend.app.services.preprocessing_stage_outputs import (
         register_coreg_norm_outputs as _register,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
         execution_id=str(body.get("execution_id", "")),
@@ -568,9 +560,8 @@ def register_smoothing_outputs(
     from src.backend.app.services.preprocessing_stage_outputs import (
         register_smoothing_outputs as _register,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
         execution_id=str(body.get("execution_id", "")),
@@ -604,9 +595,8 @@ def nuisance_dry_run(
     from src.backend.app.services.preprocessing_nuisance_dry_run import (
         run_nuisance_dry_run as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = NuisanceDryRunRequest(
         registered_stage_output_id=str(body.get("registered_stage_output_id", "")),
@@ -639,13 +629,14 @@ def nuisance_sandbox(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
-    from src.backend.app.schemas.preprocessing_nuisance_execution import NuisanceSandboxExecutionRequest
+    from src.backend.app.schemas.preprocessing_nuisance_execution import (
+        NuisanceSandboxExecutionRequest,
+    )
     from src.backend.app.services.preprocessing_nuisance_execution import (
         run_nuisance_sandbox_execution as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = NuisanceSandboxExecutionRequest(
         dry_run_id=str(body.get("dry_run_id", "")),
@@ -678,9 +669,8 @@ def register_nuisance_outputs(
     from src.backend.app.services.preprocessing_stage_outputs import (
         register_nuisance_outputs as _register,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
         execution_id=str(body.get("execution_id", "")),
@@ -714,9 +704,8 @@ def filtering_dry_run(
     from src.backend.app.services.preprocessing_filtering_dry_run import (
         run_filtering_dry_run as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FilteringDryRunRequest(
         registered_stage_output_id=str(body.get("registered_stage_output_id", "")),
@@ -746,13 +735,14 @@ def filtering_sandbox(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
-    from src.backend.app.schemas.preprocessing_filtering_execution import FilteringSandboxExecutionRequest
+    from src.backend.app.schemas.preprocessing_filtering_execution import (
+        FilteringSandboxExecutionRequest,
+    )
     from src.backend.app.services.preprocessing_filtering_execution import (
         run_filtering_sandbox_execution as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FilteringSandboxExecutionRequest(
         dry_run_id=str(body.get("dry_run_id", "")),
@@ -785,9 +775,8 @@ def register_filtering_outputs(
     from src.backend.app.services.preprocessing_stage_outputs import (
         register_filtering_outputs as _register,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
         execution_id=str(body.get("execution_id", "")),
@@ -821,9 +810,8 @@ def alff_reho_dry_run(
     from src.backend.app.services.preprocessing_alff_reho_dry_run import (
         run_alff_reho_dry_run as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = AlffRehoDryRunRequest(
         registered_stage_output_id=str(body.get("registered_stage_output_id", "")),
@@ -855,13 +843,14 @@ def alff_reho_sandbox(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
 
-    from src.backend.app.schemas.preprocessing_alff_reho_execution import AlffRehoSandboxExecutionRequest
+    from src.backend.app.schemas.preprocessing_alff_reho_execution import (
+        AlffRehoSandboxExecutionRequest,
+    )
     from src.backend.app.services.preprocessing_alff_reho_execution import (
         run_alff_reho_sandbox_execution as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = AlffRehoSandboxExecutionRequest(
         dry_run_id=str(body.get("dry_run_id", "")),
@@ -895,9 +884,8 @@ def register_alff_reho_outputs(
     from src.backend.app.services.preprocessing_stage_outputs import (
         register_alff_reho_outputs as _register,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
         execution_id=str(body.get("execution_id", "")),
@@ -931,9 +919,8 @@ def fc_dry_run(
     from src.backend.app.services.preprocessing_fc_dry_run import (
         run_fc_dry_run as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FcDryRunRequest(
         filtered_stage_output_id=str(body.get("filtered_stage_output_id", "")),
@@ -969,9 +956,8 @@ def fc_sandbox(
     from src.backend.app.services.preprocessing_fc_execution import (
         run_fc_sandbox_execution as _run,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FcSandboxExecutionRequest(
         dry_run_id=str(body.get("dry_run_id", "")),
@@ -1006,9 +992,8 @@ def register_fc_outputs(
     from src.backend.app.services.preprocessing_stage_outputs import (
         register_fc_outputs as _register,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
         execution_id=str(body.get("execution_id", "")),
@@ -1141,9 +1126,8 @@ def get_pipeline_report(
     from src.backend.app.services.preprocessing_pipeline_report import (
         generate_pipeline_report as _generate,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     return _generate(project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", ""))).model_dump()
 
@@ -1164,9 +1148,8 @@ def get_pipeline_validation(
     from src.backend.app.services.preprocessing_pipeline_validation import (
         validate_preprocessing_pipeline as _validate,
     )
-    from src.backend.app.services.mock_store import mock_store
 
-    project = mock_store.get_project(project_id)
+    project = store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     return _validate(project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", ""))).model_dump()
 

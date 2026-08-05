@@ -5,7 +5,10 @@ from pathlib import Path
 
 import numpy as np
 
-from src.backend.app.native_preproc.core.masks import intensity_brain_mask, tissue_probabilities_from_intensity
+from src.backend.app.native_preproc.core.masks import (
+    intensity_brain_mask,
+    tissue_probabilities_from_intensity,
+)
 from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
 from src.backend.app.native_preproc.io.nifti_io import load_nifti, save_nifti

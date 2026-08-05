@@ -122,4 +122,13 @@ describe("AssistantSheet", () => {
     expect(screen.getByRole("button", { name: "新对话" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "向 AI 助手提问" })).toBeInTheDocument();
   });
+
+  it("uses explanation-only task prompts in the Agent workspace", () => {
+    renderSheet({ activePageLabel: "Agent" });
+
+    expect(screen.getByLabelText("Assistant suggestions")).toHaveTextContent(
+      "Explain what the current Agent task is waiting for",
+    );
+    expect(screen.getByText("Execution boundary")).toBeInTheDocument();
+  });
 });

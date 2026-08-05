@@ -7,6 +7,7 @@ const THEME_STORAGE_KEY = "medimage.themePreference";
 const FALLBACK_THEME: ThemePreference = "light";
 const LOCALE_STORAGE_KEY = "medimage.localePreference";
 const FALLBACK_LOCALE: LocalePreference = "en";
+const ADVANCED_MODE_STORAGE_KEY = "medimage.advancedMode";
 
 function isThemePreference(value: string | null): value is ThemePreference {
   return value === "light" || value === "dark";
@@ -37,6 +38,15 @@ function readStoredThemePreference(): ThemePreference {
   }
 }
 
+function readStoredAdvancedMode(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(ADVANCED_MODE_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function persistThemePreference(themePreference: ThemePreference): void {
   if (typeof window === "undefined") return;
 
@@ -60,6 +70,7 @@ export function useAppState() {
   const [localePreference, setLocalePreferenceState] = useState<LocalePreference>(
     readStoredLocalePreference,
   );
+  const [advancedMode, setAdvancedModeState] = useState(readStoredAdvancedMode);
 
   useEffect(() => {
     applyThemePreference(themePreference);
@@ -75,6 +86,14 @@ export function useAppState() {
     document.documentElement.lang = localePreference;
   }, [localePreference]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(ADVANCED_MODE_STORAGE_KEY, String(advancedMode));
+    } catch {
+      // The opt-in remains effective for this session when storage is unavailable.
+    }
+  }, [advancedMode]);
+
   const setThemePreference = useCallback((nextThemePreference: ThemePreference) => {
     setThemePreferenceState(nextThemePreference);
   }, []);
@@ -83,13 +102,26 @@ export function useAppState() {
     setLocalePreferenceState(nextLocalePreference);
   }, []);
 
+  const setAdvancedMode = useCallback((enabled: boolean) => {
+    setAdvancedModeState(enabled);
+  }, []);
+
   return useMemo(
     () => ({
       setThemePreference,
       themePreference,
       localePreference,
       setLocalePreference,
+      advancedMode,
+      setAdvancedMode,
     }),
-    [localePreference, setLocalePreference, setThemePreference, themePreference],
+    [
+      advancedMode,
+      localePreference,
+      setAdvancedMode,
+      setLocalePreference,
+      setThemePreference,
+      themePreference,
+    ],
   );
 }

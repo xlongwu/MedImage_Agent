@@ -13,12 +13,11 @@ from __future__ import annotations
 import hashlib
 import json
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Response models
@@ -101,7 +100,7 @@ def _safety_flags() -> dict[str, bool]:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _file_info(path: str) -> tuple[bool, int | None, str | None]:
@@ -322,7 +321,7 @@ def export_conversion_review_package(
 
     export_dir = run_dir / "exports"
     export_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     zip_path = export_dir / f"conversion_review_package_{ts}.zip"
 
     excluded: list[str] = []

@@ -6,13 +6,16 @@ from time import perf_counter
 
 import numpy as np
 
-from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.core.compute_backend import (
     GpuComputeError,
     compute_atlas_resampling_gpu,
     cpu_compute_provenance,
 )
-from src.backend.app.native_preproc.core.resampling import _output_to_input_voxel_mapping, resample_spatial_to_reference
+from src.backend.app.native_preproc.core.qc import finite_stats
+from src.backend.app.native_preproc.core.resampling import (
+    _output_to_input_voxel_mapping,
+    resample_spatial_to_reference,
+)
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
 from src.backend.app.native_preproc.io.nifti_io import load_nifti, save_nifti
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref

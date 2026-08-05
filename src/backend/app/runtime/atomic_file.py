@@ -7,7 +7,6 @@ import threading
 from pathlib import Path
 from typing import Any
 
-
 _LOCKS_GUARD = threading.Lock()
 _PATH_LOCKS: dict[Path, threading.Lock] = {}
 
@@ -39,7 +38,7 @@ def atomic_write_json(
     with _path_lock(target):
         tmp_fd, tmp_name = tempfile.mkstemp(
             dir=str(target.parent),
-            prefix=f".{target.name}.",
+            prefix=".tmp-",
             suffix=".tmp",
             text=True,
         )
@@ -48,6 +47,33 @@ def atomic_write_json(
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as handle:
                 json.dump(payload, handle, ensure_ascii=False, indent=2)
                 handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, target)
+        except Exception:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            finally:
+                raise
+    return target
+
+
+def atomic_write_text(path: str | Path, content: str) -> Path:
+    """Write UTF-8 text through a same-directory temp file and atomic replace."""
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with _path_lock(target):
+        tmp_fd, tmp_name = tempfile.mkstemp(
+            dir=str(target.parent),
+            prefix=".tmp-",
+            suffix=".tmp",
+            text=True,
+        )
+        tmp_path = Path(tmp_name)
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8", newline="") as handle:
+                handle.write(content)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(tmp_path, target)

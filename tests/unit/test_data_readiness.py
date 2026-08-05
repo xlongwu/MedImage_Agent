@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -17,7 +18,6 @@ from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import data_readiness
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -74,9 +74,7 @@ def test_created_project_returns_readiness_response(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -94,9 +92,7 @@ def test_readiness_has_all_required_checks(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     body = resp.json()
     check_names = {c["name"] for c in body["checks"]}
     required = {
@@ -118,13 +114,9 @@ def test_readiness_includes_rawdata_safety_check(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     body = resp.json()
-    safety_checks = [
-        c for c in body["checks"] if c["name"] == "rawdata_read_only"
-    ]
+    safety_checks = [c for c in body["checks"] if c["name"] == "rawdata_read_only"]
     assert len(safety_checks) == 1
     assert safety_checks[0]["status"] == "pass"
     assert "read-only" in safety_checks[0]["message"].lower()
@@ -136,9 +128,7 @@ def test_no_imports_returns_blocked(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     body = resp.json()
     # Without explicit imports, image_source_count may be 0
     assert isinstance(body["image_source_count"], int)
@@ -150,9 +140,7 @@ def test_next_actions_present(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     body = resp.json()
     assert isinstance(body["next_actions"], list)
     assert len(body["next_actions"]) > 0
@@ -163,9 +151,7 @@ def test_warnings_and_errors_are_lists(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     body = resp.json()
     assert isinstance(body["warnings"], list)
     assert isinstance(body["errors"], list)
@@ -176,9 +162,7 @@ def test_dicom_fields_are_int(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     body = resp.json()
     assert isinstance(body["dicom_file_count"], int)
     assert isinstance(body["dicom_series_count"], int)

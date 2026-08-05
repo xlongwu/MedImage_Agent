@@ -14,7 +14,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
 import yaml
 from fastapi.testclient import TestClient
 
@@ -26,6 +25,7 @@ client = TestClient(app)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _write_config(tmp_path: Path) -> str:
     """Write a valid project_config.yaml to tmp_path. Returns the path."""
@@ -187,6 +187,7 @@ def _persist_review_context(monkeypatch, tmp_path: Path, plan: dict, config_path
 # Smoke: safe Python-only plan → EXECUTION_SUBMITTED
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_safe_plan_execution_submitted(monkeypatch, tmp_path):
     """Full integration: safe plan, mocked executor, check all gates."""
     monkeypatch.setenv("MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "1")
@@ -195,11 +196,13 @@ def test_safe_plan_execution_submitted(monkeypatch, tmp_path):
     executor_calls = []
 
     def _fake_run_pipeline(*, project_config_path, pipeline_path, execution_context):
-        executor_calls.append({
-            "project_config_path": project_config_path,
-            "pipeline_path": pipeline_path,
-            "ticket_id": execution_context.ticket.execution_ticket_id,
-        })
+        executor_calls.append(
+            {
+                "project_config_path": project_config_path,
+                "pipeline_path": pipeline_path,
+                "ticket_id": execution_context.ticket.execution_ticket_id,
+            }
+        )
         return {"status": "SUCCESS", "run_id": "ci-mock-run-001"}
 
     monkeypatch.setattr(
@@ -237,52 +240,53 @@ def test_safe_plan_execution_submitted(monkeypatch, tmp_path):
     )
 
     # ── Assert ──
-    assert resp.status_code == 200                                          # 1
+    assert resp.status_code == 200  # 1
     data = resp.json()
 
-    assert data["status"] == "EXECUTION_SUBMITTED"                         # 2
-    assert data["ok"] is True                                              # 3
-    assert data["execution"]["executor_called"] is True                    # 4
-    assert data["execution"]["submitted"] is True                          # 5
-    assert data["execution"]["run_id"] is not None                         # 6
-    assert data["execution"]["run_id"].startswith("run_")                  # 6b
+    assert data["status"] == "EXECUTION_SUBMITTED"  # 2
+    assert data["ok"] is True  # 3
+    assert data["execution"]["executor_called"] is True  # 4
+    assert data["execution"]["submitted"] is True  # 5
+    assert data["execution"]["run_id"] is not None  # 6
+    assert data["execution"]["run_id"].startswith("run_")  # 6b
     assert data["executor_result"]["run_id"] == "ci-mock-run-001"
 
     # ── Executor called once ──
-    assert len(executor_calls) == 1                                         # 7
+    assert len(executor_calls) == 1  # 7
     call = executor_calls[0]
     assert data["execution_ticket"]["execution_ticket_id"] == call["ticket_id"]
-    assert call["project_config_path"] == config_path                      # 8
-    assert Path(call["pipeline_path"]).exists()                            # 9
+    assert call["project_config_path"] == config_path  # 8
+    assert Path(call["pipeline_path"]).exists()  # 9
 
     # ── Pipeline YAML ──
     yaml_path = Path(call["pipeline_path"])
-    content = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))        # 10
+    content = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))  # 10
     assert content is not None
-    assert "version" in content                                            # 11
+    assert "version" in content  # 11
     assert "modality" in content
     assert "execution" in content
     assert "nodes" in content
 
     # ── Audit ──
-    assert data["audit"]["persisted"] is True                              # 12
-    assert "audit_id" in data["audit"]                                     # 13
+    assert data["audit"]["persisted"] is True  # 12
+    assert "audit_id" in data["audit"]  # 13
     audit_files = list(audit_dir.glob("*.json"))
-    assert len(audit_files) >= 1                                           # 14
+    assert len(audit_files) >= 1  # 14
 
     # ── No rawdata ──
     rawdata = tmp_path / "data"
     derivatives = tmp_path / "derivatives"
-    assert not rawdata.exists() or list(rawdata.glob("*")) == []           # 15
-    assert not derivatives.exists() or list(derivatives.glob("*")) == []   # 16
+    assert not rawdata.exists() or list(rawdata.glob("*")) == []  # 15
+    assert not derivatives.exists() or list(derivatives.glob("*")) == []  # 16
 
     # ── JSON serializable ──
-    json.loads(resp.text)                                                  # 18
+    json.loads(resp.text)  # 18
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Blocked: unsafe SPM plan → EXECUTION_POLICY_BLOCKED
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_unsafe_spm_plan_blocked(monkeypatch, tmp_path):
     """SPM plan should be blocked by execution policy."""
@@ -327,10 +331,12 @@ def test_unsafe_spm_plan_blocked(monkeypatch, tmp_path):
     data = resp.json()
     assert resp.status_code == 200
     # Policy blocked (SPM nodes are blocked by execution policy)
-    assert data["status"] in ("EXECUTION_POLICY_BLOCKED",
-                              "SAFE_EXECUTION_POLICY_BLOCKED",
-                              "APPROVAL_GATE_BLOCKED",
-                              "REVIEWED_PLAN_NEEDS_GOAL_REVIEW")
+    assert data["status"] in (
+        "EXECUTION_POLICY_BLOCKED",
+        "SAFE_EXECUTION_POLICY_BLOCKED",
+        "APPROVAL_GATE_BLOCKED",
+        "REVIEWED_PLAN_NEEDS_GOAL_REVIEW",
+    )
     assert data["execution"]["executor_called"] is False
     assert len(executor_calls) == 0  # executor NOT called
 
@@ -338,6 +344,7 @@ def test_unsafe_spm_plan_blocked(monkeypatch, tmp_path):
 # ══════════════════════════════════════════════════════════════════════════════
 # dry_run=true regression
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_dry_run_true_does_not_call_executor(monkeypatch, tmp_path):
     """dry_run=true must never call the executor."""

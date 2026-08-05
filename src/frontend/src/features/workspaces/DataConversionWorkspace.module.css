@@ -2,21 +2,29 @@
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .rawMain,
 .rawAside {
+  display: flex;
   min-width: 0;
 }
 
+.rawMain > *,
+.rawAside > * {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .rawAside {
-  position: sticky;
-  top: 16px;
+  position: static;
 }
 
 .summaryCard {
   display: grid;
+  height: 100%;
+  box-sizing: border-box;
   gap: 14px;
   min-width: 0;
 }

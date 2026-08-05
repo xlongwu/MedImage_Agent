@@ -6,7 +6,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 ParameterType = Literal["string", "integer", "number", "boolean", "object", "array"]
 CapabilityLevel = Literal["unavailable", "scaffolded", "metadata_only", "computed", "validated"]
 

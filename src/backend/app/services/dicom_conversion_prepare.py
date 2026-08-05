@@ -23,16 +23,14 @@ The backend never asks the user to manually set system-verifiable fields.
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.api.dependencies import ProjectStore
 from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.schemas.dicom_conversion_prepare import (
-    DicomConversionPrepareConfirmations,
     DicomConversionPrepareRequest,
     DicomConversionPrepareResponse,
     DicomConversionPrepareSystemChecks,
@@ -42,7 +40,7 @@ from src.backend.app.schemas.dicom_conversion_prepare import (
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _write_json(path: str | Path, data: dict[str, Any]) -> str:
@@ -147,22 +145,22 @@ def run_dicom_conversion_prepare(
     Per 实现dcm2nii任务方案.md §13.2, this performs all system validations
     and persists the approval package in one call.
     """
-    from src.backend.app.services.dicom_conversion_execution import (
-        check_native_dicom_converter_availability,
-        run_conversion_preflight,
-    )
-    from src.backend.app.schemas.dicom_conversion_execution import (
-        DicomConversionExecutionRequest,
-    )
     from src.backend.app.schemas.dicom_conversion_approval import (
         DicomConversionApprovalRecord,
         evaluate_conversion_approval_gate,
     )
-    from src.backend.app.services.dicom_conversion_plan_persistence import (
-        persist_conversion_plan,
+    from src.backend.app.schemas.dicom_conversion_execution import (
+        DicomConversionExecutionRequest,
     )
     from src.backend.app.schemas.dicom_conversion_release_approval import (
         DicomConversionReleaseApprovalRecord,
+    )
+    from src.backend.app.services.dicom_conversion_execution import (
+        check_native_dicom_converter_availability,
+        run_conversion_preflight,
+    )
+    from src.backend.app.services.dicom_conversion_plan_persistence import (
+        persist_conversion_plan,
     )
     from src.backend.app.services.dicom_conversion_release_approval import (
         persist_release_approval,
@@ -509,6 +507,23 @@ def run_dicom_conversion_prepare(
         output_root_safe=output_root_safe,
         env_gates_ok=env_gates_ok,
     )
+
+    # Make an already prepared and release-approved package discoverable by the
+    # Agent planner. This is a binding hint only; the reviewed conversion runner
+    # revalidates every release, path, checksum, approval, and ticket invariant.
+    if execution_ready:
+        try:
+            if store.update_project_metadata(
+                project_id,
+                {
+                    "agent_conversion_run_id": conversion_run_id,
+                    "agent_conversion_execution_ready": True,
+                    "agent_conversion_output_root": output_root,
+                },
+            ) is None:
+                warnings.append("Agent conversion binding was not persisted: project not found")
+        except Exception as exc:
+            warnings.append(f"Agent conversion binding was not persisted: {exc}")
 
     system_checks = DicomConversionPrepareSystemChecks(
         preflight_ok=preflight_ok,

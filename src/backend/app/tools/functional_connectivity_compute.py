@@ -4,6 +4,7 @@ import time
 from typing import Any
 
 import numpy as np
+
 from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
 

@@ -890,3 +890,95 @@
   border-radius: 3px;
   font-size: 12px;
 }
+
+.goalContractReview {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #d8dee9;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.goalContractHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.goalContractHeader h4 {
+  margin: 0 0 4px;
+}
+
+.goalContractHeader p {
+  margin: 0 0 12px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.goalContractPending,
+.goalContractReviewed {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.goalContractPending {
+  color: #9a6700;
+  background: #fff3d6;
+}
+
+.goalContractReviewed {
+  color: #18733b;
+  background: #daf5e3;
+}
+
+.goalContractTextarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccd3dc;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.goalContractNotice,
+.goalContractError {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.goalContractNotice {
+  color: #7a4d00;
+  background: #fff8e6;
+}
+
+.goalContractError {
+  color: #b42318;
+  background: #fff0ee;
+}
+
+.goalContractConfirmation {
+  display: block;
+  margin: 12px 0;
+}
+
+.goalContractReviewButton {
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  background: #1769e0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.goalContractReviewButton:disabled {
+  color: #777;
+  background: #d8dce2;
+  cursor: not-allowed;
+}

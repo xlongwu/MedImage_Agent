@@ -14,8 +14,6 @@ export const TopBar = memo(function TopBar({
   onOpenAssistant,
   onOpenInspector,
   onBackToProjects,
-  onOpenRuns,
-  onOpenSettings,
   locale,
   onLocaleChange,
   version,
@@ -29,8 +27,6 @@ export const TopBar = memo(function TopBar({
   onOpenAssistant: () => void;
   onOpenInspector: () => void;
   onBackToProjects: () => void;
-  onOpenRuns: () => void;
-  onOpenSettings: () => void;
   locale: LocalePreference;
   onLocaleChange: (locale: LocalePreference) => void;
   version: string;
@@ -116,11 +112,6 @@ export const TopBar = memo(function TopBar({
           >
             {t("nav.assistant")}
           </Button>
-          <Tooltip label={t("nav.runs")}>
-            <IconButton label={t("nav.runs")} onClick={onOpenRuns} variant="ghost">
-              <Icon height={16} name="runs" width={16} />
-            </IconButton>
-          </Tooltip>
           <Tooltip label={t("nav.inspector")}>
             <IconButton label={t("nav.inspector")} onClick={onOpenInspector} variant="ghost">
               <Icon height={16} name="inspector" width={16} />
@@ -135,11 +126,6 @@ export const TopBar = memo(function TopBar({
             <Icon height={15} name="language" width={15} />
             <span>{locale === "en" ? "中文" : "EN"}</span>
           </button>
-          <Tooltip label={t("nav.settings")}>
-            <IconButton label={t("nav.settings")} onClick={onOpenSettings} variant="ghost">
-              <Icon height={16} name="settings" width={16} />
-            </IconButton>
-          </Tooltip>
         </div>
       </header>
       {apiError ? (

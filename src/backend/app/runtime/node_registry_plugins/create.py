@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from src.backend.app.runtime.node_registry_plugins.base import NodeRunner, merge_registries
+from src.backend.app.runtime.node_registry_plugins.conversion_nodes import (
+    REGISTRY as CONVERSION_REGISTRY,
+)
 from src.backend.app.runtime.node_registry_plugins.core_nodes import REGISTRY as CORE_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.dpabi_nodes import REGISTRY as DPABI_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.gpu_nodes import REGISTRY as GPU_REGISTRY
-from src.backend.app.runtime.node_registry_plugins.native_preproc_nodes import REGISTRY as NATIVE_PREPROC_REGISTRY
+from src.backend.app.runtime.node_registry_plugins.native_preproc_nodes import (
+    REGISTRY as NATIVE_PREPROC_REGISTRY,
+)
 from src.backend.app.runtime.node_registry_plugins.qc_nodes import REGISTRY as QC_REGISTRY
-from src.backend.app.runtime.node_registry_plugins.rsfmri_nodes import REGISTRY as RSFMRI_REGISTRY
 from src.backend.app.runtime.node_registry_plugins.report_nodes import REGISTRY as REPORT_REGISTRY
-
+from src.backend.app.runtime.node_registry_plugins.rsfmri_nodes import REGISTRY as RSFMRI_REGISTRY
 
 _EXTERNAL_LEGACY_NODE_IDS = frozenset({
     "dpabi_sandbox_smoke_run",
@@ -52,12 +56,10 @@ def create_registry() -> dict[str, NodeRunner]:
         for node_id, runner in DPABI_REGISTRY.items()
         if node_id not in _EXTERNAL_LEGACY_NODE_IDS
     }
-    legacy_blockers = {
-        node_id: _external_legacy_node_blocker
-        for node_id in _EXTERNAL_LEGACY_NODE_IDS
-    }
+    legacy_blockers = dict.fromkeys(_EXTERNAL_LEGACY_NODE_IDS, _external_legacy_node_blocker)
     return merge_registries(
         CORE_REGISTRY,
+        CONVERSION_REGISTRY,
         internal_dpabi,
         GPU_REGISTRY,
         NATIVE_PREPROC_REGISTRY,

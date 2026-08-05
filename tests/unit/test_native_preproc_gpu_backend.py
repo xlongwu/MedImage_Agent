@@ -1,4 +1,5 @@
 """Contract tests for reviewed GPU policy and backend-neutral native stages."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -9,7 +10,9 @@ from src.backend.app.native_preproc.orchestrator import gpu_resource_planner as 
 from src.backend.app.native_preproc.orchestrator.runner import dry_run_native_full_preproc
 from src.backend.app.native_preproc.stages.alff_falff import compute_alff_falff_maps
 from src.backend.app.native_preproc.stages.atlas_resampling import resample_atlas_with_backend
-from src.backend.app.native_preproc.stages.functional_connectivity import compute_roi_functional_connectivity
+from src.backend.app.native_preproc.stages.functional_connectivity import (
+    compute_roi_functional_connectivity,
+)
 from src.backend.app.native_preproc.stages.nuisance_regression import regress_confounds_with_backend
 from src.backend.app.native_preproc.stages.smoothing import smooth_spatial_with_backend
 from src.backend.app.native_preproc.stages.temporal_filtering import temporal_filter_4d
@@ -33,12 +36,18 @@ def test_compute_policy_defaults_to_cpu_and_rejects_unknown_stage() -> None:
         NativeComputePolicy(stage_backends={"reho": "gpu"})
 
 
-def test_gpu_planner_changes_chunk_and_tokens_with_live_vram(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_gpu_planner_changes_chunk_and_tokens_with_live_vram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(planner, "_live_gpu_snapshot", lambda: _gpu_snapshot())
     policy = NativeComputePolicy(backend="gpu")
-    roomy = planner.plan_gpu_stage("temporal_filtering", input_shape=(32, 32, 16, 100), policy=policy, subject_count=4)
+    roomy = planner.plan_gpu_stage(
+        "temporal_filtering", input_shape=(32, 32, 16, 100), policy=policy, subject_count=4
+    )
     monkeypatch.setattr(planner, "_live_gpu_snapshot", lambda: _gpu_snapshot(free=700 * 1024**2))
-    constrained = planner.plan_gpu_stage("temporal_filtering", input_shape=(32, 32, 16, 100), policy=policy, subject_count=4)
+    constrained = planner.plan_gpu_stage(
+        "temporal_filtering", input_shape=(32, 32, 16, 100), policy=policy, subject_count=4
+    )
 
     assert roomy.selected_backend == "gpu"
     assert roomy.chunk_size >= constrained.chunk_size
@@ -56,8 +65,14 @@ def test_auto_remains_cpu_and_records_visible_reason(monkeypatch: pytest.MonkeyP
     assert plan.fallback_allowed is True
 
 
-def test_require_gpu_does_not_silently_fallback_when_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(planner, "_live_gpu_snapshot", lambda: {"cupy_available": False, "gpu_available": False, "warnings": ["missing"]})
+def test_require_gpu_does_not_silently_fallback_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        planner,
+        "_live_gpu_snapshot",
+        lambda: {"cupy_available": False, "gpu_available": False, "warnings": ["missing"]},
+    )
     plan = planner.plan_gpu_stage(
         "alff", input_shape=(4, 4, 4, 20), policy=NativeComputePolicy(backend="gpu")
     )

@@ -10,17 +10,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from src.backend.app.schemas.dicom_conversion_approval import (
     DicomConversionApprovalRecord,
-    DicomConversionGateDecision,
-    DicomConversionOverwritePolicy,
-    DicomConversionPlanPersistenceResponse,
     DicomConversionRunReservation,
     build_conversion_run_id,
     build_conversion_run_paths,
-    evaluate_conversion_approval_gate,
     is_reserved_run_directory_safe,
     validate_conversion_run_paths,
 )
@@ -293,12 +287,17 @@ def test_no_nifti_files_created(tmp_path):
 
 def test_persistence_service_has_no_subprocess():
     import inspect
+
     from src.backend.app.services import dicom_conversion_plan_persistence as mod
 
     source = inspect.getsource(mod.persist_conversion_plan)
     assert "import subprocess" not in source
     # Only check actual code, not docstring text
-    lines = [l for l in source.splitlines() if '"""' not in l and not l.strip().startswith("#")]
+    lines = [
+        line
+        for line in source.splitlines()
+        if '"""' not in line and not line.strip().startswith("#")
+    ]
     code = "\n".join(lines)
     assert "shell=True" not in code
 

@@ -13,7 +13,7 @@ This module:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 # ── Provider taxonomy ───────────────────────────────────────────────────────
@@ -249,11 +249,11 @@ def validate_model_provider_policy(
                         ptype=ptype, pname=provider_name)
     if _out not in _ALLOWED_OUTPUT_MODES:
         return _blocked(_ERROR_CODES["output_mode_blocked"],
-                        f"allowed_output_mode must be 'raw_model_output_envelope'.",
+                        "allowed_output_mode must be 'raw_model_output_envelope'.",
                         ptype=ptype, pname=provider_name)
     if _act not in _ALLOWED_ACTION_POLICIES:
         return _blocked(_ERROR_CODES["action_policy_blocked"],
-                        f"allowed_action_policy must be 'record_observation_only'.",
+                        "allowed_action_policy must be 'record_observation_only'.",
                         ptype=ptype, pname=provider_name)
     if _trust is not False:
         return _blocked(_ERROR_CODES["trust_remote_code_blocked"],

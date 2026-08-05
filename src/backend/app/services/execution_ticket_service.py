@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 from uuid import uuid4
@@ -111,7 +111,7 @@ class ExecutionTicketService:
             execution_ticket_id=ticket_id,
             project_id=project_id,
             event_type=event_type,
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             audit_id=audit_id,
             reason=reason,
             details=details or {},
@@ -186,7 +186,7 @@ class ExecutionTicketService:
                 "EXECUTION_TICKET_BINDING_REQUIRED",
                 code="EXECUTION_TICKET_BINDING_REQUIRED",
             )
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ticket_id = f"ticket_{uuid4().hex}"
         payload: dict[str, Any] = {
             "schema_version": 2,
@@ -416,7 +416,7 @@ class ExecutionTicketService:
             for path in (canonical_config, canonical_pipeline)
         ):
             raise SafetyError("RECOVERY_CHILD_CONTROL_PATH_INVALID", code="RECOVERY_CHILD_CONTROL_PATH_INVALID")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         child_id = f"recovery_ticket_{uuid4().hex}"
         contract_versions = tuple(
             (node_id, dict(parent.contract_versions)[node_id])
@@ -496,10 +496,10 @@ class ExecutionTicketService:
         )
 
         parent = self.store.get_execution_ticket(ticket.parent_execution_ticket_id or "")
-        proposal = getattr(self.store, "get_recovery_proposal")(ticket.recovery_proposal_id or "")
-        approval = getattr(self.store, "get_recovery_approval")(ticket.recovery_approval_id or "")
-        attempt = getattr(self.store, "get_recovery_attempt")(ticket.recovery_attempt_id or "")
-        reservation = getattr(self.store, "get_recovery_quota_reservation")(ticket.quota_reservation_id or "")
+        proposal = self.store.get_recovery_proposal(ticket.recovery_proposal_id or "")
+        approval = self.store.get_recovery_approval(ticket.recovery_approval_id or "")
+        attempt = self.store.get_recovery_attempt(ticket.recovery_attempt_id or "")
+        reservation = self.store.get_recovery_quota_reservation(ticket.quota_reservation_id or "")
         if parent is None or parent.status != "consumed" or parent.canonical_hash != ticket.parent_ticket_hash:
             raise SafetyError("RECOVERY_CHILD_PARENT_INVALID", code="RECOVERY_CHILD_PARENT_INVALID")
         if (
@@ -518,7 +518,7 @@ class ExecutionTicketService:
         if (
             approval is None
             or approval.status != "active"
-            or approval.expires_at <= datetime.now(timezone.utc)
+            or approval.expires_at <= datetime.now(UTC)
             or approval.candidate_hash != ticket.recovery_candidate_hash
             or calculate_recovery_approval_hash(approval) != approval.recovery_approval_hash
             or approval.recovery_approval_id != ticket.recovery_approval_id
@@ -616,7 +616,7 @@ class ExecutionTicketService:
                 "EXECUTION_TICKET_NOT_CONSUMABLE",
                 code="EXECUTION_TICKET_NOT_CONSUMABLE",
             )
-        consumed_at = datetime.now(timezone.utc)
+        consumed_at = datetime.now(UTC)
         if ticket.ticket_kind == "recovery_child":
             from src.backend.app.services.recovery_policy_service import RecoveryPolicyService
 
@@ -647,7 +647,7 @@ class ExecutionTicketService:
         revoked = self.store.update_execution_ticket(
             execution_ticket_id,
             status="revoked",
-            revoked_at=datetime.now(timezone.utc).isoformat(),
+            revoked_at=datetime.now(UTC).isoformat(),
             revocation_reason=reason,
         )
         if revoked is None:

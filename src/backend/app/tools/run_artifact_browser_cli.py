@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import sys
 
-from src.backend.app.tools.cli_utils import emit_json, emit_json_result
 from src.backend.app.tools.artifact_browser import build_artifact_index, preview_artifact
+from src.backend.app.tools.cli_utils import emit_json, emit_json_result
 
 
 def main() -> int:

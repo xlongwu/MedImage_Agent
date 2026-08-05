@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-
 from src.backend.app.tools.dpabi_safety import ALLOWED_FUNCTIONS as ALLOWLISTED_SINGLE_FUNCTIONS
 
 
@@ -107,13 +106,13 @@ def run_dpabi_subject_smooth(
 
     # ── M7-DPABI-T006b: FWHM validation ──
     fwhm = fwhm or [6.0, 6.0, 6.0]
-    if not isinstance(fwhm, (list, tuple)) or len(fwhm) != 3:
+    if not isinstance(fwhm, list | tuple) or len(fwhm) != 3:
         return {'ok': False, 'node_id': 'dpabi_subject_smooth', 'backend': 'matlab-dpabi',
                 'subject_id': subject_id, 'outputs': [], 'warnings': [],
                 'errors': ['FWHM must be a 3-element list of numbers.'],
                 'matlab_called': False, 'dpabi_called': False, 'stage': 'fwhm_preflight'}
     for i, v in enumerate(fwhm):
-        if not isinstance(v, (int, float)) or v != v or v == float('inf') or v <= 0 or v > 12:
+        if not isinstance(v, int | float) or v != v or v == float('inf') or v <= 0 or v > 12:
             return {'ok': False, 'node_id': 'dpabi_subject_smooth', 'backend': 'matlab-dpabi',
                     'subject_id': subject_id, 'outputs': [], 'warnings': [],
                     'errors': [f'FWHM element {i} invalid: {v}. Must be 0 < value <= 12.'],

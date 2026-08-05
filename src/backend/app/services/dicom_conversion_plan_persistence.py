@@ -12,29 +12,24 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.schemas.dicom_conversion_approval import (
     DicomConversionApprovalRecord,
-    DicomConversionGateDecision,
     DicomConversionOverwritePolicy,
-    DicomConversionPersistedPlan,
     DicomConversionPlanPersistenceResponse,
-    DicomConversionPersistenceStatus,
     DicomConversionRunReservation,
     build_conversion_run_id,
     build_conversion_run_paths,
     evaluate_conversion_approval_gate,
-    is_reserved_run_directory_safe,
-    summarize_persisted_conversion_plan,
     validate_conversion_run_paths,
 )
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _write_json(path: str, data: dict[str, Any]) -> str:
@@ -69,7 +64,7 @@ def persist_conversion_plan(
     Does NOT call dcm2niix.  Does NOT create NIfTI files.  Does NOT
     modify rawdata.  Subprocess execution is never used.
     """
-    errors: list[str] = []
+    _errors: list[str] = []
     warnings: list[str] = []
 
     # ── 1. Gate evaluation ──
@@ -108,9 +103,7 @@ def persist_conversion_plan(
             errors=["conversion_run_id contains unsafe characters."],
             safety_flags=safety_flags or {},
         )
-    conversion_run_id = conversion_run_id or build_conversion_run_id(
-        project_id, mapping_hash
-    )
+    conversion_run_id = conversion_run_id or build_conversion_run_id(project_id, mapping_hash)
     paths = build_conversion_run_paths(project_dir, conversion_run_id)
     run_dir = Path(paths["run_dir"])
 
@@ -154,6 +147,7 @@ def persist_conversion_plan(
         elif overwrite_policy == "write_new_run_directory":
             # Generate a new unique run ID
             import uuid
+
             conversion_run_id = f"conv-{uuid.uuid4().hex[:12]}"
             paths = build_conversion_run_paths(project_dir, conversion_run_id)
             run_dir = Path(paths["run_dir"])
@@ -176,36 +170,54 @@ def persist_conversion_plan(
     written: list[str] = []
     try:
         written.append(_write_json(paths["approval_record_path"], approval_record.model_dump()))
-        written.append(_write_json(paths["audit_preview_path"], {
-            "audit_id": f"audit-{conversion_run_id}",
-            "approval_id": approval_record.approval_id,
-            "project_id": project_id,
-            "reviewed_plan_id": approval_record.reviewed_plan_id,
-            "output_root": paths["output_root"],
-            "dcm2niix_version": approval_record.dcm2niix_version,
-            "persisted_at": _now_iso(),
-            "note": "Audit record placeholder — no conversion executed.",
-        }))
+        written.append(
+            _write_json(
+                paths["audit_preview_path"],
+                {
+                    "audit_id": f"audit-{conversion_run_id}",
+                    "approval_id": approval_record.approval_id,
+                    "project_id": project_id,
+                    "reviewed_plan_id": approval_record.reviewed_plan_id,
+                    "output_root": paths["output_root"],
+                    "dcm2niix_version": approval_record.dcm2niix_version,
+                    "persisted_at": _now_iso(),
+                    "note": "Audit record placeholder — no conversion executed.",
+                },
+            )
+        )
         written.append(_write_json(paths["preflight_snapshot_path"], preflight_snapshot or {}))
         written.append(_write_json(paths["mapping_snapshot_path"], {"mappings": mappings or []}))
-        written.append(_write_json(paths["command_templates_path"], {"templates": command_templates or []}))
-        written.append(_write_json(paths["planned_manifest_path"], {
-            "project_id": project_id,
-            "run_id": conversion_run_id,
-            "node_id": "dicom_to_nifti",
-            "note": "Planned output manifest — no conversion executed.",
-        }))
-        written.append(_write_json(paths["planned_provenance_path"], {
-            "project_id": project_id,
-            "run_id": conversion_run_id,
-            "backend": "external",
-            "note": "Planned provenance — no conversion executed.",
-        }))
+        written.append(
+            _write_json(paths["command_templates_path"], {"templates": command_templates or []})
+        )
+        written.append(
+            _write_json(
+                paths["planned_manifest_path"],
+                {
+                    "project_id": project_id,
+                    "run_id": conversion_run_id,
+                    "node_id": "dicom_to_nifti",
+                    "note": "Planned output manifest — no conversion executed.",
+                },
+            )
+        )
+        written.append(
+            _write_json(
+                paths["planned_provenance_path"],
+                {
+                    "project_id": project_id,
+                    "run_id": conversion_run_id,
+                    "backend": "external",
+                    "note": "Planned provenance — no conversion executed.",
+                },
+            )
+        )
 
         # ── Phase 4H-2: Rawdata checksum snapshot ──
         rawdata_checksum_path = str(run_dir / "rawdata_checksum_before.json")
-        from src.backend.app.services.rawdata_fingerprint import build_rawdata_fingerprint
         from src.backend.app.schemas.dicom_conversion_safety import build_rawdata_checksum_snapshot
+        from src.backend.app.services.rawdata_fingerprint import build_rawdata_fingerprint
+
         try:
             if rawdata_dir:
                 fp = build_rawdata_fingerprint([rawdata_dir])
@@ -214,9 +226,12 @@ def persist_conversion_plan(
                 _write_json(rawdata_checksum_path, checksum.model_dump())
                 written.append(rawdata_checksum_path)
             else:
-                _write_json(rawdata_checksum_path, {
-                    "note": "No rawdata_dir configured — checksum snapshot not generated.",
-                })
+                _write_json(
+                    rawdata_checksum_path,
+                    {
+                        "note": "No rawdata_dir configured — checksum snapshot not generated.",
+                    },
+                )
                 written.append(rawdata_checksum_path)
         except Exception as exc:
             warnings.append(f"Rawdata checksum snapshot failed: {exc}")
@@ -227,6 +242,7 @@ def persist_conversion_plan(
             build_conversion_rollback_plan,
             run_conversion_rollback_dry_run,
         )
+
         try:
             rawdata_roots = [rawdata_dir] if rawdata_dir else []
             plan = build_conversion_rollback_plan(

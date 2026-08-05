@@ -48,6 +48,8 @@ def test_electron_main_contract():
     assert "reactRootChildCount" in main
     assert "mainLandmarkPresent" in main
     assert "rendererConsoleErrors" in main
+    assert "rendererBackendHealthOk" in main
+    assert 'fetch(backendBaseUrl + "/api/health")' in main
     assert "MEDIMAGE_DESKTOP_USER_DATA" in main
     assert "MEDIMAGE_DESKTOP_WORKSPACE" in main
     assert "findRepositoryRoot" in main
@@ -58,11 +60,29 @@ def test_electron_main_contract():
     assert "loadFile(frontendIndex)" in main
     assert "medimage-backend.bin" in main
     assert "copyFileSync" in main
+    assert "DEFAULT_BACKEND_STARTUP_TIMEOUT_MS = 120_000" in main
+    assert "MEDIMAGE_DESKTOP_BACKEND_STARTUP_TIMEOUT_MS" in main
+    assert "Date.now() < deadline" in main
+    assert '["error", "stopped"].includes(backendState.status)' in main
     assert "spawnSync" in main
     assert '"taskkill"' in main
     assert '"/t"' in main
     assert '"/f"' in main
     assert "backendProcess.kill()" in main
+    assert "requestSingleInstanceLock" in main
+    assert 'app.on("second-instance"' in main
+    assert "mainWindow.focus()" in main
+    assert "payloadKey" in main
+    assert "app.getVersion()" in main
+    assert "deferred stale sidecar cleanup" in main
+    assert "fs.rmSync(destinationDir" not in main
+    assert "startBackendOnce" in main
+    assert "backendStartPromise" in main
+    assert "MEDIMAGE_DESKTOP_SESSION_TOKEN" in main
+    assert "X-MedImage-Desktop-Health-Nonce" in main
+    assert "timingSafeEqual" in main
+    assert 'MEDIMAGE_DESKTOP_PARENT_PID: String(process.pid)' in main
+    assert 'MEDIMAGE_AGENT_STARTUP_RECONCILE: "1"' in main
     assert "contextIsolation: true" in main
     assert "nodeIntegration: false" in main
     assert "sandbox: true" in main
@@ -148,6 +168,7 @@ def test_pyinstaller_spec_excludes_blocked_gui_and_model_modules():
     assert 'collect_data_files("cupy", includes=["_core/include/**/*"])' in spec
     assert 'collect_submodules("fastrlock")' in spec
     assert '"graphlib"' in spec
+    assert '"pydicom"' in spec
     assert "dcm2niix" not in spec.lower()
     assert "resources/tools" not in spec
     assert '"pywinauto"' in spec
@@ -171,7 +192,7 @@ def test_desktop_launcher_contract():
     assert "StaticFiles" in launcher
     assert "MEDIMAGE_DESKTOP_WORKSPACE" in launcher
     assert "_default_packaged_workspace" in launcher
-    assert '_find_repository_root' in launcher
+    assert "_find_repository_root" in launcher
     assert "MEDIMAGE_GUI_AGENT_PROVIDER" in launcher
     assert '"mock"' in launcher
     assert "server.should_exit = True" in launcher
@@ -194,10 +215,13 @@ def test_frontend_runtime_config_contract():
 
 def test_backend_build_checks_native_scientific_dependencies():
     build_backend = read("desktop/packaging/build_backend.ps1")
+    requirements = read("requirements.txt")
 
     assert "scipy.ndimage" in build_backend
     assert "scipy.signal" in build_backend
     assert "graphlib" in build_backend
+    assert "pydicom" in build_backend
+    assert "pydicom>=2.4.0,<4.0.0" in requirements
     assert "Scientific packaging dependency check failed" in build_backend
     assert "GpuManifestScript" in build_backend
     assert "GpuRuntimeProbeScript" in build_backend
@@ -216,7 +240,7 @@ def test_gpu_runtime_manifest_is_portable_and_inventory_based():
     assert "gpu_runtime_manifest.json" in manifest_writer
     assert "bundled_gpu_dlls" in manifest_writer
     assert "cuda_driver_requirement" in manifest_writer
-    assert "rglob(\"*.dll\")" in manifest_writer
+    assert 'rglob("*.dll")' in manifest_writer
     assert "analysis_toc" in manifest_writer
 
 
@@ -225,9 +249,14 @@ def test_packaged_gpu_probe_launches_frozen_backend_and_checks_lazy_import():
 
     assert "/api/health" in probe
     assert "/api/gpu/detect" in probe
+    assert "/api/desktop/capabilities/dicom-conversion" in probe
     assert "MEDIMAGE_DESKTOP_WORKSPACE" in probe
     assert "CUPY_CACHE_DIR" in probe
     assert "cupy_available" in probe
+    assert "dicom_converter_available" in probe
+    assert "dicom_execution_supported" in probe
+    assert "_stop_backend_process_tree" in probe
+    assert '["taskkill", "/pid", str(proc.pid), "/t", "/f"]' in probe
 
 
 def test_desktop_dist_wrapper_uses_workspace_caches():

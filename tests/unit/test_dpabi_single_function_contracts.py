@@ -44,7 +44,9 @@ def test_dpabi_contract_only_includes_output_manifest_and_external_result(tmp_pa
     assert result["external_tool_result"]["tool_name"] == "dpabi.y_FC"
 
 
-def _fake_dpabi_subprocess(monkeypatch: pytest.MonkeyPatch, *, returncode: int = 0, create_outputs: bool = True) -> None:
+def _fake_dpabi_subprocess(
+    monkeypatch: pytest.MonkeyPatch, *, returncode: int = 0, create_outputs: bool = True
+) -> None:
     def fake_run(cmd: list[str], stdout=None, stderr=None, **kwargs):  # type: ignore[no-untyped-def]
         del kwargs
         if stdout:
@@ -81,7 +83,9 @@ def _fake_dpabi_subprocess(monkeypatch: pytest.MonkeyPatch, *, returncode: int =
         "y_FC",
     ],
 )
-def test_dpabi_fake_matlab_success_for_allowlist(function_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_dpabi_fake_matlab_success_for_allowlist(
+    function_name: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _fake_dpabi_subprocess(monkeypatch, returncode=0, create_outputs=True)
 
     result = run_dpabi_single_function(
@@ -125,7 +129,9 @@ def test_dpabi_fake_matlab_missing_outputs_fail(tmp_path: Path, monkeypatch: pyt
     assert "Expected DPABI outputs were not found" in " ".join(result["errors"])
 
 
-def test_dpabi_fake_matlab_nonzero_returncode_has_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_dpabi_fake_matlab_nonzero_returncode_has_logs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     _fake_dpabi_subprocess(monkeypatch, returncode=9, create_outputs=False)
 
     result = run_dpabi_single_function(

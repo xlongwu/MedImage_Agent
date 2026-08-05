@@ -1,4 +1,5 @@
 """Pipeline, file, log, and dataset report route handlers."""
+
 from __future__ import annotations
 
 import json
@@ -47,6 +48,7 @@ def list_pipelines() -> dict[str, Any]:
         "pipelines": pipelines,
     }
 
+
 @router.get("/api/pipelines/{pipeline_name}")
 def get_pipeline(pipeline_name: str) -> dict[str, Any]:
     try:
@@ -85,6 +87,7 @@ def get_pipeline(pipeline_name: str) -> dict[str, Any]:
     except Exception as exc:
         raise_api_error(exc)
 
+
 @router.get("/api/reports/dataset-evaluation")
 def get_dataset_evaluation_report() -> dict[str, Any]:
     base = Path("outputs/reports") / "dataset_evaluation"
@@ -98,14 +101,16 @@ def get_dataset_evaluation_report() -> dict[str, Any]:
         "report_html": _read_text_if_exists(base / "dataset_evaluation_report.html"),
     }
 
+
 @router.get("/api/files/read")
 def read_file(path: str = Query(...)) -> dict[str, Any]:
     try:
         return read_safe_text_file(path)
     except PathSafetyError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
         raise_api_error(exc)
+
 
 @router.get("/api/logs/read")
 def api_read_log(path: str = Query(...)) -> dict[str, Any]:
@@ -119,6 +124,6 @@ def api_read_log(path: str = Query(...)) -> dict[str, Any]:
     try:
         return read_safe_text_file(path)
     except PathSafetyError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
         raise_api_error(exc)

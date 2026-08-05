@@ -166,6 +166,8 @@ export async function saveReviewedPlan(
     provider?: string;
     status?: string;
     warnings?: string[];
+    goal_contract_candidate?: Record<string, unknown>;
+    reviewed_actor?: string;
   },
 ) {
   return requestJson<{ ok: boolean; reviewed_plan: ReviewedPlanRecord }>(

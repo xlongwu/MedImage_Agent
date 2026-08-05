@@ -229,6 +229,30 @@ describe("ArtifactBrowser", () => {
     expect(table).toHaveTextContent("functional_connectivity");
   });
 
+  it("keeps an empty project artifact result project-scoped instead of scanning the legacy index", async () => {
+    const user = userEvent.setup();
+    preprocessingMocks.getLatestNativeFullPreprocessingRun.mockResolvedValue({
+      dry_run: false,
+      project_id: "project-1",
+      run_id: "",
+      stage_results: [],
+    });
+
+    renderBrowser(vi.fn(), "project-1");
+
+    await user.click(screen.getByRole("button", { name: "Load Artifacts" }));
+
+    expect(preprocessingMocks.getLatestNativeFullPreprocessingRun).toHaveBeenCalledWith(
+      "http://localhost",
+      "project-1",
+    );
+    expect(apiMocks.getArtifacts).not.toHaveBeenCalled();
+    expect(await screen.findByText("Index metadata loaded")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Artifact index" })).toHaveTextContent(
+      "No computed artifacts are registered for this project yet",
+    );
+  });
+
   it("renders the artifact workflow in Chinese", async () => {
     const user = userEvent.setup();
     apiMocks.getArtifacts.mockResolvedValue(artifactIndex);

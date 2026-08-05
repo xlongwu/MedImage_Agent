@@ -63,34 +63,26 @@ async function loadArtifactPayload(
   mode: "load" | "refresh",
 ): Promise<Record<string, unknown>> {
   if (projectId) {
-    const projectPayload = await loadProjectNativeArtifactPayload(baseUrl, projectId);
-    if (projectPayload && asArtifacts(projectPayload).length > 0) {
-      return projectPayload;
-    }
+    return loadProjectNativeArtifactPayload(baseUrl, projectId);
   }
 
   return mode === "refresh" ? refreshArtifacts(baseUrl) : getArtifacts(baseUrl);
 }
 
 async function loadProjectNativeArtifactPayload(baseUrl: string, projectId: string) {
-  try {
-    const run = await getLatestNativeFullPreprocessingRun(baseUrl, projectId);
-    const artifacts = nativeRunArtifacts(run);
-    if (!artifacts.length) return null;
+  const run = await getLatestNativeFullPreprocessingRun(baseUrl, projectId);
+  const artifacts = nativeRunArtifacts(run);
 
-    return {
-      index: {
-        artifacts_total: artifacts.length,
-        generated_at: latestTimestamp(artifacts) ?? new Date().toISOString(),
-        project_id: run.project_id,
-        run_id: run.run_id,
-        source: "native_preprocessing_latest",
-        artifacts,
-      },
-    };
-  } catch {
-    return null;
-  }
+  return {
+    index: {
+      artifacts_total: artifacts.length,
+      generated_at: latestTimestamp(artifacts) ?? "",
+      project_id: run.project_id,
+      run_id: run.run_id,
+      source: "native_preprocessing_latest",
+      artifacts,
+    },
+  };
 }
 
 function nativeRunArtifacts(run: NativeFullPreprocResponse): ArtifactRecord[] {
@@ -413,7 +405,9 @@ export function ArtifactBrowser({ baseUrl, projectId, onSelectedArtifactChange }
               <TableEmpty colSpan={8}>
                 {allArtifacts.length
                   ? t("results.browser.noMatches")
-                  : t("results.browser.loadFirst")}
+                  : status === "LOADED"
+                    ? t("results.browser.noProjectArtifacts")
+                    : t("results.browser.loadFirst")}
               </TableEmpty>
             )}
           </tbody>

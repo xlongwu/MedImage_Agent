@@ -8,7 +8,7 @@ import pytest
 nib = pytest.importorskip("nibabel")
 pytest.importorskip("scipy")
 
-from src.backend.app.native_preproc.stages.smoothing import run_smoothing
+from src.backend.app.native_preproc.stages.smoothing import run_smoothing  # noqa: E402
 
 
 def _save_bold(path: Path, data: np.ndarray) -> Path:
@@ -35,7 +35,9 @@ def test_smoothing_is_spatial_only_and_preserves_timepoints(tmp_path: Path) -> N
 
 
 def test_smoothing_blocks_invalid_fwhm(tmp_path: Path) -> None:
-    bold = _save_bold(tmp_path / "sub-01_task-rest_bold.nii.gz", np.zeros((4, 4, 4, 2), dtype=np.float32))
+    bold = _save_bold(
+        tmp_path / "sub-01_task-rest_bold.nii.gz", np.zeros((4, 4, 4, 2), dtype=np.float32)
+    )
 
     result = run_smoothing(bold, tmp_path / "native", fwhm_mm=-1.0)
 

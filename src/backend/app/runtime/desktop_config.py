@@ -4,11 +4,10 @@ import json
 import os
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any
-
 
 DESKTOP_CONFIG_PATH = Path("outputs/work/desktop/config.json")
 
@@ -221,7 +220,7 @@ def add_authorized_data_dir(path: str) -> None:
     ):
         dirs.append({
             "path": resolved_path,
-            "authorized_at": datetime.now(timezone.utc).isoformat(),
+            "authorized_at": datetime.now(UTC).isoformat(),
             "authorized_by": "user-selection",
             "scope": "read-only",
         })

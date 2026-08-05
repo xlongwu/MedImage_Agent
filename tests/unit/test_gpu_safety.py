@@ -3,22 +3,21 @@
 from __future__ import annotations
 
 import json
-import pytest
+
 from src.backend.app.safety.gpu_safety import (
-    GpuSafetyResult,
-    validate_gpu_device,
     check_cuda_availability,
     estimate_tensor_bytes,
-    validate_gpu_memory_budget,
-    validate_live_gpu_memory,
-    validate_gpu_timeout,
-    validate_gpu_concurrency,
     normalize_gpu_exception,
+    validate_gpu_concurrency,
+    validate_gpu_device,
+    validate_gpu_memory_budget,
     validate_gpu_runtime_request,
+    validate_gpu_timeout,
+    validate_live_gpu_memory,
 )
 
-
 # ── Device ──
+
 
 def test_auto_allowed():
     r = validate_gpu_device("auto")
@@ -72,6 +71,7 @@ def test_path_traversal_blocked():
 
 # ── CUDA availability ──
 
+
 def test_unavailable_no_require_warns():
     r = check_cuda_availability(torch_cuda_available=False, require_gpu=False)
     assert r.ok
@@ -95,6 +95,7 @@ def test_device_available_is_ok():
 
 
 # ── Memory ──
+
 
 def test_estimate_tensor_bytes():
     assert estimate_tensor_bytes([100, 100, 100]) == 100 * 100 * 100 * 4
@@ -148,6 +149,7 @@ def test_live_memory_guard_uses_runtime_free_vram_and_reserve():
 
 # ── Timeout ──
 
+
 def test_timeout_30_passes():
     r = validate_gpu_timeout(30)
     assert r.ok
@@ -175,6 +177,7 @@ def test_timeout_none_passes():
 
 # ── Concurrency ──
 
+
 def test_concurrency_idle_ok():
     r = validate_gpu_concurrency(active_jobs=0, max_concurrent_jobs=1)
     assert r.ok
@@ -192,6 +195,7 @@ def test_concurrency_invalid_max_blocked():
 
 # ── OOM ──
 
+
 def test_oom_normalized():
     r = normalize_gpu_exception(RuntimeError("CUDA out of memory"))
     assert not r.ok
@@ -207,6 +211,7 @@ def test_generic_error_normalized():
 
 # ── Combined ──
 
+
 def test_combined_metadata_ok():
     r = validate_gpu_runtime_request(device="cpu", torch_cuda_available=False, require_gpu=False)
     assert r.ok
@@ -218,11 +223,19 @@ def test_combined_require_gpu_unavailable_blocked():
 
 
 def test_combined_invalid_device_and_shape():
-    r = validate_gpu_runtime_request(device="invalid", shape=[10000, 10000, 10000], require_gpu=True, torch_cuda_available=False)
+    r = validate_gpu_runtime_request(
+        device="invalid", shape=[10000, 10000, 10000], require_gpu=True, torch_cuda_available=False
+    )
     assert not r.ok
     assert len(r.errors) >= 2
 
 
 def test_result_json_serializable():
-    r = validate_gpu_runtime_request(device="cuda:0", shape=[64, 64, 64], require_gpu=True, torch_cuda_available=True, device_count=1)
+    r = validate_gpu_runtime_request(
+        device="cuda:0",
+        shape=[64, 64, 64],
+        require_gpu=True,
+        torch_cuda_available=True,
+        device_count=1,
+    )
     json.dumps(r.to_dict())

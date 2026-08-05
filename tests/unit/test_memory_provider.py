@@ -1,15 +1,15 @@
 from pathlib import Path
 
-from src.backend.app.runtime.memory_store import (
-    get_provider,
-    set_provider,
-    append_run_history,
-    ensure_memory_layout,
-    sanitize_project_name,
-)
 from src.backend.app.runtime.memory_provider import MemoryProvider
 from src.backend.app.runtime.memory_providers.file_provider import FileMemoryProvider
 from src.backend.app.runtime.memory_providers.sqlite_provider import SQLiteMemoryProvider
+from src.backend.app.runtime.memory_store import (
+    append_run_history,
+    ensure_memory_layout,
+    get_provider,
+    sanitize_project_name,
+    set_provider,
+)
 
 
 def test_file_provider_roundtrip(tmp_path: Path):

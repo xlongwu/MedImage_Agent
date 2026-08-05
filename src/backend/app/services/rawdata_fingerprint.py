@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -145,5 +146,5 @@ def build_rawdata_fingerprint(
 
 
 def _mtime_to_iso(mtime: float) -> str:
-    from datetime import datetime, timezone
-    return datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+    from datetime import datetime
+    return datetime.fromtimestamp(mtime, tz=UTC).isoformat()

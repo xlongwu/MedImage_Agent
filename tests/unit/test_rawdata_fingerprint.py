@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 from src.backend.app.schemas.desktop import RawdataFingerprint
 from src.backend.app.services.rawdata_fingerprint import build_rawdata_fingerprint
@@ -19,6 +18,7 @@ def test_missing_root_returns_warning():
 def test_empty_root():
     """Empty directory → file_count 0."""
     import tempfile
+
     with tempfile.TemporaryDirectory() as td:
         result = build_rawdata_fingerprint([td])
         assert result.file_count == 0
@@ -78,7 +78,8 @@ def test_suffix_filtering_includes_nii_gz(tmp_path):
     (tmp_path / "t2.nii.gz").write_text("niigz")
     (tmp_path / "t3.json").write_text("json")
     result = build_rawdata_fingerprint(
-        [str(tmp_path)], include_suffixes={".nii", ".nii.gz"},
+        [str(tmp_path)],
+        include_suffixes={".nii", ".nii.gz"},
     )
     assert result.file_count == 2
 

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from src.backend.app.native_preproc.orchestrator import resource_planner
-from src.backend.app.schemas.native_preproc_api import NativeCpuExecutionPolicy, NativeFullPreprocRequest
+from src.backend.app.schemas.native_preproc_api import (
+    NativeCpuExecutionPolicy,
+    NativeFullPreprocRequest,
+)
 
 
 def test_cpu_policy_defaults_to_serial_for_legacy_requests() -> None:
@@ -46,7 +49,10 @@ def test_resource_planner_falls_back_to_one_worker_without_memory_probe(monkeypa
         lambda: resource_planner.ResourceSnapshot(8, None, None, None, "test"),
     )
     plan = resource_planner.plan_subject_execution(
-        [NativeFullPreprocRequest(subject_id="sub-001"), NativeFullPreprocRequest(subject_id="sub-002")],
+        [
+            NativeFullPreprocRequest(subject_id="sub-001"),
+            NativeFullPreprocRequest(subject_id="sub-002"),
+        ],
         NativeCpuExecutionPolicy(mode="auto"),
     )
 

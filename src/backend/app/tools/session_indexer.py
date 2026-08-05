@@ -30,7 +30,7 @@ def index_pipeline_runs(work_dir: str = "./work", db_path: str = "outputs/memory
 
             try:
                 summary = json.loads(summary_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 skipped += 1
                 continue
 
@@ -102,7 +102,7 @@ def index_demo_runs(demo_dir: str = "./demo_runs", db_path: str = "outputs/memor
                 continue
             try:
                 summary = json.loads(summary_path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, IOError):
+            except (OSError, json.JSONDecodeError):
                 continue
             run_id = f"demo_{run_dir.name}"
             db.upsert_run({

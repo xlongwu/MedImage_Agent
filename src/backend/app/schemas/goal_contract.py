@@ -9,7 +9,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.backend.app.schemas.node_contract import CapabilityLevel
 
-
 GoalEvaluationStatus = Literal["satisfied", "not_satisfied", "indeterminate"]
 CriterionResultStatus = Literal["passed", "failed", "indeterminate"]
 CriterionType = Literal[

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Callable
+from collections.abc import Callable
+from datetime import UTC, datetime
 
 from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.planner.audit_record import stable_hash
@@ -18,7 +18,6 @@ from src.backend.app.schemas.recovery import (
     GoalGap,
     RecoveryBindings,
 )
-
 
 _ERROR_CODE = re.compile(r"^([A-Z][A-Z0-9_]{2,})(?::|\b)")
 
@@ -220,7 +219,7 @@ class RunDiagnosisService:
             diagnosis_id=f"diagnosis_{stable_hash(identity_payload)[:24]}",
             diagnoser_version=self.VERSION,
             bindings=bindings,
-            created_at=created_at or datetime.now(timezone.utc),
+            created_at=created_at or datetime.now(UTC),
             facts=tuple(facts),
             goal_gaps=gaps,
             root_cause_status=root_status,
@@ -263,7 +262,7 @@ def adapt_legacy_diagnosis(
     record = DiagnosisRecord(
         diagnosis_id=f"diagnosis_legacy_{stable_hash(identity_payload)[:17]}",
         bindings=bindings,
-        created_at=created_at or datetime.now(timezone.utc),
+        created_at=created_at or datetime.now(UTC),
         facts=tuple(facts),
         goal_gaps=(),
         root_cause_status="unknown",

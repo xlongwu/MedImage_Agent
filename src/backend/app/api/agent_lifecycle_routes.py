@@ -14,12 +14,11 @@ from src.backend.app.schemas.agent_lifecycle import (
     LifecycleCommand,
     LifecycleCreateRequest,
 )
-from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.schemas.recovery import CheckpointEvidence, RecoveryChangeRequest
+from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.recovery_execution_service import RecoveryExecutionService
 from src.backend.app.services.recovery_policy_service import RecoveryPolicyService
 from src.backend.app.services.replan_service import ReplanService
-
 
 router = APIRouter(prefix="/api/projects/{project_id}/agent-lifecycles")
 

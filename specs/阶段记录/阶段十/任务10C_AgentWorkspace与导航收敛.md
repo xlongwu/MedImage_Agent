@@ -1,6 +1,9 @@
 # 任务 10C：Agent Workspace 与导航收敛
 
-> 状态：Blocked — requires 10B API contract freeze
+> 状态：Source implemented and frontend automation recorded；可见 Electron 验收延期。
+>
+> 本文正文保留实施前要求；其中 `Current Behavior`、清单和 Stop Conditions 是历史方案，
+> 当前结果以 `README.md` 和 `evidence/阶段十_E2E验收记录.md` 为准。
 >
 > 任务模式：Architecture and Refactor Mode + Feature Bundle Mode
 >

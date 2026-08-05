@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
 
 ExecutionTicketStatus = Literal["issued", "consumed", "revoked", "expired"]
 ExecutionTicketKind = Literal["reviewed_execution", "recovery_child"]
@@ -78,7 +77,7 @@ class ExecutionTicket(BaseModel):
     canonical_hash: str
 
     @model_validator(mode="after")
-    def validate_recovery_child_binding(self) -> "ExecutionTicket":
+    def validate_recovery_child_binding(self) -> ExecutionTicket:
         if self.ticket_kind != "recovery_child":
             return self
         required = (
@@ -105,10 +104,10 @@ class ExecutionTicket(BaseModel):
         return self
 
     def is_expired(self, now: datetime | None = None) -> bool:
-        current = now or datetime.now(timezone.utc)
+        current = now or datetime.now(UTC)
         expiry = self.expires_at
         if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
+            expiry = expiry.replace(tzinfo=UTC)
         return current >= expiry
 
 

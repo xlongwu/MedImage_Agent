@@ -43,7 +43,7 @@ def run_group_summary(
         atomic_write_json(report_path, payload, schema_version=1)
         output_ref = build_artifact_ref(
             report_path,
-            artifact_type="final_report",
+            artifact_type="group_summary",
             metadata={
                 "summary_type": payload["summary_type"],
                 "subject_count": subject_count,

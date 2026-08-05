@@ -6,7 +6,14 @@ import ast
 import inspect
 import json
 
-import pytest
+from src.backend.app.runtime.gui_model_audit_contract import (
+    allowed_model_audit_metadata_declaration,
+    validate_and_build_model_audit_record,
+)
+from src.backend.app.runtime.gui_model_input_redaction import (
+    allowed_minimal_prompt_input_declaration,
+    validate_and_build_model_prompt_envelope,
+)
 from src.backend.app.runtime.gui_model_provider_policy import (
     allowed_fixture_provider_declaration,
     validate_model_provider_policy,
@@ -19,21 +26,17 @@ from src.backend.app.runtime.gui_model_source_policy import (
     allowed_fixture_model_source_declaration,
     validate_model_source_policy,
 )
-from src.backend.app.runtime.gui_model_input_redaction import (
-    allowed_minimal_prompt_input_declaration,
-    validate_and_build_model_prompt_envelope,
-)
-from src.backend.app.runtime.gui_model_audit_contract import (
-    allowed_model_audit_metadata_declaration,
-    validate_and_build_model_audit_record,
-)
 
 ALL_ALLOWED = {
     "provider": lambda: validate_model_provider_policy(**allowed_fixture_provider_declaration()),
     "runtime": lambda: validate_model_runtime_declaration(**allowed_fixture_runtime_declaration()),
     "source": lambda: validate_model_source_policy(**allowed_fixture_model_source_declaration()),
-    "input": lambda: validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration()),
-    "audit": lambda: validate_and_build_model_audit_record(**allowed_model_audit_metadata_declaration()),
+    "input": lambda: validate_and_build_model_prompt_envelope(
+        **allowed_minimal_prompt_input_declaration()
+    ),
+    "audit": lambda: validate_and_build_model_audit_record(
+        **allowed_model_audit_metadata_declaration()
+    ),
 }
 
 
@@ -47,9 +50,11 @@ def _assert_module_has_no_forbidden_imports(module) -> None:
             imported.add(node.module.split(".", 1)[0])
     assert imported.isdisjoint(forbidden), imported & forbidden
 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Common result schema
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_has_common_fields():
     r = ALL_ALLOWED["provider"]()
@@ -89,6 +94,7 @@ def test_audit_has_common_fields():
 # ══════════════════════════════════════════════════════════════════════════════
 # B. Allowed status semantics
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_allowed_status():
     r = ALL_ALLOWED["provider"]()
@@ -134,6 +140,7 @@ def test_all_allowed_provider_call_false():
 # C. Blocked status semantics
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_provider_blocked_status():
     r = validate_model_provider_policy(provider_type="local_allowlisted")
     assert r.status == "MODEL_PROVIDER_BLOCKED"
@@ -159,7 +166,9 @@ def test_input_blocked_status():
 
 def test_audit_blocked_status():
     r = validate_and_build_model_audit_record(
-        audit_id="a_001", run_id="r_001", session_id="s_001",
+        audit_id="a_001",
+        run_id="r_001",
+        session_id="s_001",
         event_type="MODEL_OUTPUT_NORMALIZED",
         extra={"raw_text": "secret"},
     )
@@ -172,11 +181,15 @@ def test_all_blocked_ok_false():
         validate_model_runtime_declaration(runtime_type="local_worker"),
         validate_model_source_policy(model_source="local_allowlisted"),
         validate_and_build_model_prompt_envelope(
-            **allowed_minimal_prompt_input_declaration(), raw_screenshot_present=True,
+            **allowed_minimal_prompt_input_declaration(),
+            raw_screenshot_present=True,
         ),
         validate_and_build_model_audit_record(
-            audit_id="a", run_id="r", session_id="s",
-            event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "s"},
+            audit_id="a",
+            run_id="r",
+            session_id="s",
+            event_type="MODEL_OUTPUT_NORMALIZED",
+            extra={"raw_text": "s"},
         ),
     ]
     for r in blocks:
@@ -187,6 +200,7 @@ def test_all_blocked_ok_false():
 # ══════════════════════════════════════════════════════════════════════════════
 # D. Permission flags — allowed
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_allowed_no_inference():
     for name, fn in ALL_ALLOWED.items():
@@ -237,6 +251,7 @@ def test_audit_allowed_extra():
 # E. Fail-closed behavior
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_provider_blocked_no_permissions():
     r = validate_model_provider_policy(provider_type="local_allowlisted")
     assert r.inference_allowed is False
@@ -261,7 +276,8 @@ def test_source_blocked_no_permissions():
 
 def test_input_blocked_null_envelope():
     r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration(), raw_screenshot_present=True,
+        **allowed_minimal_prompt_input_declaration(),
+        raw_screenshot_present=True,
     )
     assert r.ok is False
     assert r.prompt_envelope is None
@@ -270,8 +286,11 @@ def test_input_blocked_null_envelope():
 
 def test_audit_blocked_null_record():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "s"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_text": "s"},
     )
     assert r.ok is False
     assert r.audit_record is None
@@ -295,6 +314,7 @@ def test_any_blocked_executable_false():
 # F. Sensitive field policy
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_input_blocks_rawdata():
     d = allowed_minimal_prompt_input_declaration()
     d["user_intent_summary"] = "open rawdata/sub-001"
@@ -315,40 +335,55 @@ def test_input_blocks_password():
 
 def test_audit_blocks_rawtext():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_text": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_text": "x"},
     )
     assert not r.ok
 
 
 def test_audit_blocks_rawjson():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"raw_json": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"raw_json": "x"},
     )
     assert not r.ok
 
 
 def test_audit_blocks_chain_of_thought():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"chain_of_thought": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"chain_of_thought": "x"},
     )
     assert not r.ok
 
 
 def test_audit_blocks_token():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"token": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"token": "x"},
     )
     assert not r.ok
 
 
 def test_audit_blocks_rawdata_path():
     r = validate_and_build_model_audit_record(
-        audit_id="a", run_id="r", session_id="s",
-        event_type="MODEL_OUTPUT_NORMALIZED", extra={"rawdata_path": "x"},
+        audit_id="a",
+        run_id="r",
+        session_id="s",
+        event_type="MODEL_OUTPUT_NORMALIZED",
+        extra={"rawdata_path": "x"},
     )
     assert not r.ok
 
@@ -356,6 +391,7 @@ def test_audit_blocks_rawdata_path():
 # ══════════════════════════════════════════════════════════════════════════════
 # G. Side-effect policy
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_no_pywinauto():
     from src.backend.app.runtime import gui_model_provider_policy
@@ -382,11 +418,13 @@ def test_no_safetensors():
 
 
 def test_all_decls_json_serializable():
-    for decl in [allowed_fixture_provider_declaration(),
-                 allowed_fixture_runtime_declaration(),
-                 allowed_fixture_model_source_declaration(),
-                 allowed_minimal_prompt_input_declaration(),
-                 allowed_model_audit_metadata_declaration()]:
+    for decl in [
+        allowed_fixture_provider_declaration(),
+        allowed_fixture_runtime_declaration(),
+        allowed_fixture_model_source_declaration(),
+        allowed_minimal_prompt_input_declaration(),
+        allowed_model_audit_metadata_declaration(),
+    ]:
         json.loads(json.dumps(decl))
 
 
@@ -399,6 +437,7 @@ def test_all_results_json_serializable():
 # ══════════════════════════════════════════════════════════════════════════════
 # H. Regression
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_policy_pass():
     pass
@@ -430,24 +469,47 @@ def test_gui_blocklist_pass():
 
 def test_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]

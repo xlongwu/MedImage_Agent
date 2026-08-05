@@ -5,6 +5,7 @@ import { useAppState } from "../useAppState";
 
 const THEME_STORAGE_KEY = "medimage.themePreference";
 const LOCALE_STORAGE_KEY = "medimage.localePreference";
+const ADVANCED_MODE_STORAGE_KEY = "medimage.advancedMode";
 
 describe("useAppState", () => {
   beforeEach(() => {
@@ -56,5 +57,17 @@ describe("useAppState", () => {
       expect(document.documentElement.lang).toBe("zh-CN");
     });
     expect(window.localStorage.getItem(LOCALE_STORAGE_KEY)).toBe("zh-CN");
+  });
+
+  it("keeps Advanced Mode off by default and persists explicit opt-in", async () => {
+    const { result } = renderHook(() => useAppState());
+
+    expect(result.current.advancedMode).toBe(false);
+    act(() => result.current.setAdvancedMode(true));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem(ADVANCED_MODE_STORAGE_KEY)).toBe("true");
+    });
+    expect(result.current.advancedMode).toBe(true);
   });
 });

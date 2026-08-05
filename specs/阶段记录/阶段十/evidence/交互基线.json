@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "captured_on": "2026-07-16",
+  "capture_method": "source-and-test reconstruction from the pre-Phase-10 HEAD UI",
+  "privacy": {
+    "contains_user_data": false,
+    "contains_logs": false,
+    "contains_local_paths": false
+  },
+  "metrics": [
+    "pages",
+    "primary_actions",
+    "secondary_actions",
+    "form_fields",
+    "science_decisions",
+    "approval_actions",
+    "manual_refresh_actions",
+    "technical_concepts",
+    "troubleshooting_actions"
+  ],
+  "workflows": [
+    {
+      "id": "converted_bids_to_fc",
+      "label": "Converted BIDS to functional connectivity",
+      "pages": ["overview", "data", "plan", "preprocessing", "qc", "results"],
+      "primary_actions": [
+        "open project",
+        "prepare plan",
+        "review plan",
+        "approve plan",
+        "execute reviewed plan",
+        "validate result",
+        "generate report",
+        "open result"
+      ],
+      "secondary_actions": ["open task details", "open artifact browser", "open runs"],
+      "form_fields": ["profile", "atlas", "backend", "output root"],
+      "science_decisions": ["atlas", "global signal regression", "TR", "template"],
+      "approval_actions": ["review plan", "confirm execution scope", "approve execution"],
+      "manual_refresh_actions": ["refresh run", "refresh validation", "refresh report"],
+      "technical_concepts": [
+        "reviewed plan",
+        "plan hash",
+        "node contract",
+        "execution ticket",
+        "worker count",
+        "GPU budget"
+      ],
+      "troubleshooting_actions": ["inspect run", "inspect validation JSON", "inspect artifacts"],
+      "minimum_explicit_actions": 8,
+      "phase_10_target_actions": 3,
+      "target_reduction_fraction": 0.625
+    },
+    {
+      "id": "raw_dicom_to_native_preprocessing_to_fc",
+      "label": "Raw DICOM through conversion and native preprocessing to functional connectivity",
+      "pages": ["overview", "data", "plan", "preprocessing", "qc", "results"],
+      "primary_actions": [
+        "open project",
+        "prepare conversion",
+        "review conversion",
+        "approve conversion",
+        "execute conversion",
+        "prepare preprocessing plan",
+        "approve preprocessing",
+        "execute preprocessing",
+        "validate result",
+        "generate report",
+        "open result"
+      ],
+      "secondary_actions": ["inspect DICOM series", "open conversion details", "open runs"],
+      "form_fields": ["source", "series mapping", "output policy", "profile", "atlas", "backend"],
+      "science_decisions": ["series inclusion", "atlas", "global signal regression", "TR", "template"],
+      "approval_actions": ["approve conversion", "approve preprocessing"],
+      "manual_refresh_actions": ["refresh conversion", "refresh run", "refresh validation", "refresh report"],
+      "technical_concepts": [
+        "conversion manifest",
+        "reviewed plan",
+        "approval context",
+        "execution ticket",
+        "node contract",
+        "artifact registry"
+      ],
+      "troubleshooting_actions": ["inspect conversion logs", "inspect run", "inspect artifacts"],
+      "minimum_explicit_actions": 11,
+      "phase_10_target_actions": 3,
+      "target_reduction_fraction": 0.7273
+    },
+    {
+      "id": "single_subject_failure_to_approved_recovery",
+      "label": "Single-subject failure through diagnosis and approved recovery",
+      "pages": ["preprocessing", "qc", "runs", "settings"],
+      "primary_actions": [
+        "open failed run",
+        "refresh run",
+        "collect observation",
+        "evaluate goal",
+        "create diagnosis",
+        "create recovery proposal",
+        "approve recovery",
+        "execute recovery"
+      ],
+      "secondary_actions": ["inspect failed subject", "inspect ticket", "inspect raw error"],
+      "form_fields": ["candidate", "subject scope", "node scope", "recovery reason"],
+      "science_decisions": ["parameter change", "backend change", "subject exclusion"],
+      "approval_actions": ["review recovery scope", "approve recovery"],
+      "manual_refresh_actions": ["refresh run", "refresh observation", "refresh evaluation"],
+      "technical_concepts": [
+        "observation hash",
+        "goal evaluation",
+        "diagnosis",
+        "recovery proposal",
+        "child ticket",
+        "quota reservation"
+      ],
+      "troubleshooting_actions": ["inspect subject evidence", "inspect logs", "inspect attempt lineage"],
+      "minimum_explicit_actions": 8,
+      "phase_10_target_actions": 3,
+      "target_reduction_fraction": 0.625
+    }
+  ]
+}

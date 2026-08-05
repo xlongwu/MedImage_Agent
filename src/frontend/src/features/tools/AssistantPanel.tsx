@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import type { ChatMessage } from "../../lib/types/assistant";
 import { useI18n } from "../../i18n/useI18n";
+import styles from "./AssistantPanel.module.css";
 
 export interface AssistantPanelProps {
   messages: ChatMessage[];
@@ -23,23 +24,30 @@ export function AssistantPanel({
 }: AssistantPanelProps) {
   const { t } = useI18n();
   return (
-    <section className="assistant-card">
-      <div className="card-row">
-        <div className="card-title">{t("assistant.panel.title")}</div>
+    <section className={styles.panel}>
+      <div className={styles.header}>
+        <div>{t("assistant.panel.title")}</div>
         <button onClick={onNewChat}>{t("assistant.panel.newChat")}</button>
       </div>
-      <div className="chat-thread">
+      <div className={styles.thread}>
         {messages.map((message, index) => (
-          <div key={`${message.role}-${index}`} className={`chat-bubble ${message.role}`}>
+          <div
+            key={`${message.role}-${index}`}
+            className={`${styles.bubble} ${
+              message.role === "user" ? styles.user : styles.assistant
+            }`}
+          >
             {message.text}
           </div>
         ))}
         {loading ? (
-          <div className="chat-bubble assistant">{t("assistant.panel.thinking")}</div>
+          <div className={`${styles.bubble} ${styles.assistant}`}>
+            {t("assistant.panel.thinking")}
+          </div>
         ) : null}
-        {error ? <div className="chat-error">{error}</div> : null}
+        {error ? <div className={styles.error}>{error}</div> : null}
       </div>
-      <form className="prompt-box" onSubmit={onSubmit}>
+      <form className={styles.prompt} onSubmit={onSubmit}>
         <input
           value={input}
           onChange={(event) => onInput(event.target.value)}

@@ -89,11 +89,20 @@ _STRICT_PARAMETERS: dict[str, dict[str, ParameterContract]] = {
         "generate_seed_map": _parameter("boolean", default=False),
         "input_nii": _parameter("string", nullable=True, path_access="read"),
     },
+    "native_dicom_conversion_execute": {
+        "project_id": _parameter("string", required=True, path_access="non_path"),
+        "project_dir": _parameter("string", required=True, path_access="write"),
+        "rawdata_dir": _parameter("string", required=True, path_access="read"),
+        "conversion_run_id": _parameter("string", required=True, path_access="non_path"),
+        "output_dir": _parameter("string", nullable=True, path_access="write"),
+    },
     "native_preproc_full_execute": {
         "project_id": _parameter("string", nullable=True, path_access="non_path"),
         "project_dir": _parameter("string", nullable=True, path_access="write"),
+        "subject_id": _parameter("string", nullable=True, path_access="non_path"),
         "conversion_run_id": _parameter("string", nullable=True, path_access="non_path"),
         "input_bold": _parameter("string", nullable=True, path_access="read"),
+        "input_bids_dir": _parameter("string", nullable=True, path_access="read"),
         "sidecar_json": _parameter("string", nullable=True, path_access="read"),
         "t1w": _parameter("string", nullable=True, path_access="read"),
         "template": _parameter("string", nullable=True, path_access="read"),
@@ -107,6 +116,7 @@ _STRICT_PARAMETERS: dict[str, dict[str, ParameterContract]] = {
     },
     "native_preproc_full_dry_run": {
         "input_bold": _parameter("string", nullable=True, path_access="read"),
+        "input_bids_dir": _parameter("string", nullable=True, path_access="read"),
         "conversion_run_id": _parameter("string", nullable=True, path_access="non_path"),
         "sidecar_json": _parameter("string", nullable=True, path_access="read"),
         "output_dir": _parameter("string", nullable=True, path_access="write"),
@@ -119,6 +129,12 @@ _STRICT_PARAMETERS: dict[str, dict[str, ParameterContract]] = {
 # reachability and Observation matching must use the same canonical artifact
 # types that the runners persist.
 _STRICT_OUTPUT_ARTIFACT_TYPES: dict[str, tuple[str, ...]] = {
+    "native_dicom_conversion_execute": (
+        "converted_nifti",
+        "bids_sidecar",
+        "conversion_manifest",
+        "conversion_provenance",
+    ),
     "nuisance_regression_subject": ("residual_bold",),
     "temporal_filtering_subject": ("filtered_bold",),
     "alff_falff_subject": ("alff_map", "falff_map"),
@@ -266,7 +282,7 @@ def _build_contracts() -> dict[str, NodeContract]:
             node_id=node_id,
             contract_version=(
                 "1.1.0"
-                if node_id == "native_preproc_full_execute"
+                if node_id in {"native_preproc_full_execute", "native_dicom_conversion_execute"}
                 else "1.0.0"
                 if strict
                 else "0.9.0-legacy"
@@ -328,7 +344,7 @@ def _matches_type(value: Any, expected: str) -> bool:
     if expected == "integer":
         return isinstance(value, int) and not isinstance(value, bool)
     if expected == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
+        return isinstance(value, int | float) and not isinstance(value, bool)
     if expected == "boolean":
         return isinstance(value, bool)
     if expected == "object":
@@ -362,7 +378,7 @@ def validate_and_normalize_parameters(
             continue
         if rule.enum and value not in rule.enum:
             errors.append(f"parameter '{name}' must be one of {list(rule.enum)}")
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if isinstance(value, int | float) and not isinstance(value, bool):
             if rule.minimum is not None and value < rule.minimum:
                 errors.append(f"parameter '{name}' must be >= {rule.minimum}")
             if rule.maximum is not None and value > rule.maximum:
@@ -375,13 +391,14 @@ def validate_and_normalize_parameters(
     if contract.node_id in {"temporal_filtering_subject", "alff_falff_subject"}:
         low = normalized.get("low_hz")
         high = normalized.get("high_hz")
-        if isinstance(low, (int, float)) and isinstance(high, (int, float)) and low >= high:
+        if isinstance(low, int | float) and isinstance(high, int | float) and low >= high:
             errors.append("low_hz must be lower than high_hz")
     if contract.node_id in {"native_preproc_full_execute", "native_preproc_full_dry_run"}:
-        if not str(normalized.get("input_bold") or "").strip() and not str(
-            normalized.get("conversion_run_id") or ""
-        ).strip():
-            errors.append("input_bold or conversion_run_id is required")
+        if not any(
+            str(normalized.get(name) or "").strip()
+            for name in ("input_bold", "input_bids_dir", "conversion_run_id")
+        ):
+            errors.append("input_bold, input_bids_dir, or conversion_run_id is required")
     if errors:
         return normalized, None, errors
     evidence = ContractValidationEvidence(

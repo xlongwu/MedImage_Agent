@@ -10,8 +10,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 
 def _make_smoke_results(tmp_path: Path) -> tuple[str, str]:
     """Create synthetic smoke results and return (project_dir, run_id)."""
@@ -23,8 +21,12 @@ def _make_smoke_results(tmp_path: Path) -> tuple[str, str]:
 
     # Write output manifest (post-execution)
     manifest = {
-        "project_id": "test", "run_id": run_id, "node_id": "dicom_to_nifti",
-        "items": [{"kind": "nifti", "path": f"{run_dir}/test.nii.gz", "exists": True, "size_bytes": 100}],
+        "project_id": "test",
+        "run_id": run_id,
+        "node_id": "dicom_to_nifti",
+        "items": [
+            {"kind": "nifti", "path": f"{run_dir}/test.nii.gz", "exists": True, "size_bytes": 100}
+        ],
     }
     (run_dir / "output_manifest.json").write_text(json.dumps(manifest))
 
@@ -51,6 +53,7 @@ def test_read_returns_manifest_and_provenance(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_synthetic_smoke_results,
     )
+
     project_dir, run_id = _make_smoke_results(tmp_path)
     result = read_synthetic_smoke_results("test", run_id, project_dir=project_dir)
     assert result.ok is True
@@ -63,6 +66,7 @@ def test_read_reports_created_artifacts(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_synthetic_smoke_results,
     )
+
     project_dir, run_id = _make_smoke_results(tmp_path)
     result = read_synthetic_smoke_results("test", run_id, project_dir=project_dir)
     kinds = {f.kind for f in result.files}
@@ -76,6 +80,7 @@ def test_nifti_is_metadata_only(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_synthetic_smoke_results,
     )
+
     project_dir, run_id = _make_smoke_results(tmp_path)
     result = read_synthetic_smoke_results("test", run_id, project_dir=project_dir)
     nifti_files = [f for f in result.files if f.kind == "nifti_output"]
@@ -88,6 +93,7 @@ def test_missing_manifest_returns_warning(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_synthetic_smoke_results,
     )
+
     project_dir = str(tmp_path / "project")
     run_id = "conv-empty"
     run_dir = Path(project_dir) / "conversion_runs" / run_id
@@ -103,9 +109,11 @@ def test_missing_logs_returns_warning_not_500(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_synthetic_smoke_results,
     )
+
     project_dir, run_id = _make_smoke_results(tmp_path)
     # Remove the logs dir
     import shutil
+
     shutil.rmtree(Path(project_dir) / "conversion_runs" / run_id / "logs")
     result = read_synthetic_smoke_results("test", run_id, project_dir=project_dir)
     assert result.ok is True
@@ -118,6 +126,7 @@ def test_safety_flags_present(tmp_path):
     from src.backend.app.services.dicom_conversion_review_package import (
         read_synthetic_smoke_results,
     )
+
     project_dir, run_id = _make_smoke_results(tmp_path)
     result = read_synthetic_smoke_results("test", run_id, project_dir=project_dir)
     assert result.safety_flags["synthetic_only"] is True
@@ -127,10 +136,12 @@ def test_safety_flags_present(tmp_path):
 
 
 def test_no_dcm2niix_called(tmp_path):
+    import inspect
+
     from src.backend.app.services.dicom_conversion_review_package import (
         read_synthetic_smoke_results,
     )
-    import inspect
+
     source = inspect.getsource(read_synthetic_smoke_results)
     assert "import subprocess" not in source
     assert "from subprocess" not in source

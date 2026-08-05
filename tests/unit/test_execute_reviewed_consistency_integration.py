@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest import mock
 
 from fastapi.testclient import TestClient
 
@@ -29,26 +28,30 @@ from src.backend.app.services import (
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 from tests.goal_contract_helpers import reviewed_goal_candidate
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
-    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH",
-                        tmp_path / "cfg.json")
-    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT",
-                        tmp_path / "prj")
-    for mod in (project_routes, dashboard_routes, project_context,
-                reviewed_plan_store, project_history_routes,
-                execute_reviewed_routes, bold_reference_readiness,
-                motion_qc_readiness):
+    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "cfg.json")
+    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "prj")
+    for mod in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+    ):
         monkeypatch.setattr(mod, "mock_store", store)
-    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
-                        tmp_path / "audit")
+    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR", tmp_path / "audit")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
-        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
@@ -60,12 +63,17 @@ def _create_project(client: TestClient, tmp_path: Path) -> dict:
     rd = tmp_path / "rawdata"
     rd.mkdir(parents=True, exist_ok=True)
     (rd / "dataset_description.json").write_text(
-        '{"Name":"test","BIDSVersion":"1.8.0"}', encoding="utf-8")
+        '{"Name":"test","BIDSVersion":"1.8.0"}', encoding="utf-8"
+    )
     pj = tmp_path / "project"
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Consistency Test",
-        "rawdata_dir": str(rd), "project_dir": str(pj),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Consistency Test",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -82,8 +90,7 @@ def _make_plan(created: dict) -> dict:
             "diagnostics": created.get("diagnostics", {}),
         },
         "nodes": [
-            {"id": "contract_smoke", "backend": "python",
-             "depends_on": [], "params": {}},
+            {"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}},
         ],
     }
 
@@ -106,13 +113,16 @@ def _save_plan(client: TestClient, created: dict, plan: dict) -> str:
     return resp.json()["reviewed_plan"]["reviewed_plan_id"]
 
 
-def _execute(client: TestClient, created: dict, plan: dict,
-             reviewed_plan_id: str, **overrides) -> dict:
+def _execute(
+    client: TestClient, created: dict, plan: dict, reviewed_plan_id: str, **overrides
+) -> dict:
     body = {
         "plan": plan,
         "approval": {
-            "approved": True, "approved_by": "test",
-            "approved_nodes": ["*"], "rejected_nodes": [],
+            "approved": True,
+            "approved_by": "test",
+            "approved_nodes": ["*"],
+            "rejected_nodes": [],
         },
         "project_id": created["project_id"],
         "reviewed_plan_id": reviewed_plan_id,
@@ -140,6 +150,7 @@ def _setup_executed(tmp_path, monkeypatch, client):
 # Group 1 — Consistency report in response
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_contract_smoke_execution_succeeds_with_consistency(tmp_path, monkeypatch):
     """contract_smoke execution still succeeds with consistency check."""
     _isolated_store(tmp_path, monkeypatch)
@@ -148,15 +159,16 @@ def test_contract_smoke_execution_succeeds_with_consistency(tmp_path, monkeypatc
     created, data = _setup_executed(tmp_path, monkeypatch, client)
 
     # Execution should succeed
-    assert data["status"] in ("EXECUTION_SUBMITTED", "SUCCESS",
-                               "EXECUTION_PREFLIGHT_READY"), \
+    assert data["status"] in ("EXECUTION_SUBMITTED", "SUCCESS", "EXECUTION_PREFLIGHT_READY"), (
         f"Got: {data['status']}, errors: {data.get('errors')}"
+    )
     assert data.get("ok") is True
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Group 2 — Consistency failure blocks execution
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_consistency_failure_blocks_execution(tmp_path, monkeypatch):
     """Simulated consistency failure returns EXECUTION_CONSISTENCY_FAILED."""
@@ -174,15 +186,21 @@ def test_consistency_failure_blocks_execution(tmp_path, monkeypatch):
     )
 
     fail_report = ExecutionConsistencyReport(
-        ok=False, status="fail", issue_count=2, error_count=2,
+        ok=False,
+        status="fail",
+        issue_count=2,
+        error_count=2,
         issues=[
             ConsistencyIssue(
-                code="PROJECT_ID_MISMATCH", severity="error",
+                code="PROJECT_ID_MISMATCH",
+                severity="error",
                 message="Simulated project_id mismatch",
-                expected="p1", actual="p2",
+                expected="p1",
+                actual="p2",
             ),
             ConsistencyIssue(
-                code="PLAN_HASH_MISMATCH", severity="error",
+                code="PLAN_HASH_MISMATCH",
+                severity="error",
                 message="Simulated plan_hash mismatch",
             ),
         ],
@@ -223,10 +241,14 @@ def test_consistency_failure_does_not_call_executor(tmp_path, monkeypatch):
     )
 
     fail_report = ExecutionConsistencyReport(
-        ok=False, status="fail", issue_count=1, error_count=1,
+        ok=False,
+        status="fail",
+        issue_count=1,
+        error_count=1,
         issues=[
             ConsistencyIssue(
-                code="PROJECT_ID_MISMATCH", severity="error",
+                code="PROJECT_ID_MISMATCH",
+                severity="error",
                 message="Simulated mismatch",
             ),
         ],
@@ -255,6 +277,7 @@ def test_consistency_failure_does_not_call_executor(tmp_path, monkeypatch):
 # Group 3 — Existing gates still block before consistency
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_missing_project_context_blocks_before_consistency(tmp_path, monkeypatch):
     """Missing project context still blocks — consistency not reached."""
     _isolated_store(tmp_path, monkeypatch)
@@ -266,24 +289,28 @@ def test_missing_project_context_blocks_before_consistency(tmp_path, monkeypatch
     plan_no_ctx = {
         "pipeline_id": "test_no_ctx",
         "nodes": [
-            {"id": "contract_smoke", "backend": "python",
-             "depends_on": [], "params": {}},
+            {"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}},
         ],
     }
 
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan_no_ctx,
-        "approval": {
-            "approved": True, "approved_by": "test",
-            "approved_nodes": ["*"], "rejected_nodes": [],
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan_no_ctx,
+            "approval": {
+                "approved": True,
+                "approved_by": "test",
+                "approved_nodes": ["*"],
+                "rejected_nodes": [],
+            },
+            "project_id": created["project_id"],
+            "project_config_path": created["project_config_path"],
+            "dry_run": False,
+            "confirm_execution": True,
+            "persist_audit": True,
+            "write_pipeline_yaml": True,
         },
-        "project_id": created["project_id"],
-        "project_config_path": created["project_config_path"],
-        "dry_run": False,
-        "confirm_execution": True,
-        "persist_audit": True,
-        "write_pipeline_yaml": True,
-    })
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     # Should be blocked by project context, not consistency
@@ -300,8 +327,7 @@ def test_approval_gate_still_blocks_before_execution(tmp_path, monkeypatch):
     plan = _make_plan(created)
     rpid = _save_plan(client, created, plan)
 
-    data = _execute(client, created, plan, rpid,
-                    confirm_execution=False)
+    data = _execute(client, created, plan, rpid, confirm_execution=False)
     assert data["status"] == "CONFIRMATION_REQUIRED"
 
 
@@ -323,24 +349,32 @@ def test_external_tool_nodes_still_blocked(tmp_path, monkeypatch):
             "diagnostics": created.get("diagnostics", {}),
         },
         "nodes": [
-            {"id": "contract_smoke", "backend": "python",
-             "depends_on": [], "params": {}},
-            {"id": "spm_smooth_subject", "backend": "matlab-spm",
-             "depends_on": ["contract_smoke"], "params": {}},
+            {"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}},
+            {
+                "id": "spm_smooth_subject",
+                "backend": "matlab-spm",
+                "depends_on": ["contract_smoke"],
+                "params": {},
+            },
         ],
     }
 
     # Dry-run to check adapter policy
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": {
-            "approved": True, "approved_by": "test",
-            "approved_nodes": ["*"], "rejected_nodes": [],
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": {
+                "approved": True,
+                "approved_by": "test",
+                "approved_nodes": ["*"],
+                "rejected_nodes": [],
+            },
+            "project_id": created["project_id"],
+            "project_config_path": created["project_config_path"],
+            "dry_run": True,
         },
-        "project_id": created["project_id"],
-        "project_config_path": created["project_config_path"],
-        "dry_run": True,
-    })
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     # Dry-run should flag high-risk nodes
@@ -352,6 +386,7 @@ def test_external_tool_nodes_still_blocked(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 # Group 4 — Safety boundaries
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_rawdata_not_modified(tmp_path, monkeypatch):
     """Rawdata mtime unchanged after successful consistency + execution."""
@@ -366,10 +401,14 @@ def test_rawdata_not_modified(tmp_path, monkeypatch):
     mtime_before = sentinel.stat().st_mtime
 
     pj = tmp_path / "pj_cs"
-    create_resp = client.post("/api/projects/create", json={
-        "project_name": "CS Safety",
-        "rawdata_dir": str(rd), "project_dir": str(pj),
-    })
+    create_resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "CS Safety",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert create_resp.status_code == 200, create_resp.text
     created = create_resp.json()
     plan = _make_plan(created)
@@ -377,8 +416,7 @@ def test_rawdata_not_modified(tmp_path, monkeypatch):
     _execute(client, created, plan, rpid)
 
     mtime_after = sentinel.stat().st_mtime
-    assert mtime_before == mtime_after, \
-        f"Rawdata mtime changed: {mtime_before} → {mtime_after}"
+    assert mtime_before == mtime_after, f"Rawdata mtime changed: {mtime_before} → {mtime_after}"
 
 
 def test_no_external_subprocess_called(tmp_path, monkeypatch):
@@ -387,6 +425,7 @@ def test_no_external_subprocess_called(tmp_path, monkeypatch):
     _enable_env(monkeypatch)
 
     import subprocess
+
     original_run = subprocess.run
     called_matlab = []
 
@@ -422,9 +461,7 @@ def test_run_history_still_visible(tmp_path, monkeypatch):
 
     run_id = data.get("run_id")
     if run_id:
-        detail_resp = client.get(
-            f"/api/projects/{created['project_id']}/runs/{run_id}"
-        )
+        detail_resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}")
         assert detail_resp.status_code == 200
 
 
@@ -438,12 +475,11 @@ def test_manifest_provenance_still_written(tmp_path, monkeypatch):
     run_id = data.get("run_id")
     assert run_id is not None
 
-    artifacts_resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts"
-    )
+    artifacts_resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts")
     artifacts_data = artifacts_resp.json()
-    artifacts = (artifacts_data if isinstance(artifacts_data, list)
-                 else artifacts_data.get("artifacts", []))
+    artifacts = (
+        artifacts_data if isinstance(artifacts_data, list) else artifacts_data.get("artifacts", [])
+    )
 
     names = [a.get("name", "") for a in artifacts]
     assert "contract_smoke_output_manifest.json" in names

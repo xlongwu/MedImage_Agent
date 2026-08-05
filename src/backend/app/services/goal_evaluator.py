@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
-from typing import Iterable, Protocol
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import Protocol
 from uuid import uuid4
 
 from src.backend.app.core.exceptions import SafetyError, StateStoreError
@@ -44,7 +45,9 @@ def _artifact_type(value: str) -> str:
 def calculate_goal_evaluation_hash(
     record: GoalEvaluationRecord | dict[str, object],
 ) -> str:
-    payload = record.model_dump(mode="json") if isinstance(record, GoalEvaluationRecord) else dict(record)
+    payload = (
+        record.model_dump(mode="json") if isinstance(record, GoalEvaluationRecord) else dict(record)
+    )
     payload.pop("goal_evaluation_hash", None)
     return stable_hash(payload)
 
@@ -60,10 +63,7 @@ def _source_available(observation: ObservationRecord, source_types: Iterable[str
 
 
 def _sources_available_all(observation: ObservationRecord, source_types: Iterable[str]) -> bool:
-    return all(
-        _source_available(observation, (source_type,))
-        for source_type in source_types
-    )
+    return all(_source_available(observation, (source_type,)) for source_type in source_types)
 
 
 def _result(
@@ -132,15 +132,18 @@ def _evaluate_artifact(
     artifacts = _scope_artifacts(observation, goal, criterion.target)
     if criterion.criterion_type == "artifact_present":
         source_ok = _source_available(observation, ("artifact_discovery",))
-        predicate = lambda artifact: artifact.exists
+        def predicate(artifact):
+            return artifact.exists
         reason = "ARTIFACT_MISSING"
     elif criterion.criterion_type == "artifact_reloadable":
         source_ok = _source_available(observation, ("artifact_discovery", "artifact_registry"))
-        predicate = lambda artifact: artifact.exists and artifact.reload_status == "passed"
+        def predicate(artifact):
+            return artifact.exists and artifact.reload_status == "passed"
         reason = "ARTIFACT_NOT_RELOADABLE"
     else:
         source_ok = _source_available(observation, ("artifact_registry",))
-        predicate = lambda artifact: artifact.registration_status == "registered"
+        def predicate(artifact):
+            return artifact.registration_status == "registered"
         reason = "ARTIFACT_NOT_REGISTERED"
     if not artifacts and not goal.scope.subject_ids:
         return _result(
@@ -169,8 +172,15 @@ def _evaluate_artifact(
             "failed" if source_ok else "indeterminate",
             reason if source_ok else "ARTIFACT_SOURCE_INCOMPLETE",
             evidence_ids=(evidence for artifact in failed for evidence in artifact.evidence_ids),
-            actual={"count": len(values), "passed": sum(values), "failed": len(values) - sum(values)},
-            affected_subjects=(*failed_subjects, *(artifact.subject_id for artifact in failed if artifact.subject_id)),
+            actual={
+                "count": len(values),
+                "passed": sum(values),
+                "failed": len(values) - sum(values),
+            },
+            affected_subjects=(
+                *failed_subjects,
+                *(artifact.subject_id for artifact in failed if artifact.subject_id),
+            ),
             affected_artifacts=(artifact.artifact_id for artifact in failed),
         )
     return _result(
@@ -192,22 +202,34 @@ def evaluate_criterion(
     kind = criterion.criterion_type
     if kind == "pipeline_terminal":
         source_ok = _source_available(observation, ("pipeline_summary", "node_state"))
-        allowed = {str(item).upper() for item in criterion.expected.get("statuses", ["SUCCESS", "COMPLETED"])}
+        allowed = {
+            str(item).upper()
+            for item in criterion.expected.get("statuses", ["SUCCESS", "COMPLETED"])
+        }
         if not source_ok:
             return _result(criterion, "indeterminate", "PIPELINE_SOURCE_INCOMPLETE")
-        passed = observation.pipeline.status.upper() in allowed and (observation.pipeline.active_nodes or 0) == 0
+        passed = (
+            observation.pipeline.status.upper() in allowed
+            and (observation.pipeline.active_nodes or 0) == 0
+        )
         return _result(
             criterion,
             "passed" if passed else "failed",
             "CRITERION_PASSED" if passed else "PIPELINE_TERMINAL_STATUS_FAILED",
             evidence_ids=observation.pipeline.evidence_ids,
-            actual={"status": observation.pipeline.status, "active_nodes": observation.pipeline.active_nodes},
+            actual={
+                "status": observation.pipeline.status,
+                "active_nodes": observation.pipeline.active_nodes,
+            },
             blocking=not passed,
         )
     if kind == "node_status":
         source_ok = _source_available(observation, ("node_state", "node_states"))
         required = {str(item) for item in criterion.expected.get("node_ids", [])}
-        allowed = {str(item).upper() for item in criterion.expected.get("statuses", ["SUCCESS", "COMPLETED"])}
+        allowed = {
+            str(item).upper()
+            for item in criterion.expected.get("statuses", ["SUCCESS", "COMPLETED"])
+        }
         relevant = [node for node in observation.nodes if node.node_id in required]
         observed = {node.node_id for node in relevant}
         missing = required - observed
@@ -217,7 +239,9 @@ def evaluate_criterion(
             for node_id in sorted(required)
         ]
         if (missing or not relevant) and not source_ok:
-            return _result(criterion, "indeterminate", "NODE_STATE_SOURCE_INCOMPLETE", affected_nodes=missing)
+            return _result(
+                criterion, "indeterminate", "NODE_STATE_SOURCE_INCOMPLETE", affected_nodes=missing
+            )
         if not _quantifier_pass(criterion, values):
             return _result(
                 criterion,
@@ -248,13 +272,22 @@ def evaluate_criterion(
                 "failed",
                 "VALIDATION_MISSING",
             )
-        failed = [validation for validation in observation.validations if validation.status != "passed"]
+        failed = [
+            validation for validation in observation.validations if validation.status != "passed"
+        ]
         return _result(
             criterion,
             "failed" if failed else "passed",
             "VALIDATION_FAILED" if failed else "CRITERION_PASSED",
-            evidence_ids=(evidence for validation in observation.validations for evidence in validation.evidence_ids),
-            actual={validation.validation_id: validation.status for validation in observation.validations},
+            evidence_ids=(
+                evidence
+                for validation in observation.validations
+                for evidence in validation.evidence_ids
+            ),
+            actual={
+                validation.validation_id: validation.status
+                for validation in observation.validations
+            },
             blocking=bool(failed),
         )
     if kind == "capability_at_least":
@@ -266,24 +299,40 @@ def evaluate_criterion(
         return _result(
             criterion,
             status,
-            "CRITERION_PASSED" if passed else "CAPABILITY_BELOW_MINIMUM" if source_ok else "CAPABILITY_SOURCE_INCOMPLETE",
+            "CRITERION_PASSED"
+            if passed
+            else "CAPABILITY_BELOW_MINIMUM"
+            if source_ok
+            else "CAPABILITY_SOURCE_INCOMPLETE",
             evidence_ids=observation.capability.evidence_ids,
             actual=actual,
             blocking=not passed,
         )
     if kind == "scientific_status_allowed":
         minimum = str(criterion.expected.get("minimum") or goal.minimum_capability_level)
-        forbidden = set(criterion.expected.get("forbidden_limitation_flags", goal.forbidden_limitation_flags))
+        forbidden = set(
+            criterion.expected.get("forbidden_limitation_flags", goal.forbidden_limitation_flags)
+        )
+        forbidden.difference_update(goal.allowed_limitation_flags)
         active_forbidden = forbidden.intersection(observation.scientific.limitation_flags)
         level_ok = _LEVELS.index(observation.scientific.status) >= _LEVELS.index(minimum)
         passed = level_ok and not active_forbidden
-        source_ok = _sources_available_all(observation, ("artifact_registry", "validation", "node_contract"))
+        source_ok = _sources_available_all(
+            observation, ("artifact_registry", "validation", "node_contract")
+        )
         return _result(
             criterion,
             "passed" if passed else "failed" if source_ok else "indeterminate",
-            "CRITERION_PASSED" if passed else "SCIENTIFIC_STATUS_NOT_ALLOWED" if source_ok else "SCIENTIFIC_SOURCE_INCOMPLETE",
+            "CRITERION_PASSED"
+            if passed
+            else "SCIENTIFIC_STATUS_NOT_ALLOWED"
+            if source_ok
+            else "SCIENTIFIC_SOURCE_INCOMPLETE",
             evidence_ids=observation.scientific.validation_evidence_ids,
-            actual={"status": observation.scientific.status, "limitation_flags": list(observation.scientific.limitation_flags)},
+            actual={
+                "status": observation.scientific.status,
+                "limitation_flags": list(observation.scientific.limitation_flags),
+            },
             blocking=not passed,
         )
     if kind == "scope_complete":
@@ -295,7 +344,9 @@ def evaluate_criterion(
         )
         subjects = set(goal.scope.subject_ids)
         if not subjects:
-            subjects = {node.subject_id for node in observation.nodes if node.subject_id != "project"}
+            subjects = {
+                node.subject_id for node in observation.nodes if node.subject_id != "project"
+            }
         missing: list[str] = []
         if subjects:
             for subject in sorted(subjects):
@@ -310,7 +361,8 @@ def evaluate_criterion(
         else:
             for target in artifact_types:
                 if not any(
-                    _artifact_type(artifact.artifact_type) == _artifact_type(target) and artifact.exists
+                    _artifact_type(artifact.artifact_type) == _artifact_type(target)
+                    and artifact.exists
                     for artifact in observation.artifacts
                 ):
                     missing.append(target)
@@ -322,7 +374,13 @@ def evaluate_criterion(
                 actual={"missing": missing},
                 affected_subjects=subjects,
             )
-        return _result(criterion, "passed", "CRITERION_PASSED", actual={"subjects": sorted(subjects)}, blocking=False)
+        return _result(
+            criterion,
+            "passed",
+            "CRITERION_PASSED",
+            actual={"subjects": sorted(subjects)},
+            blocking=False,
+        )
     if kind == "no_blocking_issue":
         if observation.completeness.conflicts:
             return _result(
@@ -338,7 +396,9 @@ def evaluate_criterion(
                 "OBSERVATION_BLOCKING_FACT",
                 actual={"blocking_facts": observation.completeness.blocking_facts},
             )
-        return _result(criterion, "passed", "CRITERION_PASSED", actual={"blocking_facts": 0}, blocking=False)
+        return _result(
+            criterion, "passed", "CRITERION_PASSED", actual={"blocking_facts": 0}, blocking=False
+        )
     return _result(criterion, "indeterminate", "CRITERION_TYPE_UNSUPPORTED")
 
 
@@ -357,8 +417,14 @@ class GoalEvaluator:
         previous_goal_evaluation_id: str | None = None,
     ) -> GoalEvaluationRecord:
         observation = self.store.get_observation(observation_id)
-        if observation is None or observation.bindings.project_id != project_id or observation.bindings.lifecycle_id != lifecycle_id:
-            raise SafetyError("GOAL_EVALUATION_OBSERVATION_MISMATCH", code="GOAL_EVALUATION_OBSERVATION_MISMATCH")
+        if (
+            observation is None
+            or observation.bindings.project_id != project_id
+            or observation.bindings.lifecycle_id != lifecycle_id
+        ):
+            raise SafetyError(
+                "GOAL_EVALUATION_OBSERVATION_MISMATCH", code="GOAL_EVALUATION_OBSERVATION_MISMATCH"
+            )
         reviewed = self.store.get_reviewed_plan(observation.bindings.reviewed_plan_id)
         payload = reviewed.payload.get("goal_contract") if reviewed else None
         if reviewed is None or reviewed.project_id != project_id or not isinstance(payload, dict):
@@ -374,7 +440,9 @@ class GoalEvaluator:
             or goal.goal_contract_id != observation.bindings.goal_contract_id
         ):
             raise SafetyError("GOAL_CONTRACT_BINDING_DRIFT", code="GOAL_CONTRACT_BINDING_DRIFT")
-        results = tuple(evaluate_criterion(criterion, goal, observation) for criterion in goal.criteria)
+        results = tuple(
+            evaluate_criterion(criterion, goal, observation) for criterion in goal.criteria
+        )
         required = [
             result
             for result, criterion in zip(results, goal.criteria, strict=True)
@@ -394,7 +462,9 @@ class GoalEvaluator:
             )
             previous_goal_evaluation_id = existing[0].goal_evaluation_id if existing else None
         elif self.store.get_goal_evaluation(previous_goal_evaluation_id) is None:
-            raise SafetyError("GOAL_EVALUATION_PREVIOUS_NOT_FOUND", code="GOAL_EVALUATION_PREVIOUS_NOT_FOUND")
+            raise SafetyError(
+                "GOAL_EVALUATION_PREVIOUS_NOT_FOUND", code="GOAL_EVALUATION_PREVIOUS_NOT_FOUND"
+            )
         record = GoalEvaluationRecord(
             goal_evaluation_id=f"goal_evaluation_{uuid4().hex}",
             evaluator_version=self.VERSION,
@@ -407,7 +477,7 @@ class GoalEvaluator:
             observation_id=observation.observation_id,
             observation_hash=observation.observation_hash,
             recovery_attempt_id=observation.bindings.recovery_attempt_id,
-            evaluated_at=datetime.now(timezone.utc),
+            evaluated_at=datetime.now(UTC),
             criterion_results=results,
             status=status,
             previous_goal_evaluation_id=previous_goal_evaluation_id,

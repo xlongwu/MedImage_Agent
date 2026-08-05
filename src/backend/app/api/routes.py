@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import yaml
-from pathlib import Path
 from fastapi import APIRouter, Query
 
 from src.backend.app.api._errors import raise_api_error

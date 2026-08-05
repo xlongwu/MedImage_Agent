@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +10,7 @@ ALLOWLISTED_FUNCTIONS = {"y_Smooth", "rest_Smooth"}
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -279,10 +279,10 @@ def instantiate_dpabi_template(
     lines.append(f"- Instance ID: {instance_id}")
     lines.append(f"- Run ID: {final_run_id}")
     lines.append(f"- Pipeline: `{pipeline_out}`")
-    lines.append(f"- Requires approval: true")
-    lines.append(f"- Approved: false")
-    lines.append(f"- Execution allowed: false")
-    lines.append(f"- Synthetic only: true")
+    lines.append("- Requires approval: true")
+    lines.append("- Approved: false")
+    lines.append("- Execution allowed: false")
+    lines.append("- Synthetic only: true")
     lines.append("")
     lines.append("## Safety Gates")
     lines.append("")

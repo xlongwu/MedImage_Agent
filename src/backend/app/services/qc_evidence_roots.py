@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from src.backend.app.services.mock_store import mock_store
-
 
 _REGISTERED_INPUT_FIELDS = (
     "preprocessing_input_dir",
@@ -54,28 +54,35 @@ def collect_qc_evidence_roots(
         return []
 
     metadata = project.metadata if isinstance(project.metadata, dict) else {}
-    candidates: list[str | Path] = []
+    registered_candidates: list[str | Path] = []
 
     for field in _REGISTERED_INPUT_FIELDS:
         value = str(metadata.get(field) or "")
         if value:
-            candidates.append(value)
+            registered_candidates.append(value)
 
     project_dir = str(metadata.get("project_dir") or "")
     if project_dir:
         project_root = Path(project_dir)
-        candidates.append(project_root / "converted_bids")
-        if include_native_outputs:
-            candidates.append(project_root / "preprocessing_native_runs")
+        registered_candidates.append(project_root / "converted_bids")
 
-    try:
-        candidates.extend(project_store.list_import_paths(project_id))
-    except Exception:
-        pass
+    roots = _resolved_existing_dirs(registered_candidates)
+    if not roots:
+        try:
+            roots = _resolved_existing_dirs(project_store.list_import_paths(project_id))
+        except Exception:
+            roots = []
+    if include_native_outputs and project_dir:
+        roots = _resolved_existing_dirs(
+            [*roots, Path(project_dir) / "preprocessing_native_runs"]
+        )
+    if roots:
+        return roots
 
+    rawdata_candidates: list[str | Path] = []
     if include_rawdata:
         rawdata = str(metadata.get("rawdata_dir") or "")
         if rawdata:
-            candidates.append(rawdata)
+            rawdata_candidates.append(rawdata)
 
-    return _resolved_existing_dirs(candidates)
+    return _resolved_existing_dirs(rawdata_candidates)

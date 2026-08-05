@@ -132,10 +132,7 @@ def test_artifact_preview_json_payload_and_summary(tmp_path):
     assert payload["json_summary"]["status"] == "PASS"
     assert payload["json_summary"]["warnings"]["count"] == 1
     assert payload["json_summary"]["errors"]["count"] == 0
-    field_summaries = {
-        item["key"]: item
-        for item in payload["json_summary"]["field_summaries"]
-    }
+    field_summaries = {item["key"]: item for item in payload["json_summary"]["field_summaries"]}
     assert field_summaries["subjects"]["type"] == "array"
     assert field_summaries["subjects"]["size"] == 1
     assert field_summaries["thresholds"]["type"] == "object"

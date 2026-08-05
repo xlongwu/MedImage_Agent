@@ -125,6 +125,7 @@ def _execute_plan(
 
 # ── Event endpoint tests ────────────────────────────────────────────────────
 
+
 def test_events_project_not_found():
     client = TestClient(app)
     resp = client.get("/api/projects/nonexistent/runs/any-run/events")
@@ -135,9 +136,7 @@ def test_events_run_not_found(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created = _create_project(client, tmp_path)
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/nonexistent-run/events"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/nonexistent-run/events")
     assert resp.status_code == 404
 
 
@@ -153,9 +152,7 @@ def test_events_ok_after_real_execution(tmp_path, monkeypatch):
     run_id = result.get("run_id")
     assert run_id, f"No run_id in execute result: {result}"
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/events"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/events")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -167,6 +164,7 @@ def test_events_ok_after_real_execution(tmp_path, monkeypatch):
 
 # ── Log endpoint tests ──────────────────────────────────────────────────────
 
+
 def test_logs_project_not_found():
     client = TestClient(app)
     resp = client.get("/api/projects/nonexistent/runs/any-run/logs")
@@ -177,9 +175,7 @@ def test_logs_run_not_found(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created = _create_project(client, tmp_path)
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/nonexistent-run/logs"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/nonexistent-run/logs")
     assert resp.status_code == 404
 
 
@@ -195,9 +191,7 @@ def test_logs_ok_after_real_execution(tmp_path, monkeypatch):
     run_id = result.get("run_id")
     assert run_id, f"No run_id in execute result: {result}"
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/logs"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/logs")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -218,9 +212,7 @@ def test_logs_respects_max_bytes(tmp_path, monkeypatch):
     run_id = result.get("run_id")
     assert run_id
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/logs?max_bytes=2000"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/logs?max_bytes=2000")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     for log_entry in body["logs"]:

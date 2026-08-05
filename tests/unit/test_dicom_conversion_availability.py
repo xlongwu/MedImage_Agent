@@ -7,15 +7,8 @@ to real output directories.  No rawdata modification.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
-import pytest
-
 from src.backend.app.schemas.dicom_conversion_execution import (
     Dcm2niixAvailabilityCheck,
-    DicomConversionExecutionRequest,
-    DicomConversionSandboxResult,
     DicomConversionSafetyFlags,
     build_disabled_sandbox_result,
     is_dcm2niix_availability_ready,
@@ -35,8 +28,7 @@ from src.backend.app.services.dicom_conversion_execution import (
 
 def test_parse_version_standard_output() -> None:
     result = parse_dcm2niix_version(
-        "Chris Rorden's dcm2niix version v1.0.20230411 (JFIF-to-NIfTI)\n"
-        "BSD 2-Clause License\n"
+        "Chris Rorden's dcm2niix version v1.0.20230411 (JFIF-to-NIfTI)\nBSD 2-Clause License\n"
     )
     assert result == "v1.0.20230411"
 
@@ -309,7 +301,9 @@ def test_availability_function_never_uses_shell() -> None:
 
     source = inspect.getsource(check_dcm2niix_availability)
     # Check actual code, not docstrings
-    lines = [l for l in source.splitlines() if not l.strip().startswith(("#", '"""', "``"))]
+    lines = [
+        line for line in source.splitlines() if not line.strip().startswith(("#", '"""', "``"))
+    ]
     code = "\n".join(lines)
     assert "shell=True" not in code
 

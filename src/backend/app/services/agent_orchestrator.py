@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
-from typing import Any, Callable, Protocol
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any, Protocol
 from uuid import uuid4
 
 from src.backend.app.core.exceptions import SafetyError, StateStoreError
 from src.backend.app.planner.audit_record import stable_hash
+from src.backend.app.runtime.node_contract_registry import get_node_contract
 from src.backend.app.schemas.agent_lifecycle import (
     AgentLifecycleEvent,
     AgentLifecycleRecord,
@@ -16,8 +18,8 @@ from src.backend.app.schemas.agent_lifecycle import (
     RetryProposal,
 )
 from src.backend.app.schemas.execution_ticket import ExecutionTicket
-from src.backend.app.schemas.observation import ObservationRecord
 from src.backend.app.schemas.goal_contract import GoalEvaluationRecord
+from src.backend.app.schemas.observation import ObservationRecord
 from src.backend.app.schemas.recovery import (
     CheckpointEvidence,
     DiagnosisRecord,
@@ -25,11 +27,10 @@ from src.backend.app.schemas.recovery import (
     RecoveryProposal,
     RecoveryQuotaUsage,
 )
-from src.backend.app.runtime.node_contract_registry import get_node_contract
-from src.backend.app.services.observation_collector import ObservationCollector
 from src.backend.app.services.goal_evaluator import GoalEvaluator
-from src.backend.app.services.run_diagnosis_service import RunDiagnosisService
+from src.backend.app.services.observation_collector import ObservationCollector
 from src.backend.app.services.recovery_proposal_engine import RecoveryProposalEngine
+from src.backend.app.services.run_diagnosis_service import RunDiagnosisService
 
 
 class AgentLifecycleStore(Protocol):
@@ -57,13 +58,23 @@ class AgentLifecycleStore(Protocol):
 
 
 _TRANSITIONS: dict[AgentLifecycleState, frozenset[AgentLifecycleState]] = {
-    "CREATED": frozenset({"CONTEXT_READY", "HUMAN_HANDOFF"}),
-    "CONTEXT_READY": frozenset({"PLAN_DRAFTED", "HUMAN_HANDOFF"}),
-    "PLAN_DRAFTED": frozenset({"PLAN_VALIDATED", "HUMAN_HANDOFF"}),
-    "PLAN_VALIDATED": frozenset({"WAITING_FOR_APPROVAL", "HUMAN_HANDOFF"}),
-    "WAITING_FOR_APPROVAL": frozenset({"APPROVED", "HUMAN_HANDOFF"}),
-    "APPROVED": frozenset({"EXECUTION_READY", "PLAN_DRAFTED", "HUMAN_HANDOFF"}),
-    "EXECUTION_READY": frozenset({"RUNNING", "FAILED", "PLAN_DRAFTED", "HUMAN_HANDOFF"}),
+    "CREATED": frozenset({"WAITING_FOR_INPUT", "CONTEXT_READY", "HUMAN_HANDOFF", "CANCELED"}),
+    "WAITING_FOR_INPUT": frozenset({"CONTEXT_READY", "HUMAN_HANDOFF", "CANCELED"}),
+    "CONTEXT_READY": frozenset(
+        {
+            "WAITING_FOR_INPUT",
+            "WAITING_FOR_SCIENCE_DECISION",
+            "PLAN_DRAFTED",
+            "HUMAN_HANDOFF",
+            "CANCELED",
+        }
+    ),
+    "PLAN_DRAFTED": frozenset({"WAITING_FOR_INPUT", "WAITING_FOR_SCIENCE_DECISION", "PLAN_VALIDATED", "HUMAN_HANDOFF", "CANCELED"}),
+    "WAITING_FOR_SCIENCE_DECISION": frozenset({"PLAN_DRAFTED", "HUMAN_HANDOFF", "CANCELED"}),
+    "PLAN_VALIDATED": frozenset({"WAITING_FOR_APPROVAL", "SUCCEEDED", "HUMAN_HANDOFF", "CANCELED"}),
+    "WAITING_FOR_APPROVAL": frozenset({"APPROVED", "PLAN_DRAFTED", "HUMAN_HANDOFF", "CANCELED"}),
+    "APPROVED": frozenset({"EXECUTION_READY", "PLAN_DRAFTED", "HUMAN_HANDOFF", "CANCELED"}),
+    "EXECUTION_READY": frozenset({"RUNNING", "FAILED", "PLAN_DRAFTED", "HUMAN_HANDOFF", "CANCELED"}),
     "RUNNING": frozenset({"OBSERVING", "FAILED", "HUMAN_HANDOFF"}),
     "OBSERVING": frozenset({"EVALUATING", "FAILED", "HUMAN_HANDOFF"}),
     "EVALUATING": frozenset({"GOAL_SATISFIED", "DIAGNOSING", "HUMAN_HANDOFF"}),
@@ -79,6 +90,7 @@ _TRANSITIONS: dict[AgentLifecycleState, frozenset[AgentLifecycleState]] = {
     "GOAL_SATISFIED": frozenset(),
     "SUCCEEDED": frozenset(),
     "HUMAN_HANDOFF": frozenset(),
+    "CANCELED": frozenset(),
 }
 
 
@@ -92,13 +104,18 @@ class AgentOrchestrator:
         project_id: str,
         command_id: str,
         actor: str,
+        goal_text: str | None = None,
+        goal_hash: str | None = None,
     ) -> AgentLifecycleRecord:
         if self.store.get_project(project_id) is None:
             raise SafetyError("LIFECYCLE_PROJECT_NOT_FOUND", code="LIFECYCLE_PROJECT_NOT_FOUND")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         record = AgentLifecycleRecord(
             lifecycle_id=f"lifecycle_{uuid4().hex}",
             project_id=project_id,
+            goal_text=goal_text,
+            goal_hash=goal_hash,
+            created_actor=actor,
             created_at=now,
             updated_at=now,
             last_command_id=command_id,
@@ -115,6 +132,40 @@ class AgentOrchestrator:
             return self.store.create_agent_lifecycle(record, event)
         except sqlite3.IntegrityError as exc:
             raise SafetyError("LIFECYCLE_COMMAND_REPLAYED", code="LIFECYCLE_COMMAND_REPLAYED") from exc
+
+    def cancel(
+        self,
+        *,
+        project_id: str,
+        lifecycle_id: str,
+        command_id: str,
+        actor: str,
+        reason: str | None = None,
+    ) -> AgentLifecycleRecord:
+        current = self.get(project_id=project_id, lifecycle_id=lifecycle_id)
+        if current.state == "CANCELED":
+            return current
+        if "CANCELED" not in _TRANSITIONS[current.state]:
+            raise SafetyError(
+                "LIFECYCLE_CANCEL_NOT_SUPPORTED",
+                code="LIFECYCLE_CANCEL_NOT_SUPPORTED",
+            )
+        now = datetime.now(UTC)
+        return self.transition(
+            project_id=project_id,
+            lifecycle_id=lifecycle_id,
+            to_state="CANCELED",
+            command_id=command_id,
+            actor=actor,
+            source_command="cancel",
+            reason=reason,
+            updates={
+                "pending_decision": None,
+                "canceled_at": now,
+                "canceled_by": actor,
+                "cancellation_reason": reason,
+            },
+        )
 
     def get(self, *, project_id: str, lifecycle_id: str) -> AgentLifecycleRecord:
         record = self.store.get_agent_lifecycle(lifecycle_id)
@@ -145,7 +196,7 @@ class AgentOrchestrator:
             command_id=command_id,
             actor=actor,
             source_command=source_command,
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             from_state=from_state,
             to_state=to_state,
             reviewed_plan_id=record.reviewed_plan_id,
@@ -212,7 +263,7 @@ class AgentOrchestrator:
                 raise SafetyError("LIFECYCLE_TICKET_PLAN_MISMATCH", code="LIFECYCLE_TICKET_PLAN_MISMATCH")
             if to_state in {"RUNNING", "RETRYING"} and ticket.status != "consumed":
                 raise SafetyError("LIFECYCLE_TICKET_NOT_CONSUMED", code="LIFECYCLE_TICKET_NOT_CONSUMED")
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         updated = current.model_copy(
             update={
                 **changes,

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -36,36 +37,46 @@ def _assert_module_has_no_forbidden_imports(module) -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".", 1)[0])
     assert imported.isdisjoint(forbidden), imported & forbidden
-from src.backend.app.runtime.gui_model_input_redaction import (
-    allowed_minimal_prompt_input_declaration,
-    validate_and_build_model_prompt_envelope,
-)
-from src.backend.app.runtime.gui_model_audit_contract import (
+
+
+from src.backend.app.runtime.gui_model_audit_contract import (  # noqa: E402
     allowed_model_audit_metadata_declaration,
     validate_and_build_model_audit_record,
+)
+from src.backend.app.runtime.gui_model_input_redaction import (  # noqa: E402
+    allowed_minimal_prompt_input_declaration,
+    validate_and_build_model_prompt_envelope,
 )
 
 client = TestClient(app)
 
 
 def _session(**kw):
-    return client.post("/api/gui-agent/sessions", json={
-        "provider": "mock", "target_app": "a", "target_window": "w",
-        "allowed_action_tiers": [0], "file_scope": ["outputs/work/gui_agent/"],
-        "approved": True, **kw,
-    }).json()["session_id"]
+    return client.post(
+        "/api/gui-agent/sessions",
+        json={
+            "provider": "mock",
+            "target_app": "a",
+            "target_window": "w",
+            "allowed_action_tiers": [0],
+            "file_scope": ["outputs/work/gui_agent/"],
+            "approved": True,
+            **kw,
+        },
+    ).json()["session_id"]
 
 
-def _mock_step(sid=None, fid="safe_observe_current_state",
-               submit=True, dry=False):
+def _mock_step(sid=None, fid="safe_observe_current_state", submit=True, dry=False):
     body = {"fixture_id": fid, "submit_to_guard": submit, "dry_run": dry}
-    if sid: body["session_id"] = sid
+    if sid:
+        body["session_id"] = sid
     return client.post("/api/gui-agent/mock-adapter/step", json=body)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Safe fixture-only contract chain
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_fixture_allowed():
     r = validate_model_provider_policy(**allowed_fixture_provider_declaration())
@@ -153,13 +164,15 @@ def test_audit_flags_false():
 # B. Safe fixture-to-adapter-to-guard path
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_fixture_maps_to_record_observation():
-    from src.backend.app.runtime.gui_agent_model_adapter import (
-        validate_and_normalize_model_output,
-    )
     from src.backend.app.runtime.gui_agent_mock_model_fixtures import (
         get_mock_model_fixture,
     )
+    from src.backend.app.runtime.gui_agent_model_adapter import (
+        validate_and_normalize_model_output,
+    )
+
     fix = get_mock_model_fixture("safe_observe_current_state")
     r = validate_and_normalize_model_output(**fix.model_output)
     assert r.adapter_decision == "mapped"
@@ -167,12 +180,13 @@ def test_fixture_maps_to_record_observation():
 
 
 def test_adapter_provider_call_false():
-    from src.backend.app.runtime.gui_agent_model_adapter import (
-        validate_and_normalize_model_output,
-    )
     from src.backend.app.runtime.gui_agent_mock_model_fixtures import (
         get_mock_model_fixture,
     )
+    from src.backend.app.runtime.gui_agent_model_adapter import (
+        validate_and_normalize_model_output,
+    )
+
     fix = get_mock_model_fixture("safe_observe_current_state")
     r = validate_and_normalize_model_output(**fix.model_output)
     assert "provider_call_allowed_by_adapter" in r.to_dict() or True
@@ -212,23 +226,38 @@ def test_step_count_increments():
 # ══════════════════════════════════════════════════════════════════════════════
 
 REAL_PROVIDERS = [
-    "local_allowlisted", "local_untrusted", "remote_disabled",
-    "remote_allowlisted_future", "remote_untrusted", "external_tool_provider",
-    "openai", "huggingface", "ollama", "vllm", "transformers",
-    "custom_http", "pywinauto", "desktop", "browser", "manual",
+    "local_allowlisted",
+    "local_untrusted",
+    "remote_disabled",
+    "remote_allowlisted_future",
+    "remote_untrusted",
+    "external_tool_provider",
+    "openai",
+    "huggingface",
+    "ollama",
+    "vllm",
+    "transformers",
+    "custom_http",
+    "pywinauto",
+    "desktop",
+    "browser",
+    "manual",
 ]
 
 
 @pytest.mark.parametrize("ptype", REAL_PROVIDERS)
 def test_real_provider_blocked(ptype):
-    r = validate_model_provider_policy(provider_type=ptype,
-                                       provider_name=ptype)
+    r = validate_model_provider_policy(provider_type=ptype, provider_name=ptype)
     assert r.ok is False
 
 
 REAL_RUNTIMES = [
-    "local_process", "local_worker", "local_server",
-    "remote_server", "external_tool", "gpu_inference",
+    "local_process",
+    "local_worker",
+    "local_server",
+    "remote_server",
+    "external_tool",
+    "gpu_inference",
 ]
 
 
@@ -239,8 +268,12 @@ def test_real_runtime_blocked(rtype):
 
 
 REAL_SOURCES = [
-    "local_allowlisted", "local_untrusted", "remote_repository",
-    "huggingface_repo", "runtime_download", "user_supplied_path",
+    "local_allowlisted",
+    "local_untrusted",
+    "remote_repository",
+    "huggingface_repo",
+    "runtime_download",
+    "user_supplied_path",
     "absolute_path",
 ]
 
@@ -267,8 +300,7 @@ def test_local_allowlisted_valid_still_blocked():
 
 def test_all_real_blocked_flags_false():
     for ptype in REAL_PROVIDERS:
-        r = validate_model_provider_policy(provider_type=ptype,
-                                           provider_name=ptype)
+        r = validate_model_provider_policy(provider_type=ptype, provider_name=ptype)
         if not r.ok:
             assert r.inference_allowed is False
             assert r.model_loaded is False
@@ -286,6 +318,7 @@ def test_all_real_blocked_flags_false():
 # ══════════════════════════════════════════════════════════════════════════════
 # D. Fail-closed chain behavior
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_blocked_chain():
     r = validate_model_provider_policy(provider_type="local_allowlisted")
@@ -319,7 +352,9 @@ def test_input_blocked_no_model():
 
 def test_audit_blocked_no_provider():
     r = validate_and_build_model_audit_record(
-        audit_id="a_001", run_id="r_001", session_id="s_001",
+        audit_id="a_001",
+        run_id="r_001",
+        session_id="s_001",
         event_type="MODEL_OUTPUT_NORMALIZED",
         extra={"raw_text": "secret"},
     )
@@ -333,8 +368,7 @@ def test_rejected_output_not_submitted():
 
 
 def test_guard_blocked_no_provider():
-    r = _mock_step(fid="safe_observe_current_state",
-                   sid="nonexistent_session_xyz")
+    r = _mock_step(fid="safe_observe_current_state", sid="nonexistent_session_xyz")
     assert r.json()["guard_status"] == "SESSION_NOT_FOUND"
     assert r.json().get("provider_call_allowed_by_guard", True) is not True
 
@@ -368,17 +402,25 @@ def test_input_redaction_blocks(name, overrides):
 
 
 AUDIT_FORBIDDEN = [
-    "raw_text", "raw_json", "chain_of_thought",
-    "screenshot_bytes", "clipboard_contents",
-    "token", "password", "credential",
-    "rawdata_path", "derivatives_path",
+    "raw_text",
+    "raw_json",
+    "chain_of_thought",
+    "screenshot_bytes",
+    "clipboard_contents",
+    "token",
+    "password",
+    "credential",
+    "rawdata_path",
+    "derivatives_path",
 ]
 
 
 @pytest.mark.parametrize("key", AUDIT_FORBIDDEN)
 def test_audit_blocks_forbidden(key):
     r = validate_and_build_model_audit_record(
-        audit_id="a_001", run_id="r_001", session_id="s_001",
+        audit_id="a_001",
+        run_id="r_001",
+        session_id="s_001",
         event_type="MODEL_OUTPUT_NORMALIZED",
         extra={key: "secret"},
     )
@@ -387,7 +429,9 @@ def test_audit_blocks_forbidden(key):
 
 def test_audit_path_traversal_blocked():
     r = validate_and_build_model_audit_record(
-        audit_id="a_001", run_id="r_001", session_id="s_001",
+        audit_id="a_001",
+        run_id="r_001",
+        session_id="s_001",
         event_type="MODEL_OUTPUT_NORMALIZED",
         audit_root="../escape",
     )
@@ -396,7 +440,9 @@ def test_audit_path_traversal_blocked():
 
 def test_audit_rawdata_root_blocked():
     r = validate_and_build_model_audit_record(
-        audit_id="a_001", run_id="r_001", session_id="s_001",
+        audit_id="a_001",
+        run_id="r_001",
+        session_id="s_001",
         event_type="MODEL_OUTPUT_NORMALIZED",
         audit_root="rawdata/logs",
     )
@@ -405,7 +451,9 @@ def test_audit_rawdata_root_blocked():
 
 def test_audit_derivatives_root_blocked():
     r = validate_and_build_model_audit_record(
-        audit_id="a_001", run_id="r_001", session_id="s_001",
+        audit_id="a_001",
+        run_id="r_001",
+        session_id="s_001",
         event_type="MODEL_OUTPUT_NORMALIZED",
         audit_root="derivatives/audit",
     )
@@ -415,6 +463,7 @@ def test_audit_derivatives_root_blocked():
 # ══════════════════════════════════════════════════════════════════════════════
 # F. Non-call / isolation assertions
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_no_pywinauto_import():
     from src.backend.app.runtime import gui_model_provider_policy
@@ -442,26 +491,31 @@ def test_no_safetensors_import():
 
 def test_provider_module_no_side_effects():
     from src.backend.app.runtime import gui_model_provider_policy
+
     assert gui_model_provider_policy is not None
 
 
 def test_runtime_module_no_side_effects():
     from src.backend.app.runtime import gui_model_runtime_isolation
+
     assert gui_model_runtime_isolation is not None
 
 
 def test_source_module_no_side_effects():
     from src.backend.app.runtime import gui_model_source_policy
+
     assert gui_model_source_policy is not None
 
 
 def test_input_module_no_side_effects():
     from src.backend.app.runtime import gui_model_input_redaction
+
     assert gui_model_input_redaction is not None
 
 
 def test_audit_module_no_side_effects():
     from src.backend.app.runtime import gui_model_audit_contract
+
     assert gui_model_audit_contract is not None
 
 
@@ -469,44 +523,80 @@ def test_audit_module_no_side_effects():
 # G. Reviewed execution and existing guard regression
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_gui_allowlist_zero():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gui_x", "depends_on": []},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gui_x", "depends_on": []},
+            ],
+        }
+    )
     assert "gui_x" in p["blocked_unknown_nodes"]
 
 
 def test_executor_called_false():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gui_agent_manual", "depends_on": []},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gui_agent_manual", "depends_on": []},
+            ],
+        }
+    )
     assert "gui_agent_manual" in p["blocked_unknown_nodes"]
 
 
 def test_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]
 
 

@@ -1,4 +1,5 @@
 """Tests for the native preprocessing contract schemas."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,7 +17,6 @@ from src.backend.app.schemas.native_preproc import (
     NativePreprocStageResult,
     NativePreprocStageSpec,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -201,17 +201,17 @@ def test_schema_module_has_no_execution_imports() -> None:
 
 
 def test_stage_matrix_document_covers_schema_stage_ids() -> None:
-    text = (
-        REPO_ROOT / "docs" / "预处理与科学计算" / "原生预处理" / "阶段矩阵.md"
-    ).read_text(encoding="utf-8")
+    text = (REPO_ROOT / "docs" / "预处理与科学计算" / "原生预处理" / "阶段矩阵.md").read_text(
+        encoding="utf-8"
+    )
     for stage_id in NATIVE_PREPROC_STAGE_IDS:
         assert f"`{stage_id}`" in text
 
 
 def test_function_coverage_matrix_uses_closed_reuse_strategies() -> None:
-    text = (
-        REPO_ROOT / "docs" / "预处理与科学计算" / "原生预处理" / "功能覆盖矩阵.md"
-    ).read_text(encoding="utf-8")
+    text = (REPO_ROOT / "docs" / "预处理与科学计算" / "原生预处理" / "功能覆盖矩阵.md").read_text(
+        encoding="utf-8"
+    )
     strategies = set(NATIVE_PREPROC_REUSE_STRATEGIES)
     for line in text.splitlines():
         if not line.startswith("| ") or "Reuse strategy" in line or line.startswith("| ------"):
@@ -223,8 +223,8 @@ def test_function_coverage_matrix_uses_closed_reuse_strategies() -> None:
 
 
 def test_contract_document_keeps_native_runtime_prohibitions() -> None:
-    text = (
-        REPO_ROOT / "docs" / "预处理与科学计算" / "原生预处理" / "原生预处理契约.md"
-    ).read_text(encoding="utf-8")
+    text = (REPO_ROOT / "docs" / "预处理与科学计算" / "原生预处理" / "原生预处理契约.md").read_text(
+        encoding="utf-8"
+    )
     for token in ("matlab -batch", "matlab -r", "spm_jobman", "DPARSFA_run", "DPABI_run"):
         assert token in text

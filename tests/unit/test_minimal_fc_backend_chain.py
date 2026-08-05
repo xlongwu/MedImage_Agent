@@ -32,10 +32,7 @@ def test_minimal_fc_backend_chain_realigned_to_atlas_grounded_fc(tmp_path: Path)
     )
 
     motion_file = func_dir / "rp_sub-001_task-rest_bold.txt"
-    motion_rows = [
-        f"{0.01 * idx:.6f} 0 0 0 0 0"
-        for idx in range(n_time)
-    ]
+    motion_rows = [f"{0.01 * idx:.6f} 0 0 0 0 0" for idx in range(n_time)]
     motion_file.write_text("\n".join(motion_rows) + "\n", encoding="utf-8")
 
     motion_qc = compute_motion_qc_for_subject(

@@ -1,8 +1,9 @@
 """Guarded execution adapter for the in-project DICOM converter."""
+
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +29,7 @@ from src.backend.app.services.dicom_conversion_safety import (
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _sha256(path: Path) -> str:
@@ -82,7 +83,9 @@ def execute_native_persisted_conversion(
     evidence = Path(evidence_root).resolve()
     project_root = Path(project_dir).resolve()
     raw_root = Path(rawdata_dir).resolve() if rawdata_dir else None
-    approved_output_root = Path(str(approval.output_root or project_root / "converted_bids")).resolve()
+    approved_output_root = Path(
+        str(approval.output_root or project_root / "converted_bids")
+    ).resolve()
     blockers: list[str] = []
     errors: list[str] = []
     warnings: list[str] = []
@@ -136,7 +139,7 @@ def execute_native_persisted_conversion(
         schema_version=1,
     )
 
-    for index, (mapping, template) in enumerate(zip(mappings, templates), start=1):
+    for index, (mapping, template) in enumerate(zip(mappings, templates, strict=False), start=1):
         source = Path(str(mapping.get("source_path") or template.get("input_dir") or "")).resolve()
         output_dir = Path(str(template.get("output_dir") or approved_output_root)).resolve()
         try:
@@ -153,7 +156,8 @@ def execute_native_persisted_conversion(
                 subject_id=mapping.get("subject_id"),
                 session_id=mapping.get("session_id"),
                 modality=mapping.get("modality"),
-                overwrite=getattr(approval, "overwrite_policy", "fail_if_exists") == "overwrite_derivatives_only",
+                overwrite=getattr(approval, "overwrite_policy", "fail_if_exists")
+                == "overwrite_derivatives_only",
             )
             results.append(result)
             warnings.extend(result.warnings)
@@ -181,7 +185,9 @@ def execute_native_persisted_conversion(
     checksum_unchanged = True
     if rawdata_dir:
         checksum_after = build_post_conversion_rawdata_snapshot([rawdata_dir])
-        atomic_write_json(evidence / "rawdata_checksum_after.json", checksum_after.model_dump(), schema_version=1)
+        atomic_write_json(
+            evidence / "rawdata_checksum_after.json", checksum_after.model_dump(), schema_version=1
+        )
         if checksum_before is not None:
             comparison = compare_conversion_rawdata_snapshots(checksum_before, checksum_after)
             checksum_unchanged = bool(comparison.unchanged)
@@ -226,7 +232,9 @@ def execute_native_persisted_conversion(
     finished_at = _now_iso()
     success_count = len(results)
     failure_count = len(mappings) - success_count
-    status = "failed" if errors and not success_count else "partial" if failure_count else "succeeded"
+    status = (
+        "failed" if errors and not success_count else "partial" if failure_count else "succeeded"
+    )
     provenance = ExecutionProvenance(
         project_id=project_id,
         run_id=conversion_run_id,
@@ -236,7 +244,10 @@ def execute_native_persisted_conversion(
         output_paths=[item.path for item in items],
         output_checksums={item.path: item.checksum_sha256 or "" for item in items},
         software_versions={"native_converter": ALGORITHM_VERSION},
-        approval_context={"approval_id": getattr(approval, "approval_id", ""), "gate_status": gate.status},
+        approval_context={
+            "approval_id": getattr(approval, "approval_id", ""),
+            "gate_status": gate.status,
+        },
         audit_id=Path(audit_preview_path).stem,
         started_at=started_at,
         finished_at=finished_at,
@@ -254,12 +265,16 @@ def execute_native_persisted_conversion(
             "audit_final_path": str(audit_final_path),
             "audit_state": "execution_succeeded" if status == "succeeded" else "execution_failed",
             "checksum_before_path": checksum_before_path,
-            "checksum_after_path": str(evidence / "rawdata_checksum_after.json") if checksum_after else None,
+            "checksum_after_path": str(evidence / "rawdata_checksum_after.json")
+            if checksum_after
+            else None,
             "mapping_success_count": success_count,
             "mapping_failure_count": failure_count,
             "return_code": 0 if status == "succeeded" else 1,
             "rollback_plan_path": rollback_plan_path,
-            "rollback_result_path": str(evidence / "rollback_result.json") if status != "succeeded" else None,
+            "rollback_result_path": str(evidence / "rollback_result.json")
+            if status != "succeeded"
+            else None,
             "mapping_records": records,
             "supported_scope": ["classic_single_frame_mr", "siemens_single_frame_mosaic_mr"],
         },
@@ -281,7 +296,9 @@ def execute_native_persisted_conversion(
             "mapping_failure_count": failure_count,
             "return_code": 0 if status == "succeeded" else 1,
             "rollback_plan_path": rollback_plan_path,
-            "rollback_result_path": str(evidence / "rollback_result.json") if status != "succeeded" else None,
+            "rollback_result_path": str(evidence / "rollback_result.json")
+            if status != "succeeded"
+            else None,
             "warnings": warnings,
             "errors": errors,
             "no_external_process": True,

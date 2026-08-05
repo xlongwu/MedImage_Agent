@@ -496,6 +496,7 @@ export default function DicomConversionReviewPanel({
           projectId={projectId!}
           conversionRunId={activeConversionRunId}
           readiness={releaseReadiness}
+          preflight={data}
           onPrepared={handlePrepared}
           onConversionRegistered={onConversionRegistered}
         />

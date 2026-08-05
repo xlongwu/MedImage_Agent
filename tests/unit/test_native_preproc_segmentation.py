@@ -7,8 +7,10 @@ import pytest
 
 nib = pytest.importorskip("nibabel")
 
-from src.backend.app.native_preproc.orchestrator.validation import validate_stage_result_artifacts
-from src.backend.app.native_preproc.stages.segmentation import run_segmentation
+from src.backend.app.native_preproc.orchestrator.validation import (  # noqa: E402
+    validate_stage_result_artifacts,  # noqa: E402
+)
+from src.backend.app.native_preproc.stages.segmentation import run_segmentation  # noqa: E402
 
 
 def _save(path: Path, data: np.ndarray) -> Path:
@@ -28,7 +30,13 @@ def _tissue_phantom() -> np.ndarray:
 
 
 def _artifact_path(result, artifact_type: str) -> Path:
-    return Path(next(artifact.path for artifact in result.output_artifacts if artifact.artifact_type == artifact_type))
+    return Path(
+        next(
+            artifact.path
+            for artifact in result.output_artifacts
+            if artifact.artifact_type == artifact_type
+        )
+    )
 
 
 def test_segmentation_writes_simplified_tissue_maps_with_valid_ranges(tmp_path: Path) -> None:

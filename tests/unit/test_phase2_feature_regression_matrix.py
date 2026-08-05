@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -32,7 +33,6 @@ from src.backend.app.services import (
     spm_realign_dry_run,
     spm_realign_wrapper_skeleton,
 )
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -40,10 +40,26 @@ def _iso(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "cfg.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "prj")
-    for mod in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, spm_realign_dry_run, spm_realign_wrapper_skeleton, qc_dashboard_report, nifti_thumbnail, mock_store_module):
+    for mod in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+        spm_realign_dry_run,
+        spm_realign_wrapper_skeleton,
+        qc_dashboard_report,
+        nifti_thumbnail,
+        mock_store_module,
+    ):
         monkeypatch.setattr(mod, "mock_store", store)
     monkeypatch.setattr(qc_dashboard_report, "_REPORT_DIR", tmp_path / "o" / "r" / "qc")
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
@@ -52,15 +68,20 @@ def _create(client: TestClient, tmp_path: Path) -> dict:
     rd.mkdir()
     (rd / "f.txt").write_text("x")
     pj = tmp_path / f"p_{uuid.uuid4().hex[:6]}"
-    resp = client.post("/api/projects/create", json={
-        "project_name": f"Mtx-{uuid.uuid4().hex[:4]}",
-        "rawdata_dir": str(rd), "project_dir": str(pj),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": f"Mtx-{uuid.uuid4().hex[:4]}",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
 
 # ── Group 1: Read-only readiness endpoints ──────────────────────────────────
+
 
 def test_data_readiness_ok(tmp_path, monkeypatch):
     _iso(tmp_path, monkeypatch)
@@ -100,22 +121,32 @@ def test_motion_qc_ok(tmp_path, monkeypatch):
 
 # ── Group 2: POST endpoints ─────────────────────────────────────────────────
 
+
 def test_conversion_dry_run_ok(tmp_path, monkeypatch):
     _iso(tmp_path, monkeypatch)
     c = _create(TestClient(app), tmp_path)
-    body = TestClient(app).post(f"/api/projects/{c['project_id']}/conversion/dry-run", json={"dry_run": True}).json()
+    body = (
+        TestClient(app)
+        .post(f"/api/projects/{c['project_id']}/conversion/dry-run", json={"dry_run": True})
+        .json()
+    )
     assert "status" in body
 
 
 def test_dashboard_report_cache_off_ok(tmp_path, monkeypatch):
     _iso(tmp_path, monkeypatch)
     c = _create(TestClient(app), tmp_path)
-    body = TestClient(app).post(f"/api/projects/{c['project_id']}/qc-dashboard/report?cache=off").json()
+    body = (
+        TestClient(app)
+        .post(f"/api/projects/{c['project_id']}/qc-dashboard/report?cache=off")
+        .json()
+    )
     assert body["cache"]["mode"] == "off"
     assert len(body["modules"]) == 8
 
 
 # ── Group 3: NIfTI thumbnail ────────────────────────────────────────────────
+
 
 def test_thumbnail_view_all(tmp_path, monkeypatch):
     try:
@@ -128,7 +159,11 @@ def test_thumbnail_view_all(tmp_path, monkeypatch):
     nib.save(img, str(rd / "t3d.nii.gz"))
     _iso(tmp_path, monkeypatch)
     c = _create(TestClient(app), tmp_path)
-    body = TestClient(app).get(f"/api/projects/{c['project_id']}/nifti-qc/images/nifti_0000/thumbnail?view=all").json()
+    body = (
+        TestClient(app)
+        .get(f"/api/projects/{c['project_id']}/nifti-qc/images/nifti_0000/thumbnail?view=all")
+        .json()
+    )
     if body.get("ok"):
         assert len(body["thumbnails"]) == 3
 
@@ -144,17 +179,27 @@ def test_thumbnail_invalid_vol_400(tmp_path, monkeypatch):
     nib.save(img, str(rd / "t4d.nii.gz"))
     _iso(tmp_path, monkeypatch)
     c = _create(TestClient(app), tmp_path)
-    resp = TestClient(app).get(f"/api/projects/{c['project_id']}/nifti-qc/images/nifti_0000/thumbnail?volume_index=99")
+    resp = TestClient(app).get(
+        f"/api/projects/{c['project_id']}/nifti-qc/images/nifti_0000/thumbnail?volume_index=99"
+    )
     assert resp.status_code == 400
-    assert "volume_index" in resp.json().get("detail", "") or "out of range" in resp.json().get("detail", "")
+    assert "volume_index" in resp.json().get("detail", "") or "out of range" in resp.json().get(
+        "detail", ""
+    )
 
 
 # ── Group 4: QC Dashboard latest / fingerprint / cache ──────────────────────
 
+
 def test_latest_404_before_generation(tmp_path, monkeypatch):
     _iso(tmp_path, monkeypatch)
     c = _create(TestClient(app), tmp_path)
-    assert TestClient(app).get(f"/api/projects/{c['project_id']}/qc-dashboard/report/latest").status_code == 404
+    assert (
+        TestClient(app)
+        .get(f"/api/projects/{c['project_id']}/qc-dashboard/report/latest")
+        .status_code
+        == 404
+    )
 
 
 def test_fingerprint_returns_hash(tmp_path, monkeypatch):
@@ -166,6 +211,7 @@ def test_fingerprint_returns_hash(tmp_path, monkeypatch):
 
 def test_dashboard_cache_creates_no_files_in_repo(tmp_path, monkeypatch):
     import src.backend.app.services.qc_dashboard_module_cache as mc
+
     mc_root = tmp_path / "mc_repo"
     monkeypatch.setattr(mc, "_CACHE_ROOT", mc_root)
     _iso(tmp_path, monkeypatch)
@@ -177,6 +223,7 @@ def test_dashboard_cache_creates_no_files_in_repo(tmp_path, monkeypatch):
 
 
 # ── Group 5: SPM non-execution guards ───────────────────────────────────────
+
 
 def test_spm_realign_not_executable():
     item = tool_catalog.get_tool_catalog_item("spm_realign_subject")
@@ -195,7 +242,9 @@ def test_spm_dry_run_disabled(tmp_path, monkeypatch):
 def test_spm_wrapper_preview_only(tmp_path, monkeypatch):
     _iso(tmp_path, monkeypatch)
     c = _create(TestClient(app), tmp_path)
-    body = TestClient(app).post(f"/api/projects/{c['project_id']}/spm-realign/wrapper-skeleton").json()
+    body = (
+        TestClient(app).post(f"/api/projects/{c['project_id']}/spm-realign/wrapper-skeleton").json()
+    )
     batch = body.get("matlab_batch_preview") or ""
     if batch:
         assert "PREVIEW ONLY" in batch

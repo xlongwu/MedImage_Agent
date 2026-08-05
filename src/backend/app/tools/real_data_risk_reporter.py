@@ -21,7 +21,7 @@ def build_risk_report(
             return {"ok": False, "errors": [f"Inventory not found: {inventory_path}. Run data inspection first."]}
         try:
             inventory = json.loads(inv_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             return {"ok": False, "errors": [f"Failed to load inventory: {e}"]}
 
     subjects = inventory.get("subjects", [])

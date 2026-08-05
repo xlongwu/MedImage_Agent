@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { I18nContextValue } from "../i18n/context";
 import { useI18n } from "../i18n/useI18n";
 import { DEFAULT_API_BASE } from "../lib/api/client";
 import { getProjectBoldReferenceReadiness } from "../lib/api/preprocessing";
@@ -96,7 +97,9 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
           <H3>{t("technical.BoldReferenceReadiness.001")}</H3>
           <Sub>{t("technical.BoldReferenceReadiness.004")}</Sub>
         </div>
-        <span style={{ ...pill, ...statusBadge[data.status] }}>{data.status.toUpperCase()}</span>
+        <span style={{ ...pill, ...statusBadge[data.status] }}>
+          {t(`technical.readiness.status.${data.status}` as Parameters<typeof t>[0])}
+        </span>
       </div>
       <div
         style={{
@@ -182,7 +185,7 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
                   fontSize: 12,
                 }}
               >
-                {i + 1}. {a}
+                {i + 1}. {localizeBoldNextAction(a, t)}
               </div>
             ))}
           </div>
@@ -190,6 +193,14 @@ export default function BoldReferenceReadinessPanel({ baseUrl, projectId }: Prop
       )}
     </Sec>
   );
+}
+
+function localizeBoldNextAction(action: string, t: I18nContextValue["t"]): string {
+  const ready = action.match(/^(\d+) BOLD candidate\(s\) are ready for reference planning\.$/);
+  if (ready) {
+    return t("technical.BoldReferenceReadiness.readyAction", { count: ready[1] });
+  }
+  return action;
 }
 
 function CandidateRow({ candidate }: { candidate: BoldReferenceCandidate }) {

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.backend.app.config.settings import ProjectSettings
-from src.backend.app.core.config_schema import AppConfig, ServerConfig
+from src.backend.app.core.config_schema import AppConfig, MemoryConfig, ServerConfig
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class ConfigService:
 
     def __init__(self, project_config_path: str | Path | None = None) -> None:
         self.server = ServerConfig.from_env()
+        self.memory = MemoryConfig.from_env()
         self.project = (
             ProjectSettings.from_yaml(project_config_path)
             if project_config_path is not None
@@ -32,7 +33,7 @@ class ConfigService:
         )
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "ConfigService":
+    def from_yaml(cls, path: str | Path) -> ConfigService:
         return cls(project_config_path=path)
 
     def snapshot(self) -> AppConfig:
@@ -46,6 +47,7 @@ class ConfigService:
             }
         return AppConfig(
             server=self.server,
+            memory=self.memory,
             project=project_payload,
             project_config_path=self.project_config_path,
         )

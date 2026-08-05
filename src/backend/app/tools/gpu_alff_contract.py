@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.tools.artifact_utils import write_json_artifact
+
 
 def write_alff_falff_gpu_candidate_contract(work_dir: str = "./work") -> dict[str, Any]:
     out_dir = Path(work_dir) / "gpu" / "contracts"

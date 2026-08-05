@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -18,11 +19,12 @@ from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import (
     bold_reference_readiness,
-    motion_metrics_draft as metrics_mod,
     motion_qc_readiness,
     qc_evidence_roots,
 )
-import src.backend.app.services.mock_store as mock_store_module
+from src.backend.app.services import (
+    motion_metrics_draft as metrics_mod,
+)
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -31,20 +33,36 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
     monkeypatch.setattr(metrics_mod, "_REPORT_ROOT", tmp_path / "reports" / "motion_metrics")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, qc_evidence_roots, metrics_mod,
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+        qc_evidence_roots,
+        metrics_mod,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create_project(client: TestClient, tmp_path: Path, rawdata: Path | None = None) -> dict:
     rd = str(rawdata or Path("examples/synthetic_bids/rawdata").resolve())
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Metrics Project", "rawdata_dir": rd,
-        "project_dir": str(tmp_path / "metrics_proj"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Metrics Project",
+            "rawdata_dir": rd,
+            "project_dir": str(tmp_path / "metrics_proj"),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -72,8 +90,14 @@ def test_safety_flags_all_true(tmp_path, monkeypatch):
     created = _create_project(client, tmp_path)
     resp = client.post(f"/api/projects/{created['project_id']}/motion-qc/metrics-draft")
     flags = resp.json()["safety_flags"]
-    for key in ("read_only_inputs", "rawdata_not_modified", "no_realign_executed",
-                "no_external_tools_executed", "qc_summary_only", "no_clinical_interpretation"):
+    for key in (
+        "read_only_inputs",
+        "rawdata_not_modified",
+        "no_realign_executed",
+        "no_external_tools_executed",
+        "qc_summary_only",
+        "no_clinical_interpretation",
+    ):
         assert flags.get(key) is True
 
 
@@ -111,9 +135,7 @@ def test_spm_rp_txt_parsed(tmp_path, monkeypatch):
     (subj / "sub-001_task-rest_bold.nii.gz").write_text("dummy", encoding="utf-8")
     rp_path = subj / "rp_sub-001_task-rest_bold.txt"
     rp_path.write_text(
-        "0.1 0.2 0.3 0.01 0.02 0.03\n"
-        "-0.1 -0.2 -0.3 -0.01 -0.02 -0.03\n"
-        "0.0 0.0 0.0 0.0 0.0 0.0\n",
+        "0.1 0.2 0.3 0.01 0.02 0.03\n-0.1 -0.2 -0.3 -0.01 -0.02 -0.03\n0.0 0.0 0.0 0.0 0.0 0.0\n",
         encoding="utf-8",
     )
 
@@ -175,15 +197,16 @@ def test_native_fd_source_ignores_auxiliary_empty_tsvs(tmp_path, monkeypatch):
         / "motion_qc"
     )
     motion_dir.mkdir(parents=True)
-    fd_path = motion_dir / "slice_timing_bold_desc-motion_parameters_desc-framewise_displacement.tsv"
+    fd_path = (
+        motion_dir / "slice_timing_bold_desc-motion_parameters_desc-framewise_displacement.tsv"
+    )
     fd_path.write_text(
-        "framewise_displacement\n"
-        "0.00000000\n"
-        "0.10000000\n"
-        "0.30000000\n",
+        "framewise_displacement\n0.00000000\n0.10000000\n0.30000000\n",
         encoding="utf-8",
     )
-    (motion_dir / "slice_timing_bold_desc-motion_parameters_desc-friston24_regressors.tsv").write_text(
+    (
+        motion_dir / "slice_timing_bold_desc-motion_parameters_desc-friston24_regressors.tsv"
+    ).write_text(
         "trans_x\ttrans_y\n",
         encoding="utf-8",
     )

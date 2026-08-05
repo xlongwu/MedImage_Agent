@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -57,7 +57,7 @@ def test_expired_approval_cannot_authorize_child_ticket(tmp_path):
     expired = approval.model_copy(
         update={
             "status": "expired",
-            "expires_at": datetime.now(timezone.utc) - timedelta(seconds=1),
+            "expires_at": datetime.now(UTC) - timedelta(seconds=1),
             "recovery_approval_hash": "pending",
         }
     )
@@ -71,7 +71,7 @@ def test_expired_approval_cannot_authorize_child_ticket(tmp_path):
             recovery_approval_id=approval.recovery_approval_id,
             project_id=fixture.project_id,
             event_type="expired",
-            occurred_at=datetime.now(timezone.utc),
+            occurred_at=datetime.now(UTC),
             actor="system",
             command_id="expire-1",
             reason_code="APPROVAL_EXPIRED",

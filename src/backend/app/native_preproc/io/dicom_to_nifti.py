@@ -14,15 +14,15 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 
 from src.backend.app.runtime.atomic_file import atomic_write_json
-
 
 ALGORITHM_ID = "medimage.native_dicom_to_nifti"
 ALGORITHM_VERSION = "1.0.0"
@@ -369,7 +369,7 @@ def convert_dicom_series(
         "DataType": "float32",
         "VoxelSize": [float(value) for value in zooms[:3]],
         "Warnings": warnings,
-        "CreatedAt": datetime.now(timezone.utc).isoformat(),
+        "CreatedAt": datetime.now(UTC).isoformat(),
         "ResearchUseOnly": True,
     }
     tr_ms = _safe_float(getattr(first, "RepetitionTime", None))

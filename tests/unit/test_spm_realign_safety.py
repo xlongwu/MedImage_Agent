@@ -6,7 +6,6 @@ import json
 import subprocess
 from pathlib import Path
 
-import pytest
 from src.backend.app.tools.spm_realign_runner import run_spm_realign_subject
 
 
@@ -14,7 +13,7 @@ def _make_raw_bold(tmp_path: Path) -> Path:
     """Create a synthetic BOLD file at the expected location."""
     raw = tmp_path / "examples" / "synthetic_bids" / "rawdata" / "sub-001" / "func"
     raw.mkdir(parents=True, exist_ok=True)
-    bold = raw / "sub-001_task-rest_bold.nii.gz"
+    _bold = raw / "sub-001_task-rest_bold.nii.gz"
     # Need nibabel for gz files — use .nii instead
     bold_nii = raw / "sub-001_task-rest_bold.nii"
     bold_nii.write_bytes(b"\x00" * 100)  # dummy NIfTI
@@ -33,6 +32,7 @@ def _make_spm_dir(tmp_path: Path) -> Path:
 
 # ── 1. unsafe matlab_command "matlab -r evil" → preflight failed ──
 
+
 def test_matlab_with_args_blocked(tmp_path):
     result = run_spm_realign_subject(
         matlab_command="matlab -r evil",
@@ -50,6 +50,7 @@ def test_matlab_with_args_blocked(tmp_path):
 
 
 # ── 2. unsafe "matlab && rm -rf /" → preflight failed ──
+
 
 def test_matlab_compound_blocked(tmp_path):
     result = run_spm_realign_subject(
@@ -72,6 +73,7 @@ def test_matlab_compound_blocked(tmp_path):
 
 # ── 3. spm_dir pointing to rawdata → preflight failed ──
 
+
 def test_spm_dir_rawdata_blocked(tmp_path):
     raw = tmp_path / "rawdata"
     raw.mkdir()
@@ -90,6 +92,7 @@ def test_spm_dir_rawdata_blocked(tmp_path):
 
 
 # ── 4. spm_dir pointing to derivatives → preflight failed ──
+
 
 def test_spm_dir_derivatives_blocked(tmp_path):
     d = tmp_path / "derivatives"
@@ -112,6 +115,7 @@ def test_spm_dir_derivatives_blocked(tmp_path):
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── 5. safety error → no subprocess.run called ──
+
 
 def test_safety_error_no_subprocess(monkeypatch, tmp_path):
     called = []
@@ -137,6 +141,7 @@ def test_safety_error_no_subprocess(monkeypatch, tmp_path):
 
 # ── 6. safety error → result contains safety.errors ──
 
+
 def test_safety_error_contains_safety_errors(tmp_path):
     result = run_spm_realign_subject(
         matlab_command="python",
@@ -154,6 +159,7 @@ def test_safety_error_contains_safety_errors(tmp_path):
 
 
 # ── 7. nonexistent spm_dir → warning, not error ──
+
 
 def test_nonexistent_spm_dir_warns_not_blocks(monkeypatch, tmp_path):
     # Safety only: won't block on nonexistent path (warning not error)
@@ -176,6 +182,7 @@ def test_nonexistent_spm_dir_warns_not_blocks(monkeypatch, tmp_path):
 
 # ── 8. approved=false still blocks ──
 
+
 def test_approved_false_still_blocks(tmp_path):
     result = run_spm_realign_subject(
         matlab_command="matlab",
@@ -192,6 +199,7 @@ def test_approved_false_still_blocks(tmp_path):
 
 
 # ── 9. unsafe input_bold still blocks ──
+
 
 def test_unsafe_input_still_blocks(tmp_path):
     result = run_spm_realign_subject(
@@ -214,6 +222,7 @@ def test_unsafe_input_still_blocks(tmp_path):
 
 # ── 10. no rawdata written ──
 
+
 def test_no_rawdata_written(tmp_path):
     run_spm_realign_subject(
         matlab_command="python",  # fails at safety
@@ -232,6 +241,7 @@ def test_no_rawdata_written(tmp_path):
 
 # ── 11. result JSON serializable ──
 
+
 def test_result_json_serializable(tmp_path):
     result = run_spm_realign_subject(
         matlab_command="python",
@@ -247,6 +257,7 @@ def test_result_json_serializable(tmp_path):
 
 
 # ── 12. no real MATLAB called ──
+
 
 def test_no_real_matlab_called(tmp_path):
     result = run_spm_realign_subject(

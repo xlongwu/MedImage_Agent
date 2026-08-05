@@ -7,8 +7,12 @@ import pytest
 
 nib = pytest.importorskip("nibabel")
 
-from src.backend.app.native_preproc.orchestrator.validation import validate_stage_result_artifacts
-from src.backend.app.native_preproc.stages.nuisance_regression import run_nuisance_regression
+from src.backend.app.native_preproc.orchestrator.validation import (  # noqa: E402
+    validate_stage_result_artifacts,  # noqa: E402
+)
+from src.backend.app.native_preproc.stages.nuisance_regression import (  # noqa: E402
+    run_nuisance_regression,  # noqa: E402
+)
 
 
 def _save_bold(path: Path, data: np.ndarray) -> Path:
@@ -49,18 +53,34 @@ def test_nuisance_regression_removes_known_motion_confound_and_writes_tsv(tmp_pa
 
     assert result.status == "succeeded"
     assert validate_stage_result_artifacts(result) == []
-    residual_path = Path(next(artifact.path for artifact in result.output_artifacts if artifact.artifact_type == "residual_bold"))
-    confounds_path = Path(next(artifact.path for artifact in result.output_artifacts if artifact.artifact_type == "confound_matrix"))
+    residual_path = Path(
+        next(
+            artifact.path
+            for artifact in result.output_artifacts
+            if artifact.artifact_type == "residual_bold"
+        )
+    )
+    confounds_path = Path(
+        next(
+            artifact.path
+            for artifact in result.output_artifacts
+            if artifact.artifact_type == "confound_matrix"
+        )
+    )
     residual = np.asanyarray(nib.load(residual_path).dataobj)
     assert residual.shape == data.shape
     assert abs(_corr(residual[0, 0, 0, :], confound)) < 0.05
     assert abs(_corr(data[0, 0, 0, :], confound)) > 0.9
-    assert confounds_path.read_text(encoding="utf-8").splitlines()[0].startswith("intercept\ttrans_x")
+    assert (
+        confounds_path.read_text(encoding="utf-8").splitlines()[0].startswith("intercept\ttrans_x")
+    )
     assert result.qc.metrics["timepoints_preserved"] is True
 
 
 def test_nuisance_regression_blocks_mask_mismatch_without_outputs(tmp_path: Path) -> None:
-    bold = _save_bold(tmp_path / "sub-01_task-rest_bold.nii.gz", np.zeros((2, 2, 2, 4), dtype=np.float32))
+    bold = _save_bold(
+        tmp_path / "sub-01_task-rest_bold.nii.gz", np.zeros((2, 2, 2, 4), dtype=np.float32)
+    )
     mask = tmp_path / "wm.nii.gz"
     nib.save(nib.Nifti1Image(np.ones((3, 3, 3), dtype=np.float32), affine=np.eye(4)), str(mask))
 

@@ -23,12 +23,14 @@ def _post_plan(payload: dict):
 
 # ── 1. Returns 200 ──
 
+
 def test_returns_200():
     resp = _post_plan({"goal": "motion correction"})
     assert resp.status_code == 200
 
 
 # ── 2. ok == true ──
+
 
 def test_ok_true():
     resp = _post_plan({"goal": "motion correction"})
@@ -37,6 +39,7 @@ def test_ok_true():
 
 
 # ── 3. contains plan ──
+
 
 def test_contains_plan():
     resp = _post_plan({"goal": "motion correction"})
@@ -47,6 +50,7 @@ def test_contains_plan():
 
 # ── 4. contains validation ──
 
+
 def test_contains_validation():
     resp = _post_plan({"goal": "motion correction"})
     data = resp.json()
@@ -55,6 +59,7 @@ def test_contains_validation():
 
 
 # ── 5. spm_realign in plan ──
+
 
 def test_spm_realign_in_plan():
     resp = _post_plan({"goal": "motion correction"})
@@ -65,6 +70,7 @@ def test_spm_realign_in_plan():
 
 # ── 6. approval_required in validation ──
 
+
 def test_approval_required_in_validation():
     resp = _post_plan({"goal": "motion correction"})
     data = resp.json()
@@ -72,6 +78,7 @@ def test_approval_required_in_validation():
 
 
 # ── 7. empty goal → 200, ok=false ──
+
 
 def test_empty_goal():
     resp = _post_plan({"goal": ""})
@@ -83,6 +90,7 @@ def test_empty_goal():
 
 # ── 8. unsupported goal → 200, ok=false ──
 
+
 def test_unsupported_goal():
     resp = _post_plan({"goal": "xyz unknown"})
     assert resp.status_code == 200
@@ -92,6 +100,7 @@ def test_unsupported_goal():
 
 
 # ── 9. unsupported provider → 200, ok=false ──
+
 
 def test_unsupported_provider():
     resp = _post_plan({"goal": "motion", "provider": "openai"})
@@ -103,12 +112,14 @@ def test_unsupported_provider():
 
 # ── 10. missing goal → 422 ──
 
+
 def test_missing_goal_422():
     resp = _post_plan({})
     assert resp.status_code == 422
 
 
 # ── 11. No pipeline execution ──
+
 
 def test_no_pipeline_execution():
     resp = _post_plan({"goal": "motion"})
@@ -117,12 +128,14 @@ def test_no_pipeline_execution():
 
 # ── 12. No node runner execution ──
 
+
 def test_no_runner_execution():
     resp = _post_plan({"goal": "motion"})
     assert resp.status_code == 200
 
 
 # ── 13. JSON serializable ──
+
 
 def test_json_serializable():
     resp = _post_plan({"goal": "motion correction"})
@@ -133,12 +146,15 @@ def test_json_serializable():
 
 # ── 14. openai_compatible without API key → 200, ok=false ──
 
+
 def test_openai_compatible_no_api_key(monkeypatch):
     monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
-    resp = _post_plan({
-        "goal": "motion correction",
-        "provider": "openai_compatible",
-    })
+    resp = _post_plan(
+        {
+            "goal": "motion correction",
+            "provider": "openai_compatible",
+        }
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -147,12 +163,15 @@ def test_openai_compatible_no_api_key(monkeypatch):
 
 # ── 15. openai_compatible does not call real network ──
 
+
 def test_openai_compatible_no_network(monkeypatch):
     monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
-    resp = _post_plan({
-        "goal": "motion",
-        "provider": "openai_compatible",
-    })
+    resp = _post_plan(
+        {
+            "goal": "motion",
+            "provider": "openai_compatible",
+        }
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is False
@@ -161,12 +180,15 @@ def test_openai_compatible_no_network(monkeypatch):
 
 # ── 16. openai_compatible API key not leaked ──
 
+
 def test_openai_compatible_no_api_key_leak(monkeypatch):
     monkeypatch.setenv("MEDIMAGE_LLM_API_KEY", "sk-secret-test-key")
-    resp = _post_plan({
-        "goal": "motion",
-        "provider": "openai_compatible",
-    })
+    resp = _post_plan(
+        {
+            "goal": "motion",
+            "provider": "openai_compatible",
+        }
+    )
     assert resp.status_code == 200
     raw = resp.text
     assert "sk-secret-test-key" not in raw
@@ -174,11 +196,14 @@ def test_openai_compatible_no_api_key_leak(monkeypatch):
 
 # ── 17. mock provider still works (regression) ──
 
+
 def test_mock_provider_regression():
-    resp = _post_plan({
-        "goal": "motion correction",
-        "provider": "mock",
-    })
+    resp = _post_plan(
+        {
+            "goal": "motion correction",
+            "provider": "mock",
+        }
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -210,11 +235,14 @@ def test_mock_generator_returns_minimal_reviewed_plan_shape():
 
 # ── 19. rule_based provider still works (regression) ──
 
+
 def test_rule_based_provider_regression():
-    resp = _post_plan({
-        "goal": "reho analysis",
-        "provider": "rule_based",
-    })
+    resp = _post_plan(
+        {
+            "goal": "reho analysis",
+            "provider": "rule_based",
+        }
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data["ok"] is True
@@ -223,15 +251,16 @@ def test_rule_based_provider_regression():
 
 # ── 20. openai_compatible provider error not fallback to ok ──
 
+
 def test_openai_compatible_error_not_fallback(monkeypatch):
     """When provider=openai_compatible and API key is missing,
     the response must be ok=false, not silently fallback to deterministic."""
     monkeypatch.delenv("MEDIMAGE_LLM_API_KEY", raising=False)
-    resp = _post_plan({
-        "goal": "motion",
-        "provider": "openai_compatible",
-    })
-    data = resp.json()
-    assert data["ok"] is False, (
-        "openai_compatible with missing key must fail, not fallback"
+    resp = _post_plan(
+        {
+            "goal": "motion",
+            "provider": "openai_compatible",
+        }
     )
+    data = resp.json()
+    assert data["ok"] is False, "openai_compatible with missing key must fail, not fallback"

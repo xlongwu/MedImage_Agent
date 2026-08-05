@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
+from datetime import UTC, datetime
 
 from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.planner.audit_record import stable_hash
@@ -24,7 +24,6 @@ from src.backend.app.schemas.recovery import (
     RecoveryQuotaSource,
     RecoveryQuotaUsage,
 )
-
 
 _DIMENSIONS = (
     "max_lifecycle_recovery_attempts",
@@ -64,7 +63,9 @@ _ACTION_PRIORITY = {
 def calculate_recovery_proposal_hash(
     record: RecoveryProposal | dict[str, object],
 ) -> str:
-    payload = record.model_dump(mode="json") if isinstance(record, RecoveryProposal) else dict(record)
+    payload = (
+        record.model_dump(mode="json") if isinstance(record, RecoveryProposal) else dict(record)
+    )
     payload.pop("recovery_proposal_hash", None)
     return stable_hash(payload)
 
@@ -72,7 +73,11 @@ def calculate_recovery_proposal_hash(
 def calculate_recovery_candidate_hash(
     candidate: RecoveryCandidate | dict[str, object],
 ) -> str:
-    payload = candidate.model_dump(mode="json") if isinstance(candidate, RecoveryCandidate) else dict(candidate)
+    payload = (
+        candidate.model_dump(mode="json")
+        if isinstance(candidate, RecoveryCandidate)
+        else dict(candidate)
+    )
     payload.pop("candidate_hash", None)
     return stable_hash(payload)
 
@@ -80,7 +85,9 @@ def calculate_recovery_candidate_hash(
 def calculate_canonical_diff_hash(
     value: CanonicalRecoveryDiff | dict[str, object],
 ) -> str:
-    payload = value.model_dump(mode="json") if isinstance(value, CanonicalRecoveryDiff) else dict(value)
+    payload = (
+        value.model_dump(mode="json") if isinstance(value, CanonicalRecoveryDiff) else dict(value)
+    )
     payload.pop("canonical_diff_hash", None)
     return stable_hash(payload)
 
@@ -143,9 +150,7 @@ def decide_recovery_quota(
         "max_recovery_wall_seconds": usage.recovery_wall_seconds,
     }
     exhausted = sorted(
-        dimension
-        for dimension, limit in effective.items()
-        if usage_by_limit[dimension] >= limit
+        dimension for dimension, limit in effective.items() if usage_by_limit[dimension] >= limit
     )
     reasons = []
     if missing:
@@ -172,13 +177,22 @@ def build_execution_snapshot(
     nodes = [node for node in plan.get("nodes", []) if isinstance(node, dict)]
     metadata = plan.get("metadata") if isinstance(plan.get("metadata"), dict) else {}
     params = {
-        str(node.get("id")): dict(node.get("params") or {})
-        for node in nodes
-        if node.get("id")
+        str(node.get("id")): dict(node.get("params") or {}) for node in nodes if node.get("id")
     }
     node_ids = tuple(sorted(params))
     backend_ids = tuple(
-        sorted((str(node.get("id")), str(node.get("backend") or contracts.get(str(node.get("id")), None).backend if contracts.get(str(node.get("id"))) else "")) for node in nodes if node.get("id"))
+        sorted(
+            (
+                str(node.get("id")),
+                str(
+                    node.get("backend") or contracts.get(str(node.get("id")), None).backend
+                    if contracts.get(str(node.get("id")))
+                    else ""
+                ),
+            )
+            for node in nodes
+            if node.get("id")
+        )
     )
     dag = tuple(
         sorted(
@@ -219,11 +233,12 @@ def build_execution_snapshot(
             if node_id in node_ids
         )
     )
+
     def scope_values(*keys: str) -> tuple[str, ...]:
         result = []
         for key in keys:
             value = metadata.get(key)
-            if isinstance(value, (list, tuple)):
+            if isinstance(value, list | tuple):
                 result.extend(str(item) for item in value)
         return tuple(sorted(set(result)))
 
@@ -265,7 +280,9 @@ def apply_change_request(
     payload["node_ids"] = tuple(sorted(node_ids))
     dag = dict(original.dag_dependencies)
     dag.update({key: tuple(sorted(value)) for key, value in changes.dag_patch.items()})
-    payload["dag_dependencies"] = tuple(sorted((key, value) for key, value in dag.items() if key in node_ids))
+    payload["dag_dependencies"] = tuple(
+        sorted((key, value) for key, value in dag.items() if key in node_ids)
+    )
     for field in ("input_roots", "output_roots", "readonly_roots"):
         value = getattr(changes, field)
         if value is not None:
@@ -321,7 +338,10 @@ def canonical_recovery_diff(
         "contract_versions": (before["contract_versions"], after["contract_versions"]),
         "dag_dependencies": (before["dag_dependencies"], after["dag_dependencies"]),
         "backend_ids": (before["backend_ids"], after["backend_ids"]),
-        "execution_backend_policy": (before["execution_backend_policy"], after["execution_backend_policy"]),
+        "execution_backend_policy": (
+            before["execution_backend_policy"],
+            after["execution_backend_policy"],
+        ),
         "roots": (
             {key: before[key] for key in ("input_roots", "output_roots", "readonly_roots")},
             {key: after[key] for key in ("input_roots", "output_roots", "readonly_roots")},
@@ -334,7 +354,10 @@ def canonical_recovery_diff(
         "output_policy": (before["output_policy"], after["output_policy"]),
         "goal_contract": (before["goal_contract_hash"], after["goal_contract_hash"]),
         "approval_context": (before["approval_context_id"], after["approval_context_id"]),
-        "safe_allowlist": (before["safe_allowlist_fingerprint"], after["safe_allowlist_fingerprint"]),
+        "safe_allowlist": (
+            before["safe_allowlist_fingerprint"],
+            after["safe_allowlist_fingerprint"],
+        ),
     }
     entries = []
     for dimension in _DIFF_FIELDS:
@@ -359,7 +382,10 @@ def canonical_recovery_diff(
 
 
 def _contains_rawdata_output(snapshot: RecoveryExecutionSnapshot) -> bool:
-    return any("rawdata" in {part.lower() for part in path.replace("\\", "/").split("/")} for path in snapshot.output_roots)
+    return any(
+        "rawdata" in {part.lower() for part in path.replace("\\", "/").split("/")}
+        for path in snapshot.output_roots
+    )
 
 
 def _checkpoint_valid(
@@ -373,11 +399,17 @@ def _checkpoint_valid(
         return False
     if set(checkpoint.backend_ids) != {value for _, value in original.backend_ids}:
         return False
-    if set(checkpoint.input_roots) != set(original.input_roots) or set(checkpoint.output_roots) != set(original.output_roots):
+    if set(checkpoint.input_roots) != set(original.input_roots) or set(
+        checkpoint.output_roots
+    ) != set(original.output_roots):
         return False
     remaining = set(checkpoint.remaining_node_ids)
     completed = set(checkpoint.completed_node_ids)
-    if not remaining or remaining & completed or not (remaining | completed).issubset(original.node_ids):
+    if (
+        not remaining
+        or remaining & completed
+        or not (remaining | completed).issubset(original.node_ids)
+    ):
         return False
     dag = dict(original.dag_dependencies)
     return all(set(dag.get(node_id, ())).issubset(remaining | completed) for node_id in remaining)
@@ -407,10 +439,12 @@ class RecoveryProposalEngine:
             or diagnosis.bindings.plan_hash != ticket.plan_hash
             or diagnosis.bindings.project_id != ticket.project_id
         ):
-            raise SafetyError("RECOVERY_PROPOSAL_BINDING_MISMATCH", code="RECOVERY_PROPOSAL_BINDING_MISMATCH")
+            raise SafetyError(
+                "RECOVERY_PROPOSAL_BINDING_MISMATCH", code="RECOVERY_PROPOSAL_BINDING_MISMATCH"
+            )
         node_ids = tuple(
             sorted(
-                set(fact.node_id for fact in diagnosis.facts if fact.node_id)
+                {fact.node_id for fact in diagnosis.facts if fact.node_id}
                 or set(ticket.approved_node_ids)
             )
         )
@@ -465,7 +499,7 @@ class RecoveryProposalEngine:
             or contracts[node_id].idempotency.attempt_output_strategy == "isolated_subdirectory"
             for node_id in node_ids
         )
-        failed_subjects = tuple(sorted(set(fact.subject_id for fact in facts if fact.subject_id)))
+        failed_subjects = tuple(sorted({fact.subject_id for fact in facts if fact.subject_id}))
         safe_blocks = tuple(
             reason
             for reason, condition in (
@@ -486,7 +520,9 @@ class RecoveryProposalEngine:
                     subjects=(),
                     diff=same_diff,
                     risk="low",
-                    idempotency="idempotent" if all(contracts[node].idempotency.idempotent for node in node_ids) else "isolated_output",
+                    idempotency="idempotent"
+                    if all(contracts[node].idempotency.idempotent for node in node_ids)
+                    else "isolated_output",
                     approval="explicit_retry_approval",
                     reasons=("SAFE_RETRY_EVALUATED", "QUOTA_AVAILABLE"),
                     blocked=safe_blocks,
@@ -498,7 +534,9 @@ class RecoveryProposalEngine:
             subset_supported = all(
                 contracts[node].retry_policy.supports_subject_subset for node in node_ids
             )
-            subset_in_scope = set(failed_subjects).issubset(original.subject_scope or failed_subjects)
+            subset_in_scope = set(failed_subjects).issubset(
+                original.subject_scope or failed_subjects
+            )
             subset_blocks = tuple(
                 reason
                 for reason, condition in (
@@ -527,12 +565,16 @@ class RecoveryProposalEngine:
                 )
             )
         if checkpoint is not None:
-            resume_supported = not changed_diff.changes_reviewed_contract and all(
-                contracts[node].retry_policy.supports_resume
-                and contracts[node].retry_policy.checkpoint_schema == checkpoint.schema_id
-                for node in checkpoint.remaining_node_ids
-                if node in contracts
-            ) and set(checkpoint.remaining_node_ids).issubset(contracts)
+            resume_supported = (
+                not changed_diff.changes_reviewed_contract
+                and all(
+                    contracts[node].retry_policy.supports_resume
+                    and contracts[node].retry_policy.checkpoint_schema == checkpoint.schema_id
+                    for node in checkpoint.remaining_node_ids
+                    if node in contracts
+                )
+                and set(checkpoint.remaining_node_ids).issubset(contracts)
+            )
             checkpoint_ok = _checkpoint_valid(checkpoint, original, ticket)
             candidates.append(
                 self._candidate(
@@ -573,7 +615,9 @@ class RecoveryProposalEngine:
                     contract,
                     dict(changed.normalized_params.get(node_id, {})),
                 )
-                parameter_blocks.extend(f"PARAMETER_CONTRACT_INVALID:{node_id}:{error}" for error in errors)
+                parameter_blocks.extend(
+                    f"PARAMETER_CONTRACT_INVALID:{node_id}:{error}" for error in errors
+                )
             parameter_cause = any(
                 fact.category in {"PARAMETER_INVALID", "PARAMETER_CAUSED_GAP"}
                 for fact in diagnosis.facts
@@ -629,11 +673,11 @@ class RecoveryProposalEngine:
                     change_request=change_request,
                 )
             )
-        replan_dimensions = {
-            entry.dimension
-            for entry in changed_diff.entries
-            if entry.changed
-        } - {"normalized_params", "backend_ids", "execution_backend_policy"}
+        replan_dimensions = {entry.dimension for entry in changed_diff.entries if entry.changed} - {
+            "normalized_params",
+            "backend_ids",
+            "execution_backend_policy",
+        }
         if replan_dimensions:
             replan_blocks = []
             if _contains_rawdata_output(changed):
@@ -648,7 +692,10 @@ class RecoveryProposalEngine:
                     risk="medium",
                     idempotency="not_applicable",
                     approval="new_reviewed_plan_and_approval",
-                    reasons=("REVIEWED_CONTRACT_CHANGE", *tuple(sorted(f"DIFF_{item.upper()}" for item in replan_dimensions))),
+                    reasons=(
+                        "REVIEWED_CONTRACT_CHANGE",
+                        *tuple(sorted(f"DIFF_{item.upper()}" for item in replan_dimensions)),
+                    ),
                     blocked=tuple(replan_blocks),
                     eligible=not replan_blocks,
                     executable=False,
@@ -663,11 +710,11 @@ class RecoveryProposalEngine:
                     same_diff,
                     reasons=tuple(
                         sorted(
-                            set(
+                            {
                                 reason
                                 for candidate in candidates
                                 for reason in candidate.blocked_reasons
-                            )
+                            }
                             or {"NO_SAFE_RECOVERY_CANDIDATE"}
                         )
                     ),
@@ -675,7 +722,10 @@ class RecoveryProposalEngine:
             )
             eligible = [candidates[-1]]
         candidates = sorted(candidates, key=lambda item: (item.rank_key, item.candidate_id))
-        recommended = min((candidate for candidate in candidates if candidate.eligible), key=lambda item: (item.rank_key, item.candidate_id))
+        recommended = min(
+            (candidate for candidate in candidates if candidate.eligible),
+            key=lambda item: (item.rank_key, item.candidate_id),
+        )
         return self._proposal(
             diagnosis=diagnosis,
             quota=quota,
@@ -817,7 +867,7 @@ class RecoveryProposalEngine:
             bindings=diagnosis.bindings,
             diagnosis_id=diagnosis.diagnosis_id,
             diagnosis_hash=diagnosis.diagnosis_hash,
-            created_at=created_at or datetime.now(timezone.utc),
+            created_at=created_at or datetime.now(UTC),
             parent_recovery_proposal_id=parent_recovery_proposal_id,
             quota=quota,
             candidates=candidates,

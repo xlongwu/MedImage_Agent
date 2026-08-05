@@ -1,0 +1,64 @@
+.dock {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 4px;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px;
+}
+
+.header span,
+.header p {
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+
+.header h2,
+.header p {
+  margin: 0;
+}
+
+.header h2 {
+  margin-top: 2px;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.header button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid var(--color-divider);
+  border-radius: 9px;
+  background: var(--color-surface-primary);
+  color: var(--color-text-secondary);
+}
+
+.boundary {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 24%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-warning) 6%, transparent);
+}
+
+.boundary strong {
+  font-size: 11px;
+}
+
+.boundary p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}

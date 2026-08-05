@@ -61,19 +61,6 @@ export async function executePreprocessingPythonPreflight(
   );
 }
 
-export async function executeReviewedPreprocessingPipeline(
-  baseUrl: string,
-  projectId: string,
-  preprocessingRunId: string,
-  body: import("../../types").PreprocessingPipelineExecuteRequest,
-) {
-  return requestJson<import("../../types").PreprocessingPipelineExecuteResponse>(
-    baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/runs/${encodeURIComponent(preprocessingRunId)}/execute-reviewed`,
-    { method: "POST", body: JSON.stringify(body) },
-  );
-}
-
 export async function runNativeFullPreprocessingDryRun(
   baseUrl: string,
   projectId: string,
@@ -88,30 +75,6 @@ export async function runNativeFullPreprocessingDryRun(
 
 export async function getNativeGpuDetection(baseUrl: string) {
   return requestJson<import("../../types").NativeGpuDetection>(baseUrl, "/api/gpu/detect");
-}
-
-export async function executeNativeFullPreprocessing(
-  baseUrl: string,
-  projectId: string,
-  body: import("../../types").NativeFullPreprocRequest,
-) {
-  return requestJson<import("../../types").NativeFullPreprocResponse>(
-    baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/full/execute`,
-    { method: "POST", body: JSON.stringify(body) },
-  );
-}
-
-export async function submitNativeFullPreprocessing(
-  baseUrl: string,
-  projectId: string,
-  body: import("../../types").NativeFullPreprocRequest,
-) {
-  return requestJson<import("../../types").NativeFullPreprocResponse>(
-    baseUrl,
-    `/api/projects/${encodeURIComponent(projectId)}/preprocessing/native/full/execute/async`,
-    { method: "POST", body: JSON.stringify(body) },
-  );
 }
 
 export async function getNativeFullPreprocessingProgress(

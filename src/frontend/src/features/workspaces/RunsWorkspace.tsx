@@ -1,16 +1,18 @@
 import { useMemo, useState } from "react";
+import type { TaskDiagnostics, TaskEvent, TaskLogEntry, TaskStatus } from "../../lib/types/task";
+import type { AgentTaskResponse } from "../../lib/types/agentTask";
 import type {
-  TaskAuditPackage,
-  TaskDiagnostics,
-  TaskEvent,
-  TaskLogEntry,
-  TaskStatus,
-} from "../../lib/types/task";
+  ProjectRunDetailResponse,
+  ProjectRunEventsResponse,
+  ProjectRunLogsResponse,
+  ProjectRunStateTimelineResponse,
+} from "../../types";
 import {
   Badge,
   Button,
   Card,
   EmptyState,
+  Icon,
   SegmentedControl,
   Table,
   TableEmpty,
@@ -19,33 +21,27 @@ import { WorkspaceHeader } from "../dashboard/DashboardChrome";
 import styles from "./RunsWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
 import { useI18n } from "../../i18n/useI18n";
+import { getAgentResultMessageKey } from "../agent/components/ResultSummaryCard";
+import { useProjectRunDetails, type ProjectRunDetails } from "../runs/useProjectRunDetails";
 
 export interface RunsWorkspaceProps {
-  auditLoading: boolean;
-  auditPackage: TaskAuditPackage | null;
+  agentTask?: AgentTaskResponse | null;
+  baseUrl: string;
   error: string;
-  events: TaskEvent[];
-  eventsError: string;
-  eventsLoading: boolean;
-  diagnostics: TaskDiagnostics;
   loading: boolean;
-  onApprovalNameChange: (value: string) => void;
-  onApprove: () => void;
-  onGenerateAudit: () => void;
-  onReconnect: () => void;
-  onRetryEvents: () => void;
   onRetryTasks: () => void;
+  onOpenAgent?: () => void;
   onSelectTask: (taskId: string) => void;
   projectId: string | null;
   selectedTask: TaskLogEntry | null;
   selectedTaskId: string | null;
-  streamConnected: boolean;
-  taskApprovalName: string;
   tasks: TaskLogEntry[];
+  historyTasks: TaskLogEntry[];
 }
 
 type RunStatusFilter = "all" | "active" | "failed" | "completed";
 type RunDetailTab = "events" | "logs" | "diagnostics" | "artifacts" | "audit";
+type RunWorkspaceView = "workspace" | "history";
 type Translate = ReturnType<typeof useI18n>["t"];
 
 const RUN_LIST_RENDER_LIMIT = 50;
@@ -54,36 +50,30 @@ const DIAGNOSIS_RENDER_LIMIT = 8;
 const EXTERNAL_TOOL_RENDER_LIMIT = 4;
 
 export function RunsWorkspace({
-  auditLoading,
-  auditPackage,
-  diagnostics,
+  agentTask,
+  baseUrl,
   error,
-  events,
-  eventsError,
-  eventsLoading,
   loading,
-  onApprovalNameChange,
-  onApprove,
-  onGenerateAudit,
-  onReconnect,
-  onRetryEvents,
+  onOpenAgent,
   onRetryTasks,
   onSelectTask,
   projectId,
   selectedTask,
   selectedTaskId,
-  streamConnected,
-  taskApprovalName,
   tasks,
+  historyTasks,
 }: RunsWorkspaceProps) {
   const { t } = useI18n();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<RunStatusFilter>("all");
   const [detailTab, setDetailTab] = useState<RunDetailTab>("events");
+  const [workspaceView, setWorkspaceView] = useState<RunWorkspaceView>("workspace");
+  const runDetails = useProjectRunDetails(baseUrl, projectId, selectedTask?.id ?? null);
   const hasProject = Boolean(projectId);
+  const sourceTasks = workspaceView === "history" ? historyTasks : tasks;
   const filteredTasks = useMemo(
     () =>
-      tasks.filter((task) => {
+      sourceTasks.filter((task) => {
         const query = searchTerm.trim().toLowerCase();
         const matchesQuery =
           !query ||
@@ -104,22 +94,16 @@ export function RunsWorkspace({
 
         return matchesQuery && matchesStatus;
       }),
-    [searchTerm, statusFilter, tasks],
+    [searchTerm, sourceTasks, statusFilter],
   );
   const visibleTasks = filteredTasks.slice(0, RUN_LIST_RENDER_LIMIT);
   const isFiltered = searchTerm.trim().length > 0 || statusFilter !== "all";
-  const hasActiveRun = tasks.some((task) => task.status === "running" || task.status === "pending");
-  const streamLabel = hasActiveRun
-    ? streamConnected
-      ? t("runs.stream.connected")
-      : t("runs.stream.disconnected")
-    : t("runs.stream.none");
   const emptyRunListMessage = runListEmptyMessage({
     error,
     filtered: isFiltered,
     loading,
     projectId,
-    taskCount: tasks.length,
+    taskCount: sourceTasks.length,
     t,
   });
 
@@ -131,230 +115,681 @@ export function RunsWorkspace({
         status={hasProject ? t("runs.header.history") : t("runs.header.selectProject")}
       />
 
+      <div className={styles.workspaceViewSwitch}>
+        <SegmentedControl
+          aria-label={t("runs.workspaceView")}
+          onChange={(value) => setWorkspaceView(value as RunWorkspaceView)}
+          options={[
+            { label: t("runs.view.workspace"), value: "workspace" },
+            { label: t("runs.view.history"), value: "history" },
+          ]}
+          value={workspaceView}
+        />
+      </div>
+
       {!hasProject ? (
         <EmptyState
           title={t("runs.noProject.title")}
           description={t("runs.noProject.description")}
         />
-      ) : (
-        <RunsOverview tasks={tasks} />
-      )}
+      ) : workspaceView === "history" ? (
+        <RunsOverview tasks={historyTasks} />
+      ) : null}
 
-      <section className={styles.runLayout} aria-label={t("runs.layoutAria")}>
-        <Card className={styles.runListCard} tone="muted">
-          <div className={styles.sectionHeader}>
-            <div>
-              <h3>{t("runs.execution.title")}</h3>
-              <p>{t("runs.execution.description")}</p>
-            </div>
-            <div className={styles.headerActions}>
-              <span
-                className={`${styles.streamChip} ${
-                  streamConnected && hasActiveRun ? styles.online : ""
-                } ${!hasActiveRun ? styles.idle : ""}`}
-                aria-label={t("runs.stream.status")}
-              >
-                {streamLabel}
-              </span>
+      {workspaceView === "history" && agentTask?.project_id === projectId ? (
+        <AgentTaskEvidencePanel task={agentTask} />
+      ) : null}
+
+      {workspaceView === "workspace" && hasProject ? (
+        <section className={styles.taskWorkspace} aria-label={t("runs.taskWorkspaceAria")}>
+          <Card className={styles.taskSidebar} tone="muted">
+            <div className={styles.sectionHeader}>
+              <div>
+                <h3>{t("runs.tasks.title")}</h3>
+                <p>{t("runs.tasks.description")}</p>
+              </div>
               {error ? (
                 <Button size="sm" variant="secondary" onClick={onRetryTasks}>
                   {t("common.retry")}
                 </Button>
               ) : null}
             </div>
-          </div>
+            <RunFilters
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              setStatusFilter={setStatusFilter}
+              statusFilter={statusFilter}
+            />
+            {loading && sourceTasks.length ? (
+              <div className={styles.loadingLine}>{t("runs.refreshing")}</div>
+            ) : null}
+            {error ? (
+              <div className={styles.errorLine}>
+                {sourceTasks.length ? t("runs.refreshFailedStale") : ""}
+                {error}
+              </div>
+            ) : null}
+            <div className={styles.taskList}>
+              {visibleTasks.length ? (
+                visibleTasks.map((task) => (
+                  <button
+                    aria-current={task.id === selectedTaskId ? "true" : undefined}
+                    className={styles.taskListItem}
+                    data-selected={task.id === selectedTaskId}
+                    key={task.id}
+                    onClick={() => onSelectTask(task.id)}
+                    type="button"
+                  >
+                    <span className={styles.taskListHeading}>
+                      <strong>{task.run_name || task.pipeline || task.id}</strong>
+                      <Badge size="sm" tone={statusTone(task.status)}>
+                        {statusLabel(task.status, t)}
+                      </Badge>
+                    </span>
+                    <span className={styles.taskListMeta}>
+                      <small>{task.pipeline}</small>
+                      <time>{task.started_at}</time>
+                    </span>
+                    <RunProgress value={task.progress} />
+                  </button>
+                ))
+              ) : (
+                <p className={styles.taskListEmpty}>{emptyRunListMessage}</p>
+              )}
+            </div>
+          </Card>
 
-          {hasProject ? (
-            <div className={styles.runControls}>
-              <label className={styles.searchField}>
-                <span>{t("runs.search")}</span>
-                <input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder={t("runs.searchPlaceholder")}
-                />
-              </label>
-              <SegmentedControl
-                aria-label={t("runs.filterAria")}
-                value={statusFilter}
-                onChange={(value) => setStatusFilter(value as RunStatusFilter)}
-                options={[
-                  { label: t("runs.filter.all"), value: "all" },
-                  { label: t("runs.filter.active"), value: "active" },
-                  { label: t("runs.filter.failed"), value: "failed" },
-                  { label: t("runs.filter.completed"), value: "completed" },
-                ]}
+          <Card className={styles.taskDetailCard}>
+            {selectedTask ? (
+              <SelectedRunProjection
+                agentTask={
+                  agentTaskMatchesRun(agentTask, selectedTask, projectId) ? agentTask : null
+                }
+                onOpenAgent={onOpenAgent}
+                task={selectedTask}
               />
-            </div>
-          ) : null}
+            ) : agentTask?.project_id === projectId &&
+              agentTask.next_action.type === "approve_execution" ? (
+              <ApprovalStatusPanel task={agentTask} onOpenAgent={onOpenAgent} />
+            ) : (
+              <div className={styles.approvalUnavailable}>
+                <Icon name="circle-alert" width={18} height={18} />
+                <div>
+                  <strong>{t("runs.approval.unavailable")}</strong>
+                  <p>{t("runs.approval.unavailableDescription")}</p>
+                </div>
+              </div>
+            )}
+            {selectedTask ? (
+              <RunDetailPanel
+                task={selectedTask}
+                details={runDetails.data}
+                loading={runDetails.loading}
+                error={runDetails.error}
+                onRetry={runDetails.reload}
+                activeTab={detailTab}
+                onTabChange={setDetailTab}
+              />
+            ) : (
+              <EmptyState
+                title={t("runs.selectRun.title")}
+                description={t("runs.selectRun.description")}
+              />
+            )}
+          </Card>
 
-          {loading && tasks.length ? (
-            <div className={styles.loadingLine}>{t("runs.refreshing")}</div>
-          ) : null}
-          {error ? (
-            <div className={styles.errorLine}>
-              {tasks.length ? t("runs.refreshFailedStale") : ""}
-              {error}
-            </div>
-          ) : null}
-
-          {hasProject ? (
-            <Table caption={t("runs.table.caption")}>
-              <thead>
-                <tr>
-                  <th>{t("runs.table.run")}</th>
-                  <th>{t("runs.table.project")}</th>
-                  <th>{t("runs.table.pipeline")}</th>
-                  <th>{t("runs.table.status")}</th>
-                  <th>{t("runs.table.progress")}</th>
-                  <th>{t("runs.table.started")}</th>
-                  <th>{t("runs.table.duration")}</th>
-                  <th>{t("runs.table.triggeredBy")}</th>
-                  <th>{t("runs.table.action")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleTasks.length ? (
-                  visibleTasks.map((task) => (
-                    <tr
-                      key={task.id}
-                      className={task.id === selectedTaskId ? styles.selectedRow : undefined}
-                    >
-                      <td>
-                        <strong className={styles.runName}>{task.run_name}</strong>
-                        <small className={styles.runMeta}>{task.id}</small>
-                      </td>
-                      <td>{task.dataset || projectId}</td>
-                      <td>{task.pipeline}</td>
-                      <td>
-                        <Badge tone={statusTone(task.status)} size="sm">
-                          {statusLabel(task.status, t)}
-                        </Badge>
-                      </td>
-                      <td>
-                        <RunProgress value={task.progress} />
-                      </td>
-                      <td>{task.started_at}</td>
-                      <td>{task.duration || t("runs.inProgress")}</td>
-                      <td>{task.owner}</td>
-                      <td>
-                        <Button
-                          size="sm"
-                          variant={task.id === selectedTaskId ? "primary" : "secondary"}
-                          onClick={() => onSelectTask(task.id)}
-                        >
-                          {t("common.open")}
-                        </Button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <TableEmpty colSpan={9}>{emptyRunListMessage}</TableEmpty>
-                )}
-              </tbody>
-            </Table>
-          ) : (
-            <EmptyState
-              title={t("runs.listUnavailable.title")}
-              description={t("runs.listUnavailable.description")}
-            />
-          )}
-          {filteredTasks.length > visibleTasks.length ? (
-            <div className={styles.trimNote}>
-              {t("runs.trimmed", {
-                visible: visibleTasks.length,
-                total: filteredTasks.length,
-              })}
-            </div>
-          ) : null}
-        </Card>
-
-        <Card className={styles.detailCard}>
-          <div className={styles.sectionHeader}>
-            <div>
-              <h3>{t("runs.detail.title")}</h3>
-              <p>{t("runs.detail.description")}</p>
-            </div>
-          </div>
-          {selectedTask ? (
-            <RunDetailPanel
+          <Card className={styles.artifactInspector}>
+            <RunArtifactInspector
+              details={runDetails.data}
+              loading={runDetails.loading}
               task={selectedTask}
-              events={events}
-              diagnostics={diagnostics}
-              loading={eventsLoading}
-              error={eventsError}
-              streamConnected={streamConnected}
-              approvalName={taskApprovalName}
-              auditPackage={auditPackage}
-              auditLoading={auditLoading}
-              onApprovalNameChange={onApprovalNameChange}
-              onApprove={onApprove}
-              onGenerateAudit={onGenerateAudit}
-              onRetry={onRetryEvents}
-              onReconnect={onReconnect}
-              activeTab={detailTab}
-              onTabChange={setDetailTab}
             />
-          ) : (
-            <EmptyState
-              title={t("runs.selectRun.title")}
-              description={t("runs.selectRun.description")}
-            />
-          )}
-        </Card>
-      </section>
+          </Card>
+        </section>
+      ) : null}
+
+      {workspaceView === "history" ? (
+        <section className={styles.runLayout} aria-label={t("runs.layoutAria")}>
+          <Card className={styles.runListCard} tone="muted">
+            <div className={styles.sectionHeader}>
+              <div>
+                <h3>{t("runs.execution.title")}</h3>
+                <p>{t("runs.execution.description")}</p>
+              </div>
+              <div className={styles.headerActions}>
+                {error ? (
+                  <Button size="sm" variant="secondary" onClick={onRetryTasks}>
+                    {t("common.retry")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {hasProject ? (
+              <RunFilters
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                setStatusFilter={setStatusFilter}
+                statusFilter={statusFilter}
+              />
+            ) : null}
+
+            {loading && sourceTasks.length ? (
+              <div className={styles.loadingLine}>{t("runs.refreshing")}</div>
+            ) : null}
+            {error ? (
+              <div className={styles.errorLine}>
+                {sourceTasks.length ? t("runs.refreshFailedStale") : ""}
+                {error}
+              </div>
+            ) : null}
+
+            {hasProject ? (
+              <Table caption={t("runs.table.caption")}>
+                <thead>
+                  <tr>
+                    <th>{t("runs.table.run")}</th>
+                    <th>{t("runs.table.project")}</th>
+                    <th>{t("runs.table.pipeline")}</th>
+                    <th>{t("runs.table.status")}</th>
+                    <th>{t("runs.table.progress")}</th>
+                    <th>{t("runs.table.started")}</th>
+                    <th>{t("runs.table.duration")}</th>
+                    <th>{t("runs.table.triggeredBy")}</th>
+                    <th>{t("runs.table.action")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleTasks.length ? (
+                    visibleTasks.map((task) => (
+                      <tr
+                        key={task.id}
+                        className={task.id === selectedTaskId ? styles.selectedRow : undefined}
+                      >
+                        <td>
+                          <strong className={styles.runName}>{task.run_name}</strong>
+                          <small className={styles.runMeta}>{task.id}</small>
+                        </td>
+                        <td>{task.dataset || projectId}</td>
+                        <td>{task.pipeline}</td>
+                        <td>
+                          <Badge tone={statusTone(task.status)} size="sm">
+                            {statusLabel(task.status, t)}
+                          </Badge>
+                        </td>
+                        <td>
+                          <RunProgress value={task.progress} />
+                        </td>
+                        <td>{task.started_at}</td>
+                        <td>{task.duration || t("runs.inProgress")}</td>
+                        <td>{task.owner}</td>
+                        <td>
+                          <Button
+                            size="sm"
+                            variant={task.id === selectedTaskId ? "primary" : "secondary"}
+                            onClick={() => onSelectTask(task.id)}
+                          >
+                            {t("common.open")}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <TableEmpty colSpan={9}>{emptyRunListMessage}</TableEmpty>
+                  )}
+                </tbody>
+              </Table>
+            ) : (
+              <EmptyState
+                title={t("runs.listUnavailable.title")}
+                description={t("runs.listUnavailable.description")}
+              />
+            )}
+            {filteredTasks.length > visibleTasks.length ? (
+              <div className={styles.trimNote}>
+                {t("runs.trimmed", {
+                  visible: visibleTasks.length,
+                  total: filteredTasks.length,
+                })}
+              </div>
+            ) : null}
+          </Card>
+
+          <Card className={styles.detailCard}>
+            <div className={styles.sectionHeader}>
+              <div>
+                <h3>{t("runs.detail.title")}</h3>
+                <p>{t("runs.detail.description")}</p>
+              </div>
+            </div>
+            {selectedTask ? (
+              <RunDetailPanel
+                task={selectedTask}
+                details={runDetails.data}
+                loading={runDetails.loading}
+                error={runDetails.error}
+                onRetry={runDetails.reload}
+                activeTab={detailTab}
+                onTabChange={setDetailTab}
+              />
+            ) : (
+              <EmptyState
+                title={t("runs.selectRun.title")}
+                description={t("runs.selectRun.description")}
+              />
+            )}
+          </Card>
+        </section>
+      ) : null}
     </div>
   );
 }
 
+function RunFilters({
+  searchTerm,
+  setSearchTerm,
+  setStatusFilter,
+  statusFilter,
+}: {
+  searchTerm: string;
+  setSearchTerm: (value: string) => void;
+  setStatusFilter: (value: RunStatusFilter) => void;
+  statusFilter: RunStatusFilter;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className={styles.runControls}>
+      <label className={styles.searchField}>
+        <span>{t("runs.search")}</span>
+        <input
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder={t("runs.searchPlaceholder")}
+          value={searchTerm}
+        />
+      </label>
+      <SegmentedControl
+        aria-label={t("runs.filterAria")}
+        onChange={(value) => setStatusFilter(value as RunStatusFilter)}
+        options={[
+          { label: t("runs.filter.all"), value: "all" },
+          { label: t("runs.filter.active"), value: "active" },
+          { label: t("runs.filter.failed"), value: "failed" },
+          { label: t("runs.filter.completed"), value: "completed" },
+        ]}
+        value={statusFilter}
+      />
+    </div>
+  );
+}
+
+function agentTaskMatchesRun(
+  agentTask: AgentTaskResponse | null | undefined,
+  run: TaskLogEntry,
+  projectId: string | null,
+): agentTask is AgentTaskResponse {
+  if (!agentTask || agentTask.project_id !== projectId) return false;
+  if (run.agent_task_id) {
+    if (run.agent_task_id !== agentTask.task_id) return false;
+    return !agentTask.technical_details?.run_id || agentTask.technical_details.run_id === run.id;
+  }
+  return Boolean(agentTask.technical_details?.run_id === run.id);
+}
+
+function SelectedRunProjection({
+  agentTask,
+  onOpenAgent,
+  task,
+}: {
+  agentTask: AgentTaskResponse | null;
+  onOpenAgent?: () => void;
+  task: TaskLogEntry;
+}) {
+  const { t } = useI18n();
+  const result = agentTask?.result_summary;
+  const terminal = ["completed", "partial", "failed"].includes(task.status);
+  const completedSubjects = result?.completed_subjects ?? agentTask?.progress.completed_subjects;
+  const totalSubjects = result?.total_subjects ?? agentTask?.progress.total_subjects;
+  const localizeResultText = (value: string) => {
+    const key = getAgentResultMessageKey(value);
+    return key ? t(key) : value;
+  };
+  const summary =
+    (result?.summary ? localizeResultText(result.summary) : null) ||
+    (agentTask?.current_action ?? t(`runs.projection.summary.${task.status}`));
+
+  return (
+    <section className={styles.approvalPanel} aria-label={t("runs.projection.title")}>
+      <header>
+        <div>
+          <span>{t("runs.projection.gate")}</span>
+          <h3>{result?.title ? localizeResultText(result.title) : task.run_name}</h3>
+        </div>
+        <Badge tone={statusTone(task.status)}>{statusLabel(task.status, t)}</Badge>
+      </header>
+      <p>{summary}</p>
+      <div className={styles.approvalChecks}>
+        <span data-ok={Boolean(agentTask)}>
+          <Icon height={14} name={agentTask ? "circle-check" : "circle-alert"} width={14} />
+          {agentTask
+            ? t("runs.projection.agentTask", { id: agentTask.task_id })
+            : t("runs.projection.noAgentTask")}
+        </span>
+        <span data-ok={Boolean(task.reviewed_plan_id)}>
+          <Icon
+            height={14}
+            name={task.reviewed_plan_id ? "circle-check" : "circle-alert"}
+            width={14}
+          />
+          {t("runs.projection.reviewedPlan")}
+        </span>
+        <span data-ok={terminal}>
+          <Icon height={14} name={terminal ? "circle-check" : "circle-alert"} width={14} />
+          {terminal ? t("runs.projection.terminal") : t("runs.projection.active")}
+        </span>
+      </div>
+      {completedSubjects != null && totalSubjects != null ? (
+        <p>
+          {t("runs.projection.subjects", { completed: completedSubjects, total: totalSubjects })}
+        </p>
+      ) : null}
+      {result?.limitations.length ? (
+        <ul>
+          {result.limitations.slice(0, 3).map((limitation) => (
+            <li key={limitation}>{localizeResultText(limitation)}</li>
+          ))}
+        </ul>
+      ) : null}
+      <div className={styles.approvalFooter}>
+        <small>{t("runs.projection.authority")}</small>
+        {agentTask && onOpenAgent ? (
+          <Button onClick={onOpenAgent} size="sm" variant="secondary">
+            {t("runs.projection.openAgent")}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ApprovalStatusPanel({
+  onOpenAgent,
+  task,
+}: {
+  onOpenAgent?: () => void;
+  task: AgentTaskResponse;
+}) {
+  const { t } = useI18n();
+  const summary = task.approval_summary;
+  const awaitingApproval = task.next_action.type === "approve_execution";
+  const tone =
+    task.state === "completed"
+      ? "success"
+      : task.state === "needs_attention"
+        ? "danger"
+        : awaitingApproval
+          ? "warning"
+          : "info";
+  return (
+    <section className={styles.approvalPanel} aria-label={t("runs.approval.title")}>
+      <header>
+        <div>
+          <span>{t("runs.approval.gate")}</span>
+          <h3>{t("runs.approval.title")}</h3>
+        </div>
+        <Badge tone={tone}>{t(`agent.state.${task.state}`)}</Badge>
+      </header>
+      <p>{summary?.execution_summary || task.current_action}</p>
+      <div className={styles.approvalChecks}>
+        <span data-ok={summary?.rawdata_read_only ?? false}>
+          <Icon
+            height={14}
+            name={summary?.rawdata_read_only ? "circle-check" : "circle-alert"}
+            width={14}
+          />
+          {t("runs.approval.rawdataReadonly")}
+        </span>
+        <span data-ok={Boolean(summary?.summary_hash)}>
+          <Icon
+            height={14}
+            name={summary?.summary_hash ? "circle-check" : "circle-alert"}
+            width={14}
+          />
+          {t("runs.approval.summaryBound")}
+        </span>
+        <span data-ok={Boolean(task.technical_details?.plan_hash)}>
+          <Icon
+            height={14}
+            name={task.technical_details?.plan_hash ? "circle-check" : "circle-alert"}
+            width={14}
+          />
+          {t("runs.approval.planBound")}
+        </span>
+      </div>
+      {summary?.limitations.length ? (
+        <ul>
+          {summary.limitations.slice(0, 3).map((limitation) => (
+            <li key={limitation}>{limitation}</li>
+          ))}
+        </ul>
+      ) : null}
+      <div className={styles.approvalFooter}>
+        <small>{t("runs.approval.authority")}</small>
+        {onOpenAgent ? (
+          <Button
+            onClick={onOpenAgent}
+            size="sm"
+            variant={awaitingApproval ? "primary" : "secondary"}
+          >
+            {awaitingApproval ? t("runs.approval.review") : t("nav.agent")}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function RunArtifactInspector({
+  details,
+  loading,
+  task,
+}: {
+  details: ReturnType<typeof useProjectRunDetails>["data"];
+  loading: boolean;
+  task: TaskLogEntry | null;
+}) {
+  const { t } = useI18n();
+  const artifacts = details?.artifacts.artifacts ?? [];
+  const grouped = useMemo(() => {
+    const result = new Map<string, typeof artifacts>();
+    artifacts.forEach((artifact) => {
+      const group = artifact.artifact_type || artifact.kind || t("runs.artifacts.other");
+      result.set(group, [...(result.get(group) ?? []), artifact]);
+    });
+    return [...result.entries()];
+  }, [artifacts, t]);
+  return (
+    <aside aria-label={t("runs.artifactInspector.title")}>
+      <div className={styles.sectionHeader}>
+        <div>
+          <h3>{t("runs.artifactInspector.title")}</h3>
+          <p>{t("runs.artifactInspector.description")}</p>
+        </div>
+        <Badge tone={artifacts.length ? "info" : "neutral"}>{artifacts.length}</Badge>
+      </div>
+      {loading ? <div className={styles.loadingLine}>{t("common.loading")}</div> : null}
+      {!task ? (
+        <EmptyState
+          title={t("runs.selectRun.title")}
+          description={t("runs.artifactInspector.selectRun")}
+        />
+      ) : grouped.length ? (
+        <div className={styles.artifactGroups}>
+          {grouped.map(([group, entries]) => (
+            <section key={group}>
+              <h4>{group}</h4>
+              {entries.map((artifact) => (
+                <div className={styles.inspectorArtifact} key={artifact.artifact_id}>
+                  <span className={styles.artifactIcon}>
+                    <Icon height={15} name="results" width={15} />
+                  </span>
+                  <span>
+                    <strong>{artifact.name}</strong>
+                    <small>{artifact.relative_path || artifact.path}</small>
+                    {artifact.subject_id || artifact.stage_id ? (
+                      <small>
+                        {[artifact.subject_id, artifact.stage_id].filter(Boolean).join(" · ")}
+                      </small>
+                    ) : null}
+                  </span>
+                  <Badge size="sm" tone={artifact.exists ? "success" : "danger"}>
+                    {artifact.exists ? t("runs.artifacts.available") : t("common.unavailable")}
+                  </Badge>
+                </div>
+              ))}
+            </section>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title={t("runs.artifacts.emptyTitle")}
+          description={t("runs.artifacts.emptyDescription")}
+        />
+      )}
+    </aside>
+  );
+}
+
+function AgentTaskEvidencePanel({ task }: { task: AgentTaskResponse }) {
+  const { t } = useI18n();
+  const details = task.technical_details;
+  const planOnly = Boolean(
+    task.result_summary?.artifacts.some((artifact) => artifact.artifact_type === "reviewed_plan"),
+  );
+  const ticket = planOnly
+    ? t("runs.agentEvidence.ticketNotCreated")
+    : (details?.ticket_id ?? t("common.unavailable"));
+  const run = planOnly
+    ? t("runs.agentEvidence.runNotCreated")
+    : (details?.run_id ?? t("common.unavailable"));
+  const backend = planOnly
+    ? t("runs.agentEvidence.backendPlanOnly")
+    : details?.backend
+      ? `${details.backend.requested} → ${details.backend.selected ?? t("common.unavailable")}`
+      : t("common.unavailable");
+  return (
+    <Card
+      className={styles.agentEvidenceCard}
+      role="region"
+      aria-label={t("runs.agentEvidence.title")}
+    >
+      <div className={styles.sectionHeader}>
+        <div>
+          <h3>{t("runs.agentEvidence.title")}</h3>
+          <p>{t("runs.agentEvidence.description")}</p>
+        </div>
+        <Badge
+          tone={
+            task.state === "completed"
+              ? "success"
+              : task.state === "needs_attention"
+                ? "danger"
+                : "info"
+          }
+        >
+          {t(`agent.state.${task.state}`)}
+        </Badge>
+      </div>
+      <dl className={styles.agentEvidenceGrid}>
+        <div>
+          <dt>{t("runs.agentEvidence.lifecycle")}</dt>
+          <dd>{details?.lifecycle_id ?? task.task_id}</dd>
+        </div>
+        {planOnly ? (
+          <div>
+            <dt>{t("runs.agentEvidence.execution")}</dt>
+            <dd>{t("runs.agentEvidence.planOnlyExecution")}</dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>{t("runs.agentEvidence.ticket")}</dt>
+          <dd>{ticket}</dd>
+        </div>
+        <div>
+          <dt>{t("runs.agentEvidence.run")}</dt>
+          <dd>{run}</dd>
+        </div>
+        <div>
+          <dt>{t("runs.agentEvidence.backend")}</dt>
+          <dd>{backend}</dd>
+        </div>
+        <div>
+          <dt>{t("runs.agentEvidence.plan")}</dt>
+          <dd>{details?.plan_hash ?? t("common.unavailable")}</dd>
+        </div>
+        <div>
+          <dt>{t("runs.agentEvidence.evaluation")}</dt>
+          <dd>{details?.evaluation_id ?? t("common.unavailable")}</dd>
+        </div>
+      </dl>
+      {details?.backend?.fallback_reason ? (
+        <p className={styles.backendFallback}>{details.backend.fallback_reason}</p>
+      ) : null}
+      <ul className={styles.agentEvidenceLinks}>
+        {task.evidence_links.map((link) => (
+          <li key={link.id}>
+            <span>{localizedEvidenceLabel(link.type, link.label, t)}</span>
+            <code>{link.uri}</code>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+function localizedEvidenceLabel(
+  type: AgentTaskResponse["evidence_links"][number]["type"],
+  fallback: string,
+  t: Translate,
+): string {
+  if (type === "reviewed_plan") return t("runs.agentEvidence.reviewedPlan");
+  if (type === "execution_ticket") return t("runs.agentEvidence.ticket");
+  if (type === "run") return t("runs.agentEvidence.run");
+  return fallback;
+}
+
 interface RunDetailPanelProps {
   activeTab: RunDetailTab;
-  auditLoading: boolean;
-  auditPackage: TaskAuditPackage | null;
-  approvalName: string;
-  diagnostics: TaskDiagnostics;
+  details: ReturnType<typeof useProjectRunDetails>["data"];
   error: string;
-  events: TaskEvent[];
   loading: boolean;
-  onApprovalNameChange: (value: string) => void;
-  onApprove: () => void;
-  onGenerateAudit: () => void;
-  onReconnect: () => void;
-  onRetry: () => void;
+  onRetry: () => Promise<unknown>;
   onTabChange: (value: RunDetailTab) => void;
-  streamConnected: boolean;
   task: TaskLogEntry;
 }
 
 function RunDetailPanel({
   activeTab,
-  auditLoading,
-  auditPackage,
-  approvalName,
-  diagnostics,
+  details,
   error,
-  events,
   loading,
-  onApprovalNameChange,
-  onApprove,
-  onGenerateAudit,
-  onReconnect,
   onRetry,
   onTabChange,
-  streamConnected,
   task,
 }: RunDetailPanelProps) {
   const { t } = useI18n();
-  const latestEvents = events.length ? events : eventsFromLogs(task, t);
-  const timeline = buildRunTimeline(task, latestEvents, t);
-  const artifactEntries = flattenArtifactEntries(diagnostics.artifacts, t);
+  const latestEvents = useMemo(
+    () => projectEventsToTaskEvents(task, details?.events, t),
+    [details?.events, task, t],
+  );
+  const diagnostics = useMemo(() => projectRunDiagnostics(task, details), [details, task]);
+  const timeline = buildRunTimeline(task, latestEvents, details?.timeline, t);
+  const artifactEntries = details?.artifacts.artifacts ?? [];
   const logMessages = useMemo(
-    () => [...task.logs, ...diagnostics.logs],
-    [diagnostics.logs, task.logs],
+    () => projectRunLogMessages(task, details?.logs),
+    [details?.logs, task],
   );
   const visibleLogMessages = logMessages.slice(-RUN_LOG_RENDER_LIMIT);
-  const nodeInspector = buildNodeInspector(task, diagnostics, latestEvents, t);
-  const retryAllowed = diagnosticsRetryAllowed(diagnostics);
+  const nodeInspector = buildNodeInspector(task, diagnostics, latestEvents, details?.timeline, t);
   const [failureActionStatus, setFailureActionStatus] = useState("");
   const [showFailureExplanation, setShowFailureExplanation] = useState(false);
   const hasDiagnostics =
@@ -362,12 +797,6 @@ function RunDetailPanel({
     diagnostics.errors.length ||
     diagnostics.warnings.length ||
     diagnostics.external_tool_results.length;
-  const taskHasActiveStream = task.status === "running" || task.status === "pending";
-  const detailStreamLabel = taskHasActiveStream
-    ? streamConnected
-      ? t("runs.detail.streamLive")
-      : t("runs.detail.streamDisconnected")
-    : t("runs.detail.noStream");
 
   async function handleCopyDiagnostics() {
     const payload = buildDiagnosticsCopyPayload(task, diagnostics, latestEvents);
@@ -382,12 +811,6 @@ function RunDetailPanel({
     }
   }
 
-  function handleRetryAllowedStep() {
-    setFailureActionStatus(
-      retryAllowed ? t("runs.diagnostics.retryHandoff") : t("runs.diagnostics.retryDisabled"),
-    );
-  }
-
   return (
     <section className={styles.detailPanel} aria-label={t("runs.detail.aria")}>
       <div className={styles.detailSummary}>
@@ -398,25 +821,8 @@ function RunDetailPanel({
         </div>
         <div className={styles.detailActions}>
           <Badge tone={statusTone(task.status)}>{statusLabel(task.status, t)}</Badge>
-          <span
-            className={`${styles.streamChip} ${
-              streamConnected && taskHasActiveStream ? styles.online : ""
-            } ${!taskHasActiveStream ? styles.idle : ""}`}
-          >
-            {detailStreamLabel}
-          </span>
-          {error ? (
-            <Button size="sm" variant="secondary" onClick={onRetry}>
-              {t("runs.detail.reloadEvents")}
-            </Button>
-          ) : null}
-          {!streamConnected && task.status === "running" ? (
-            <Button size="sm" variant="secondary" onClick={onReconnect}>
-              {t("runs.detail.reconnect")}
-            </Button>
-          ) : null}
-          <Button size="sm" variant="secondary" onClick={onGenerateAudit} disabled={auditLoading}>
-            {auditLoading ? t("runs.detail.requesting") : t("runs.detail.requestAudit")}
+          <Button size="sm" variant="secondary" onClick={() => void onRetry()} disabled={loading}>
+            {loading ? t("runs.events.loading") : t("runs.detail.reloadEvents")}
           </Button>
         </div>
       </div>
@@ -425,8 +831,14 @@ function RunDetailPanel({
         <RunFact label={t("runs.table.pipeline")} value={task.pipeline} />
         <RunFact label={t("runs.table.status")} value={statusLabel(task.status, t)} />
         <RunFact label={t("runs.table.progress")} value={`${clampProgress(task.progress)}%`} />
-        <RunFact label={t("runs.table.started")} value={task.started_at} />
-        <RunFact label={t("runs.table.duration")} value={task.duration || t("runs.inProgress")} />
+        <RunFact
+          label={t("runs.table.started")}
+          value={details?.detail.summary_preview?.started_at ?? task.started_at}
+        />
+        <RunFact
+          label={t("runs.table.duration")}
+          value={projectRunDuration(details?.detail, task, t)}
+        />
         <RunFact label={t("runs.table.triggeredBy")} value={task.owner} />
         <RunFact
           label={t("runs.fact.execution")}
@@ -551,8 +963,8 @@ function RunDetailPanel({
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={!retryAllowed}
-                    onClick={handleRetryAllowedStep}
+                    disabled
+                    title={t("runs.diagnostics.retryDisabled")}
                   >
                     {t("runs.diagnostics.retryAllowed")}
                   </Button>
@@ -566,7 +978,7 @@ function RunDetailPanel({
                     <p>{nodeInspector.evidence}</p>
                   </div>
                 ) : null}
-                <small>{failureActionStatus || nodeInspector.retry}</small>
+                <small>{failureActionStatus || t("runs.diagnostics.retryDisabled")}</small>
               </div>
             ) : null}
             {hasDiagnostics ? (
@@ -631,10 +1043,10 @@ function RunDetailPanel({
             ) : null}
             {artifactEntries.length ? (
               <div className={styles.artifactList}>
-                {artifactEntries.map((entry) => (
-                  <div className={styles.artifactRow} key={`${entry.label}-${entry.value}`}>
-                    <span>{entry.label}</span>
-                    <strong>{entry.value}</strong>
+                {artifactEntries.map((artifact) => (
+                  <div className={styles.artifactRow} key={artifact.artifact_id}>
+                    <span>{artifact.name}</span>
+                    <strong>{artifact.relative_path || artifact.path}</strong>
                   </div>
                 ))}
               </div>
@@ -649,57 +1061,15 @@ function RunDetailPanel({
 
         {activeTab === "audit" ? (
           <section className={styles.auditPanel} aria-label={t("runs.audit.aria")}>
-            {task.execution_mode === "external_smoke" && !diagnostics.approval ? (
-              <div className={styles.approvalBox}>
-                <div>
-                  <span>{t("runs.audit.approvalRequired")}</span>
-                  <strong>{t("runs.audit.externalReview")}</strong>
-                </div>
-                <label>
-                  <span>{t("runs.audit.approvedBy")}</span>
-                  <input
-                    value={approvalName}
-                    onChange={(event) => onApprovalNameChange(event.target.value)}
-                    placeholder={t("runs.audit.approverPlaceholder")}
-                  />
-                </label>
-                <Button size="sm" variant="primary" onClick={onApprove}>
-                  {t("runs.audit.submitApproval")}
-                </Button>
-              </div>
-            ) : (
+            {details?.detail.run_link.audit_id ? (
               <div className={styles.auditRecord}>
-                <span>{t("runs.audit.approval")}</span>
-                <strong>
-                  {diagnostics.approval
-                    ? `${diagnostics.approval.approved_by} at ${diagnostics.approval.approved_at}`
-                    : t("runs.audit.noApproval")}
-                </strong>
-              </div>
-            )}
-            {auditPackage ? (
-              <div className={styles.auditPackage}>
-                <div>
-                  <span>{t("runs.audit.package")}</span>
-                  <strong>{auditPackage.generated_at}</strong>
-                </div>
-                <p>{auditPackage.report_path}</p>
-                <p>{auditPackage.json_path}</p>
+                <span>{t("runs.audit.package")}</span>
+                <strong>{details.detail.run_link.audit_id}</strong>
               </div>
             ) : (
               <EmptyState
                 title={t("runs.audit.emptyTitle")}
                 description={t("runs.audit.emptyDescription")}
-                action={
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={onGenerateAudit}
-                    disabled={auditLoading}
-                  >
-                    {auditLoading ? t("runs.detail.requesting") : t("runs.detail.requestAudit")}
-                  </Button>
-                }
               />
             )}
           </section>
@@ -836,7 +1206,136 @@ function eventsFromLogs(task: TaskLogEntry, t: Translate): TaskEvent[] {
   }));
 }
 
-function buildRunTimeline(task: TaskLogEntry, events: TaskEvent[], t: Translate) {
+function projectEventsToTaskEvents(
+  task: TaskLogEntry,
+  response: ProjectRunEventsResponse | undefined,
+  t: Translate,
+): TaskEvent[] {
+  if (!response?.events.length) {
+    return eventsFromLogs(task, t);
+  }
+  return response.events
+    .map((event, index) => ({
+      id: index,
+      task_id: task.id,
+      status: task.status,
+      progress:
+        typeof event.metadata?.progress === "number" ? event.metadata.progress : task.progress,
+      message: localizeRunEventMessage(event.message, t),
+      timestamp: event.timestamp ?? task.started_at,
+      result_path: task.result_path,
+      source: event.source,
+      metadata: {
+        ...event.metadata,
+        level: event.level,
+        node_id: event.node_id,
+        path: event.path,
+        subject_id: event.subject_id,
+      },
+    }))
+    .sort((left, right) => compareEventTimestamps(left.timestamp, right.timestamp));
+}
+
+function projectRunLogMessages(
+  task: TaskLogEntry,
+  response: ProjectRunLogsResponse | undefined,
+): string[] {
+  if (!response) return task.logs;
+  const content = response.logs.flatMap((log) => {
+    if (log.content) {
+      return log.content
+        .split(/\r?\n/)
+        .map((line) => line.trimEnd())
+        .filter(Boolean);
+    }
+    return log.exists ? [log.relative_path || log.path] : [];
+  });
+  return [...response.warnings, ...response.errors, ...content];
+}
+
+function projectRunDiagnostics(
+  task: TaskLogEntry,
+  details: ProjectRunDetails | null,
+): TaskDiagnostics {
+  if (!details) {
+    return {
+      ok: false,
+      task_id: task.id,
+      status: task.status,
+      diagnosis: [],
+      external_tool_results: [],
+      logs: [],
+      artifacts: {},
+      approval: null,
+      errors: [],
+      warnings: [],
+    };
+  }
+  const nodeErrors = details.timeline.nodes.flatMap((node) => node.errors);
+  const nodeWarnings = details.timeline.nodes.flatMap((node) => node.warnings);
+  return {
+    ok: details.events.ok && details.logs.ok && details.artifacts.ok && details.timeline.ok,
+    task_id: task.id,
+    status: task.status,
+    diagnosis: details.timeline.nodes.map((node) => ({
+      code: node.node_id,
+      message: node.errors[0] || node.warnings[0] || node.state,
+      node_id: node.node_id,
+      retry_eligible: node.retry_eligible,
+      severity: node.errors.length ? "error" : node.warnings.length ? "warning" : "info",
+      state: node.state,
+    })),
+    external_tool_results: [],
+    logs: [],
+    artifacts: Object.fromEntries(
+      details.artifacts.artifacts.map((artifact) => [
+        artifact.name,
+        artifact.relative_path || artifact.path,
+      ]),
+    ),
+    approval: null,
+    errors: [
+      ...details.events.errors,
+      ...details.logs.errors,
+      ...details.timeline.errors,
+      ...nodeErrors,
+    ],
+    warnings: [
+      ...(details.detail.warnings ?? []),
+      ...details.events.warnings,
+      ...details.logs.warnings,
+      ...details.artifacts.warnings,
+      ...details.timeline.warnings,
+      ...nodeWarnings,
+    ],
+  };
+}
+
+function buildRunTimeline(
+  task: TaskLogEntry,
+  events: TaskEvent[],
+  stateTimeline: ProjectRunStateTimelineResponse | undefined,
+  t: Translate,
+) {
+  if (stateTimeline?.events.length) {
+    const recentEvents = [...stateTimeline.events]
+      .sort((left, right) => {
+        if (!left.timestamp) return right.timestamp ? 1 : 0;
+        if (!right.timestamp) return -1;
+        return compareEventTimestamps(left.timestamp, right.timestamp);
+      })
+      .slice(-5);
+    return recentEvents.map((event, index) => ({
+      label:
+        event.node_id ||
+        (index === recentEvents.length - 1
+          ? t("runs.timeline.latest")
+          : t("runs.timeline.step", { index: index + 1 })),
+      message: localizeRunEventMessage(event.message || event.state, t),
+      status: task.status,
+      time: event.timestamp ?? task.started_at,
+    }));
+  }
   const checkpoints = events.slice(-5).map((event, index) => ({
     label:
       index === events.slice(-5).length - 1
@@ -861,28 +1360,67 @@ function buildRunTimeline(task: TaskLogEntry, events: TaskEvent[], t: Translate)
   ];
 }
 
-function flattenArtifactEntries(artifacts: Record<string, unknown>, t: Translate) {
-  return Object.entries(artifacts)
-    .slice(0, 12)
-    .map(([label, value]) => ({
-      label,
-      value: formatArtifactValue(value, t),
-    }));
+function compareEventTimestamps(left: string, right: string): number {
+  const leftMillis = Date.parse(left);
+  const rightMillis = Date.parse(right);
+  if (Number.isFinite(leftMillis) && Number.isFinite(rightMillis)) {
+    return leftMillis - rightMillis;
+  }
+  if (Number.isFinite(leftMillis)) return -1;
+  if (Number.isFinite(rightMillis)) return 1;
+  return left.localeCompare(right);
 }
 
-function formatArtifactValue(value: unknown, t: Translate): string {
-  if (value === null || value === undefined) return t("common.unavailable");
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) return t("runs.artifact.entries", { count: value.length });
-  if (typeof value === "object") return JSON.stringify(value);
-  return String(value);
+function localizeRunEventMessage(message: string, t: Translate): string {
+  const exactKeys: Record<string, Parameters<Translate>[0]> = {
+    "Pipeline execution started.": "runs.event.pipelineStarted",
+    "Pipeline execution finished.": "runs.event.pipelineFinished",
+    "Run link created.": "runs.event.runLinkCreated",
+  };
+  const exactKey = exactKeys[message];
+  if (exactKey) return t(exactKey);
+
+  const runLinkCreated = message.match(/^Run link created with status ([^.]+)\.$/);
+  if (runLinkCreated) {
+    return t("runs.event.runLinkCreatedWithStatus", {
+      status: localizeRunEventStatus(runLinkCreated[1], t),
+    });
+  }
+  const runLinkUpdated = message.match(/^Run link updated to status ([^.]+)\.$/);
+  if (runLinkUpdated) {
+    return t("runs.event.runLinkUpdatedWithStatus", {
+      status: localizeRunEventStatus(runLinkUpdated[1], t),
+    });
+  }
+  const pipelineFinished = message.match(/^Pipeline finished(?::| with status) ([^.]+)\.$/);
+  if (pipelineFinished) {
+    return t("runs.event.pipelineFinishedWithStatus", {
+      status: localizeRunEventStatus(pipelineFinished[1], t),
+    });
+  }
+  return message;
+}
+
+function localizeRunEventStatus(status: string, t: Translate): string {
+  const normalized = status.trim().toLowerCase();
+  if (["success", "succeeded", "completed"].includes(normalized)) {
+    return t("runs.event.status.success");
+  }
+  if (["failed", "failure", "error"].includes(normalized)) {
+    return t("runs.event.status.failed");
+  }
+  if (normalized === "running") return t("runs.event.status.running");
+  if (["partial", "needs_attention"].includes(normalized)) {
+    return t("runs.event.status.partial");
+  }
+  return status;
 }
 
 function buildNodeInspector(
   task: TaskLogEntry,
   diagnostics: TaskDiagnostics,
   events: TaskEvent[],
+  stateTimeline: ProjectRunStateTimelineResponse | undefined,
   t: Translate,
 ) {
   const diagnostic = pickPrimaryDiagnostic(diagnostics);
@@ -895,9 +1433,10 @@ function buildNodeInspector(
     events[events.length - 1]?.message ||
     task.logs[task.logs.length - 1] ||
     t("runs.node.noEvidence");
-  const retry = diagnosticsRetryAllowed(diagnostics)
-    ? t("runs.node.retryEligible")
-    : t("runs.node.retryUnknown");
+  const retryEligible =
+    Boolean(stateTimeline?.retry_eligible) ||
+    Boolean(stateTimeline?.nodes.some((node) => node.retry_eligible));
+  const retry = retryEligible ? t("runs.diagnostics.retryDisabled") : t("runs.node.retryUnknown");
 
   return {
     evidence,
@@ -925,12 +1464,6 @@ function firstStringValue(record: Record<string, unknown> | null, keys: string[]
   return "";
 }
 
-function diagnosticsRetryAllowed(diagnostics: TaskDiagnostics): boolean {
-  return diagnostics.diagnosis.some((item) =>
-    ["retry_allowed", "retry_eligible", "retry_supported"].some((key) => item[key] === true),
-  );
-}
-
 function buildDiagnosticsCopyPayload(
   task: TaskLogEntry,
   diagnostics: TaskDiagnostics,
@@ -955,6 +1488,23 @@ function buildDiagnosticsCopyPayload(
     null,
     2,
   );
+}
+
+function projectRunDuration(
+  detail: ProjectRunDetailResponse | undefined,
+  task: TaskLogEntry,
+  t: Translate,
+): string {
+  if (task.duration) return task.duration;
+  const startedAt = detail?.summary_preview?.started_at;
+  const finishedAt = detail?.summary_preview?.finished_at;
+  if (!startedAt || !finishedAt) return t("runs.inProgress");
+  const durationMs = Date.parse(finishedAt) - Date.parse(startedAt);
+  if (!Number.isFinite(durationMs) || durationMs < 0) return t("runs.notReported");
+  const totalSeconds = Math.round(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
 function diagnosticTone(severity: unknown): "danger" | "info" | "neutral" | "warning" {

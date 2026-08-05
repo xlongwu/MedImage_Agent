@@ -58,7 +58,9 @@ class TestTemporalFilteringBackend:
         from src.backend.app.tools.temporal_filtering_compute import compute_temporal_filter_backend
 
         data, tr = sine_wave_data
-        result = compute_temporal_filter_backend(data, tr=tr, low_hz=0.01, high_hz=0.08, prefer_gpu=False)
+        result = compute_temporal_filter_backend(
+            data, tr=tr, low_hz=0.01, high_hz=0.08, prefer_gpu=False
+        )
         assert result["ok"]
         assert result["backend"] == "cpu-numpy"
 
@@ -67,5 +69,7 @@ class TestTemporalFilteringBackend:
 
         data, tr = sine_wave_data
         monkeypatch.setitem(sys.modules, "cupy", None)
-        result = compute_temporal_filter_backend(data, tr=tr, low_hz=0.01, high_hz=0.08, require_gpu=True)
+        result = compute_temporal_filter_backend(
+            data, tr=tr, low_hz=0.01, high_hz=0.08, require_gpu=True
+        )
         assert not result["ok"]

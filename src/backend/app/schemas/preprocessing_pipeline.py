@@ -12,7 +12,6 @@ from pydantic import BaseModel, Field
 
 from src.backend.app.schemas.preprocessing_run import PreprocessingStageStatus
 
-
 PreprocessingPipelineProfile = Literal["fc_minimal", "dparsfa_like", "custom"]
 PreprocessingStageMode = Literal["enabled", "disabled", "auto"]
 PreprocessingRerunPolicy = Literal["skip_succeeded", "require_explicit", "rerun_new_execution"]

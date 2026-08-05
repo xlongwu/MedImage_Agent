@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 from pathlib import Path
 
@@ -27,19 +26,21 @@ def _write_config(tmp_path: Path) -> Path:
 
     config = tmp_path / "project_config.yaml"
     config.write_text(
-        "\n".join([
-            "third_party:",
-            f"  spm_dir: \"{yml(spm_dir)}\"",
-            f"  dpabi_dir: \"{yml(dpabi_dir)}\"",
-            "data:",
-            f"  rawdata_dir: \"{yml(tmp_path / 'rawdata')}\"",
-            "runtime:",
-            f"  matlab_command: \"{yml(fake_matlab)}\"",
-            f"  work_dir: \"{yml(tmp_path / 'work')}\"",
-            f"  log_dir: \"{yml(tmp_path / 'logs')}\"",
-            f"  derivatives_dir: \"{yml(tmp_path / 'derivatives')}\"",
-            "",
-        ]),
+        "\n".join(
+            [
+                "third_party:",
+                f'  spm_dir: "{yml(spm_dir)}"',
+                f'  dpabi_dir: "{yml(dpabi_dir)}"',
+                "data:",
+                f'  rawdata_dir: "{yml(tmp_path / "rawdata")}"',
+                "runtime:",
+                f'  matlab_command: "{yml(fake_matlab)}"',
+                f'  work_dir: "{yml(tmp_path / "work")}"',
+                f'  log_dir: "{yml(tmp_path / "logs")}"',
+                f'  derivatives_dir: "{yml(tmp_path / "derivatives")}"',
+                "",
+            ]
+        ),
         encoding="utf-8",
     )
     return config
@@ -57,7 +58,9 @@ def test_external_smoke_status_without_package(tmp_path: Path, monkeypatch: pyte
     assert "No external smoke package" in " ".join(payload["errors"])
 
 
-def test_external_smoke_manual_package_api_does_not_launch_matlab(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_external_smoke_manual_package_api_does_not_launch_matlab(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(external_smoke, "REPORT_DIR", tmp_path / "external_smoke")
     config = _write_config(tmp_path)
 
@@ -76,7 +79,9 @@ def test_external_smoke_manual_package_api_does_not_launch_matlab(tmp_path: Path
     assert response.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
-def test_external_smoke_approved_mode_without_approval_is_blocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_external_smoke_approved_mode_without_approval_is_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(external_smoke, "REPORT_DIR", tmp_path / "external_smoke")
     config = _write_config(tmp_path)
 
@@ -88,14 +93,21 @@ def test_external_smoke_approved_mode_without_approval_is_blocked(tmp_path: Path
 
     response = client.post(
         "/api/external-smoke/run",
-        json={"target": "spm", "mode": "approved_smoke", "config_path": str(config), "approved": False},
+        json={
+            "target": "spm",
+            "mode": "approved_smoke",
+            "config_path": str(config),
+            "approved": False,
+        },
     )
 
     assert response.status_code == 410
     assert response.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
-def test_external_smoke_rejects_non_allowlisted_dpabi_function(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_external_smoke_rejects_non_allowlisted_dpabi_function(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(external_smoke, "REPORT_DIR", tmp_path / "external_smoke")
     config = _write_config(tmp_path)
     client = TestClient(app)
@@ -114,7 +126,9 @@ def test_external_smoke_rejects_non_allowlisted_dpabi_function(tmp_path: Path, m
     assert response.json()["detail"]["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
 
 
-def test_external_smoke_approved_mode_fake_runner_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_external_smoke_approved_mode_fake_runner_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     monkeypatch.setattr(external_smoke, "REPORT_DIR", tmp_path / "external_smoke")
     config = _write_config(tmp_path)
 
@@ -137,7 +151,12 @@ def test_external_smoke_approved_mode_fake_runner_success(tmp_path: Path, monkey
 
     response = client.post(
         "/api/external-smoke/run",
-        json={"target": "spm", "mode": "approved_smoke", "config_path": str(config), "approved": True},
+        json={
+            "target": "spm",
+            "mode": "approved_smoke",
+            "config_path": str(config),
+            "approved": True,
+        },
     )
 
     assert response.status_code == 410

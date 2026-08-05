@@ -4,7 +4,12 @@ import asyncio
 from datetime import datetime
 from uuid import uuid4
 
-from src.backend.app.schemas.desktop import PipelineRunRequest, TaskDetail, TaskEvent, TaskStreamMessage
+from src.backend.app.schemas.desktop import (
+    PipelineRunRequest,
+    TaskDetail,
+    TaskEvent,
+    TaskStreamMessage,
+)
 from src.backend.app.services.mock_store import mock_store, utc_now_iso
 
 

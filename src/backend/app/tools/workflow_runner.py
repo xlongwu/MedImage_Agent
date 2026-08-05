@@ -23,7 +23,9 @@ def run_quickstart_demo_workflow() -> dict[str, Any]:
     """
     from src.backend.app.tools.alff_falff import run_python_alff_falff_subject
     from src.backend.app.tools.data_inspector import inspect_dataset
-    from src.backend.app.tools.functional_connectivity import run_python_functional_connectivity_subject
+    from src.backend.app.tools.functional_connectivity import (
+        run_python_functional_connectivity_subject,
+    )
     from src.backend.app.tools.group_dataset_summary import build_group_dataset_summary
     from src.backend.app.tools.reho import run_python_reho_subject
     from src.backend.app.tools.report_exporter import export_rsfmri_report_package

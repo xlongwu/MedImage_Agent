@@ -7,20 +7,19 @@ from typing import Any, Literal
 
 import numpy as np
 
-from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.core.compute_backend import (
     GpuComputeError,
     compute_alff_falff_gpu,
     cpu_compute_provenance,
 )
+from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
-from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.io.nifti_io import ensure_4d, load_nifti, save_nifti
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
+from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import plan_gpu_stage
 from src.backend.app.native_preproc.stages._common import context_from_output_dir, stage_result
 from src.backend.app.schemas.native_preproc import NativePreprocQC
 from src.backend.app.schemas.native_preproc_api import NativeComputePolicy
-
 
 StandardizationMode = Literal["none", "zscore"]
 

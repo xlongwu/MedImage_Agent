@@ -11,9 +11,9 @@ used in reviewed-plan execute tests.
 from __future__ import annotations
 
 import json
+from datetime import UTC
 from pathlib import Path
 from typing import Any
-
 
 REQUIRED_CONTEXT_FIELDS: tuple[str, ...] = (
     "run_id",
@@ -78,12 +78,12 @@ def run_contract_smoke_node(
         }
 
     # ── 3-5. happy path: produce artifacts ─────────────────────────────
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     work_path = Path(context.work_dir)
     work_path.mkdir(parents=True, exist_ok=True)
 
-    started_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    started_at = datetime.now(UTC).replace(microsecond=0).isoformat()
 
     report_path = work_path / "contract_smoke_report.json"
     report_path.write_text(
@@ -115,7 +115,6 @@ def run_contract_smoke_node(
     # ── 6. Phase 3: output manifest + provenance ───────────────────────
     from src.backend.app.runtime.contract_smoke_manifest import (
         _project_id_from_context,
-        contract_smoke_artifact_paths,
         contract_smoke_manifest_paths,
         write_contract_smoke_manifest,
         write_contract_smoke_node_state,
@@ -125,7 +124,7 @@ def run_contract_smoke_node(
     project_id = _project_id_from_context(context)
     params = getattr(node, "params", {}) or {}
 
-    finished_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    finished_at = datetime.now(UTC).replace(microsecond=0).isoformat()
 
     # Write normalized node-state artifact BEFORE manifest
     node_state_path = write_contract_smoke_node_state(

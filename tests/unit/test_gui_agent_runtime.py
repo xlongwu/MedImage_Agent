@@ -9,11 +9,13 @@ from src.backend.app.runtime.gui_agent import (
 
 
 def test_gui_agent_mock_session_records_steps():
-    session = create_gui_agent_session({
-        "target_app": "spm",
-        "objective": "open batch editor",
-        "approved": True,
-    })
+    session = create_gui_agent_session(
+        {
+            "target_app": "spm",
+            "objective": "open batch editor",
+            "approved": True,
+        }
+    )
 
     step = step_gui_agent_session(
         session["session_id"],
@@ -37,11 +39,13 @@ def test_gui_agent_abort_marks_session():
 
 
 def test_gui_agent_real_provider_requires_approval():
-    session = create_gui_agent_session({
-        "target_app": "spm",
-        "provider": "pywinauto",
-        "approved": False,
-    })
+    session = create_gui_agent_session(
+        {
+            "target_app": "spm",
+            "provider": "pywinauto",
+            "approved": False,
+        }
+    )
 
     result = step_gui_agent_session(session["session_id"], {"action": "locate_window"})
 

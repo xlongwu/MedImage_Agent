@@ -7,8 +7,10 @@ import pytest
 
 nib = pytest.importorskip("nibabel")
 
-from src.backend.app.native_preproc.orchestrator.validation import validate_stage_result_artifacts
-from src.backend.app.native_preproc.stages.alff_falff import run_alff, run_falff
+from src.backend.app.native_preproc.orchestrator.validation import (  # noqa: E402
+    validate_stage_result_artifacts,  # noqa: E402
+)
+from src.backend.app.native_preproc.stages.alff_falff import run_alff, run_falff  # noqa: E402
 
 
 def _save(path: Path, data: np.ndarray) -> Path:

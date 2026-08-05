@@ -15,18 +15,20 @@ def test_report_writer_generates_markdown_and_html(tmp_path: Path):
     exclusion_path = report_dir / "exclusion_recommendations.csv"
 
     summary_path.write_text(
-        json.dumps({
-            "run_id": "run_test",
-            "subjects_total": 1,
-            "subjects_complete": 1,
-            "subjects_preprocess_success": 1,
-            "subjects_qc_success": 1,
-            "subjects_include": 1,
-            "subjects_manual_review": 0,
-            "subjects_exclude": 0,
-            "dataset_quality_score": 100,
-            "dataset_index": "dataset_index.json",
-        }),
+        json.dumps(
+            {
+                "run_id": "run_test",
+                "subjects_total": 1,
+                "subjects_complete": 1,
+                "subjects_preprocess_success": 1,
+                "subjects_qc_success": 1,
+                "subjects_include": 1,
+                "subjects_manual_review": 0,
+                "subjects_exclude": 0,
+                "dataset_quality_score": 100,
+                "dataset_index": "dataset_index.json",
+            }
+        ),
         encoding="utf-8",
     )
 

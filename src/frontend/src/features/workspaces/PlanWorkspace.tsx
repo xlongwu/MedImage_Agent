@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import PlanReviewConsole from "../../components/PlanReviewConsole";
 import { TechnicalModuleSection } from "../../components/domain/TechnicalModuleSection";
 import { Badge, Button, Card, EmptyState } from "../../components/ui";
+import { getProjectReviewedPlan } from "../../lib/api/pipeline";
 import type { ProjectDetail } from "../../lib/types/project";
 import type { PlanNodeSelection } from "../../lib/workspaceSelection";
-import type { PresetPlanDraft } from "../../types";
+import type { PresetPlanDraft, ReviewedPlanRecord } from "../../types";
 import { WorkspaceHeader } from "../dashboard/DashboardChrome";
 import styles from "./PlanWorkspace.module.css";
 import layoutStyles from "./WorkspaceLayout.module.css";
@@ -21,18 +22,26 @@ export interface PlanWorkspaceProps {
   rawdataDir?: string;
   projectDir?: string | null;
   initialPresetDraft?: PresetPlanDraft | null;
+  reviewedPlanId?: string | null;
   onSelectedNodeChange?: (node: PlanNodeSelection | null) => void;
   onOpenDataConversion: () => void;
   onOpenEnvironment: () => void;
 }
 
-type PlanStatus = "needs-project" | "needs-config" | "draft" | "needs-review" | "validated";
+type PlanStatus =
+  | "needs-project"
+  | "needs-config"
+  | "draft"
+  | "needs-review"
+  | "validated"
+  | "reviewed-plan-only";
 type StepState =
   | "current"
   | "completed"
   | "available"
   | "attention"
   | "pending-evidence"
+  | "not-applicable"
   | "locked";
 
 type NormalizedPlanNode = {
@@ -55,34 +64,72 @@ type ReviewStep = {
 };
 
 export function PlanWorkspace({
+  baseUrl,
   projectId,
   selectedProject,
   projectConfigPath,
   datasetIndexPath,
   rawdataDir,
   initialPresetDraft,
+  reviewedPlanId,
   onSelectedNodeChange,
   onOpenDataConversion,
   onOpenEnvironment,
 }: PlanWorkspaceProps) {
   const { t } = useI18n();
   const [showTechnicalPlanTools, setShowTechnicalPlanTools] = useState(false);
-  const plan = initialPresetDraft?.plan ?? null;
-  const validation = useMemo(() => initialPresetDraft?.validation ?? {}, [initialPresetDraft]);
+  const [reviewedPlanRecord, setReviewedPlanRecord] = useState<ReviewedPlanRecord | null>(null);
+  const [reviewedPlanLoading, setReviewedPlanLoading] = useState(false);
+  const [reviewedPlanError, setReviewedPlanError] = useState("");
+  const [reviewedPlanReloadToken, setReviewedPlanReloadToken] = useState(0);
+
+  useEffect(() => {
+    if (!projectId || !reviewedPlanId) {
+      setReviewedPlanRecord(null);
+      setReviewedPlanError("");
+      setReviewedPlanLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setReviewedPlanLoading(true);
+    setReviewedPlanError("");
+    setReviewedPlanRecord(null);
+    void getProjectReviewedPlan(baseUrl, projectId, reviewedPlanId)
+      .then((response) => {
+        if (!cancelled) setReviewedPlanRecord(response.reviewed_plan);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setReviewedPlanError(error instanceof Error ? error.message : String(error));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReviewedPlanLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUrl, projectId, reviewedPlanId, reviewedPlanReloadToken]);
+
+  const reviewedPlanDraft = useMemo(
+    () => (reviewedPlanRecord ? reviewedPlanToDraft(reviewedPlanRecord) : null),
+    [reviewedPlanRecord],
+  );
+  const activeDraft = reviewedPlanId ? reviewedPlanDraft : initialPresetDraft;
+  const plan = activeDraft?.plan ?? null;
+  const validation = useMemo(() => activeDraft?.validation ?? {}, [activeDraft]);
+  const planOnly = isPlanOnlyDraft(activeDraft);
   const nodes = useMemo(() => normalizePlanNodes(plan, validation, t), [plan, t, validation]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(nodes[0]?.id ?? null);
-  const status = derivePlanStatus(
-    projectId,
-    selectedProject,
-    projectConfigPath,
-    initialPresetDraft,
-  );
-  const summary = summarizePlan(status, initialPresetDraft, nodes.length, validation, t);
+  const status = derivePlanStatus(projectId, selectedProject, projectConfigPath, activeDraft);
+  const summary = summarizePlan(status, activeDraft, nodes.length, validation, t);
   const hasProjectContext = Boolean(projectId && selectedProject);
-  const validationIssues = countValidationIssues(validation);
-  const nextActions = initialPresetDraft?.next_actions ?? [];
-  const reviewSteps = planReviewSteps(status, validation, t);
-  const gateEvidence = summarizeGateEvidence(validation, t);
+  const validationErrors = arrayCount(validation.errors);
+  const validationWarnings = arrayCount(validation.warnings);
+  const nextActions = activeDraft?.next_actions ?? [];
+  const reviewSteps = planReviewSteps(status, validation, planOnly, t);
+  const gateEvidence = summarizeGateEvidence(validation, planOnly, t);
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? nodes[0] ?? null;
 
   useEffect(() => {
@@ -98,6 +145,42 @@ export function PlanWorkspace({
         : null,
     );
   }, [onSelectedNodeChange, selectedNode, t]);
+
+  if (reviewedPlanId && reviewedPlanLoading) {
+    return (
+      <div className={layoutStyles.stack}>
+        <WorkspaceHeader
+          title={t("plan.title")}
+          subtitle={t("plan.subtitle")}
+          status={t("plan.loadingReviewed")}
+        />
+        <Card>
+          <p role="status">{t("plan.loadingReviewedDescription")}</p>
+        </Card>
+      </div>
+    );
+  }
+
+  if (reviewedPlanId && reviewedPlanError) {
+    return (
+      <div className={layoutStyles.stack}>
+        <WorkspaceHeader
+          title={t("plan.title")}
+          subtitle={t("plan.subtitle")}
+          status={t("plan.reviewedLoadFailed")}
+        />
+        <EmptyState
+          title={t("plan.reviewedLoadFailed")}
+          description={reviewedPlanError}
+          action={
+            <Button onClick={() => setReviewedPlanReloadToken((value) => value + 1)}>
+              {t("common.retry")}
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={layoutStyles.stack}>
@@ -133,7 +216,7 @@ export function PlanWorkspace({
           <dl className={styles.outlineList}>
             <div>
               <dt>{t("plan.goal")}</dt>
-              <dd>{initialPresetDraft?.goal || t("plan.noGoal")}</dd>
+              <dd>{activeDraft?.goal || t("plan.noGoal")}</dd>
             </div>
             <div>
               <dt>{t("plan.dataScope")}</dt>
@@ -153,6 +236,12 @@ export function PlanWorkspace({
               <dt>{t("plan.validation")}</dt>
               <dd>{summary.validationText}</dd>
             </div>
+            {reviewedPlanRecord ? (
+              <div>
+                <dt>{t("plan.reviewedPlanId")}</dt>
+                <dd>{reviewedPlanRecord.reviewed_plan_id}</dd>
+              </div>
+            ) : null}
           </dl>
           {nextActions.length ? (
             <div className={styles.nextActions} aria-label={t("plan.nextActions")}>
@@ -251,8 +340,12 @@ export function PlanWorkspace({
           </ol>
           <div className={styles.reviewFacts} aria-label={t("plan.reviewFacts")}>
             <div>
-              <span>{t("plan.validationIssues")}</span>
-              <strong>{validationIssues}</strong>
+              <span>{t("plan.validationErrors")}</span>
+              <strong>{validationErrors}</strong>
+            </div>
+            <div>
+              <span>{t("plan.validationNotices")}</span>
+              <strong>{validationWarnings}</strong>
             </div>
             <div>
               <span>{t("plan.projectConfig")}</span>
@@ -260,7 +353,7 @@ export function PlanWorkspace({
             </div>
             <div>
               <span>{t("plan.execution")}</span>
-              <strong>{t("plan.backendGated")}</strong>
+              <strong>{planOnly ? t("plan.notExecuted") : t("plan.backendGated")}</strong>
             </div>
             <div>
               <span>{t("plan.approvalEvidence")}</span>
@@ -274,6 +367,18 @@ export function PlanWorkspace({
               <span>{t("plan.readyEvidence")}</span>
               <strong>{gateEvidence.ready}</strong>
             </div>
+            {planOnly ? (
+              <>
+                <div>
+                  <span>{t("plan.capabilityLevel")}</span>
+                  <strong>{t("plan.metadataOnly")}</strong>
+                </div>
+                <div>
+                  <span>{t("plan.rawdataState")}</span>
+                  <strong>{t("plan.unchanged")}</strong>
+                </div>
+              </>
+            ) : null}
           </div>
         </Card>
       </section>
@@ -302,20 +407,24 @@ export function PlanWorkspace({
         helperText={
           showTechnicalPlanTools ? t("plan.technicalOpenHelp") : t("plan.technicalClosedHelp")
         }
-        safetyNote={t("plan.technicalSafety")}
+        safetyNote={planOnly ? t("plan.planOnlySafety") : t("plan.technicalSafety")}
         status={showTechnicalPlanTools ? t("plan.open") : t("plan.onDemand")}
         statusTone="info"
         title={t("plan.openTechnical")}
       >
         <>
-          <PlanReviewConsole
-            selectedProjectId={projectId}
-            selectedProject={selectedProject}
-            projectConfigPath={projectConfigPath}
-            datasetIndexPath={datasetIndexPath}
-            rawdataDir={rawdataDir}
-            initialPresetDraft={initialPresetDraft}
-          />
+          {planOnly && reviewedPlanRecord ? (
+            <ReadOnlyReviewedPlan record={reviewedPlanRecord} />
+          ) : (
+            <PlanReviewConsole
+              selectedProjectId={projectId}
+              selectedProject={selectedProject}
+              projectConfigPath={projectConfigPath}
+              datasetIndexPath={datasetIndexPath}
+              rawdataDir={rawdataDir}
+              initialPresetDraft={activeDraft}
+            />
+          )}
         </>
       </TechnicalModuleSection>
     </div>
@@ -331,6 +440,7 @@ function derivePlanStatus(
   if (!projectId || !selectedProject) return "needs-project";
   if (!projectConfigPath) return "needs-config";
   if (!draft?.plan) return "draft";
+  if (draft.source === "reviewed_plan" && isPlanOnlyDraft(draft)) return "reviewed-plan-only";
   if (draft.validation?.ok === true) return "validated";
   return "needs-review";
 }
@@ -374,6 +484,15 @@ function summarizePlan(
       title: t("plan.configMissing"),
       tone: "warning",
       validationText,
+    };
+  }
+  if (status === "reviewed-plan-only") {
+    return {
+      badge: t("plan.reviewedPlanOnly"),
+      description: t("plan.reviewedPlanOnlyDescription", { count: nodeCount }),
+      title: t("plan.reviewedPlanLoaded"),
+      tone: "success",
+      validationText: t("plan.metadataValidated"),
     };
   }
   if (status === "validated") {
@@ -450,12 +569,54 @@ function normalizePlanNodes(
 function planReviewSteps(
   status: PlanStatus,
   validation: Record<string, unknown>,
+  planOnly: boolean,
   t: I18nContextValue["t"],
 ): ReviewStep[] {
   const hasContext = status !== "needs-project" && status !== "needs-config";
-  const hasDraft = status === "validated" || status === "needs-review";
+  const hasDraft =
+    status === "validated" || status === "needs-review" || status === "reviewed-plan-only";
   const issueCount = countValidationIssues(validation);
   const validationOk = validation.ok === true;
+
+  if (planOnly && hasDraft) {
+    return [
+      {
+        label: t("plan.stepDraft"),
+        description: t("plan.reviewedPlanLoaded"),
+        state: "completed",
+      },
+      {
+        label: t("plan.stepValidated"),
+        description: validationOk ? t("plan.validatorPassed") : t("plan.metadataValidated"),
+        state: "completed",
+      },
+      {
+        label: t("plan.stepNeedsReview"),
+        description: t("plan.reviewCompleted"),
+        state: "completed",
+      },
+      {
+        label: t("plan.stepApproved"),
+        description: t("plan.executionApprovalNotRequired"),
+        state: "not-applicable",
+      },
+      {
+        label: t("plan.stepDryRun"),
+        description: t("plan.dryRunNotRequired"),
+        state: "not-applicable",
+      },
+      {
+        label: t("plan.stepReady"),
+        description: t("plan.readinessNotRequired"),
+        state: "not-applicable",
+      },
+      {
+        label: t("plan.stepExecuted"),
+        description: t("plan.planNotExecuted"),
+        state: "not-applicable",
+      },
+    ];
+  }
   const approved = approvalEvidenceSignal(validation);
   const dryRunPassed = booleanSignal(validation, [
     "dry_run_passed",
@@ -520,12 +681,20 @@ function planReviewSteps(
 
 function summarizeGateEvidence(
   validation: Record<string, unknown>,
+  planOnly: boolean,
   t: I18nContextValue["t"],
 ): {
   approval: string;
   dryRun: string;
   ready: string;
 } {
+  if (planOnly) {
+    return {
+      approval: t("plan.notApplicable"),
+      dryRun: t("plan.notApplicable"),
+      ready: t("plan.notApplicable"),
+    };
+  }
   return {
     approval: approvalEvidenceSignal(validation) ? t("plan.created") : t("plan.backendRequired"),
     dryRun: booleanSignal(validation, ["dry_run_passed", "dry_run_ok", "dry_run_completed"])
@@ -607,6 +776,53 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+function reviewedPlanToDraft(record: ReviewedPlanRecord): PresetPlanDraft {
+  const payload = record.payload;
+  const plan = isRecord(payload.plan) ? payload.plan : {};
+  const validation = isRecord(payload.validation) ? payload.validation : {};
+  return {
+    preset_id: `reviewed:${record.reviewed_plan_id}`,
+    project_id: record.project_id,
+    goal: typeof payload.goal === "string" ? payload.goal : "",
+    plan,
+    validation: {
+      ...validation,
+      reviewed_plan_status: record.status,
+      execution_status:
+        typeof payload.execution_status === "string"
+          ? payload.execution_status
+          : record.execution_status,
+      execution_performed: payload.execution_performed,
+      rawdata_modified: payload.rawdata_modified,
+    },
+    warnings: record.warnings,
+    next_actions: stringArray(payload.next_actions),
+    source: "reviewed_plan",
+    reviewed_plan_id: record.reviewed_plan_id,
+    plan_hash: record.plan_hash,
+    goal_contract_candidate: isRecord(payload.goal_contract_candidate)
+      ? payload.goal_contract_candidate
+      : undefined,
+    goal_contract_status:
+      typeof payload.goal_contract_status === "string"
+        ? payload.goal_contract_status
+        : record.status.toLowerCase() === "reviewed"
+          ? "reviewed"
+          : undefined,
+  };
+}
+
+function isPlanOnlyDraft(draft: PresetPlanDraft | null | undefined): boolean {
+  if (!draft) return false;
+  const metadata = isRecord(draft.plan.metadata) ? draft.plan.metadata : {};
+  const executionStatus = draft.validation?.execution_status;
+  return (
+    metadata.plan_only === true ||
+    executionStatus === "NOT_EXECUTED_PLAN_ONLY" ||
+    (draft.validation?.execution_performed === false && metadata.execution_enabled === false)
+  );
+}
+
 function riskLabel(risk: NormalizedPlanNode["risk"], t: I18nContextValue["t"]): string {
   if (risk === "high") return t("plan.highRisk");
   if (risk === "approval") return t("plan.approval");
@@ -626,17 +842,46 @@ function riskTone(
 function stepTone(state: StepState): "neutral" | "info" | "success" | "warning" {
   if (state === "completed") return "success";
   if (state === "current") return "info";
+  if (state === "not-applicable") return "neutral";
   if (state === "attention" || state === "pending-evidence" || state === "locked") return "warning";
   return "neutral";
 }
 
 function stepLabel(state: StepState, t: I18nContextValue["t"]): string {
+  if (state === "not-applicable") return t("plan.notApplicable");
   if (state === "pending-evidence") return t("plan.pendingEvidence");
   if (state === "completed") return t("common.completed");
   if (state === "current") return t("common.current");
   if (state === "locked") return t("common.blocked");
   if (state === "available") return t("common.available");
   return t("plan.needsReview");
+}
+
+function ReadOnlyReviewedPlan({ record }: { record: ReviewedPlanRecord }) {
+  const { t } = useI18n();
+  const metadata =
+    isRecord(record.payload.plan) && isRecord(record.payload.plan.metadata)
+      ? record.payload.plan.metadata
+      : {};
+  const readOnlyPayload = {
+    reviewed_plan_id: record.reviewed_plan_id,
+    plan_hash: record.plan_hash,
+    status: record.status,
+    capability_level: metadata.capability_level ?? "metadata_only",
+    execution_status: record.payload.execution_status ?? record.execution_status,
+    execution_performed: record.payload.execution_performed ?? false,
+    rawdata_modified: record.payload.rawdata_modified ?? false,
+    plan: record.payload.plan ?? {},
+  };
+  return (
+    <Card className={styles.readOnlyPlan}>
+      <div>
+        <h3>{t("plan.readOnlyReviewedPlan")}</h3>
+        <p>{t("plan.readOnlyReviewedPlanDescription")}</p>
+      </div>
+      <pre>{JSON.stringify(readOnlyPayload, null, 2)}</pre>
+    </Card>
+  );
 }
 
 function NodeInspector({ node }: { node: NormalizedPlanNode | null }) {

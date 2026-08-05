@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from src.backend.app.planner.audit_record import stable_hash
 from src.backend.app.schemas.desktop import ProjectDetail, RunLinkRecord
@@ -30,7 +31,6 @@ from src.backend.app.services.run_summary_preview import (
     load_run_summary_preview,
     resolve_run_summary_path,
 )
-
 
 _LOG_SUFFIXES = {".log", ".txt", ".err", ".out"}
 _MAX_LOG_FILES = 20
@@ -57,14 +57,14 @@ class AdaptedObservationFacts:
 
 def _parse_datetime(value: object) -> datetime | None:
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     if not isinstance(value, str) or not value.strip():
         return None
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _sha256_file(path: Path) -> str:
@@ -145,7 +145,7 @@ def _source(
     modified_at: datetime | None = None
     relative_path: str | None = None
     if path is not None and path.exists():
-        modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         if project_root is not None:
             relative_path = _relative(path, project_root)
     fingerprint = {
@@ -175,7 +175,7 @@ def _source(
 def _strings(value: object) -> tuple[str, ...]:
     if isinstance(value, str):
         return (value,) if value else ()
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return tuple(str(item) for item in value if item is not None and str(item))
     return ()
 
@@ -258,6 +258,50 @@ def _registry_candidates(project_root: Path, run_id: str) -> tuple[Path, ...]:
     )
 
 
+def _native_validation_report_path(project_root: Path, run_id: str) -> Path:
+    return (
+        project_root
+        / "preprocessing_native_runs"
+        / run_id
+        / "artifacts"
+        / "validation_report"
+        / "native_preproc_validation_report.json"
+    )
+
+
+def _native_progress_path(project_root: Path, run_id: str) -> Path:
+    return (
+        project_root
+        / "preprocessing_native_runs"
+        / run_id
+        / "native_full_progress.json"
+    )
+
+
+def _summary_alias(
+    summary: dict[str, Any],
+    primary: str,
+    alias: str,
+) -> object:
+    value = summary.get(primary)
+    return value if value is not None else summary.get(alias)
+
+
+def _artifact_limitation_flags(registry_item: dict[str, Any] | None) -> tuple[str, ...]:
+    item = registry_item or {}
+    flags = {
+        flag
+        for flag in ("metadata_only", "preview_only", "partial", "simplified")
+        if bool(item.get(flag))
+    }
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    for key in ("stage_status", "capability_level"):
+        value = str(metadata.get(key) or "").strip().lower()
+        if value in {"metadata_only", "preview_only", "partial", "simplified"}:
+            flags.add(value)
+    return tuple(sorted(flags))
+
+
 def adapt_observation_sources(
     project: ProjectDetail,
     run_link: RunLinkRecord,
@@ -317,11 +361,15 @@ def adapt_observation_sources(
         facts.pipeline = PipelineObservation(
             status=str(summary.get("status") or "UNKNOWN").upper(),
             started_at=_parse_datetime(summary.get("started_at")),
-            ended_at=_parse_datetime(summary.get("finished_at")),
+            ended_at=_parse_datetime(
+                _summary_alias(summary, "finished_at", "ended_at")
+            ),
             nodes_total=summary.get("nodes_total"),
-            nodes_succeeded=summary.get("nodes_succeeded"),
-            nodes_failed=summary.get("nodes_failed"),
-            nodes_skipped=summary.get("nodes_skipped"),
+            nodes_succeeded=_summary_alias(
+                summary, "nodes_succeeded", "nodes_success"
+            ),
+            nodes_failed=_summary_alias(summary, "nodes_failed", "nodes_failure"),
+            nodes_skipped=_summary_alias(summary, "nodes_skipped", "nodes_skip"),
             errors=tuple(_redact(item)[0] for item in (summary.get("errors") or [])),
             warnings=tuple(_redact(item)[0] for item in (summary.get("warnings") or [])),
             evidence_ids=(summary_source.source_id,),
@@ -449,6 +497,89 @@ def adapt_observation_sources(
             }
         )
 
+    # The native orchestrator owns subject-level progress separately from the
+    # project-level Pipeline Runtime node state. Project node counts remain
+    # bound to the runtime summary; these additional observations exist only
+    # to project the reviewed subject scope truthfully.
+    native_progress_path = _native_progress_path(project_root, run_link.run_id)
+    if native_progress_path.exists():
+        try:
+            safe_progress = _safe_project_path(
+                native_progress_path,
+                project_root=project_root,
+                rawdata_roots=raw_roots,
+            )
+            progress_payload = json.loads(
+                safe_progress.read_text(encoding="utf-8")
+            )
+            if not isinstance(progress_payload, dict):
+                raise ValueError("native_progress_invalid")
+            subjects_payload = progress_payload.get("subjects")
+            if not isinstance(subjects_payload, dict):
+                raise ValueError("native_progress_invalid")
+        except Exception as exc:
+            facts.blocking_facts.append("NATIVE_PROGRESS_INVALID")
+            facts.sources.append(
+                _source(
+                    source_type="native_progress",
+                    observed_at=collected_at,
+                    read_status="invalid",
+                    run_created_at=run_created_at,
+                    record_id=run_link.run_id,
+                    warnings=(
+                        f"NATIVE_PROGRESS_READ_FAILED:{type(exc).__name__}",
+                    ),
+                )
+            )
+        else:
+            progress_source = _source(
+                source_type="native_progress",
+                observed_at=collected_at,
+                read_status="ok",
+                run_created_at=run_created_at,
+                path=safe_progress,
+                project_root=project_root,
+                record_id=run_link.run_id,
+                content_hash=_sha256_file(safe_progress),
+            )
+            facts.sources.append(progress_source)
+            subject_nodes: list[NodeObservation] = []
+            for subject_id, subject_payload in subjects_payload.items():
+                if not isinstance(subject_payload, dict) or not str(subject_id):
+                    facts.conflicts.append("NATIVE_PROGRESS_SUBJECT_INVALID")
+                    continue
+                subject_nodes.append(
+                    NodeObservation(
+                        node_id="native_preproc_subject",
+                        subject_id=str(subject_id),
+                        status=str(
+                            subject_payload.get("status") or "UNKNOWN"
+                        ).upper(),
+                        attempt=1,
+                        backend="native_python",
+                        warnings=_strings(subject_payload.get("warnings")),
+                        errors=_strings(subject_payload.get("errors")),
+                        evidence_ids=(progress_source.source_id,),
+                    )
+                )
+            completed = sum(
+                node.status in {"SUCCESS", "SUCCEEDED", "COMPLETED"}
+                for node in subject_nodes
+            )
+            expected_total = progress_payload.get("total_subjects")
+            expected_completed = progress_payload.get("completed_subjects")
+            if (
+                isinstance(expected_total, int)
+                and expected_total != len(subject_nodes)
+            ) or (
+                isinstance(expected_completed, int)
+                and expected_completed != completed
+            ):
+                facts.conflicts.append(
+                    "NATIVE_PROGRESS_SUBJECT_COUNT_CONFLICT"
+                )
+            facts.nodes.extend(subject_nodes)
+
     # Artifact registry is the authority for registration/provenance metadata.
     registry_by_path: dict[str, dict[str, Any]] = {}
     for registry_path in _registry_candidates(project_root, run_link.run_id):
@@ -517,6 +648,12 @@ def adapt_observation_sources(
         try:
             path = _safe_project_path(raw_path, project_root=project_root, rawdata_roots=raw_roots)
         except ValueError:
+            # The reviewed pipeline is a control-plane evidence link.  It can
+            # live in the shared reviewed-pipeline directory, but must never be
+            # mistaken for a project-owned scientific artifact.  All other
+            # rejected discovery paths remain a blocking safety fact.
+            if item.get("source") == "run_link.pipeline_path":
+                continue
             facts.blocking_facts.append("ARTIFACT_PATH_REJECTED")
             continue
         candidate_paths[str(path).casefold()] = (path, item, registry_by_path.get(str(path).casefold()))
@@ -549,11 +686,7 @@ def adapt_observation_sources(
         if not shape and isinstance(registry_shape, list):
             shape = tuple(int(item) for item in registry_shape if isinstance(item, int))
         dtype = dtype or (str((registry_item or {}).get("dtype")) if (registry_item or {}).get("dtype") else None)
-        flags = tuple(
-            flag
-            for flag in ("metadata_only", "preview_only", "partial", "simplified")
-            if bool((registry_item or {}).get(flag))
-        )
+        flags = _artifact_limitation_flags(registry_item)
         provenance = (
             (registry_item or {}).get("provenance_id")
             or (registry_item or {}).get("provenance_path")
@@ -575,8 +708,18 @@ def adapt_observation_sources(
                 artifact_id=str((registry_item or {}).get("artifact_id") or (discovered_item or {}).get("artifact_id") or f"artifact_{stable_hash(_relative(path, project_root))[:20]}"),
                 artifact_type=artifact_type,
                 owner_node_id=str((registry_item or {}).get("stage_id") or (discovered_item or {}).get("node_id") or "") or None,
-                subject_id=str((registry_item or {}).get("subject") or "") or None,
-                session_id=str((registry_item or {}).get("session") or "") or None,
+                subject_id=str(
+                    (registry_item or {}).get("subject_id")
+                    or (registry_item or {}).get("subject")
+                    or ""
+                )
+                or None,
+                session_id=str(
+                    (registry_item or {}).get("session_id")
+                    or (registry_item or {}).get("session")
+                    or ""
+                )
+                or None,
                 relative_path=_relative(path, project_root),
                 exists=exists,
                 size_bytes=path.stat().st_size if exists else None,
@@ -594,6 +737,7 @@ def adapt_observation_sources(
 
     # Existing validation service is read-only and consumes the registry/artifacts.
     preprocessing_run = project_root / "preprocessing_runs" / run_link.run_id
+    native_validation_report = _native_validation_report_path(project_root, run_link.run_id)
     if preprocessing_run.exists():
         response = validate_preprocessing_pipeline(
             project.id, run_link.run_id, project_dir=str(project_root)
@@ -637,6 +781,80 @@ def adapt_observation_sources(
                 report_ref=None,
                 report_hash=validation_hash,
                 evidence_ids=(validation_source.source_id,),
+            )
+        )
+    elif native_validation_report.exists():
+        try:
+            safe_report = _safe_project_path(
+                native_validation_report,
+                project_root=project_root,
+                rawdata_roots=raw_roots,
+            )
+            payload = json.loads(safe_report.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise ValueError("native_validation_not_object")
+        except Exception as exc:
+            facts.blocking_facts.append("NATIVE_VALIDATION_REPORT_INVALID")
+            facts.sources.append(
+                _source(
+                    source_type="validation",
+                    observed_at=collected_at,
+                    read_status="invalid",
+                    run_created_at=run_created_at,
+                    record_id=run_link.run_id,
+                    warnings=(f"NATIVE_VALIDATION_REPORT_READ_FAILED:{type(exc).__name__}",),
+                )
+            )
+        else:
+            errors = _strings(payload.get("errors"))
+            status_text = str(payload.get("status") or "").lower()
+            validation_status = (
+                "passed"
+                if status_text in {"succeeded", "success", "completed"} and not errors
+                else "failed"
+                if status_text in {"failed", "blocked", "partial", "cancelled"} or errors
+                else "unknown"
+            )
+            validation_source = _source(
+                source_type="validation",
+                observed_at=collected_at,
+                read_status="ok",
+                run_created_at=run_created_at,
+                path=safe_report,
+                project_root=project_root,
+                record_id=run_link.run_id,
+                content_hash=_sha256_file(safe_report),
+                warnings=_strings(payload.get("warnings")),
+            )
+            facts.sources.append(validation_source)
+            facts.validations.append(
+                ValidationObservation(
+                    validation_id=f"native_validation_{stable_hash({'run_id': run_link.run_id, 'hash': validation_source.content_hash})[:20]}",
+                    validator_id="native_full_preproc_validation",
+                    validator_version="1",
+                    scope=run_link.run_id,
+                    status=validation_status,
+                    checks=tuple(
+                        str(item.get("stage_id"))
+                        for item in payload.get("stage_results", [])
+                        if isinstance(item, dict) and item.get("stage_id")
+                    ),
+                    blocking_issues=errors,
+                    report_ref=_relative(safe_report, project_root),
+                    report_hash=validation_source.content_hash,
+                    evidence_ids=(validation_source.source_id,),
+                )
+            )
+    elif (project_root / "preprocessing_native_runs" / run_link.run_id).exists():
+        facts.missing_sources.append("validation")
+        facts.sources.append(
+            _source(
+                source_type="validation",
+                observed_at=collected_at,
+                read_status="missing",
+                run_created_at=run_created_at,
+                record_id=run_link.run_id,
+                warnings=("NATIVE_VALIDATION_REPORT_MISSING",),
             )
         )
     else:

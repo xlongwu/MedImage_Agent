@@ -100,14 +100,16 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
           <Sub>{t("technical.NiftiQcSnapshot.004")}</Sub>
         </div>
         <StatusPill status={niftiNotApplicable ? "not_applicable" : data.status}>
-          {niftiNotApplicable ? "Not applicable" : data.status.toUpperCase()}
+          {niftiNotApplicable
+            ? t("technical.NiftiQcSnapshot.notApplicable")
+            : t(`technical.readiness.status.${data.status}` as Parameters<typeof t>[0])}
         </StatusPill>
       </div>
       <SafetyBanner tone="warning">{t("technical.NiftiQcSnapshot.005")}</SafetyBanner>
 
       {niftiNotApplicable ? (
         <SafetyBanner tone="info">
-          NIfTI QC is not applicable until DICOM data is converted. Keep using{" "}
+          {t("technical.NiftiQcSnapshot.notApplicableDescription")}{" "}
           <strong>{t("technical.NiftiQcSnapshot.006")}</strong> {t("technical.NiftiQcSnapshot.007")}
         </SafetyBanner>
       ) : null}
@@ -122,19 +124,19 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
         }}
       >
         <MetricTile
-          label="Images"
+          label={t("technical.NiftiQcSnapshot.inputImages")}
           value={data.image_count}
           tone={data.image_count > 0 ? "green" : "neutral"}
         />
-        <MetricTile label="Readable" value={data.readable_count} />
+        <MetricTile label={t("technical.NiftiQcSnapshot.readable")} value={data.readable_count} />
         <MetricTile
-          label="Unreadable"
+          label={t("technical.NiftiQcSnapshot.unreadable")}
           value={data.unreadable_count}
           tone={data.unreadable_count > 0 ? "red" : "neutral"}
         />
         <MetricTile label="4D" value={data.four_d_count} />
         <MetricTile
-          label="Warnings"
+          label={t("technical.NiftiQcSnapshot.warnings")}
           value={data.warning_count}
           tone={data.warning_count > 0 ? "amber" : "neutral"}
         />
@@ -162,7 +164,9 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
       {/* Image table */}
       {data.images.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>Images ({data.images.length})</h4>
+          <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>
+            {t("technical.NiftiQcSnapshot.inputImages")} ({data.images.length})
+          </h4>
           <div style={{ display: "grid", gap: 6, maxHeight: 360, overflow: "auto" }}>
             {data.images.map((img) => {
               const key = img.image_id;
@@ -224,7 +228,9 @@ export default function NiftiQcSnapshotPanel({ baseUrl, projectId }: Props) {
                     }
                     style={{ fontSize: 11, fontWeight: 600 }}
                   >
-                    {isExpanded ? "Hide" : "Show"} details
+                    {isExpanded
+                      ? t("technical.NiftiQcSnapshot.hideDetails")
+                      : t("technical.NiftiQcSnapshot.showDetails")}
                   </button>
 
                   {/* Expanded details */}
@@ -430,7 +436,7 @@ function ThumbnailLoader({
       }}
       style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px" }}
     >
-      Load central slices
+      {t("technical.NiftiQcSnapshot.loadCentralSlices")}
     </button>
   );
 }

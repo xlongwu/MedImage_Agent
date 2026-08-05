@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
-  executeReviewedPreprocessingPipeline,
   getNativeGpuDetection,
   getLatestNativeFullPreprocessingRun,
   getNativeFullPreprocessingProgress,
   getNativeFullPreprocessingReport,
   getNativeFullPreprocessingValidation,
   runNativeFullPreprocessingDryRun,
-  submitNativeFullPreprocessing,
 } from "../../lib/api/preprocessing";
 import type {
   NativeFullPreprocConfirmations,
@@ -39,7 +37,7 @@ import type { MessageKey } from "../../i18n/messages/en";
 type Profile = NonNullable<PreprocessingPipelineExecuteRequest["pipeline_profile"]>;
 type ConfirmationKey = keyof NonNullable<PreprocessingPipelineExecuteRequest["confirmations"]>;
 type NativeConfirmationKey = keyof NativeFullPreprocConfirmations;
-type NativeAction = "" | "dry-run" | "execute" | "validation" | "report";
+type NativeAction = "" | "dry-run" | "validation" | "report";
 
 type Props = {
   baseUrl: string;
@@ -257,22 +255,6 @@ const STAGE_ROWS: Array<{
   },
 ];
 
-const defaultConfirmations: Record<ConfirmationKey, boolean> = {
-  confirm_rawdata_readonly: false,
-  confirm_reviewed_execution: false,
-  confirm_external_tools_if_needed: false,
-  confirm_research_use_only: false,
-  confirm_no_clinical_use: false,
-};
-
-const defaultNativeConfirmations: Record<NativeConfirmationKey, boolean> = {
-  confirm_reviewed_native_execution: false,
-  confirm_rawdata_readonly: false,
-  confirm_no_external_tools: false,
-  confirm_research_use_only: false,
-  confirm_no_clinical_use: false,
-};
-
 export function PreprocessingReviewedFlow({
   baseUrl,
   hasPreprocessingRun,
@@ -289,14 +271,7 @@ export function PreprocessingReviewedFlow({
   const [fallbackTr, setFallbackTr] = useState("");
   const [previewLimit, setPreviewLimit] = useState("");
   const [includeGlobalSignal, setIncludeGlobalSignal] = useState(false);
-  const [confirmations, setConfirmations] =
-    useState<Record<ConfirmationKey, boolean>>(defaultConfirmations);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<PreprocessingPipelineExecuteResponse | null>(null);
-  const [error, setError] = useState("");
-  const [nativeConfirmations, setNativeConfirmations] = useState<
-    Record<NativeConfirmationKey, boolean>
-  >(defaultNativeConfirmations);
+  const result: PreprocessingPipelineExecuteResponse | null = null;
   const [nativeAction, setNativeAction] = useState<NativeAction>("");
   const [nativeResult, setNativeResult] = useState<NativeFullPreprocResponse | null>(null);
   const [nativeValidation, setNativeValidation] = useState<Record<string, unknown> | null>(null);
@@ -317,16 +292,8 @@ export function PreprocessingReviewedFlow({
     [profile],
   );
 
-  const allConfirmationsChecked = CONFIRMATIONS.every((item) => confirmations[item.key]);
-  const allNativeConfirmationsChecked = NATIVE_CONFIRMATIONS.every(
-    (item) => nativeConfirmations[item.key],
-  );
-  const canSubmit = Boolean(
-    projectId && preprocessingRunId && allConfirmationsChecked && !submitting,
-  );
   const nativeRunId = nativeResult?.run_id || preprocessingRunId || "";
   const canNativeDryRun = Boolean(projectId && nativeRunId && !nativeAction);
-  const canNativeExecute = Boolean(canNativeDryRun && allNativeConfirmationsChecked);
   const canRefreshNative = Boolean(projectId && nativeRunId && !nativeAction);
   const fcResult = result?.stage_results.find(
     (stage) => stage.stage_id === "functional_connectivity",
@@ -395,34 +362,6 @@ export function PreprocessingReviewedFlow({
     };
   }, [baseUrl, nativeResult?.run_id, nativeResult?.status, projectId]);
 
-  const executeReviewedFlow = async () => {
-    if (!projectId || !preprocessingRunId || !canSubmit) return;
-    setSubmitting(true);
-    setError("");
-    setResult(null);
-    try {
-      const response = await executeReviewedPreprocessingPipeline(
-        baseUrl,
-        projectId,
-        preprocessingRunId,
-        buildReviewedRequest({
-          atlasPath,
-          confirmations,
-          fallbackTr,
-          includeGlobalSignal,
-          labelsPath,
-          previewLimit,
-          profile,
-        }),
-      );
-      setResult(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const runNativeDryRun = async () => {
     if (!projectId || !nativeRunId || !canNativeDryRun) return;
     setNativeAction("dry-run");
@@ -441,42 +380,11 @@ export function PreprocessingReviewedFlow({
           preprocessingRunId: nativeRunId,
           profile,
           templatePath,
-          computeBackend,
-        }),
-      );
-      setNativeResult(response);
-    } catch (err) {
-      setNativeError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setNativeAction("");
-    }
-  };
-
-  const executeNativeFlow = async () => {
-    if (!projectId || !nativeRunId || !canNativeExecute) return;
-    setNativeAction("execute");
-    setNativeError("");
-    setNativeValidation(null);
-    setNativeReport(null);
-    try {
-      const response = await submitNativeFullPreprocessing(
-        baseUrl,
-        projectId,
-        buildNativeRequest({
-          atlasPath,
-          confirmations: nativeConfirmations,
-          fallbackTr,
-          includeGlobalSignal,
-          labelsPath,
-          preprocessingRunId: nativeRunId,
-          profile,
-          templatePath,
           cpuMode,
           computeBackend,
         }),
       );
       setNativeResult(response);
-      setNativeProgress(null);
     } catch (err) {
       setNativeError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -617,9 +525,7 @@ export function PreprocessingReviewedFlow({
             <h3>{t("preprocessing.flow.executionGate")}</h3>
             <p>{t("preprocessing.flow.executionGateDescription")}</p>
           </div>
-          <Badge tone={canSubmit ? "success" : "warning"}>
-            {canSubmit ? t("preprocessing.ready") : t("common.blocked")}
-          </Badge>
+          <Badge tone="warning">{t("preprocessing.flow.agentApprovalRequired")}</Badge>
         </div>
         <div className={styles.gateSummary} aria-label={t("preprocessing.flow.gateReadiness")}>
           <div>
@@ -643,16 +549,7 @@ export function PreprocessingReviewedFlow({
         <div className={styles.confirmationList} aria-label={t("preprocessing.flow.confirmations")}>
           {CONFIRMATIONS.map((item) => (
             <label className={styles.confirmationItem} key={item.key}>
-              <input
-                type="checkbox"
-                checked={confirmations[item.key]}
-                onChange={() =>
-                  setConfirmations((current) => ({
-                    ...current,
-                    [item.key]: !current[item.key],
-                  }))
-                }
-              />
+              <input type="checkbox" checked={false} disabled readOnly />
               <span>
                 <strong>{t(item.labelKey)}</strong>
                 <small>{t(item.detailKey)}</small>
@@ -661,30 +558,18 @@ export function PreprocessingReviewedFlow({
           ))}
         </div>
         <div className={styles.reviewedActions}>
-          <Button variant="primary" onClick={executeReviewedFlow} disabled={!canSubmit}>
-            {submitting ? t("preprocessing.flow.submitting") : t("preprocessing.flow.submit")}
+          <Button variant="primary" disabled>
+            {t("preprocessing.flow.submit")}
           </Button>
-          <span>
-            {preprocessingRunId
-              ? t("preprocessing.flow.backendAuthoritative")
-              : t("preprocessing.flow.createRunFirst")}
-          </span>
+          <span>{t("preprocessing.flow.executionViaAgentOnly")}</span>
         </div>
-        {error ? <div className={styles.inlineError}>{error}</div> : null}
       </Card>
 
       <NativeFullWorkflowCard
-        allConfirmationsChecked={allNativeConfirmationsChecked}
         canDryRun={canNativeDryRun}
-        canExecute={canNativeExecute}
         canRefresh={canRefreshNative}
-        confirmations={nativeConfirmations}
         error={nativeError}
-        onConfirmationToggle={(key) =>
-          setNativeConfirmations((current) => ({ ...current, [key]: !current[key] }))
-        }
         onDryRun={runNativeDryRun}
-        onExecute={executeNativeFlow}
         onRefreshReport={refreshNativeReport}
         onRefreshValidation={refreshNativeValidation}
         pendingAction={nativeAction}
@@ -758,15 +643,10 @@ function ConversionHandoffCard({
 }
 
 function NativeFullWorkflowCard({
-  allConfirmationsChecked,
   canDryRun,
-  canExecute,
   canRefresh,
-  confirmations,
   error,
-  onConfirmationToggle,
   onDryRun,
-  onExecute,
   onRefreshReport,
   onRefreshValidation,
   pendingAction,
@@ -781,15 +661,10 @@ function NativeFullWorkflowCard({
   runId,
   validation,
 }: {
-  allConfirmationsChecked: boolean;
   canDryRun: boolean;
-  canExecute: boolean;
   canRefresh: boolean;
-  confirmations: Record<NativeConfirmationKey, boolean>;
   error: string;
-  onConfirmationToggle: (key: NativeConfirmationKey) => void;
   onDryRun: () => void;
-  onExecute: () => void;
   onRefreshReport: () => void;
   onRefreshValidation: () => void;
   pendingAction: NativeAction;
@@ -828,11 +703,7 @@ function NativeFullWorkflowCard({
         </div>
         <div>
           <span>{t("preprocessing.flow.gate")}</span>
-          <strong>
-            {allConfirmationsChecked
-              ? t("preprocessing.ready")
-              : t("preprocessing.flow.confirmationsRequired")}
-          </strong>
+          <strong>{t("preprocessing.flow.agentApprovalRequired")}</strong>
         </div>
       </div>
 
@@ -842,11 +713,7 @@ function NativeFullWorkflowCard({
       >
         {NATIVE_CONFIRMATIONS.map((item) => (
           <label className={styles.confirmationItem} key={item.key}>
-            <input
-              type="checkbox"
-              checked={confirmations[item.key]}
-              onChange={() => onConfirmationToggle(item.key)}
-            />
+            <input type="checkbox" checked={false} disabled readOnly />
             <span>
               <strong>{t(item.labelKey)}</strong>
               <small>{t(item.detailKey)}</small>
@@ -930,10 +797,8 @@ function NativeFullWorkflowCard({
             ? t("preprocessing.flow.planning")
             : t("preprocessing.flow.runNativeDryRun")}
         </Button>
-        <Button variant="primary" onClick={onExecute} disabled={!canExecute}>
-          {pendingAction === "execute"
-            ? t("preprocessing.flow.executing")
-            : t("preprocessing.flow.executeNative")}
+        <Button variant="primary" disabled>
+          {t("preprocessing.flow.executeNative")}
         </Button>
         <Button variant="secondary" onClick={onRefreshValidation} disabled={!canRefresh}>
           {pendingAction === "validation"
@@ -945,6 +810,7 @@ function NativeFullWorkflowCard({
             ? t("preprocessing.flow.refreshing")
             : t("preprocessing.flow.refreshReport")}
         </Button>
+        <span>{t("preprocessing.flow.executionViaAgentOnly")}</span>
       </div>
       {error ? <div className={styles.inlineError}>{error}</div> : null}
 
@@ -1302,87 +1168,8 @@ function SummaryMetric({
   );
 }
 
-function buildReviewedRequest({
-  atlasPath,
-  confirmations,
-  fallbackTr,
-  includeGlobalSignal,
-  labelsPath,
-  previewLimit,
-  profile,
-}: {
-  atlasPath: string;
-  confirmations: Record<ConfirmationKey, boolean>;
-  fallbackTr: string;
-  includeGlobalSignal: boolean;
-  labelsPath: string;
-  previewLimit: string;
-  profile: Profile;
-}): PreprocessingPipelineExecuteRequest {
-  return {
-    pipeline_profile: profile,
-    start_from: "existing_preprocessing_input",
-    backend_policy: {
-      slice_timing: "native_python",
-      motion_correction: "native_python",
-      t1_coregistration: profile === "dparsfa_like" ? "native_python" : "skip",
-      segmentation: profile === "dparsfa_like" ? "native_python" : "skip",
-      normalization: profile === "dparsfa_like" ? "native_python" : "skip",
-      spatial_smoothing: profile === "dparsfa_like" ? "native_python" : "skip",
-      nuisance_regression: "python",
-      temporal_filtering: "python",
-      functional_connectivity: "python",
-      alff_falff: "python",
-      reho: "python",
-    },
-    stages:
-      profile === "custom"
-        ? {
-            input_validation: "enabled",
-            realignment: "enabled",
-            nuisance_regression: "enabled",
-            temporal_filtering: "enabled",
-            functional_connectivity: "enabled",
-            subject_qc: "enabled",
-            group_summary: "enabled",
-            alff_falff: "auto",
-            reho: "auto",
-          }
-        : {},
-    atlas: {
-      atlas_path: atlasPath.trim(),
-      labels_path: labelsPath.trim(),
-      atlas_space: "native_or_matched",
-      allow_resample: false,
-    },
-    nuisance: {
-      model: "friston24",
-      include_wm_csf: profile === "dparsfa_like",
-      include_global_signal: includeGlobalSignal,
-      include_linear_trend: true,
-      include_intercept: true,
-    },
-    filtering: {
-      low_hz: 0.01,
-      high_hz: 0.08,
-      fallback_tr: parseOptionalNumber(fallbackTr),
-      tr: null,
-    },
-    execution_limits: {
-      preview_limit: parseOptionalInteger(previewLimit),
-      max_subjects: null,
-    },
-    confirmations,
-    resume: true,
-    rerun_policy: "skip_succeeded",
-    generate_report: true,
-    run_validation: true,
-  };
-}
-
 function buildNativeRequest({
   atlasPath,
-  confirmations,
   fallbackTr,
   includeGlobalSignal,
   labelsPath,
@@ -1393,7 +1180,6 @@ function buildNativeRequest({
   computeBackend = "cpu",
 }: {
   atlasPath: string;
-  confirmations?: Record<NativeConfirmationKey, boolean>;
   fallbackTr: string;
   includeGlobalSignal: boolean;
   labelsPath: string;
@@ -1414,7 +1200,6 @@ function buildNativeRequest({
     stage_overrides: nativeStageOverrides(profile),
     cpu_policy: { mode: cpuMode },
     compute_policy: { backend: computeBackend },
-    confirmations,
   };
 }
 
@@ -1458,11 +1243,6 @@ function nativeStageOverrides(profile: Profile): Record<string, boolean> {
 function parseOptionalNumber(value: string): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseOptionalInteger(value: string): number | null {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function firstIssue(stage: PreprocessingPipelineStageResult): string {

@@ -1,0 +1,541 @@
+.workspace {
+  position: relative;
+  display: grid;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+  gap: 18px;
+  isolation: isolate;
+}
+
+.workspace::before {
+  content: none;
+}
+
+.hero {
+  display: flex;
+  min-height: 150px;
+  align-items: end;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 18px 2px 8px;
+}
+
+.hero h1 {
+  max-width: 780px;
+  margin: 6px 0 8px;
+  font-family: "SF Pro Display", var(--font-family-ui);
+  font-size: clamp(34px, 4vw, 54px);
+  font-weight: 720;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+}
+
+.hero p {
+  max-width: 650px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.heroKicker,
+.eyebrow {
+  color: var(--color-accent);
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.projectSummary {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(480px, 1.6fr);
+  gap: 32px;
+  align-items: stretch;
+  padding: 24px 26px;
+  border-top: 3px solid var(--color-accent);
+}
+
+.projectSummary h2,
+.goalComposer h2,
+.currentAction h2,
+.nextAction h2,
+.resultSummary h2 {
+  margin: 5px 0;
+  color: var(--text);
+}
+
+.projectSummary p,
+.goalComposer p,
+.nextAction p,
+.resultSummary p,
+.technicalEvidence p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
+.summaryMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+  margin: 0;
+}
+
+.summaryMetrics > div {
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.summaryMetrics div {
+  min-width: 0;
+  padding: 12px 14px;
+  border-left: 1px solid var(--color-divider);
+}
+
+.summaryMetrics dt,
+.technicalEvidence dt {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryMetrics dd,
+.technicalEvidence dd {
+  margin: 8px 0 0;
+  font-weight: 650;
+}
+
+.goalComposer {
+  padding: 28px;
+  background: var(--surface-solid);
+}
+
+.goalComposer form {
+  display: grid;
+  gap: 20px;
+}
+
+.stepNumber {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  margin-right: 12px;
+  place-items: center;
+  border: 1px solid var(--color-divider-strong);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+}
+
+.goalField {
+  display: grid;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.goalField textarea,
+.decisionOptions textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--color-divider-strong);
+  border-radius: 14px;
+  background: var(--surface-solid);
+  color: var(--text);
+  padding: 16px;
+  font-size: 16px;
+  line-height: 1.55;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.composerFooter,
+.actionFooter,
+.nextActionHeader,
+.resultHeader,
+.technicalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.composerFooter small {
+  max-width: 620px;
+  color: var(--text-muted);
+}
+
+.inlineError,
+.connectionError {
+  color: var(--color-danger);
+}
+
+.currentAction {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 26px;
+}
+
+.currentAction h2 {
+  font-size: clamp(20px, 2.2vw, 28px);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.pulse {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: agent-pulse 2s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.macroProgress {
+  display: grid;
+  gap: 16px;
+  padding: 18px 22px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--surface-solid) 82%, transparent);
+}
+
+.macroProgress ol {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.macroProgress li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.macroProgress li > span {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--color-divider-strong);
+  border-radius: 50%;
+  background: var(--surface-solid);
+}
+
+.macroProgress li[data-state="done"] > span {
+  border-color: var(--color-success);
+  background: var(--color-success);
+}
+.macroProgress li[data-state="current"] {
+  color: var(--text);
+  font-weight: 700;
+}
+.macroProgress li[data-state="current"] > span {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  box-shadow: none;
+}
+
+.macroProgress li[data-state="skipped"] {
+  color: var(--text-muted);
+}
+
+.macroProgress li[data-state="skipped"] > span {
+  border-style: dashed;
+  background: var(--surface-muted);
+}
+
+.macroProgress li small {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.nextAction {
+  display: grid;
+  gap: 22px;
+  padding: 28px;
+  border-color: color-mix(in srgb, var(--color-accent) 34%, var(--color-divider));
+}
+
+.recoveryCard {
+  display: grid;
+  gap: 20px;
+  padding: 28px;
+  border-color: color-mix(in srgb, var(--color-warning) 38%, var(--color-divider));
+}
+
+.recoveryHeader {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.recoveryHeader h2 {
+  display: inline;
+  margin: 0;
+  font-size: 24px;
+}
+.recoveryHeader p {
+  margin: 8px 0 0 44px;
+  color: var(--text-muted);
+}
+
+.recoveryScope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.recoveryScope div {
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: var(--surface-muted);
+}
+.recoveryScope dt {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.recoveryScope dd {
+  margin: 6px 0 0;
+  font-weight: 650;
+}
+
+.nextActionHeader > div:first-child {
+  min-width: 0;
+}
+.nextActionHeader h2 {
+  display: inline;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.decisionOptions {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.decisionOptions legend {
+  font-size: 16px;
+  font-weight: 700;
+}
+.decisionOptions > label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+.decisionOptions label span {
+  display: grid;
+}
+.decisionOptions label small {
+  color: var(--text-muted);
+}
+
+.approvalSummary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--color-divider);
+  border-radius: 12px;
+  background: var(--color-divider);
+}
+
+.approvalSummary div {
+  display: grid;
+  gap: 5px;
+  padding: 13px 15px;
+  background: var(--surface-muted);
+}
+.approvalSummary span {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.approvalSummary strong {
+  font-size: 13px;
+}
+
+.actionFooter {
+  min-height: 40px;
+  border-top: 1px solid var(--color-divider);
+  padding-top: 16px;
+}
+.actionFooter > div {
+  display: flex;
+  gap: 8px;
+}
+
+.resultSummary {
+  display: grid;
+  gap: 16px;
+  padding: 26px;
+  border-left: 4px solid var(--color-success);
+}
+.resultMetrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.resultMetrics span {
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.limitations {
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--surface-solid));
+}
+.limitations ul {
+  margin-bottom: 0;
+}
+
+.taskDetails {
+  overflow: hidden;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-card);
+  background: var(--surface-solid);
+}
+.taskDetails > summary {
+  padding: 15px 18px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.taskDetailsBody {
+  display: grid;
+  gap: 18px;
+  padding: 0 18px 18px;
+  border-top: 1px solid var(--color-divider);
+}
+.evidenceList {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.evidenceList li {
+  display: grid;
+  grid-template-columns: auto minmax(140px, 0.5fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+.evidenceList code {
+  overflow: hidden;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+}
+.evidenceAvailable,
+.evidenceMissing {
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.evidenceAvailable {
+  background: color-mix(in srgb, var(--color-success) 13%, transparent);
+  color: var(--color-success);
+}
+.evidenceMissing {
+  background: color-mix(in srgb, var(--color-warning) 13%, transparent);
+  color: var(--color-warning);
+}
+.detailActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.technicalEvidence {
+  margin-top: 4px;
+  padding: 18px;
+  border-radius: 11px;
+  background: #14171c;
+  color: #e8ebf0;
+}
+.technicalEvidence h3 {
+  margin: 0;
+  color: #fff;
+}
+.technicalEvidence p {
+  color: #aeb6c3;
+}
+.technicalEvidence dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 16px 0 0;
+  background: #303641;
+}
+.technicalEvidence dl div {
+  min-width: 0;
+  padding: 10px 12px;
+  background: #1d222a;
+}
+.technicalEvidence dt {
+  color: #9ca7b8;
+}
+.technicalEvidence dd {
+  overflow-wrap: anywhere;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+}
+
+.connectionError {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-divider));
+}
+.connectionError p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+}
+.loadingState {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 1180px) {
+  .projectSummary {
+    grid-template-columns: 1fr;
+  }
+  .approvalSummary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}

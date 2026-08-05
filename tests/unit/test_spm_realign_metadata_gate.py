@@ -12,7 +12,6 @@ from src.backend.app.services.spm_realign_params import (
     validate_spm_realign_params,
 )
 
-
 # ── Tool Catalog metadata tests ──────────────────────────────────────────────
 
 

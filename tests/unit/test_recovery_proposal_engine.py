@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import sqlite3
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,10 +12,9 @@ from src.backend.app.main import app
 from src.backend.app.planner.audit_record import stable_hash
 from src.backend.app.runtime.execution_gateway import ExecutionGateway
 from src.backend.app.runtime.node_contract_registry import get_node_contract
-from src.backend.app.schemas.execution_ticket import ExecutionRetryPolicy, ExecutionTicket
 from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
 from src.backend.app.schemas.desktop import ProjectDetail
-from src.backend.app.schemas.node_contract import ContractRetryPolicy
+from src.backend.app.schemas.execution_ticket import ExecutionRetryPolicy, ExecutionTicket
 from src.backend.app.schemas.recovery import (
     CheckpointEvidence,
     DiagnosisFact,
@@ -25,16 +25,15 @@ from src.backend.app.schemas.recovery import (
     RecoveryQuotaLimits,
     RecoveryQuotaUsage,
 )
+from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.execution_ticket_service import ExecutionTicketService
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.recovery_proposal_engine import (
     RecoveryProposalEngine,
     calculate_recovery_proposal_hash,
 )
 
-
-NOW = datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 14, 12, 0, tzinfo=UTC)
 NODE = "functional_connectivity_subject"
 
 
@@ -199,7 +198,8 @@ def test_safe_retry_and_exact_failed_subject_retry_are_deterministic():
     actions = {candidate.action for candidate in first.candidates}
     assert {"SAFE_RETRY", "RETRY_FAILED_SUBJECTS"}.issubset(actions)
     recommended = next(
-        candidate for candidate in first.candidates
+        candidate
+        for candidate in first.candidates
         if candidate.candidate_id == first.recommended_candidate_id
     )
     assert recommended.action == "RETRY_FAILED_SUBJECTS"
@@ -266,7 +266,9 @@ def test_parameter_backend_and_replan_actions_require_new_review():
         diagnosis=_diagnosis(category="PARAMETER_CAUSED_GAP", retryability="non_retryable"),
         changes=RecoveryChangeRequest(parameter_patch={NODE: {"roi_count": 8}}),
     )
-    parameter_candidate = next(item for item in parameter.candidates if item.action == "PARAMETER_CHANGE")
+    parameter_candidate = next(
+        item for item in parameter.candidates if item.action == "PARAMETER_CHANGE"
+    )
     assert parameter_candidate.eligible and not parameter_candidate.executable
     assert parameter_candidate.changes_reviewed_plan
     assert parameter_candidate.approval_class == "new_reviewed_plan_and_approval"
@@ -308,7 +310,9 @@ def test_parameter_backend_and_replan_actions_require_new_review():
         RecoveryChangeRequest(parameter_patch={NODE: {"roi_count": 8}}),
         RecoveryChangeRequest(backend_patch={NODE: "gpu"}),
         RecoveryChangeRequest(replacement_node_ids=("contract_smoke",)),
-        RecoveryChangeRequest(dag_patch={NODE: ("contract_smoke",)}, replacement_node_ids=("contract_smoke", NODE)),
+        RecoveryChangeRequest(
+            dag_patch={NODE: ("contract_smoke",)}, replacement_node_ids=("contract_smoke", NODE)
+        ),
         RecoveryChangeRequest(output_roots=("project/other-derivatives",)),
         RecoveryChangeRequest(subject_scope=("sub-01",)),
         RecoveryChangeRequest(goal_contract_hash="changed-goal"),
@@ -323,7 +327,11 @@ def test_every_reviewed_contract_dimension_change_is_canonical_and_never_safe(ch
         if candidate.action in {"SAFE_RETRY", "RETRY_FAILED_SUBJECTS", "RESUME"}:
             assert not candidate.eligible
             assert "REVIEWED_CONTRACT_CHANGED" in candidate.blocked_reasons
-    changed_candidates = [candidate for candidate in proposal.candidates if candidate.canonical_diff.changes_reviewed_contract]
+    changed_candidates = [
+        candidate
+        for candidate in proposal.candidates
+        if candidate.canonical_diff.changes_reviewed_contract
+    ]
     assert changed_candidates
     assert all(
         any(entry.changed for entry in candidate.canonical_diff.entries)
@@ -334,10 +342,34 @@ def test_every_reviewed_contract_dimension_change_is_canonical_and_never_safe(ch
 @pytest.mark.parametrize(
     ("diagnosis", "ticket", "policy", "usage", "reason"),
     [
-        (_diagnosis(root="unknown"), _ticket(), _project_quota(), RecoveryQuotaUsage(), "ROOT_CAUSE_UNKNOWN"),
-        (_diagnosis(blocking=("EVIDENCE_CONFLICT",)), _ticket(), _project_quota(), RecoveryQuotaUsage(), "EVIDENCE_CONFLICT"),
-        (_diagnosis(), _ticket(), RecoveryQuotaLimits(), RecoveryQuotaUsage(), "RECOVERY_QUOTA_DIMENSION_MISSING"),
-        (_diagnosis(), _ticket(), _project_quota(), RecoveryQuotaUsage(node_attempts=1), "RECOVERY_QUOTA_EXHAUSTED"),
+        (
+            _diagnosis(root="unknown"),
+            _ticket(),
+            _project_quota(),
+            RecoveryQuotaUsage(),
+            "ROOT_CAUSE_UNKNOWN",
+        ),
+        (
+            _diagnosis(blocking=("EVIDENCE_CONFLICT",)),
+            _ticket(),
+            _project_quota(),
+            RecoveryQuotaUsage(),
+            "EVIDENCE_CONFLICT",
+        ),
+        (
+            _diagnosis(),
+            _ticket(),
+            RecoveryQuotaLimits(),
+            RecoveryQuotaUsage(),
+            "RECOVERY_QUOTA_DIMENSION_MISSING",
+        ),
+        (
+            _diagnosis(),
+            _ticket(),
+            _project_quota(),
+            RecoveryQuotaUsage(node_attempts=1),
+            "RECOVERY_QUOTA_EXHAUSTED",
+        ),
     ],
 )
 def test_unknown_conflict_missing_or_exhausted_quota_produces_only_handoff(
@@ -410,7 +442,7 @@ def test_proposal_persistence_is_immutable_and_reloadable(tmp_path):
     reopened = SQLiteDesktopStore(store.db_path)
     assert reopened.get_recovery_proposal(proposal.recovery_proposal_id) == proposal
     assert reopened.list_recovery_proposals("project-1", lifecycle_id="lifecycle-1") == [proposal]
-    with pytest.raises(Exception):
+    with pytest.raises(sqlite3.IntegrityError):
         store.add_recovery_proposal(proposal)
 
 
@@ -501,10 +533,19 @@ def test_lifecycle_references_and_read_only_recovery_api_are_project_scoped(tmp_
         )
         assert diagnoses.status_code == proposals.status_code == detail.status_code == 200
         assert diagnoses.json()["diagnoses"][0]["diagnosis_id"] == diagnosis.diagnosis_id
-        assert proposals.json()["recovery_proposals"][0]["recovery_proposal_id"] == proposal.recovery_proposal_id
-        assert detail.json()["recovery_proposal"]["recovery_proposal_hash"] == proposal.recovery_proposal_hash
-        assert client.get(
-            f"/api/projects/other/agent-lifecycles/lifecycle-1/recovery-proposals/{proposal.recovery_proposal_id}"
-        ).status_code == 404
+        assert (
+            proposals.json()["recovery_proposals"][0]["recovery_proposal_id"]
+            == proposal.recovery_proposal_id
+        )
+        assert (
+            detail.json()["recovery_proposal"]["recovery_proposal_hash"]
+            == proposal.recovery_proposal_hash
+        )
+        assert (
+            client.get(
+                f"/api/projects/other/agent-lifecycles/lifecycle-1/recovery-proposals/{proposal.recovery_proposal_id}"
+            ).status_code
+            == 404
+        )
     finally:
         app.dependency_overrides.pop(get_project_store, None)

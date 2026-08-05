@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +18,7 @@ def _matlab_quote(value: str) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -93,7 +93,10 @@ def run_dpabi_sandbox_smoke(
         return data
 
     # ── M7-DPABI-T004b: DPABI runtime safety preflight (runs AFTER plan check, BEFORE subprocess) ──
-    from src.backend.app.safety.matlab_safety import validate_matlab_command, validate_third_party_dir
+    from src.backend.app.safety.matlab_safety import (
+        validate_matlab_command,
+        validate_third_party_dir,
+    )
     _cmd_sr = validate_matlab_command(matlab_command)
     _dpabi_sr = validate_third_party_dir(dpabi_dir, name="dpabi_dir")
     from src.backend.app.safety.matlab_safety import MatlabSafetyResult

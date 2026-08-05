@@ -1,8 +1,9 @@
 """Affine and voxel-size helpers."""
+
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -18,7 +19,7 @@ def fwhm_mm_to_sigma_voxels(
     fwhm_mm: float | Sequence[float],
     affine: np.ndarray,
 ) -> tuple[float, float, float]:
-    if isinstance(fwhm_mm, (int, float)):
+    if isinstance(fwhm_mm, int | float):
         fwhm_values = (float(fwhm_mm), float(fwhm_mm), float(fwhm_mm))
     else:
         fwhm_values = tuple(float(value) for value in fwhm_mm)
@@ -28,7 +29,7 @@ def fwhm_mm_to_sigma_voxels(
         raise ValueError("FWHM values must be non-negative.")
     divisor = math.sqrt(8.0 * math.log(2.0))
     voxel_sizes = voxel_sizes_from_affine(affine)
-    return tuple(float(fwhm / divisor / voxel) for fwhm, voxel in zip(fwhm_values, voxel_sizes))
+    return tuple(float(fwhm / divisor / voxel) for fwhm, voxel in zip(fwhm_values, voxel_sizes, strict=False))
 
 
 def world_center_of_mass(data: np.ndarray, affine: np.ndarray) -> np.ndarray | None:
@@ -36,7 +37,9 @@ def world_center_of_mass(data: np.ndarray, affine: np.ndarray) -> np.ndarray | N
 
     from scipy.ndimage import center_of_mass
 
-    weights = np.abs(np.nan_to_num(np.asarray(data, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0))
+    weights = np.abs(
+        np.nan_to_num(np.asarray(data, dtype=np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+    )
     if not np.any(weights):
         return None
     voxel_center = np.asarray(center_of_mass(weights), dtype=np.float64)

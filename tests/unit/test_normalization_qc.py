@@ -23,7 +23,9 @@ def test_normalization_qc_computes_output_metrics(tmp_path: Path):
     normalized_data = np.ones((6, 6, 6, 5), dtype=np.float32)
 
     nib.save(nib.Nifti1Image(input_data, affine_input), str(input_func))
-    nib.save(nib.Nifti1Image(np.zeros((4, 4, 4, 1, 3), dtype=np.float32), affine_input), str(deformation))
+    nib.save(
+        nib.Nifti1Image(np.zeros((4, 4, 4, 1, 3), dtype=np.float32), affine_input), str(deformation)
+    )
     nib.save(nib.Nifti1Image(normalized_data, affine_norm), str(normalized))
 
     result = compute_normalization_qc_for_subject(

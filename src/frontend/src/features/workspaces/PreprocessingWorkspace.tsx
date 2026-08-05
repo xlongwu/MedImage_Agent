@@ -29,7 +29,6 @@ export interface PreprocessingWorkspaceProps {
   preprocessingRunId?: string | null;
   onOpenDataConversion: () => void;
   onOpenToolsDrawer: () => void;
-  onOpenRuns?: (runId: string | null) => void;
 }
 
 export function PreprocessingWorkspace({
@@ -41,7 +40,6 @@ export function PreprocessingWorkspace({
   preprocessingRunId,
   onOpenDataConversion,
   onOpenToolsDrawer,
-  onOpenRuns,
 }: PreprocessingWorkspaceProps) {
   const { t } = useI18n();
   const [showTechnicalModules, setShowTechnicalModules] = useState(false);
@@ -265,7 +263,7 @@ export function PreprocessingWorkspace({
             >
               {creatingRun ? t("preprocessing.creating") : t("preprocessing.createNewRun")}
             </Button>
-            <Button onClick={() => onOpenRuns?.(null)} variant="secondary">
+            <Button onClick={() => setShowDetailedValidation(true)} variant="secondary">
               {t("preprocessing.viewLogs")}
             </Button>
           </div>
@@ -280,7 +278,7 @@ export function PreprocessingWorkspace({
           >
             {creatingRun ? t("preprocessing.creating") : t("preprocessing.createNewRun")}
           </Button>
-          <Button onClick={() => onOpenRuns?.(null)} variant="secondary">
+          <Button onClick={() => setShowDetailedValidation(true)} variant="secondary">
             {t("preprocessing.viewDetails")}
           </Button>
         </div>

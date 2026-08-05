@@ -8,7 +8,7 @@ computing or writing any reference image.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -25,7 +25,7 @@ _NIFTI_EXT = (".nii", ".nii.gz")
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _is_bold(path: Path) -> bool:
@@ -188,7 +188,7 @@ def build_bold_reference_readiness(project_id: str) -> BoldReferenceReadinessRes
             "volume_count": volume_count,
             "is_4d": is_4d,
             "has_sidecar": has_sidecar,
-            "repetition_time": float(tr) if isinstance(tr, (int, float)) else None,
+            "repetition_time": float(tr) if isinstance(tr, int | float) else None,
             "task_name": str(task_name) if task_name else None,
             "has_slice_timing": has_slice_timing,
             "phase_encoding_direction": str(pe_dir) if pe_dir else None,

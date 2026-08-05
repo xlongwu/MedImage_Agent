@@ -7,7 +7,11 @@ from src.backend.app.native_preproc.core.interpolation import slice_timing_corre
 from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.io.derivative_naming import derivative_path
 from src.backend.app.native_preproc.io.nifti_io import ensure_4d, load_nifti, save_nifti
-from src.backend.app.native_preproc.io.sidecar import read_bids_metadata, require_repetition_time, require_slice_timing
+from src.backend.app.native_preproc.io.sidecar import (
+    read_bids_metadata,
+    require_repetition_time,
+    require_slice_timing,
+)
 from src.backend.app.native_preproc.orchestrator.artifact_registry import build_artifact_ref
 from src.backend.app.native_preproc.stages._common import context_from_output_dir, stage_result
 from src.backend.app.schemas.native_preproc import NativePreprocQC

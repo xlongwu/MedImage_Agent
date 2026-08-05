@@ -10,7 +10,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 PREPROCESSING_ARTIFACT_TYPES: tuple[str, ...] = (
     "converted_bold",
     "converted_t1w",

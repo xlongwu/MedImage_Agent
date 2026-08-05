@@ -6,7 +6,6 @@ from typing import Any
 from src.backend.app.advisor.advisor_safety import (
     is_llm_enabled,
     wrap_advisor_response,
-    advisor_fallback,
 )
 
 
@@ -44,9 +43,10 @@ def advise_qc_report(
 
 
 def _llm_qc_narrative(qc_data: dict, subjects_total: int, subjects_passed: int) -> str:
-    from src.backend.app.advisor.protocol_advisor import _call_llm
-    from src.backend.app.advisor.advisor_safety import get_llm_config
     import json
+
+    from src.backend.app.advisor.advisor_safety import get_llm_config
+    from src.backend.app.advisor.protocol_advisor import _call_llm
 
     config = get_llm_config()
     prompt = (

@@ -102,8 +102,10 @@ def test_decision_is_full_go_eligible_not_public_enabled():
     """Decision is full-go-eligible, not public-enabled."""
     review = build_default_go_no_go_review()
     assert review.decision == "CONDITIONAL_GO"
-    assert "public conversion still disabled" in review.recommendation.lower() or \
-           "public conversion remains disabled" in review.recommendation.lower()
+    assert (
+        "public conversion still disabled" in review.recommendation.lower()
+        or "public conversion remains disabled" in review.recommendation.lower()
+    )
 
 
 def test_human_release_approval_required():
@@ -114,12 +116,13 @@ def test_human_release_approval_required():
 
 def test_user_conversion_remains_disabled_by_default():
     """User-data conversion remains disabled by default even at full GO eligibility."""
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+
     result = run_conversion_execute("test", DicomConversionExecutionRequest())
     assert result.conversion_disabled is True, "Public conversion must remain disabled"
 
@@ -162,6 +165,7 @@ def test_summarize_missing():
 
 def test_schema_has_no_subprocess():
     import src.backend.app.schemas.dicom_conversion_go_no_go as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -171,6 +175,7 @@ def test_schema_has_no_subprocess():
 
 def test_schema_has_no_file_write():
     import src.backend.app.schemas.dicom_conversion_go_no_go as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()

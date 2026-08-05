@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -40,7 +40,6 @@ from src.backend.app.services.mock_store import SQLiteDesktopStore
 from src.backend.app.services.observation_collector import calculate_observation_hash
 from src.backend.app.services.recovery_proposal_engine import RecoveryProposalEngine
 from src.backend.app.services.run_diagnosis_service import RunDiagnosisService
-
 
 QUOTA = {
     "max_lifecycle_recovery_attempts": 2,
@@ -155,7 +154,7 @@ def build_recovery_fixture(
         ),
         minimum_capability_level="unavailable",
         reviewed_actor="test-reviewer",
-        reviewed_at=datetime.now(timezone.utc),
+        reviewed_at=datetime.now(UTC),
         goal_contract_hash="pending",
     )
     goal_payload = goal.model_dump(mode="json")
@@ -167,8 +166,8 @@ def build_recovery_fixture(
         project_config_path=str(config_path),
         plan_hash=plan_hash,
         plan_path=str(project_root / "plans" / f"{reviewed_plan_id}.json"),
-        created_at=datetime.now(timezone.utc).isoformat(),
-        updated_at=datetime.now(timezone.utc).isoformat(),
+        created_at=datetime.now(UTC).isoformat(),
+        updated_at=datetime.now(UTC).isoformat(),
         status="REVIEWED",
         payload={
             "plan": plan,
@@ -206,11 +205,11 @@ def build_recovery_fixture(
     parent = store.update_execution_ticket(
         parent.execution_ticket_id,
         status="consumed",
-        consumed_at=datetime.now(timezone.utc).isoformat(),
+        consumed_at=datetime.now(UTC).isoformat(),
         idempotency_key="parent-dispatch",
     )
     assert parent is not None
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     store.add_run_link(
         RunLinkRecord(
             run_link_id=f"runlink-{uuid4().hex[:10]}",
@@ -226,7 +225,7 @@ def build_recovery_fixture(
         )
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     observation = ObservationRecord(
         observation_id=f"observation-{uuid4().hex[:10]}",
         bindings=ObservationBindings(

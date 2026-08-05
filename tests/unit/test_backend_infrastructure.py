@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-from typing import List, Set
 
 from fastapi.testclient import TestClient
 
@@ -17,7 +16,7 @@ from src.backend.app.runtime.state_store import (
 )
 
 
-def _extract_route_paths(app) -> Set[str]:
+def _extract_route_paths(app) -> set[str]:
     """Extract all registered route paths from the OpenAPI schema.
 
     Uses app.openapi() instead of iterating app.routes directly because
@@ -28,12 +27,12 @@ def _extract_route_paths(app) -> Set[str]:
     return set(schema.get("paths", {}).keys())
 
 
-def _extract_duplicate_routes(app) -> List[str]:
+def _extract_duplicate_routes(app) -> list[str]:
     """Find duplicate (method, path) entries via OpenAPI schema."""
-    duplicates: List[str] = []
+    duplicates: list[str] = []
     schema = app.openapi()
     for path, methods in schema.get("paths", {}).items():
-        seen: Set[str] = set()
+        seen: set[str] = set()
         for method in methods:
             if method in seen:
                 duplicates.append(f"{method.upper()} {path}")

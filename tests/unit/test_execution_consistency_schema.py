@@ -24,6 +24,7 @@ from src.backend.app.schemas.execution_consistency import (
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _base(project_id: str = "p1", **kw) -> ExecutionConsistencyInput:
     """Minimal valid input with project_id set."""
     defaults: dict = {
@@ -48,6 +49,7 @@ def _base(project_id: str = "p1", **kw) -> ExecutionConsistencyInput:
 # ═══════════════════════════════════════════════════════════════════════
 # Model serialization tests
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_input_minimal_serializes():
     inp = ExecutionConsistencyInput(project_id="p1")
@@ -98,6 +100,7 @@ def test_invalid_status_rejected():
 # Passing consistency
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_identical_inputs_pass():
     base = _base()
     report = verify_execution_consistency(reviewed=base, dry_run=base, execution=base)
@@ -136,6 +139,7 @@ def test_missing_dry_run_status_not_flagged():
 # Failure: project_id mismatch
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_project_id_mismatch_reviewed_vs_dry_run():
     r = _base(project_id="p_reviewed")
     d = _base(project_id="p_dry_run")
@@ -159,6 +163,7 @@ def test_project_id_mismatch_dry_run_vs_execution():
 # Failure: reviewed_plan_id mismatch
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_reviewed_plan_id_mismatch():
     r = _base(reviewed_plan_id="rp-A")
     d = _base(reviewed_plan_id="rp-B")
@@ -171,6 +176,7 @@ def test_reviewed_plan_id_mismatch():
 # ═══════════════════════════════════════════════════════════════════════
 # Failure: plan_hash mismatch
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_plan_hash_mismatch():
     r = _base(plan_hash="sha256:abc")
@@ -185,6 +191,7 @@ def test_plan_hash_mismatch():
 # Failure: project_config_path mismatch
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_project_config_path_mismatch():
     d = _base(project_config_path="/cfg/a.yaml")
     e = _base(project_config_path="/cfg/b.yaml")
@@ -196,6 +203,7 @@ def test_project_config_path_mismatch():
 # ═══════════════════════════════════════════════════════════════════════
 # Failure: project_context_path missing on execution
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_project_context_path_missing():
     e = _base(project_context_path="")  # empty = missing
@@ -214,6 +222,7 @@ def test_project_context_path_none():
 # ═══════════════════════════════════════════════════════════════════════
 # Failure: node set mismatch
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_node_set_mismatch():
     d = _base(node_ids=["a", "b"])
@@ -234,6 +243,7 @@ def test_node_set_extra_in_execution():
 # ═══════════════════════════════════════════════════════════════════════
 # Failure: node param hash mismatch
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_node_param_hash_mismatch():
     d = _base(node_param_hashes={"a": "ph_v1"})
@@ -256,6 +266,7 @@ def test_node_param_hash_mismatch_reports_node_id():
 # Failure: output_root mismatch
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_output_root_mismatch():
     d = _base(output_root="/out/a/")
     e = _base(output_root="/out/b/")
@@ -268,10 +279,13 @@ def test_output_root_mismatch():
 # Failure: output manifest missing
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_output_manifest_missing_when_required():
     e = _base(output_manifest_ids=[])
     report = verify_execution_consistency(
-        reviewed=_base(), dry_run=_base(), execution=e,
+        reviewed=_base(),
+        dry_run=_base(),
+        execution=e,
         require_output_manifest=True,
     )
     codes = {i.code for i in report.issues}
@@ -281,6 +295,7 @@ def test_output_manifest_missing_when_required():
 # ═══════════════════════════════════════════════════════════════════════
 # Failure: safe allowlist fingerprint mismatch
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_safe_allowlist_changed():
     d = _base(safe_allowlist_fingerprint="sha256:v1")
@@ -294,10 +309,13 @@ def test_safe_allowlist_changed():
 # Failure: approval / audit missing
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_approval_missing_when_required():
     e = _base(approval_context_id=None)
     report = verify_execution_consistency(
-        reviewed=_base(), dry_run=_base(), execution=e,
+        reviewed=_base(),
+        dry_run=_base(),
+        execution=e,
         require_approval=True,
     )
     codes = {i.code for i in report.issues}
@@ -307,7 +325,9 @@ def test_approval_missing_when_required():
 def test_audit_missing_when_required():
     e = _base(audit_id=None)
     report = verify_execution_consistency(
-        reviewed=_base(), dry_run=_base(), execution=e,
+        reviewed=_base(),
+        dry_run=_base(),
+        execution=e,
         require_audit=True,
     )
     codes = {i.code for i in report.issues}
@@ -317,6 +337,7 @@ def test_audit_missing_when_required():
 # ═══════════════════════════════════════════════════════════════════════
 # Failure: bad dry_run status
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_bad_dry_run_status():
     base = _base(dry_run_status="BLOCKED")
@@ -336,10 +357,13 @@ def test_bad_dry_run_status_cancelled():
 # Optional flags
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_require_approval_false_allows_missing():
     e = _base(approval_context_id=None)
     report = verify_execution_consistency(
-        reviewed=_base(), dry_run=_base(), execution=e,
+        reviewed=_base(),
+        dry_run=_base(),
+        execution=e,
         require_approval=False,
     )
     codes = {i.code for i in report.issues}
@@ -349,7 +373,9 @@ def test_require_approval_false_allows_missing():
 def test_require_audit_false_allows_missing():
     e = _base(audit_id=None)
     report = verify_execution_consistency(
-        reviewed=_base(), dry_run=_base(), execution=e,
+        reviewed=_base(),
+        dry_run=_base(),
+        execution=e,
         require_audit=False,
     )
     codes = {i.code for i in report.issues}
@@ -359,7 +385,9 @@ def test_require_audit_false_allows_missing():
 def test_require_output_manifest_false_allows_missing():
     e = _base(output_manifest_ids=[])
     report = verify_execution_consistency(
-        reviewed=_base(), dry_run=_base(), execution=e,
+        reviewed=_base(),
+        dry_run=_base(),
+        execution=e,
         require_output_manifest=False,
     )
     codes = {i.code for i in report.issues}
@@ -369,6 +397,7 @@ def test_require_output_manifest_false_allows_missing():
 # ═══════════════════════════════════════════════════════════════════════
 # Summary helper
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_summarize_counts_info_warning_error():
     issues = [
@@ -395,11 +424,18 @@ def test_summarize_empty():
 # Complex multi-issue report
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_multiple_mismatches_produce_fail():
     r = _base(project_id="pA", plan_hash="h1")
     d = _base(project_id="pB", plan_hash="h2", node_ids=["x"], dry_run_status="blocked")
-    e = _base(project_id="pC", plan_hash="h3", node_ids=["y"],
-              project_context_path=None, approval_context_id=None, audit_id=None)
+    e = _base(
+        project_id="pC",
+        plan_hash="h3",
+        node_ids=["y"],
+        project_context_path=None,
+        approval_context_id=None,
+        audit_id=None,
+    )
     report = verify_execution_consistency(reviewed=r, dry_run=d, execution=e)
     assert report.ok is False
     assert report.status == "fail"
@@ -418,11 +454,14 @@ def test_multiple_mismatches_produce_fail():
 # Purity / safety tests
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_helper_creates_no_files(tmp_path):
     """verify_execution_consistency creates no files."""
     before = list(tmp_path.iterdir())
     _report = verify_execution_consistency(
-        reviewed=_base(), dry_run=_base(), execution=_base(),
+        reviewed=_base(),
+        dry_run=_base(),
+        execution=_base(),
     )
     _s = summarize_consistency_issues([])
     after = list(tmp_path.iterdir())
@@ -432,6 +471,7 @@ def test_helper_creates_no_files(tmp_path):
 def test_module_does_not_import_runtime_executor():
     """Schema module must not import pipeline_executor."""
     import src.backend.app.schemas.execution_consistency as ec
+
     source = inspect.getsource(ec)
     forbidden = [
         "pipeline_executor",
@@ -446,6 +486,7 @@ def test_module_does_not_import_runtime_executor():
 def test_no_rawdata_or_outputs_path_touched():
     """Module does not reference rawdata or outputs directories."""
     import src.backend.app.schemas.execution_consistency as ec
+
     source = str(getattr(ec, "__file__", ""))
     assert "schemas" in source
 
@@ -453,6 +494,7 @@ def test_no_rawdata_or_outputs_path_touched():
 def test_no_file_io_in_module():
     """Schema module must not perform file I/O on import."""
     import src.backend.app.schemas.execution_consistency as ec
+
     source = inspect.getsource(ec)
     iowords = ["open(", "Path(", "write_text", "read_text", "json.dump", "json.load"]
     for word in iowords:
@@ -472,9 +514,18 @@ def test_unknown_strings_do_not_raise():
 def test_checked_fields_populated():
     report = verify_execution_consistency(reviewed=_base(), dry_run=_base(), execution=_base())
     expected = {
-        "project_id", "reviewed_plan_id", "plan_hash", "project_config_path",
-        "project_context_path", "node_ids", "node_param_hashes", "output_root",
-        "output_manifest_ids", "safe_allowlist_fingerprint",
-        "approval_context_id", "audit_id", "dry_run_status",
+        "project_id",
+        "reviewed_plan_id",
+        "plan_hash",
+        "project_config_path",
+        "project_context_path",
+        "node_ids",
+        "node_param_hashes",
+        "output_root",
+        "output_manifest_ids",
+        "safe_allowlist_fingerprint",
+        "approval_context_id",
+        "audit_id",
+        "dry_run_status",
     }
     assert set(report.checked_fields) == expected

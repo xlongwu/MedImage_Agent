@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Literal
 
-
 ExecutionEntryDisposition = Literal["gateway", "proposal/dry-run", "deprecated"]
 
 
@@ -30,7 +29,7 @@ EXECUTION_ENTRY_INVENTORY: tuple[ExecutionEntry, ...] = (
     ExecutionEntry("retry.execute", "/api/retry/execute", "agent_routes", "deprecated", "Retry must be coordinated by the lifecycle orchestrator."),
     ExecutionEntry("planner.execute", "/api/planner/execute", "planner_routes", "deprecated", "Planner output is advisory and cannot authorize execution."),
     ExecutionEntry("pipeline.task", "/api/pipelines/run", "task_routes", "deprecated", "Non-simulated task execution lacks a reviewed-plan ticket."),
-    ExecutionEntry("conversion.execute", "/api/projects/{project_id}/conversion/execute", "conversion_routes", "deprecated", "Conversion approval package is not an execution ticket."),
+    ExecutionEntry("conversion.execute", "/api/projects/{project_id}/conversion/execute", "conversion_routes", "deprecated", "Retired compatibility route; use native_dicom_conversion_execute inside /api/plans/execute-reviewed."),
     ExecutionEntry("preprocessing.execute", "/api/projects/{project_id}/preprocessing/runs/{run_id}/execute-reviewed", "preprocessing_routes", "deprecated", "The legacy orchestrator is not ticket-bound."),
     ExecutionEntry("realdata.workflow", "/api/workflow/run", "realdata_routes", "deprecated", "Workflow shortcuts cannot bypass reviewed execution."),
     ExecutionEntry("external_smoke.run", "/api/external-smoke/run", "external_smoke_routes", "deprecated", "External processes require gateway capability and environment gates."),

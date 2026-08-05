@@ -6,8 +6,6 @@ import { I18nProvider } from "../../../i18n/I18nProvider";
 import type { NativeFullPreprocResponse } from "../../../types";
 import {
   createPreprocessingRun,
-  submitNativeFullPreprocessing,
-  executeReviewedPreprocessingPipeline,
   getLatestNativeFullPreprocessingRun,
   getNativeFullPreprocessingReport,
   getNativeFullPreprocessingValidation,
@@ -16,11 +14,16 @@ import {
 } from "../../../lib/api/preprocessing";
 import { PreprocessingWorkspace } from "../PreprocessingWorkspace";
 
+const legacyExecutionMocks = vi.hoisted(() => ({
+  executeReviewed: vi.fn(),
+  executeNative: vi.fn(),
+}));
+
 vi.mock("../../../lib/api/preprocessing", () => ({
   createPreprocessingRun: vi.fn(),
-  submitNativeFullPreprocessing: vi.fn(),
+  submitNativeFullPreprocessing: legacyExecutionMocks.executeNative,
   getNativeFullPreprocessingProgress: vi.fn(),
-  executeReviewedPreprocessingPipeline: vi.fn(),
+  executeReviewedPreprocessingPipeline: legacyExecutionMocks.executeReviewed,
   getLatestNativeFullPreprocessingRun: vi.fn(),
   getNativeFullPreprocessingReport: vi.fn(),
   getNativeFullPreprocessingValidation: vi.fn(),
@@ -64,10 +67,10 @@ vi.mock("../../../components/RsfmriSmoothingQcPanel", () => ({
   RsfmriSmoothingQcPanel: () => <div data-testid="smoothing-qc-panel">Smoothing QC panel</div>,
 }));
 
-const executeReviewedMock = vi.mocked(executeReviewedPreprocessingPipeline);
+const executeReviewedMock = legacyExecutionMocks.executeReviewed;
 const createRunMock = vi.mocked(createPreprocessingRun);
 const nativeDryRunMock = vi.mocked(runNativeFullPreprocessingDryRun);
-const nativeExecuteMock = vi.mocked(submitNativeFullPreprocessing);
+const nativeExecuteMock = legacyExecutionMocks.executeNative;
 const latestNativeRunMock = vi.mocked(getLatestNativeFullPreprocessingRun);
 const nativeValidationMock = vi.mocked(getNativeFullPreprocessingValidation);
 const nativeReportMock = vi.mocked(getNativeFullPreprocessingReport);
@@ -198,9 +201,11 @@ describe("PreprocessingWorkspace", () => {
       "需要已登记的转换后 BIDS/NIfTI 输入",
     );
     expect(screen.getByRole("heading", { name: "受控执行门" })).toBeInTheDocument();
-    expect(screen.getByLabelText("受控执行确认项")).toHaveTextContent("rawdata 保持只读");
+    expect(screen.getByLabelText("Agent 执行复核清单")).toHaveTextContent("rawdata 保持只读");
     expect(screen.getByRole("heading", { name: "完整原生预处理" })).toBeInTheDocument();
-    expect(screen.getByLabelText("完整原生流程安全确认项")).toHaveTextContent("不使用外部工具");
+    expect(screen.getByLabelText("原生安全清单（仅 Agent 审批链）")).toHaveTextContent(
+      "不使用外部工具",
+    );
     expect(screen.getByRole("table", { name: "完整原生预处理阶段结果" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "DICOM 转换交接" })).toBeInTheDocument();
     expect(screen.getByText("尚未提交受控执行")).toBeInTheDocument();
@@ -307,7 +312,6 @@ describe("PreprocessingWorkspace", () => {
   });
 
   it("creates a preprocessing run from registered converted input and opens reviewed flow", async () => {
-    const onOpenRuns = vi.fn();
     createRunMock.mockResolvedValue({
       ok: true,
       status: "created",
@@ -339,7 +343,6 @@ describe("PreprocessingWorkspace", () => {
         hasPreprocessingRun={false}
         onOpenDataConversion={vi.fn()}
         onOpenToolsDrawer={vi.fn()}
-        onOpenRuns={onOpenRuns}
       />,
     );
 
@@ -358,8 +361,8 @@ describe("PreprocessingWorkspace", () => {
     );
     expect(await screen.findByText(/Run pp-created is ready/)).toBeInTheDocument();
     expect(screen.getByLabelText("Reviewed preprocessing flow")).toHaveTextContent("pp-created");
-    fireEvent.click(screen.getByRole("button", { name: "View logs in Runs" }));
-    expect(onOpenRuns).toHaveBeenCalledWith(null);
+    fireEvent.click(screen.getByRole("button", { name: "Open run validation details" }));
+    expect(screen.getByRole("button", { name: "Hide validation checks" })).toBeInTheDocument();
   });
 
   it("offers a fresh preprocessing run without overwriting prior run evidence", async () => {
@@ -523,11 +526,11 @@ describe("PreprocessingWorkspace", () => {
     expect(within(stages).getAllByText("Review").length).toBeGreaterThan(0);
     expect(screen.queryByText("Create preprocessing run")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Reviewed preprocessing flow")).toHaveTextContent("pp-demo");
-    expect(screen.getByRole("button", { name: "Submit reviewed execution" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Agent approval flow required" })).toBeDisabled();
     expect(screen.queryByText("Run Full Preprocessing")).not.toBeInTheDocument();
   });
 
-  it("submits reviewed execution only after explicit confirmations", async () => {
+  it("keeps legacy reviewed preprocessing execution unavailable after confirmations", async () => {
     executeReviewedMock.mockResolvedValue({
       ok: false,
       status: "blocked",
@@ -603,7 +606,7 @@ describe("PreprocessingWorkspace", () => {
       />,
     );
 
-    const submit = screen.getByRole("button", { name: "Submit reviewed execution" });
+    const submit = screen.getByRole("button", { name: "Agent approval flow required" });
     expect(submit).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText(/Rawdata stays read-only/));
@@ -612,36 +615,12 @@ describe("PreprocessingWorkspace", () => {
     fireEvent.click(screen.getByLabelText(/Research use only/));
     fireEvent.click(screen.getByLabelText(/No clinical use/));
 
-    expect(submit).toBeEnabled();
+    expect(submit).toBeDisabled();
     fireEvent.click(submit);
 
-    await waitFor(() => expect(executeReviewedMock).toHaveBeenCalledTimes(1));
-    expect(executeReviewedMock).toHaveBeenCalledWith(
-      "http://localhost",
-      "project-1",
-      "pp-demo",
-      expect.objectContaining({
-        pipeline_profile: "fc_minimal",
-        confirmations: expect.objectContaining({
-          confirm_rawdata_readonly: true,
-          confirm_reviewed_execution: true,
-          confirm_external_tools_if_needed: true,
-          confirm_research_use_only: true,
-          confirm_no_clinical_use: true,
-        }),
-      }),
-    );
-    expect(screen.getByLabelText("Pipeline run dashboard")).toHaveTextContent("blocked");
-    expect(screen.getByLabelText("FC results panel")).toHaveTextContent("preview_only");
-    expect(screen.getByLabelText("FC results panel")).toHaveTextContent("Synthetic preview");
-    expect(screen.getByLabelText("FC results panel")).toHaveTextContent("8 x 8");
-    expect(screen.getByRole("link", { name: "Metadata" })).toHaveAttribute(
-      "href",
-      "http://localhost/api/projects/project-1/preprocessing/runs/pp-demo/artifacts/fc-matrix-preview",
-    );
-    expect(screen.getByRole("link", { name: "File" })).toHaveAttribute(
-      "href",
-      "http://localhost/api/projects/project-1/preprocessing/runs/pp-demo/artifacts/fc-matrix-preview/file",
+    expect(executeReviewedMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Reviewed preprocessing flow")).toHaveTextContent(
+      "Continue in Agent workspace to review the plan, approval summary, and execution scope.",
     );
   });
 
@@ -809,7 +788,7 @@ describe("PreprocessingWorkspace", () => {
     expect(fcPanel).toHaveTextContent("Missing ROI time series for FC.");
   });
 
-  it("allows native execute from a restored latest native run without a preprocessing run id", async () => {
+  it("does not expose legacy native execute from a restored run", async () => {
     latestNativeRunMock.mockResolvedValue(
       nativeResponse({
         ok: false,
@@ -850,7 +829,7 @@ describe("PreprocessingWorkspace", () => {
     expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
       "run-reviewed-native",
     );
-    const execute = screen.getByRole("button", { name: "Execute native full preprocessing" });
+    const execute = screen.getByRole("button", { name: "Native Agent approval required" });
     expect(execute).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText(/Reviewed native execution/));
@@ -859,27 +838,16 @@ describe("PreprocessingWorkspace", () => {
     fireEvent.click(screen.getByLabelText(/Native research use only/));
     fireEvent.click(screen.getByLabelText(/Native no clinical use/));
 
-    expect(execute).toBeEnabled();
+    expect(execute).toBeDisabled();
     fireEvent.click(execute);
 
-    await waitFor(() => expect(nativeExecuteMock).toHaveBeenCalledTimes(1));
-    expect(nativeExecuteMock).toHaveBeenCalledWith(
-      "http://localhost",
-      "project-1",
-      expect.objectContaining({
-        run_id: "run-reviewed-native",
-        confirmations: expect.objectContaining({
-          confirm_reviewed_native_execution: true,
-          confirm_rawdata_readonly: true,
-          confirm_no_external_tools: true,
-          confirm_research_use_only: true,
-          confirm_no_clinical_use: true,
-        }),
-      }),
+    expect(nativeExecuteMock).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
+      "Agent approval required",
     );
   });
 
-  it("executes native full only after native safety confirmations", async () => {
+  it("keeps native full execution gated by the Agent approval flow", async () => {
     nativeExecuteMock.mockResolvedValue(
       nativeResponse({
         ok: true,
@@ -904,7 +872,7 @@ describe("PreprocessingWorkspace", () => {
       />,
     );
 
-    const execute = screen.getByRole("button", { name: "Execute native full preprocessing" });
+    const execute = screen.getByRole("button", { name: "Native Agent approval required" });
     expect(execute).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText(/Reviewed native execution/));
@@ -913,27 +881,12 @@ describe("PreprocessingWorkspace", () => {
     fireEvent.click(screen.getByLabelText(/Native research use only/));
     fireEvent.click(screen.getByLabelText(/Native no clinical use/));
 
-    expect(execute).toBeEnabled();
+    expect(execute).toBeDisabled();
     fireEvent.click(execute);
 
-    await waitFor(() => expect(nativeExecuteMock).toHaveBeenCalledTimes(1));
-    expect(nativeExecuteMock).toHaveBeenCalledWith(
-      "http://localhost",
-      "project-1",
-      expect.objectContaining({
-        run_id: "pp-demo",
-        confirmations: expect.objectContaining({
-          confirm_reviewed_native_execution: true,
-          confirm_rawdata_readonly: true,
-          confirm_no_external_tools: true,
-          confirm_research_use_only: true,
-          confirm_no_clinical_use: true,
-        }),
-      }),
-    );
-    expect(screen.getByLabelText("Native full run summary")).toHaveTextContent("3");
+    expect(nativeExecuteMock).not.toHaveBeenCalled();
     expect(screen.getByLabelText("Native full preprocessing workflow")).toHaveTextContent(
-      "partial",
+      "Continue in Agent workspace to review the plan, approval summary, and execution scope.",
     );
   });
 

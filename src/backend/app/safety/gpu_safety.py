@@ -7,9 +7,9 @@ Works in CI, local dev, and GPU-absent environments.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
-
+from typing import Literal
 
 # ── Data structures ──
 
@@ -305,7 +305,7 @@ def validate_gpu_timeout(
     if timeout_seconds is None:
         return result
 
-    if not isinstance(timeout_seconds, (int, float)):
+    if not isinstance(timeout_seconds, int | float):
         result.errors.append(GpuSafetyIssue(
             code="GPU_TIMEOUT_INVALID",
             severity="error",

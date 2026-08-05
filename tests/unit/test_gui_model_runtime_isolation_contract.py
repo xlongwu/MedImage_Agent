@@ -5,15 +5,16 @@ from __future__ import annotations
 import json
 
 import pytest
+
 from src.backend.app.runtime.gui_model_runtime_isolation import (
     allowed_fixture_runtime_declaration,
     validate_model_runtime_declaration,
 )
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Allowed fixture_only
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_fixture_runtime_allowed():
     r = validate_model_runtime_declaration(**allowed_fixture_runtime_declaration())
@@ -61,6 +62,7 @@ def test_fixture_json_serializable():
 # B. Missing / Unknown
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_missing_runtime_type():
     r = validate_model_runtime_declaration(runtime_type=None)
     assert r.ok is False
@@ -83,8 +85,12 @@ def test_unknown_runtime_type():
 # ══════════════════════════════════════════════════════════════════════════════
 
 REAL_RUNTIMES = [
-    "local_process", "local_worker", "local_server",
-    "remote_server", "external_tool", "gpu_inference",
+    "local_process",
+    "local_worker",
+    "local_server",
+    "remote_server",
+    "external_tool",
+    "gpu_inference",
 ]
 
 
@@ -98,6 +104,7 @@ def test_real_runtime_blocked(rtype):
 # ══════════════════════════════════════════════════════════════════════════════
 # D. Fixture Policy Deviations Blocked
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _fixture(**overrides):
     d = allowed_fixture_runtime_declaration()
@@ -239,17 +246,28 @@ def test_extra_enable_gui_automation_blocked():
 # E. Future Real Runtime Blocked
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_local_worker_valid_looking_blocked():
     r = validate_model_runtime_declaration(
         runtime_type="local_worker",
-        runtime_sandbox_required=True, runtime_sandbox_enabled=True,
-        inference_enabled=False, runtime_started=False,
-        network_policy="disabled", filesystem_policy="none",
-        temp_dir=None, cache_dir=None,
-        timeout_seconds=30, hard_timeout_seconds=60, memory_budget_mb=4096,
-        gpu_enabled=False, max_concurrent_jobs=1, queue_limit=10,
-        provider_access=False, gui_api_access=False,
-        pywinauto_allowed=False, gui_automation_allowed=False,
+        runtime_sandbox_required=True,
+        runtime_sandbox_enabled=True,
+        inference_enabled=False,
+        runtime_started=False,
+        network_policy="disabled",
+        filesystem_policy="none",
+        temp_dir=None,
+        cache_dir=None,
+        timeout_seconds=30,
+        hard_timeout_seconds=60,
+        memory_budget_mb=4096,
+        gpu_enabled=False,
+        max_concurrent_jobs=1,
+        queue_limit=10,
+        provider_access=False,
+        gui_api_access=False,
+        pywinauto_allowed=False,
+        gui_automation_allowed=False,
         allowed_output_mode="raw_model_output_envelope",
         provider_call_allowed=False,
     )
@@ -271,8 +289,10 @@ def test_gpu_inference_blocked():
 # F. Non-Call / Isolation
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_no_pywinauto_import():
     import sys
+
     assert "pywinauto" not in sys.modules
 
 
@@ -288,12 +308,14 @@ def test_blocked_all_flags_false():
 
 def test_module_no_worker():
     from src.backend.app.runtime import gui_model_runtime_isolation
+
     assert gui_model_runtime_isolation is not None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # G. Regression
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_policy_tests_pass():
     pass
@@ -313,24 +335,47 @@ def test_gui_blocklist_tests_pass():
 
 def test_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]

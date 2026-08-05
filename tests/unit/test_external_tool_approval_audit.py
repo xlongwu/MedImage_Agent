@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from src.backend.app.planner.plan_validator import validate_plan
 from src.backend.app.planner.approval_gate import check_approval_gate
 from src.backend.app.planner.audit_record import build_review_audit_record
+from src.backend.app.planner.plan_validator import validate_plan
 
 
 def _spm_plan():
@@ -50,6 +50,7 @@ def _validation(plan):
 
 # ── Low-risk compatibility ───────────────────────────────────────────────────
 
+
 def test_low_risk_contract_smoke_still_passes():
     """Existing contract_smoke plan should still pass without external-tool fields."""
     plan = {
@@ -58,7 +59,8 @@ def test_low_risk_contract_smoke_still_passes():
     }
     val = _validation(plan)
     result = check_approval_gate(
-        plan, val,
+        plan,
+        val,
         {"approved": True, "approved_nodes": ["contract_smoke"]},
     )
     assert result.execution_allowed is True
@@ -66,6 +68,7 @@ def test_low_risk_contract_smoke_still_passes():
 
 
 # ── External-tool approval field tests ───────────────────────────────────────
+
 
 def test_spm_plan_blocked_when_approved_false():
     plan = _spm_plan()
@@ -78,7 +81,8 @@ def test_spm_plan_blocked_missing_external_tool_ack():
     plan = _spm_plan()
     val = _validation(plan)
     result = check_approval_gate(
-        plan, val,
+        plan,
+        val,
         _valid_approval(external_tool_acknowledgement=False),
     )
     assert result.execution_allowed is False
@@ -89,7 +93,8 @@ def test_spm_plan_blocked_missing_rawdata_confirm():
     plan = _spm_plan()
     val = _validation(plan)
     result = check_approval_gate(
-        plan, val,
+        plan,
+        val,
         _valid_approval(rawdata_read_only_confirmed=False),
     )
     assert result.execution_allowed is False
@@ -100,7 +105,8 @@ def test_spm_plan_blocked_missing_output_confirm():
     plan = _spm_plan()
     val = _validation(plan)
     result = check_approval_gate(
-        plan, val,
+        plan,
+        val,
         _valid_approval(output_directory_confirmed=False),
     )
     assert result.execution_allowed is False
@@ -110,7 +116,8 @@ def test_spm_plan_blocked_missing_risk_ack():
     plan = _spm_plan()
     val = _validation(plan)
     result = check_approval_gate(
-        plan, val,
+        plan,
+        val,
         _valid_approval(risk_acknowledgement=False),
     )
     assert result.execution_allowed is False
@@ -119,7 +126,9 @@ def test_spm_plan_blocked_missing_risk_ack():
 def test_spm_plan_blocked_missing_overwrite_policy():
     plan = _spm_plan()
     val = _validation(plan)
-    result = check_approval_gate(plan, val, {**{k: v for k, v in _valid_approval().items() if k != "overwrite_policy"}})
+    result = check_approval_gate(
+        plan, val, {**{k: v for k, v in _valid_approval().items() if k != "overwrite_policy"}}
+    )
     assert result.execution_allowed is False
     assert any("OVERWRITE_POLICY" in e.code for e in result.errors)
 
@@ -147,12 +156,16 @@ def test_spm_plan_passes_with_all_fields():
 
 # ── Audit record extension tests ─────────────────────────────────────────────
 
+
 def test_audit_record_includes_approval_context():
     plan = _spm_plan()
     val = _validation(plan)
     approval = _valid_approval()
     record = build_review_audit_record(
-        "execution_requested", plan, val, approval,
+        "execution_requested",
+        plan,
+        val,
+        approval,
     )
     ctx = record.safety.get("approval_context")
     assert ctx is not None
@@ -168,7 +181,9 @@ def test_audit_record_no_context_for_low_risk():
     }
     val = _validation(plan)
     record = build_review_audit_record(
-        "dry_run_checked", plan, val,
+        "dry_run_checked",
+        plan,
+        val,
         {"approved": True, "approved_nodes": ["contract_smoke"]},
     )
     assert record.safety.get("approval_context") is None

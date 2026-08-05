@@ -287,9 +287,7 @@ describe("QCReportsWorkspace", () => {
     expect(screen.getByLabelText("详细质量控制模块")).toHaveTextContent(
       "质量控制模块正在等待项目上下文",
     );
-    expect(screen.getByLabelText("派生指标模块")).toHaveTextContent(
-      "加载指标专用质量控制模块前请选择项目",
-    );
+    expect(screen.getByLabelText("派生指标模块")).toHaveTextContent("旧指标执行面板不可用");
   });
 
   it("renders conservative QC evidence states in simplified Chinese", async () => {
@@ -340,7 +338,7 @@ describe("QCReportsWorkspace", () => {
     expect(screen.getByLabelText("QC visualization requirements")).toHaveTextContent("Data range");
     expect(screen.getByLabelText("QC visualization requirements")).toHaveTextContent("Drill-down");
     expect(screen.getByLabelText("Detailed QC modules")).toBeInTheDocument();
-    expect(screen.getByLabelText("Derived metric modules")).toHaveTextContent("On demand");
+    expect(screen.getByLabelText("Derived metric modules")).toHaveTextContent("Unavailable");
     expect(screen.queryByTestId("alff-falff-panel")).not.toBeInTheDocument();
   });
 
@@ -450,9 +448,30 @@ describe("QCReportsWorkspace", () => {
       "Spatial artifacts are available",
     );
     expect(screen.getByText("FC computed")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Outlier drill-down evidence" })).toHaveTextContent(
+      "sub-001",
+    );
+    expect(screen.getByRole("table", { name: "Outlier drill-down evidence" })).toHaveTextContent(
+      "/tmp/rp_sub-001.txt",
+    );
     expect(
       screen.queryByText(/Subject rows appear only after dashboard reports/),
     ).not.toBeInTheDocument();
+  });
+
+  it("surfaces backend evidence failures and retries the real API requests", async () => {
+    latestQcDashboardMock.mockReset();
+    latestQcDashboardMock
+      .mockRejectedValueOnce(new Error("backend offline"))
+      .mockResolvedValue(qcDashboardReport());
+
+    renderWorkspace();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("backend offline");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    await waitFor(() => expect(latestQcDashboardMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
   it("aggregates a completed native batch by subject instead of counting duplicate BOLD candidates", async () => {
@@ -666,18 +685,14 @@ describe("QCReportsWorkspace", () => {
     expect(screen.getByRole("button", { name: "Open derived modules" })).toBeDisabled();
   });
 
-  it("opens migrated derived metric modules on demand", () => {
+  it("keeps legacy derived metric execution panels explicitly unavailable", () => {
     renderWorkspace();
 
     expect(screen.queryByTestId("nuisance-regression-panel")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open derived modules" }));
-
-    expect(screen.getByTestId("nuisance-regression-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("temporal-filtering-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("motion-qc-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("alff-falff-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("reho-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("functional-connectivity-panel")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open derived modules" })).toBeDisabled();
+    expect(screen.getByLabelText("Derived metric modules")).toHaveTextContent(
+      "Legacy metric execution panels are unavailable",
+    );
   });
 });

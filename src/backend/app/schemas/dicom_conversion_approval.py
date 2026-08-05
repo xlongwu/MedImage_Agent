@@ -14,10 +14,10 @@ Reference:
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. Literal type aliases
@@ -416,9 +416,9 @@ def build_conversion_run_id(
     Pure function — no file I/O, no subprocess.
     """
     import hashlib
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    ts = timestamp or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    ts = timestamp or datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     seed = f"{project_id}:{mapping_hash}:{ts}"
     short = hashlib.sha256(seed.encode()).hexdigest()[:12]
     return f"conv-{short}"

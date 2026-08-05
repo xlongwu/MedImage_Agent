@@ -26,6 +26,7 @@ class TestPublicExecuteEndpointAbsence:
         """
         try:
             from fastapi.testclient import TestClient
+
             from src.backend.app.main import app
 
             client = TestClient(app)
@@ -66,6 +67,7 @@ class TestPublicExecuteEndpointAbsence:
         """POST /api/projects/{id}/conversion/execute returns blocked when env flags missing."""
         try:
             from fastapi.testclient import TestClient
+
             from src.backend.app.main import app
 
             client = TestClient(app)
@@ -120,8 +122,7 @@ class TestFrontendExecuteAbsence:
                     or "conversion/execute" in stripped
                 ):
                     pytest.fail(
-                        f"Frontend 'Run Conversion' onClick handler found "
-                        f"at line: {stripped[:120]}"
+                        f"Frontend 'Run Conversion' onClick handler found at line: {stripped[:120]}"
                     )
 
     def test_no_run_conversion_onclick_in_release_readiness_panel(self):
@@ -139,12 +140,10 @@ class TestFrontendExecuteAbsence:
                 if stripped.startswith("//") or stripped.startswith("/*"):
                     continue
                 if "onClick" in stripped and (
-                    "execute" in stripped.lower()
-                    and "conversion" in stripped.lower()
+                    "execute" in stripped.lower() and "conversion" in stripped.lower()
                 ):
                     pytest.fail(
-                        f"Frontend ReleaseReadinessPanel has execute onClick: "
-                        f"{stripped[:120]}"
+                        f"Frontend ReleaseReadinessPanel has execute onClick: {stripped[:120]}"
                     )
 
 
@@ -154,11 +153,11 @@ class TestRunConversionExecuteBlocked:
     def test_run_conversion_execute_still_blocked(self):
         """run_conversion_execute() must return disabled for any request."""
         try:
-            from src.backend.app.services.dicom_conversion_execution import (
-                run_conversion_execute,
-            )
             from src.backend.app.schemas.dicom_conversion_execution import (
                 DicomConversionExecutionRequest,
+            )
+            from src.backend.app.services.dicom_conversion_execution import (
+                run_conversion_execute,
             )
 
             req = DicomConversionExecutionRequest()
@@ -179,12 +178,11 @@ class TestRunConversionExecuteBlocked:
     def test_run_conversion_execute_with_mock_env_still_blocked(self):
         """Even with env flags mocked, run_conversion_execute() must return disabled."""
         try:
-            import os
-            from src.backend.app.services.dicom_conversion_execution import (
-                run_conversion_execute,
-            )
             from src.backend.app.schemas.dicom_conversion_execution import (
                 DicomConversionExecutionRequest,
+            )
+            from src.backend.app.services.dicom_conversion_execution import (
+                run_conversion_execute,
             )
 
             # In Phase 4B, run_conversion_execute() is ALWAYS disabled —
@@ -198,9 +196,7 @@ class TestRunConversionExecuteBlocked:
                 resp.status == "disabled"
                 or resp.status == "blocked"
                 or resp.safety_flags.conversion_disabled_by_default
-            ), (
-                f"Expected disabled/blocked, got status={resp.status}"
-            )
+            ), f"Expected disabled/blocked, got status={resp.status}"
         except ImportError:
             pytest.skip("dicom_conversion_execution module not importable")
 
@@ -213,6 +209,7 @@ class TestPublicEndpointDesignPhaseSafety:
         from src.backend.app.schemas.dicom_conversion_public_execution import (
             is_public_execution_design_only,
         )
+
         assert is_public_execution_design_only() is False
 
     def test_public_execution_allowed_is_true_when_all_gates_met(self):

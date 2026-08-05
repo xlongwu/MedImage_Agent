@@ -8,10 +8,12 @@ import pytest
 nib = pytest.importorskip("nibabel")
 pytest.importorskip("scipy")
 
-from scipy.ndimage import shift
+from scipy.ndimage import shift  # noqa: E402
 
-from src.backend.app.native_preproc.orchestrator.validation import validate_stage_result_artifacts
-from src.backend.app.native_preproc.stages.coregistration import run_coregistration
+from src.backend.app.native_preproc.orchestrator.validation import (  # noqa: E402
+    validate_stage_result_artifacts,  # noqa: E402
+)
+from src.backend.app.native_preproc.stages.coregistration import run_coregistration  # noqa: E402
 
 
 def _phantom(shape: tuple[int, int, int] = (9, 9, 9)) -> np.ndarray:
@@ -22,12 +24,21 @@ def _phantom(shape: tuple[int, int, int] = (9, 9, 9)) -> np.ndarray:
 
 
 def _save(path: Path, data: np.ndarray, affine: np.ndarray | None = None) -> Path:
-    nib.save(nib.Nifti1Image(data.astype(np.float32), affine=np.eye(4) if affine is None else affine), str(path))
+    nib.save(
+        nib.Nifti1Image(data.astype(np.float32), affine=np.eye(4) if affine is None else affine),
+        str(path),
+    )
     return path
 
 
 def _artifact_path(result, artifact_type: str) -> Path:
-    return Path(next(artifact.path for artifact in result.output_artifacts if artifact.artifact_type == artifact_type))
+    return Path(
+        next(
+            artifact.path
+            for artifact in result.output_artifacts
+            if artifact.artifact_type == artifact_type
+        )
+    )
 
 
 def test_coregistration_improves_known_translation_and_writes_transform(tmp_path: Path) -> None:
@@ -53,7 +64,9 @@ def test_coregistration_improves_known_translation_and_writes_transform(tmp_path
 
 
 def test_coregistration_blocks_empty_images_without_success(tmp_path: Path) -> None:
-    mean_path = _save(tmp_path / "sub-01_desc-mean_bold.nii.gz", np.zeros((5, 5, 5), dtype=np.float32))
+    mean_path = _save(
+        tmp_path / "sub-01_desc-mean_bold.nii.gz", np.zeros((5, 5, 5), dtype=np.float32)
+    )
     t1_path = _save(tmp_path / "sub-01_T1w.nii.gz", np.zeros((5, 5, 5), dtype=np.float32))
 
     result = run_coregistration(mean_path, t1_path, tmp_path / "native")

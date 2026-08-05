@@ -15,10 +15,9 @@ Schema-only module. No subprocess. No file writes. No dcm2niix.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
-
 
 # ── 1. Literal type aliases ────────────────────────────────────────────────
 
@@ -59,7 +58,7 @@ class DicomConversionPrepareConfirmations(BaseModel):
     confirm_execution: bool = False
 
     @model_validator(mode="after")
-    def _normalize_legacy_converter_acknowledgement(self) -> "DicomConversionPrepareConfirmations":
+    def _normalize_legacy_converter_acknowledgement(self) -> DicomConversionPrepareConfirmations:
         if self.external_converter and not self.native_converter:
             self.native_converter = True
         return self

@@ -8,6 +8,7 @@ external tool imports, no real dcm2niix execution.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from src.backend.app.schemas.dicom_conversion_execution import (
     Dcm2niixCommandTemplate,
@@ -19,7 +20,6 @@ from src.backend.app.schemas.dicom_conversion_execution import (
     DicomConversionPreflight,
     DicomConversionSafetyFlags,
     DicomConversionStatus,
-    DicomConversionTool,
     build_dcm2niix_command_template,
     build_disabled_conversion_response,
     is_conversion_execution_enabled,
@@ -113,7 +113,7 @@ def test_command_template_no_shell_string_field() -> None:
 
 def test_command_template_extra_forbidden() -> None:
     """Command template must reject extra fields."""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         Dcm2niixCommandTemplate(
             tool="dcm2niix",
             shell="dcm2niix ...",  # type: ignore[call-arg]
@@ -212,11 +212,14 @@ def test_env_flags_all_set_enables_preflight_only() -> None:
 
 def test_env_flags_empty_string_not_accepted() -> None:
     """Empty string is not '1'."""
-    env = {f: "" for f in [
-        "MEDIMAGE_ENABLE_DICOM_CONVERSION",
-        "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
-        "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
-    ]}
+    env = dict.fromkeys(
+        [
+            "MEDIMAGE_ENABLE_DICOM_CONVERSION",
+            "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
+            "MEDIMAGE_ALLOW_USER_DATA_CONVERSION",
+        ],
+        "",
+    )
     ok, _ = is_conversion_execution_enabled(env)
     assert ok is False
 
@@ -228,47 +231,65 @@ def test_env_flags_empty_string_not_accepted() -> None:
 
 def test_output_under_project_is_safe() -> None:
     """Output root inside project dir must pass validation."""
-    assert validate_output_root_under_project(
-        "C:/project/converted_bids/sub-001",
-        "C:/project",
-    ) is True
+    assert (
+        validate_output_root_under_project(
+            "C:/project/converted_bids/sub-001",
+            "C:/project",
+        )
+        is True
+    )
 
 
 def test_output_outside_project_is_unsafe() -> None:
     """Output root outside project dir must fail validation."""
-    assert validate_output_root_under_project(
-        "C:/somewhere_else/converted_bids",
-        "C:/project",
-    ) is False
+    assert (
+        validate_output_root_under_project(
+            "C:/somewhere_else/converted_bids",
+            "C:/project",
+        )
+        is False
+    )
 
 
 def test_output_equals_project_is_safe() -> None:
     """Output root equal to project dir must pass."""
-    assert validate_output_root_under_project(
-        "C:/project",
-        "C:/project",
-    ) is True
+    assert (
+        validate_output_root_under_project(
+            "C:/project",
+            "C:/project",
+        )
+        is True
+    )
 
 
 def test_output_with_traversal_is_unsafe() -> None:
     """Output root with .. traversal must be rejected."""
-    assert validate_output_root_under_project(
-        "C:/project/../outside",
-        "C:/project",
-    ) is False
+    assert (
+        validate_output_root_under_project(
+            "C:/project/../outside",
+            "C:/project",
+        )
+        is False
+    )
 
 
 def test_output_root_not_under_rawdata() -> None:
     """Output root must not be inside rawdata dir."""
-    assert validate_output_root_not_under_rawdata(
-        "C:/project/converted_bids",
-        "D:/DemoData",
-    ) is True
+    assert (
+        validate_output_root_not_under_rawdata(
+            "C:/project/converted_bids",
+            "D:/DemoData",
+        )
+        is True
+    )
 
-    assert validate_output_root_not_under_rawdata(
-        "D:/DemoData/outputs",
-        "D:/DemoData",
-    ) is False
+    assert (
+        validate_output_root_not_under_rawdata(
+            "D:/DemoData/outputs",
+            "D:/DemoData",
+        )
+        is False
+    )
 
 
 def test_empty_paths_return_safe() -> None:

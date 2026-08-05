@@ -23,8 +23,9 @@ Current release line: **v0.6.0-rc1**. See
 ### Requirements
 
 - Python 3.11+
-- Node.js 20+
-- `pydicom` and `nibabel` optional, required for the in-project DICOM converter
+- Node.js `^20.19.0` or `>=22.12.0` (Vite 8 engine requirement)
+- `nibabel` and `pydicom` are included in the core requirements for the
+  in-project NIfTI and DICOM paths
 - CuPy optional, only for GPU paths
 
 ### Install
@@ -100,33 +101,47 @@ State is local and project-scoped: SQLite stores project metadata and JSON
 files store run state and artifacts. Runtime state writes use atomic file
 writes. The Pipeline Runtime is the only pipeline execution path.
 
+Project memory is available as a default-disabled feature. When both install
+and project consent gates are enabled, reviewed preferences and project
+experience are stored in a separate local SQLite authority and injected only
+as a bounded, typed context before planning. Scientific memory is never an
+execution constraint: it requires a new task-level confirmation and its exact
+snapshot is bound to the Reviewed Plan and Approval Summary. See the
+[Memory System Design](docs/架构与决策/记忆系统设计方案.md).
+
 See [Architecture](docs/架构与决策/系统架构.md) for current router, service, schema,
 node registry, frontend API, storage, and desktop boundaries.
 
-## Current Stable Workflow
+## Current Source Workflow
 
 ```text
 Select BIDS/rawdata or converted BIDS
 -> Create project
 -> Generate project_config.yaml and dataset_index.json
--> Review plan with project context
--> Save reviewed plan
--> Execute reviewed plan through approval gates
--> Optionally run DICOM conversion dry-run, review, readiness, and approved execution
--> Register converted outputs as preprocessing input
--> Create a preprocessing run and execute Python preflight
--> Submit reviewed preprocessing / Minimal FC execution
--> Inspect stage status, validation, report, logs, artifacts, and metadata links
+-> Describe the goal in the project Agent workspace
+-> Answer any required data or scientific decision
+-> Review one hashed Approval Summary
+-> Approve the unchanged plan and execution scope
+-> Follow bounded progress and inspect the result
+-> Open Runs or technical details for validation, logs, artifacts, and provenance
 ```
 
-DICOM/FunRaw/T1Raw datasets support read-only detection and conversion dry-run
-preview. Public DICOM conversion execution exists only as a fail-closed,
-env-gated, approval/readiness-gated path; it is not automatic.
+The Agent Task API and source UI are a projection and command surface over the
+existing lifecycle, Reviewed Plan, Approval Gate, Execution Ticket, sole
+Execution Gateway, Pipeline Runtime, and artifact evidence. They do not create
+a second execution path. The source implementation is not yet a packaged or
+released `v0.7.0` claim; the published version surfaces remain `v0.6.0-rc1`.
 
-Reviewed preprocessing workflows operate on converted/sandboxed inputs and
-remain explicit, confirmable, and environment gated. The current stage catalog
-tracks metadata-only, planned, blocked, computed, and preview states separately
-so the UI does not present placeholders as completed numerical outputs.
+DICOM/FunRaw/T1Raw datasets support read-only detection and conversion dry-run
+preview. Native conversion can enter the reviewed gateway path only when its
+release-readiness evidence is present. The legacy public conversion endpoint
+remains fail-closed; conversion is never inferred from rawdata alone.
+
+Reviewed preprocessing operates on converted/sandboxed inputs and remains
+explicit, confirmable, and environment gated. The current stage catalog tracks
+metadata-only, planned, blocked, computed, partial, and preview states
+separately so the UI does not present placeholders as completed numerical
+outputs.
 
 ## Project Structure
 
@@ -180,6 +195,7 @@ tests/
 | Path traversal blocked | `path_safety.py` and project/run artifact IDs |
 | Frontend isolated | HTTP API modules and approved Electron bridge |
 | Execution contained in project | registered Python runners, approval/readiness checks, audit records |
+| Memory is advisory and project-scoped | install/project consent, provenance, confirmation, plan hash binding, tombstone forgetting |
 | Research use only | UI and documentation warnings |
 
 ## Known Limitations
@@ -204,6 +220,7 @@ tests/
 
 - [Current Project State](PROJECT_STATE.md)
 - [Architecture](docs/架构与决策/系统架构.md)
+- [Memory System Design](docs/架构与决策/记忆系统设计方案.md)
 - [Release Notes v0.6.0-rc1](docs/发布记录/v0.6.0-rc1.md)
 - [Release Notes v0.4.0-rc1](docs/发布记录/v0.4.0-rc1.md)
 - [Release Notes v0.3.0-rc1](docs/发布记录/v0.3.0-rc1.md)

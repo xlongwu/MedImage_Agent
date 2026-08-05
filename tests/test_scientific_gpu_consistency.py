@@ -7,6 +7,7 @@ skips gracefully when the required backend is not installed.
 Each backend-specific test invokes that backend directly so installing another
 GPU implementation cannot change which kernel is under test.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -40,6 +41,7 @@ def _torch_cuda_available() -> bool:
 
 # ── ALFF: CPU numpy vs GPU torch ──
 
+
 @pytest.mark.gpu
 def test_alff_cpu_torch_consistency():
     """CPU compute_alff_numpy must match GPU compute_alff_backend (torch)
@@ -62,12 +64,15 @@ def test_alff_cpu_torch_consistency():
     falff_gpu = np.asarray(falff_gpu).astype(np.float32)
 
     assert np.allclose(alff_cpu, alff_gpu, atol=GPU_ATOL), (
-        f"ALFF CPU/torch mismatch max={np.max(np.abs(alff_cpu - alff_gpu))}")
+        f"ALFF CPU/torch mismatch max={np.max(np.abs(alff_cpu - alff_gpu))}"
+    )
     assert np.allclose(falff_cpu, falff_gpu, atol=GPU_ATOL), (
-        f"fALFF CPU/torch mismatch max={np.max(np.abs(falff_cpu - falff_gpu))}")
+        f"fALFF CPU/torch mismatch max={np.max(np.abs(falff_cpu - falff_gpu))}"
+    )
 
 
 # ── FC: CPU numpy vs GPU cupy ──
+
 
 @pytest.mark.gpu
 @pytest.mark.skipif(not _cupy_available(), reason="CuPy not installed")
@@ -75,9 +80,9 @@ def test_fc_cpu_cupy_consistency():
     """CPU compute_fc_numpy must match GPU compute_fc_cupy within atol=1e-4.
     Skipped automatically when CuPy is not installed."""
     from src.backend.app.tools.functional_connectivity_compute import (
-        compute_fc_numpy,
-        compute_fc_cupy,
         _generate_atlas,
+        compute_fc_cupy,
+        compute_fc_numpy,
     )
 
     bold = np.load(INPUT_DIR / "tiny_fc_bold.npy").astype(np.float32)
@@ -88,13 +93,18 @@ def test_fc_cpu_cupy_consistency():
     gpu_res = compute_fc_cupy(bold, atlas)
     assert gpu_res["ok"], gpu_res.get("errors")
 
-    assert np.allclose(cpu_res["correlation_matrix"], gpu_res["correlation_matrix"], atol=GPU_ATOL), (
-        f"FC correlation CPU/GPU max diff={np.max(np.abs(cpu_res['correlation_matrix'] - gpu_res['correlation_matrix']))}")
+    assert np.allclose(
+        cpu_res["correlation_matrix"], gpu_res["correlation_matrix"], atol=GPU_ATOL
+    ), (
+        f"FC correlation CPU/GPU max diff={np.max(np.abs(cpu_res['correlation_matrix'] - gpu_res['correlation_matrix']))}"
+    )
     assert np.allclose(cpu_res["fisher_z_matrix"], gpu_res["fisher_z_matrix"], atol=GPU_ATOL), (
-        f"FC Fisher-Z CPU/GPU max diff={np.max(np.abs(cpu_res['fisher_z_matrix'] - gpu_res['fisher_z_matrix']))}")
+        f"FC Fisher-Z CPU/GPU max diff={np.max(np.abs(cpu_res['fisher_z_matrix'] - gpu_res['fisher_z_matrix']))}"
+    )
 
 
 # ── ReHo: CPU numpy vs GPU cupy ──
+
 
 @pytest.mark.gpu
 @pytest.mark.skipif(not _cupy_available(), reason="CuPy not installed")
@@ -102,8 +112,8 @@ def test_reho_cpu_cupy_consistency():
     """CPU compute_reho_numpy must match GPU compute_reho_cupy within atol=1e-4
     on the shared tiny input. Skipped automatically when CuPy is not installed."""
     from src.backend.app.tools.reho_compute import (
-        compute_reho_numpy,
         compute_reho_cupy,
+        compute_reho_numpy,
     )
 
     bold = np.load(INPUT_DIR / "tiny_reho_bold.npy").astype(np.float32)
@@ -120,7 +130,8 @@ def test_reho_cpu_cupy_consistency():
     interior = slice(1, -1)
     diff = np.abs(cpu_map[interior, interior, interior] - gpu_map[interior, interior, interior])
     assert np.max(diff) < GPU_ATOL, (
-        f"ReHo CPU/GPU interior max diff={np.max(diff)} at {np.unravel_index(np.argmax(diff), diff.shape)}")
+        f"ReHo CPU/GPU interior max diff={np.max(diff)} at {np.unravel_index(np.argmax(diff), diff.shape)}"
+    )
     # Both must agree on which interior voxels are valid (>0).
     cpu_valid = cpu_map > 0
     gpu_valid = gpu_map > 0

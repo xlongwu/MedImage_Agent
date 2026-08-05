@@ -17,32 +17,38 @@ def test_chain_report_aggregates_subject_status(tmp_path: Path):
     func_dir.mkdir(parents=True)
 
     (qc_dir / "slice_timing_qc.json").write_text(
-        json.dumps({
-            "ok": True,
-            "subject_id": subject_id,
-            "slice_timing_status": "PASS",
-        }),
+        json.dumps(
+            {
+                "ok": True,
+                "subject_id": subject_id,
+                "slice_timing_status": "PASS",
+            }
+        ),
         encoding="utf-8",
     )
 
     (func_dir / "spm_realign_result.json").write_text(
-        json.dumps({
-            "ok": True,
-            "realigned_files": [str(func_dir / "rasub-001_bold.nii")],
-            "mean_file": str(func_dir / "meanasub-001_bold.nii"),
-            "motion_parameter_file": str(func_dir / "rp_asub-001_bold.txt"),
-        }),
+        json.dumps(
+            {
+                "ok": True,
+                "realigned_files": [str(func_dir / "rasub-001_bold.nii")],
+                "mean_file": str(func_dir / "meanasub-001_bold.nii"),
+                "motion_parameter_file": str(func_dir / "rp_asub-001_bold.txt"),
+            }
+        ),
         encoding="utf-8",
     )
 
     (qc_dir / "motion_qc.json").write_text(
-        json.dumps({
-            "ok": True,
-            "subject_id": subject_id,
-            "motion_qc_status": "PASS",
-            "mean_fd": 0.1,
-            "max_fd": 0.2,
-        }),
+        json.dumps(
+            {
+                "ok": True,
+                "subject_id": subject_id,
+                "motion_qc_status": "PASS",
+                "mean_fd": 0.1,
+                "max_fd": 0.2,
+            }
+        ),
         encoding="utf-8",
     )
 

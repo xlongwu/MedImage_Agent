@@ -10,17 +10,20 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.backend.app.core.exceptions import ConfigError
 from src.backend.app.api.routes import _load_project_config
-
+from src.backend.app.core.exceptions import ConfigError
 
 # ── Helpers ──
 
-def _write_config(tmp_path: Path, *,
-                  work_dir: str | None = None,
-                  log_dir: str | None = None,
-                  spm_dir: str | None = "./spm",
-                  dpabi_dir: str | None = "./dpabi") -> Path:
+
+def _write_config(
+    tmp_path: Path,
+    *,
+    work_dir: str | None = None,
+    log_dir: str | None = None,
+    spm_dir: str | None = "./spm",
+    dpabi_dir: str | None = "./dpabi",
+) -> Path:
     """Write a minimal project_config.yaml into tmp_path.
 
     Pass None for a critical field to omit it entirely.
@@ -50,16 +53,16 @@ def _write_config(tmp_path: Path, *,
 
 # ── Happy path ──
 
+
 def test_returns_dict(tmp_path: Path):
-    cfg = _write_config(tmp_path,
-                        work_dir=str(tmp_path / "work"),
-                        log_dir=str(tmp_path / "logs"))
+    cfg = _write_config(tmp_path, work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"))
     result = _load_project_config(str(cfg))
     assert isinstance(result, dict)
     assert result["runtime"]["work_dir"] == str(tmp_path / "work")
 
 
 # ── Missing critical fields → ConfigError(400) ──
+
 
 def test_missing_work_dir_raises_http_400(tmp_path: Path):
     cfg = _write_config(tmp_path, log_dir=str(tmp_path / "logs"))
@@ -78,10 +81,9 @@ def test_missing_log_dir_raises_http_400(tmp_path: Path):
 
 
 def test_missing_spm_dir_raises_http_400(tmp_path: Path):
-    cfg = _write_config(tmp_path,
-                        work_dir=str(tmp_path / "work"),
-                        log_dir=str(tmp_path / "logs"),
-                        spm_dir=None)
+    cfg = _write_config(
+        tmp_path, work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), spm_dir=None
+    )
     with pytest.raises(ConfigError) as exc_info:
         _load_project_config(str(cfg))
     assert exc_info.value.status_code == 400
@@ -89,10 +91,9 @@ def test_missing_spm_dir_raises_http_400(tmp_path: Path):
 
 
 def test_missing_dpabi_dir_raises_http_400(tmp_path: Path):
-    cfg = _write_config(tmp_path,
-                        work_dir=str(tmp_path / "work"),
-                        log_dir=str(tmp_path / "logs"),
-                        dpabi_dir=None)
+    cfg = _write_config(
+        tmp_path, work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), dpabi_dir=None
+    )
     with pytest.raises(ConfigError) as exc_info:
         _load_project_config(str(cfg))
     assert exc_info.value.status_code == 400
@@ -100,6 +101,7 @@ def test_missing_dpabi_dir_raises_http_400(tmp_path: Path):
 
 
 # ── File not found → ConfigError(400) ──
+
 
 def test_file_not_found_raises_http_400():
     with pytest.raises(ConfigError) as exc_info:
@@ -109,6 +111,7 @@ def test_file_not_found_raises_http_400():
 
 
 # ── Invalid YAML → ConfigError(400) ──
+
 
 def test_invalid_yaml_raises_http_400(tmp_path: Path):
     p = tmp_path / "bad.yaml"
@@ -120,11 +123,10 @@ def test_invalid_yaml_raises_http_400(tmp_path: Path):
 
 # ── No real execution ──
 
+
 def test_no_real_matlab_spm_dpabi_called(tmp_path: Path):
     """_load_project_config is a pure read function — no tools invoked."""
-    cfg = _write_config(tmp_path,
-                        work_dir=str(tmp_path / "work"),
-                        log_dir=str(tmp_path / "logs"))
+    cfg = _write_config(tmp_path, work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"))
     result = _load_project_config(str(cfg))
     assert isinstance(result, dict)
     # Verify no files were written by the load call

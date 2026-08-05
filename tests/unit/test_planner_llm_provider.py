@@ -23,11 +23,13 @@ class _FakeHttpResponse:
 def test_planner_valid_llm_fixture_selects_pipeline(monkeypatch):
     monkeypatch.setenv(
         "MEDIMAGE_LLM_MOCK_RESPONSE",
-        json.dumps({
-            "recommended_pipeline_path": "examples/pipeline_rsfmri_reho.yaml",
-            "rationale": ["ReHo requested"],
-            "constraints": [],
-        }),
+        json.dumps(
+            {
+                "recommended_pipeline_path": "examples/pipeline_rsfmri_reho.yaml",
+                "rationale": ["ReHo requested"],
+                "constraints": [],
+            }
+        ),
     )
 
     draft = draft_pipeline_plan({"downstream_task": "regional homogeneity"})
@@ -42,10 +44,12 @@ def test_openai_compatible_provider_parses_chat_completion(monkeypatch):
         "choices": [
             {
                 "message": {
-                    "content": json.dumps({
-                        "recommended_pipeline_path": "examples/pipeline_rsfmri_core_plan.yaml",
-                        "rationale": ["Core plan requested"],
-                    })
+                    "content": json.dumps(
+                        {
+                            "recommended_pipeline_path": "examples/pipeline_rsfmri_core_plan.yaml",
+                            "rationale": ["Core plan requested"],
+                        }
+                    )
                 }
             }
         ]

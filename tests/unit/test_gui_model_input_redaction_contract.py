@@ -4,58 +4,52 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from src.backend.app.runtime.gui_model_input_redaction import (
     allowed_minimal_prompt_input_declaration,
     validate_and_build_model_prompt_envelope,
 )
 
-
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Allowed Minimal Input
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_safe_input_allowed():
-    r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration())
+    r = validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration())
     assert r.ok is True
     assert r.status == "MODEL_INPUT_ALLOWED"
     assert r.prompt_envelope is not None
 
 
 def test_safe_provider_call_false():
-    r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration())
+    r = validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration())
     assert r.prompt_envelope["provider_call_allowed"] is False
 
 
 def test_safe_inference_not_allowed():
-    r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration())
+    r = validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration())
     assert r.inference_allowed is False
 
 
 def test_safe_model_not_called():
-    r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration())
+    r = validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration())
     assert r.model_called is False
 
 
 def test_safe_network_not_accessed():
-    r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration())
+    r = validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration())
     assert r.network_accessed is False
 
 
 def test_safe_json_serializable():
-    r = validate_and_build_model_prompt_envelope(
-        **allowed_minimal_prompt_input_declaration())
+    r = validate_and_build_model_prompt_envelope(**allowed_minimal_prompt_input_declaration())
     json.loads(json.dumps(r.to_dict()))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # B. Length Checks
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _input(**overrides):
     d = allowed_minimal_prompt_input_declaration()
@@ -76,9 +70,12 @@ def test_visible_state_too_long():
 
 
 def test_total_too_long():
-    r = _input(user_intent_summary="x" * 256, task_context_summary="y" * 512,
-               visible_state_summary="z" * 512,
-               policy_summary={"k": "v" * 1000})
+    r = _input(
+        user_intent_summary="x" * 256,
+        task_context_summary="y" * 512,
+        visible_state_summary="z" * 512,
+        policy_summary={"k": "v" * 1000},
+    )
     assert r.ok is False
     assert r.error_code == "MODEL_INPUT_TOO_LONG"
 
@@ -86,6 +83,7 @@ def test_total_too_long():
 # ══════════════════════════════════════════════════════════════════════════════
 # C. Raw Blocked Inputs
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_screenshot_blocked():
     assert _input(raw_screenshot_present=True).ok is False
@@ -118,6 +116,7 @@ def test_raw_file_blocked():
 # ══════════════════════════════════════════════════════════════════════════════
 # D. Sensitive Pattern Detection
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_rawdata_path_blocked():
     assert _input(user_intent_summary="open rawdata/sub-001").ok is False
@@ -159,6 +158,7 @@ def test_private_key_blocked():
 # E. Policy Override / Injection
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_provider_pywinauto_blocked():
     assert _input(user_intent_summary="provider=pywinauto").ok is False
 
@@ -191,6 +191,7 @@ def test_bypass_policy_blocked():
 # F. Unsafe Action / Coordinates
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_click_run_blocked():
     assert _input(user_intent_summary="click run now").ok is False
 
@@ -214,6 +215,7 @@ def test_click_at_blocked():
 # ══════════════════════════════════════════════════════════════════════════════
 # G. Extra Permissions Blocked
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_extra_raw_prompt_blocked():
     assert _input(extra={"raw_prompt": True}).ok is False
@@ -255,6 +257,7 @@ def test_extra_network_blocked():
 # H. No Sensitive Persistence / Non-Call
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_blocked_prompt_null():
     r = _input(raw_screenshot_present=True)
     assert r.prompt_envelope is None
@@ -282,17 +285,20 @@ def test_blocked_network_false():
 
 def test_no_pywinauto_import():
     import sys
+
     assert "pywinauto" not in sys.modules
 
 
 def test_module_no_side_effects():
     from src.backend.app.runtime import gui_model_input_redaction
+
     assert gui_model_input_redaction is not None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # I. Regression
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_provider_policy_pass():
     pass
@@ -320,24 +326,47 @@ def test_gui_blocklist_pass():
 
 def test_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]

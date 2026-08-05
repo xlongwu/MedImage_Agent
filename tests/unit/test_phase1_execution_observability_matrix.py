@@ -27,8 +27,8 @@ from src.backend.app.runtime import desktop_config
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 from tests.goal_contract_helpers import reviewed_goal_candidate
 
-
 # ── Test helpers ────────────────────────────────────────────────────────────
+
 
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
@@ -148,6 +148,7 @@ def _setup_executed(
 
 # ── 1. Dry-run blocked states remain non-executing ──────────────────────────
 
+
 def test_dry_run_reviewed_execution_disabled(tmp_path, monkeypatch):
     """REVIEWED_EXECUTION_DISABLED: env var not set → no execution."""
     _isolated_store(tmp_path, monkeypatch)
@@ -242,13 +243,15 @@ def test_dry_run_pipeline_yaml_required(tmp_path, monkeypatch):
 
 # ── 2. Successful execution creates traceable run identity ──────────────────
 
+
 def test_successful_execution_has_traceable_identity(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created, result = _setup_executed(tmp_path, client, monkeypatch)
 
     assert result.get("ok") is True or result.get("status") in (
-        "EXECUTION_SUBMITTED", "EXECUTION_PREFLIGHT_READY",
+        "EXECUTION_SUBMITTED",
+        "EXECUTION_PREFLIGHT_READY",
     ), f"Unexpected result: {result}"
     assert result.get("reviewed_plan_id"), f"Missing reviewed_plan_id: {result}"
     assert result.get("run_link_id"), f"Missing run_link_id: {result}"
@@ -259,6 +262,7 @@ def test_successful_execution_has_traceable_identity(tmp_path, monkeypatch):
 
 
 # ── 3. Run list and detail resolve after execution ──────────────────────────
+
 
 def test_run_list_contains_executed_run(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
@@ -281,9 +285,7 @@ def test_run_detail_returns_summary_preview_or_controlled_error(tmp_path, monkey
     run_id = result.get("run_id")
     assert run_id
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -298,6 +300,7 @@ def test_run_detail_returns_summary_preview_or_controlled_error(tmp_path, monkey
 
 # ── 4. Events / logs remain safe and scoped ─────────────────────────────────
 
+
 def test_events_endpoint_returns_ok_after_execution(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
@@ -305,9 +308,7 @@ def test_events_endpoint_returns_ok_after_execution(tmp_path, monkeypatch):
     run_id = result.get("run_id")
     assert run_id
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/events"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/events")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -321,9 +322,7 @@ def test_logs_endpoint_returns_ok_after_execution(tmp_path, monkeypatch):
     run_id = result.get("run_id")
     assert run_id
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/logs?max_bytes=2000"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/logs?max_bytes=2000")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
@@ -353,6 +352,7 @@ def test_logs_irrelevant_path_param_is_ignored(tmp_path, monkeypatch):
 
 # ── 5. Artifact list and preview remain safe ────────────────────────────────
 
+
 def test_artifact_list_has_stable_required_fields(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
@@ -360,21 +360,22 @@ def test_artifact_list_has_stable_required_fields(tmp_path, monkeypatch):
     run_id = result.get("run_id")
     assert run_id
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts")
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["ok"] is True
     assert isinstance(body["artifacts"], list)
     for artifact in body["artifacts"]:
         for field in (
-            "artifact_id", "name", "kind", "path", "exists",
-            "previewable", "warnings",
+            "artifact_id",
+            "name",
+            "kind",
+            "path",
+            "exists",
+            "previewable",
+            "warnings",
         ):
-            assert field in artifact, (
-                f"Missing field '{field}' in artifact: {artifact}"
-            )
+            assert field in artifact, f"Missing field '{field}' in artifact: {artifact}"
 
 
 def test_artifact_list_missing_artifacts_have_exists_false(tmp_path, monkeypatch):
@@ -384,9 +385,7 @@ def test_artifact_list_missing_artifacts_have_exists_false(tmp_path, monkeypatch
     run_id = result.get("run_id")
     assert run_id
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts")
     body = resp.json()
     for artifact in body["artifacts"]:
         if not artifact["exists"]:
@@ -402,9 +401,7 @@ def test_invalid_artifact_id_rejected(tmp_path, monkeypatch):
     assert run_id
 
     for bad_id in ["../secret", "a/b", "a\\b"]:
-        resp = client.get(
-            f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts/{bad_id}"
-        )
+        resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts/{bad_id}")
         assert resp.status_code in (400, 404), (
             f"Expected 400/404 for {bad_id!r}, got {resp.status_code}"
         )
@@ -418,14 +415,9 @@ def test_preview_discovered_artifact_succeeds(tmp_path, monkeypatch):
     assert run_id
 
     # Discover a previewable artifact
-    artifacts_resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts"
-    )
+    artifacts_resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts")
     artifacts = artifacts_resp.json()["artifacts"]
-    previewable = [
-        a for a in artifacts
-        if a.get("exists") and a.get("previewable")
-    ]
+    previewable = [a for a in artifacts if a.get("exists") and a.get("previewable")]
     if not previewable:
         # If no previewable artifact, the test still validates that
         # the artifacts endpoint itself is healthy
@@ -438,11 +430,18 @@ def test_preview_discovered_artifact_succeeds(tmp_path, monkeypatch):
     preview = preview_resp.json()
     assert "preview_type" in preview
     assert preview["preview_type"] in (
-        "json", "csv", "markdown", "text", "log", "metadata_only", "missing",
+        "json",
+        "csv",
+        "markdown",
+        "text",
+        "log",
+        "metadata_only",
+        "missing",
     )
 
 
 # ── 6. Retry / resume not implemented ──────────────────────────────────────
+
 
 def test_retry_resume_endpoints_do_not_exist(tmp_path, monkeypatch):
     """POST to /resume and /retry should return 404 (not implemented)."""

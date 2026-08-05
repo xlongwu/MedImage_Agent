@@ -13,7 +13,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ── High-risk backends ──────────────────────────────────────────────────────
 
 HIGH_RISK_BACKENDS: frozenset[str] = frozenset({

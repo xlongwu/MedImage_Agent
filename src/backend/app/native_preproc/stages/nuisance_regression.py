@@ -7,12 +7,12 @@ from typing import Any
 
 import numpy as np
 
-from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.core.compute_backend import (
     GpuComputeError,
     compute_nuisance_regression_gpu,
     cpu_compute_provenance,
 )
+from src.backend.app.native_preproc.core.qc import finite_stats
 from src.backend.app.native_preproc.dpabi_compat.regressors import (
     RegressorMatrix,
     combine_regressor_matrices,

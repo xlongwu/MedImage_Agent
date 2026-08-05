@@ -10,7 +10,6 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 
-
 PreprocessingStageExecutionStatus = Literal[
     "not_started",
     "planned",

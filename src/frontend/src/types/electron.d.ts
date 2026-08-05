@@ -26,6 +26,7 @@ declare global {
     };
     medimage?: {
       getApiBaseUrl: () => Promise<string>;
+      getAgentApprovalToken?: () => Promise<string | null>;
       getRuntime?: () => Promise<Window["MEDIMAGE_DESKTOP_RUNTIME"]>;
       selectDirectory: () => Promise<string | null>;
       selectFile: (

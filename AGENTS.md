@@ -1,1202 +1,447 @@
-# AGENTS.md — MedImage Agent Repository Operating Contract
+# AGENTS.md — MedImage Agent 仓库执行规则
 
-This file is the authoritative repository operating contract for Codex, Claude
-Code, Reasonix, and other coding agents working in this repository.
-
-Its purpose is to keep development safe, scientifically valid, reproducible,
-and efficient without forcing every task into the same narrow workflow.
+本文件是后续 Codex、Claude Code 及其他开发 Agent 在本仓库中的项目级执行约束。它只保留会直接影响开发正确性、安全性、科学有效性、兼容性和交付质量的规则；架构细节、能力说明和当前状态分别由专项文档维护。
 
 ---
 
-## 1. Project Boundary
+## 1. 文档用途与适用范围
 
-MedImage Agent is a deterministic Plan-then-Execute platform for rs-fMRI
-research workflows.
+### 1.1 作用域与继承
 
-The LLM may plan, explain, validate, and propose actions. Actual execution must
-remain inside the Pipeline Runtime and registered node runners.
+- 本文件位于仓库根目录，适用于整个仓库。
+- 当前仓库没有子目录 `AGENTS.md`。以后新增子目录规则时，只能补充该目录特有约束，不得机械复制本文件。
+- 子目录规则默认继承本文件；如必须覆盖上级规则，必须写明覆盖原因、适用目录和验证方式。
+- 任务说明可以缩小修改范围，但不得削弱 rawdata 只读、Approval Gate、路径安全、审计、科学真实性和测试要求。
 
-This project is:
+### 1.2 权威来源
 
-* a research engineering platform;
-* a deterministic workflow system;
-* a non-clinical research tool.
+不同问题使用不同事实来源：
 
-This project is not:
+| 问题 | 权威来源 |
+|---|---|
+| 项目级开发、安全、验证与文档规则 | `AGENTS.md` |
+| 当前任务范围和验收标准 | 已批准的任务说明、Issue 或方案 |
+| 当前真实行为 | 当前源码、测试和实际运行证据 |
+| 当前版本、限制、打包和下一步 | `PROJECT_STATE.md` |
+| 架构职责与调用链 | `docs/架构与决策/系统架构.md` |
+| 科学能力及验证等级 | `docs/项目概览/能力矩阵.md` |
+| 安全与审批说明 | `docs/安全与审批/安全边界.md` |
+| 文档分类和入口 | `docs/文档索引.md` |
+| 用户和开发入口 | `README.md`、`README_CN.md` |
 
-* a clinical diagnosis product;
-* a clinical decision-support product;
-* an unrestricted autonomous agent;
-* a general-purpose external command executor.
+代码通过测试不自动证明科学结论正确、文档准确或任务全部完成。来源冲突时，必须说明当前行为、治理规则要求和需要修正的差异。
 
-External data execution is disabled by default.
+### 1.3 项目边界
 
-No new external execution path may be introduced without:
+MedImage Agent 是面向 rs-fMRI 研究工程的确定性 Plan-then-Execute 平台，不是临床诊断产品、临床决策支持产品、通用外部命令执行器或无限自主 Agent。
 
-* explicit task scope;
-* maintainer approval;
-* Approval Gate integration;
-* audit logging;
-* safe path handling;
-* environment gating;
-* failure handling;
-* tests.
-
----
-
-## 2. Authority and Sources of Truth
-
-Different sources are authoritative for different questions.
-
-### 2.1 Repository policy
-
-`AGENTS.md` is authoritative for:
-
-* safety invariants;
-* architecture boundaries;
-* task execution rules;
-* scientific computing requirements;
-* validation requirements;
-* Git and artifact rules.
-
-A task handoff may narrow these rules but must not weaken them.
-
-### 2.2 Current behavior
-
-Current executable code and tests are authoritative evidence of what the
-repository currently does.
-
-Current code and tests are not automatic proof that:
-
-* the behavior is scientifically correct;
-* the public documentation is accurate;
-* a numerical implementation is validated;
-* an implementation satisfies the current task.
-
-When code behavior conflicts with a scientific or safety invariant, report the
-conflict and correct it within the approved task scope.
-
-### 2.3 Task scope
-
-The approved task handoff, issue, plan, or direct maintainer instruction is
-authoritative for:
-
-* the delivery goal;
-* task mode;
-* allowed files;
-* non-goals;
-* acceptance criteria;
-* validation commands;
-* stop conditions.
-
-### 2.4 Current project status
-
-`PROJECT_STATE.md` records the latest verified project state, limitations,
-packaging status, and next work.
-
-Treat it as a maintained snapshot, not as stronger evidence than current code,
-tests, CI, or inspected artifacts.
-
-### 2.5 Architecture and historical documents
-
-* `docs/架构与决策/系统架构.md` describes current architecture.
-* `README.md` and `README_CN.md` are user and developer entry points.
-* `docs/发布记录/` contains historical records tied to specific versions.
-* Historical task documents and Completion Reports must not override current
-  code or current repository policy.
-
-When sources disagree, report:
-
-1. what the repository currently does;
-2. what the governing rule or task requires;
-3. what must be corrected.
+- LLM 只能规划、解释、校验和提出动作。
+- 实际计算只能经受控服务、Approval Gate、Execution Ticket、唯一 Execution Gateway、Pipeline Runtime 和已注册 node runner 完成。
+- 外部 MATLAB/SPM/DPABI/GPU/DICOM 执行默认关闭；启用新路径必须有明确任务范围、人工批准、环境门控、审计、安全路径、失败处理和测试。
+- 禁止作出诊断、治疗或临床性能声明。
 
 ---
 
-## 3. Task Modes
+## 2. 开发前必须完成的检查
 
-Every implementation task must use one of the following modes.
+### 2.1 确定任务模式
 
-The task handoff should declare the mode explicitly. If it does not, the
-implementing agent must infer the narrowest mode that can fully deliver the
-requested outcome and state that mode in the Completion Report.
+开始修改前必须选择能完整交付目标的最窄模式，并在最终报告中写明：
 
-### 3.1 Focused Fix Mode
+| 模式 | 适用范围 | 最低检查范围 |
+|---|---|---|
+| Focused Fix | 小范围 Bug、单接口、文档小修 | 目标文件、调用方、相关测试 |
+| Feature Bundle | 完整用户或开发功能 | 前端到存储/运行时的完整调用链 |
+| Architecture / Refactor | 拆分、迁移、依赖或状态重构 | 现有行为刻画、兼容面、共享测试 |
+| Scientific Validation | ALFF/fALFF、ReHo、连接、过滤、回归、atlas、数值后端 | 请求到数值产物、注册、溯源和参考验证全链 |
+| Release / Packaging | 版本、依赖、CI、sidecar、Electron、安装包 | 版本面、锁文件、构建、启动、产物清单 |
+| Documentation | 规则、README、架构或流程文档 | 引用路径、命令、实现锚点和文档一致性 |
 
-Use for:
+Focused Fix 不得借机广泛重构；其他模式新增修改文件必须确属完整调用链所需，并在最终报告解释。
 
-* isolated bug fixes;
-* one-file or small-surface corrections;
-* test collection fixes;
-* narrow API corrections;
-* documentation-only corrections.
+### 2.2 必做动作
 
-Rules:
+1. 完整阅读本文件、任务说明和与任务直接相关的专项文档。
+2. 运行 `git status --short`，识别用户已有修改、未跟踪文件和生成物；不得假设工作区干净。
+3. 阅读每个目标文件、直接调用方、数据结构和现有测试；不得在未理解现有实现时直接重写。
+4. 搜索旧字段、旧路径、旧接口、重复实现和兼容入口。
+5. 对方案驱动任务列出必做项、非目标、调用链和验收命令，并在开发过程中持续逐项对照。
+6. 确认是否触及受保护区域：Pipeline Runtime、node runner、Approval Gate、Execution Gateway、转换/预处理算法、产物注册、状态迁移、路径/allowlist。
+7. 修改前确认测试不会使用持久桌面数据库、用户工作区或研究数据。
 
-* inspect only listed files, read-only files, and required anchors;
-* do not perform broad repository exploration;
-* do not edit unlisted files (see §4.4 for unlisted-file escalation rules);
-* preserve existing public behavior unless the task explicitly changes it;
-* run focused regression tests.
+### 2.3 单一所有者与现有改动
 
-### 3.2 Feature Bundle Mode
-
-Use for a complete user-visible or developer-visible feature.
-
-A feature bundle may span:
-
-* frontend;
-* API schemas;
-* routes;
-* services;
-* runtime;
-* storage;
-* tests;
-* documentation.
-
-Rules:
-
-* inspect the complete feature call chain;
-* do not implement only the visible UI or only the API surface;
-* include success, failure, empty, disabled, and unsafe states;
-* keep the task centered on one complete delivery goal;
-* edit only files required by the end-to-end feature;
-* report any additional files discovered beyond the original estimate.
-
-### 3.3 Architecture and Refactor Mode
-
-Use for:
-
-* splitting monolithic modules;
-* dependency inversion;
-* router decomposition;
-* state-management restructuring;
-* frontend controller extraction;
-* shared service extraction.
-
-Rules:
-
-* targeted repository-wide search is allowed;
-* exploration must have a stated architectural purpose;
-* characterize current behavior before moving code;
-* preserve API and execution semantics unless explicitly changed;
-* do not combine unrelated product features with the refactor;
-* add regression tests before or with structural changes;
-* record compatibility and migration risks.
-
-### 3.4 Scientific Validation Mode
-
-Use for:
-
-* ALFF or fALFF;
-* ReHo;
-* functional connectivity;
-* filtering;
-* nuisance regression;
-* atlas extraction;
-* numerical backend changes;
-* CPU/GPU equivalence;
-* scientific artifact generation.
-
-Rules:
-
-* inspect the complete path from request to persisted artifact;
-* inspect existing numerical kernels before adding new computation;
-* verify algorithm definition, parameters, artifact contents, state semantics,
-  and tests;
-* compare against an independent reference where feasible;
-* do not declare an algorithm validated based only on route or service tests;
-* apply all rules in the Scientific Computing Contract.
-
-### 3.5 Release and Packaging Mode
-
-Use for:
-
-* version bumps;
-* dependency updates;
-* CI changes;
-* PyInstaller sidecar builds;
-* Electron packaging;
-* installers;
-* release candidates;
-* release documentation.
-
-Rules:
-
-* inspect version sources, manifests, lockfiles, CI, packaging configuration,
-  and release documentation together;
-* do not claim GUI validation when only a headless build was tested;
-* distinguish build success, launch success, smoke success, and user workflow
-  success;
-* record platform and toolchain versions;
-* do not publish, tag, or upload artifacts unless explicitly requested.
+- 一个任务只能有一个实现所有者和一个一致的 diff；审查者不得静默成为第二个并行实现者。
+- 必须保留无关的用户改动，不得使用 `git reset --hard`、`git checkout --` 或大范围清理来获得“干净”工作区。
+- 未明确要求时，不得提交、推送、打 tag、发布或上传产物。
 
 ---
 
-## 4. Agent Roles and Change Ownership
+## 3. 项目级核心约束
 
-The following role division is recommended:
+### 3.1 后端分层
 
-* Planner or Scout: Reasonix, web-based GPT, or another analysis agent.
-* Implementer: Codex or one designated coding agent.
-* Reviewer: Claude Code or another independent reviewer.
-
-Roles may be performed by different tools, but ownership rules remain fixed.
-
-### 4.1 Single-owner rule
-
-Use:
+后端必须保持：
 
 ```text
-One task
-→ one owner agent
-→ one branch or worktree
-→ one coherent diff
+Route -> Request/Response Schema -> Service
+      -> Runtime / Runner 或 Scientific Kernel
+      -> State and Artifact Storage
 ```
 
-Do not allow multiple coding agents to edit the same task branch concurrently.
+- Route 只处理 HTTP、依赖注入和错误映射；禁止在 Route 中放复杂业务、数值算法或直接外部执行。
+- 新端点必须有明确 domain router，并在 `src/backend/app/main.py:create_app()` 注册；不得继续扩张无关的遗留聚合路由。
+- 结构化请求/响应必须使用 schema；禁止为复杂公共接口继续堆积手解析 `dict[str, Any]`。
+- Route 的 catch-all 必须经 `src/backend/app/api/_errors.py:raise_api_error()` 保留结构化领域错误。
+- 新读接口必须通过 `ProjectStore` Protocol 和 `FastAPI Depends()` 隔离存储，不得新增对全局 `mock_store` 的直接耦合。
+- 运行时 JSON 状态必须使用 `atomic_write_json()`，并包含 `_schema_version`；禁止用 `Path.write_text(json.dumps(...))` 写受管状态。
+- 配置经 `ConfigService` 读取，环境变量使用 `MEDIMAGE_` 前缀；旧 accessor 在明确迁移前保持兼容。
 
-The reviewer should review after the implementation diff exists. The reviewer
-must not silently become a second parallel implementer.
+### 3.2 Runtime、Node Registry 与执行边界
 
-### 4.2 Handoff readiness
+- Pipeline Runtime 是确定性执行唯一来源；服务编排 kernel，runner 调用共享实现，禁止在 Route/Service 复制数值算法或建立旁路执行。
+- 新 node 放在 `src/backend/app/runtime/node_registry_plugins/` 的正确插件中并暴露 `REGISTRY`；稳定 `node_id` 不得改名，重复 ID 必须失败。
+- 新可执行 node 必须同步 Tool Catalog、Approval Gate、审计、安全 allowlist、API/前端能力展示和测试。
+- 受保护模块只有在任务明确要求、已有行为被测试刻画、兼容性已评估并运行安全回归时才可修改。
 
-For task documents intended for Codex, check the task `Status` before doing any
-work.
+### 3.3 前端边界
 
-Accepted implementation-ready statuses include:
+- 前端只能通过共享 HTTP API client 和批准的 Electron bridge 与后端交互；禁止直接使用文件系统或执行外部工具。
+- Domain API wrapper 位于 `src/frontend/src/lib/api/`，共享类型位于相应 type 模块；不得重新建立根级单体 API 文件。
+- 新业务功能放入 `features/`，复杂状态进入 domain hook/controller；`App.tsx` 只保留应用壳和编排职责。
+- 后端状态和安全 gate 始终权威；UI 不得用本地乐观状态推断执行成功、能力等级或审批结果。
+- 完整功能必须表示 loading、empty、disabled、success、partial 和 failure 状态中适用的部分。
+- 用户可见文案必须走 i18n catalog；错误码、ID、hash 等机器标识保持不翻译，由前端映射。
 
-* `Ready for Codex`;
-* `Ready for Implementation`.
+### 3.4 API、状态和兼容性
 
-If the task status is not implementation-ready, stop and report it.
+任何 API、schema、状态或持久格式变更必须同时检查并按需更新：
 
-### 4.3 Required handoff fields
+- 后端 schema、route、service 和 contract tests；
+- 前端 API wrapper、TypeScript 类型、调用方、i18n 和测试；
+- 旧字段/旧路径兼容或显式迁移；
+- 持久状态 `_schema_version`、迁移和重启恢复测试；
+- README、API/架构/状态文档。
 
-A complete implementation handoff should define:
+禁止把 contract 变化作为顺手清理；禁止只修改生产者而遗漏消费者。
 
-* Status;
-* Task Mode;
-* Goal;
-* Background;
-* Current Behavior;
-* Required Behavior;
-* Non-goals;
-* Files to Edit;
-* Files to Read Only;
-* Exact Anchors;
-* Allowed Commands;
-* Validation Commands;
-* Acceptance Criteria;
-* Safety Invariants;
-* Stop Conditions;
-* Completion Report Format.
+### 3.5 数据、路径和安全不变量
 
-### 4.4 Unlisted-file escalation
+- 用户 DICOM、BIDS、NIfTI、`rawdata/` 和已登记源数据永远只读；不得删除、覆盖、重命名或作为输出根。
+- 所有写路径必须 resolve 后位于已批准项目边界和明确 write roots（如 `work`、`logs`、`reports`、`derivatives`、`exports`）内。
+- 显式 node 输出目录不得意外覆盖或抹掉其他默认批准 write roots。
+- 禁止硬编码凭据、私有绝对路径和研究数据路径；`.env` 不得提交，配置示例维护在 `.env.example`。
+- 禁止绕过 Approval Gate、Execution Ticket、审计、safe-path 或 allowlist。
+- 禁止从 LLM 文本直接执行命令、引入无限自主循环或把历史审批当作当前权限。
 
-In Focused Fix Mode:
+### 3.6 科学计算真实性
 
-* never edit an unlisted file;
-* report the required file and stop.
+记忆系统还必须保持以下不变量：独立 memory SQLite 是长期记忆唯一权威源，
+desktop SQLite 只提供项目 consent、事务 outbox、来源投影和 forget ledger；
+Markdown/JSON 只能是可重建投影。安装级与项目级生成/使用门控默认关闭，记忆
+必须项目隔离并保留来源、版本、状态和审计。记忆不得成为执行权限、审批、能力
+等级、科学有效性或当前环境真值；科学参数只能作为建议，必须在当前任务重新
+确认，并将实际 `MemoryContext` hash/引用绑定到 Reviewed Plan 和 Approval
+Summary。忘记必须清除明文、保留最小 tombstone 并阻止旧来源自动重建。
 
-In Feature Bundle, Architecture, Scientific Validation, or Release Mode:
+能力状态必须使用真实含义：
 
-* additional files may be inspected when required by the call chain;
-* additional files may be edited only when necessary for the declared goal;
-* every added file must be explained in the Completion Report;
-* explicit task prohibitions still take precedence.
+| 等级 | 含义 |
+|---|---|
+| `unavailable` | 没有可执行实现 |
+| `scaffolded` | 仅接口或占位，不执行有效计算 |
+| `metadata_only` | 只生成计划/元数据，没有声明的数值产物 |
+| `computed` | 数值产物真实生成、可重载并已注册 |
+| `validated` | 通过定义明确的数值和独立参考验证 |
 
----
+- 禁止将计划、shape、路径、占位文件或元数据标成 `computed`、`completed` 或 `validated`。
+- 科学功能必须覆盖参数校验、kernel、数值产物、原子持久化、注册、溯源、状态和重载验证。
+- 数值算法只能有一个 canonical kernel；新增前必须搜索已有实现。
+- 产物必须存在、可重开、shape/dtype 正确、关联输入与参数，并处理部分写失败。
+- 简化、预览或子集处理必须明确标注并记录 subset rule；不得冒充完整标准算法。
+- 多后端必须显式选择，定义 CPU 可用性/GPU fallback 和容差，并验证实际后端。
 
-## 5. Required Workflow
+### 3.7 依赖、版本和可复现性
 
-Before editing:
-
-1. Read `AGENTS.md`.
-2. Read any tool-specific entry guide such as `CLAUDE.md`.
-3. Read the approved task handoff.
-4. Check task status and task mode.
-5. Read every target file before modifying it.
-6. Verify required anchors, symbols, paths, and assumptions.
-7. Inspect existing tests for the affected behavior.
-8. Inspect existing implementations before adding a duplicate path.
-
-During implementation:
-
-1. Keep one coherent delivery goal.
-2. Preserve safety and architecture invariants.
-3. Follow the rules for the selected task mode.
-4. Avoid unrelated cleanup.
-5. Do not hide incomplete behavior behind successful status values.
-6. Do not weaken tests to make a change pass.
-7. Do not silently skip unavailable validation.
-
-After implementation:
-
-1. Run the required validation matrix.
-2. Inspect `git status`.
-3. Classify delivery files and excluded artifacts.
-4. Confirm that generated outputs and user data are not staged.
-5. Produce the required Completion Report.
+- 禁止依赖版本写成 `latest`；前端 manifest 与 lockfile 必须一起更新。
+- 删除依赖前必须检查可选执行路径和打包；重依赖保持 optional，除非任务明确改变安装要求。
+- 稳定文档不得写维护者私有 Python/Node/Conda/MATLAB/CUDA 绝对路径。
+- 随机科学操作必须接收或记录确定性 seed。
+- 应用版本唯一来源是 `src/backend/app/version.py` 中的 `APP_VERSION`；版本变更必须是显式 Release 任务，并同步 `pyproject.toml`、前端、Electron、README 和当前发布文档。
+- 历史发布记录绑定历史版本，不得改成当前版本。
 
 ---
 
-## 6. Backend Architecture Rules
+## 4. 功能开发与修改规则
 
-### 6.1 Required layering
+### 4.1 新功能
 
-Server-side work must preserve this layering:
+- 必须实现完整调用链，不得只完成可见 UI、单一路由或占位产物。
+- 必须覆盖成功、失败、空状态、禁用状态、不安全输入和重启恢复中适用的场景。
+- 新接口、配置、环境变量、依赖、命令、目录、状态和能力必须在同一任务内完成测试与文档同步。
 
-```text
-Route
-→ Request/Response Schema
-→ Service
-→ Runtime / Runner or Scientific Kernel
-→ State and Artifact Storage
-```
+### 4.2 Bug 修复
 
-Responsibilities:
+- 必须定位根因和最小影响面，先补能复现问题的回归测试，再修复生产代码（纯文档错误除外）。
+- 不得只改错误文案、吞异常、降低断言或放宽容差来“通过测试”。
+- 修复后必须搜索同类路径和调用方；具有复发可能的问题必须补入本文件或适当子目录 `AGENTS.md`。
 
-* Routes handle HTTP concerns and dependency injection.
-* Schemas validate structured request and response contracts.
-* Services coordinate domain workflows.
-* Runtime and runners execute reviewed operations.
-* Scientific kernels perform numerical computation.
-* Storage persists state, provenance, and artifacts.
+### 4.3 重构
 
-Prohibited / 禁止:
+- 移动代码前必须用 characterization tests 记录公共行为。
+- 默认保持 API、执行、状态、产物和科学语义；任何有意变化必须单独列出迁移和兼容风险。
+- 禁止把无关产品功能混入架构重构；禁止为规避核心 bug 在外围复制第二套逻辑。
 
-* complex business logic in routes;
-* numerical algorithms in routes;
-* direct external-tool execution in routes;
-* large hand-parsed `dict[str, Any]` payloads when a schema is appropriate;
-* new read-side endpoints coupled directly to the global `mock_store`;
-* new unrelated endpoints added to monolithic legacy routers;
-* services that duplicate existing scientific kernels;
-* successful API responses for artifacts that were not actually created.
+### 4.4 删除和废弃
 
-Use `FastAPI Depends()` and the `ProjectStore` Protocol from
-`api/dependencies.py` for new dependency-injected endpoints.
-
-### 6.2 Middleware
-
-The middleware stack is fixed unless the task explicitly justifies a change.
-
-| Order, innermost first | Middleware                 | Purpose                              |
-| ---------------------- | -------------------------- | ------------------------------------ |
-| 1                      | `APIVersionMiddleware`     | `/api/v1/` to `/api/` rewrite        |
-| 2                      | `RateLimitMiddleware`      | request rate limiting                |
-| 3                      | `RequestIDMiddleware`      | `X-Request-ID` injection             |
-| 4                      | `RequestLoggingMiddleware` | structured logging and response time |
-| 5                      | `CORSMiddleware`           | approved local frontend origins      |
-
-Middleware is registered in `main.py:create_app()` using
-`app.add_middleware()`.
-
-Account for Starlette middleware ordering semantics when changing or testing
-middleware.
-
-### 6.3 Exception handling
-
-Route-level catch-all exception handling must use `raise_api_error(exc)` from
-`api/_errors.py`.
-
-Use the appropriate `MedImageError` subclass:
-
-* `ConfigError` for configuration failures;
-* `PipelineError` for pipeline or execution failures;
-* `StateStoreError` for state or database failures;
-* `SafetyError` for safety-policy rejections;
-* `NotFoundError` for missing resources.
-
-Do not replace structured domain errors with generic 500 responses.
-
-### 6.4 Route ownership
-
-* `api/routes.py` remains limited to its small core surface.
-* Domain endpoints belong in domain `_routes.py` modules.
-* Every new endpoint must have one clear owning domain.
-* Routers must be registered in `main.py:create_app()`.
-* Do not expand a legacy aggregation router with new unrelated domains.
-* When touching a monolithic router in Architecture Mode, prefer extracting one
-  complete domain rather than adding another layer of inline logic.
-* Route modules must import only what their endpoints use.
-
-### 6.5 Node registry
-
-* New pipeline nodes belong in the appropriate module under
-  `runtime/node_registry_plugins/`.
-* Each plugin exposes a `REGISTRY` mapping stable `node_id` values to callables.
-* Established `node_id` values are immutable.
-* Duplicate IDs must raise an error.
-* Compatibility shims must not become the primary node-registration surface.
-* New executable nodes must be represented in the Tool Catalog, Approval Gate,
-  audit path, and safe allowlist where applicable.
-
-### 6.6 State, configuration, and dependency injection
-
-* Runtime JSON state must be written with `atomic_write_json()`.
-* Persisted state must include `_schema_version`.
-* Do not use `Path.write_text(json.dumps(...))` for managed runtime state.
-* Backend configuration is loaded through `ConfigService`.
-* Environment variables use the `MEDIMAGE_` prefix.
-* Legacy configuration accessors must remain available until explicitly
-  migrated.
-* Tests must isolate project stores using dependency overrides, `monkeypatch`,
-  or temporary `SQLiteDesktopStore` instances.
-* Tests must never write to the persistent desktop database.
-* Persisted state changes require compatibility consideration and migration
-  tests where appropriate.
+- 删除前必须检查 Git tracking、动态注册、可选依赖、打包资源、fixtures、文档和兼容入口。
+- 必须全仓搜索旧路径、旧字段、旧命令和旧标识；仍需兼容时提供明确 shim 和淘汰条件。
+- 名称像 `memory/`、`outputs/` 或 `dist/` 不代表整个目录可删除；tracked fixture/source 必须保留。
 
 ---
 
-## 7. Frontend Architecture Rules
+## 5. 历史问题与防复发规则
 
-* Frontend code communicates with the backend only through HTTP APIs and the
-  approved Electron bridge.
-* Frontend code must not access the filesystem directly.
-* Domain API wrappers live under `src/frontend/src/lib/api/`.
-* All HTTP requests use the shared API client.
-* Do not recreate a root-level monolithic frontend API module.
-* Shared TypeScript models belong in the appropriate type modules.
-* Workflow state should be derived through domain state models and hooks.
-* Do not duplicate backend workflow state independently in multiple
-  components.
-* Feature flags control visibility only.
-* Backend gates remain authoritative for execution and safety.
-* UI code must not infer success when the backend has not reported success.
-* Technical details should default to a secondary or collapsed view.
-* `App.tsx` should remain an application shell and orchestration boundary.
-* New business features belong in `features/`.
-* New complex workflows should use domain hooks or controllers rather than
-  accumulating handlers and state in `App.tsx`.
-* A complete feature must represent loading, empty, disabled, success, partial,
-  and failure states where applicable.
+本节只记录已在代码、测试或本项目会话中确认、且可能复发的问题。新增近似问题时优先扩充现有规则。
 
-API contract changes must update:
+### 5.1 目标路由不得混淆“不支持”与“缺少前提”
 
-* backend schema;
-* backend tests;
-* frontend API wrapper;
-* frontend types;
-* frontend tests;
-* compatibility or migration handling where needed.
+- **触发条件**：修改 Agent Task 目标分类、中文/英文意图、BIDS 前提或工作流选择。
+- **必须执行**：先识别核心意图，再独立检查项目证据；支持目标缺输入时进入可恢复的输入补充，真正不支持时进入目标更新。计划限定语和“生成 QC 报告”“不修改 rawdata”等修饰语不得破坏核心路由。
+- **禁止事项**：不得依赖一个完整句子、单个关键词或任意英文摘要解析；不得把所有失败归为 `UNSUPPORTED_GOAL`。
+- **验证方式**：覆盖中英文正例、近似反例、缺少证据、由不支持目标更新为支持目标，以及已确认的 plan-only、头动、ALFF/fALFF、ReHo 表述。
+- **相关文件**：`src/backend/app/services/goal_planning_service.py`、`src/backend/app/planner/goal_contract_builder.py`、`tests/unit/test_agent_task_commands.py`。
 
-Do not change API contracts as incidental cleanup.
+### 5.2 审批顺序必须以副作用为边界
 
----
+- **触发条件**：修改 Reviewed Plan、Approval Summary、approve 命令、dry-run、Execution Ticket、Execution Gateway 或执行状态。
+- **必须执行**：严格保持以下顺序：
 
-## 8. Safety Invariants and Protected Changes
+  ```text
+  持久化 Reviewed Plan
+  -> 构建并持久化稳定 Approval Summary
+  -> WAITING_FOR_APPROVAL
+  -> 审批时校验未变化的 summary/hash、actor 和 scope
+  -> 绑定审批后运行 dry-run
+  -> dry-run 通过后创建 ticket 并经唯一 gateway dispatch
+  ```
 
-### 8.1 Absolute invariants
+  科学执行计划在进入 dispatch 前还必须校验其输入链：例如 ReHo 必须由计划内 realignment/smoothing 产物供给，或绑定经过审阅的显式预处理 BOLD 输入；缺少前提时以结构化错误阻断审批执行。
 
-All agents must obey the following:
+- **禁止事项**：规划阶段不得运行执行 dry-run、runner、外部工具或 dispatch；失败的 post-approval dry-run 不得落入真实执行；不得用历史审批批准改变后的计划。
+- **验证方式**：用 spy/有序调用日志证明没有审批前副作用、顺序正确、summary hash 变化被拒绝、`AGENT_DRY_RUN_BLOCKED`/`AGENT_EXECUTION_PREREQUISITE_MISSING` 或等价错误阻止 dispatch；ReHo 回归必须覆盖缺少和具备预处理输入链两种情况。
+- **相关文件**：`src/backend/app/services/approval_summary_service.py`、`src/backend/app/services/agent_task_command_service.py`、`src/backend/app/services/reviewed_execution_service.py`、`src/backend/app/runtime/execution_gateway.py`、`tests/unit/test_approval_summary.py`、`tests/unit/test_agent_task_commands.py`。
 
-* Do not modify user DICOM, BIDS, NIfTI, `rawdata/`, or source research data.
-* Do not bypass the Approval Gate.
-* Do not introduce unrestricted autonomous execution loops.
-* Do not execute unreviewed commands from LLM-generated text.
-* Do not hardcode credentials, API keys, private absolute paths, or research
-  dataset paths.
-* Do not make optional external execution enabled by default.
-* Do not weaken safe path validation.
-* Do not hide destructive operations behind generic workflow actions.
-* Do not make clinical diagnosis or treatment claims.
+### 5.3 Plan-only 必须真实“不执行”
 
-### 8.2 Protected modules
+- **触发条件**：目标包含“仅生成计划”“不执行计算”或等价语义。
+- **必须执行**：持久化 Reviewed Plan、计划 hash 和证据链接；结果必须包含 `execution_performed=false` 或等价结构化字段，并清楚表示执行/数值计算已跳过。
+- **禁止事项**：不得创建执行审批、dry-run 执行记录、Execution Ticket、run 或数值产物；不得把无 run 视为证据丢失。
+- **验证方式**：断言审批、dry-run、ticket、gateway 和 runner 均未调用；重启后方案 ID、节点、状态和 Reviewed Plan 证据仍可读取。
+- **相关文件**：`src/backend/app/services/agent_task_command_service.py`、`src/backend/app/services/agent_task_read_model.py`、`src/backend/app/services/agent_task_result_summary.py` 及其单元/API/前端测试。
 
-The following areas are protected, not permanently frozen:
+### 5.4 生命周期命令与错误必须后端权威
 
-* pipeline executor;
-* node runner execution logic;
-* Approval Gate;
-* DICOM conversion execution;
-* preprocessing algorithms;
-* artifact registration;
-* state migration;
-* path and allowlist enforcement.
+- **触发条件**：修改 create、answer/update goal、approve、cancel、reconcile 或公共状态映射。
+- **必须执行**：命令按 command ID 幂等；同一 lifecycle 只能有一个未解决决策；只允许状态机明确支持的取消；重复取消幂等；运行中或终态取消返回结构化领域拒绝。执行命令返回前必须进行一次有界终态协调；仍在运行时再启动单 owner 的有界 monitor。前端只轮询后端投影并在终态停止，不得长期保留本地“运行中”。
+- **禁止事项**：不得伪造成功、用 UI 本地状态覆盖后端、把结构化拒绝渲染为通用“服务不可用”。GET 投影不得产生 reconcile 或其他副作用。
+- **验证方式**：覆盖允许/拒绝/重复/终态取消、命令重放、审批返回前终态协调、后台 monitor、重启投影、等待用户/需注意/完成/取消的前端映射；GET/list 只读测试必须证明不会触发状态迁移。
+- **相关文件**：`src/backend/app/services/agent_task_command_service.py`、`agent_task_read_model.py`、`agent_task_reconciler.py`、`src/frontend/src/features/agent/`、对应测试。
 
-Protected modules may be modified only when:
+### 5.5 前后端结构化数据和 i18n 必须同步
 
-1. the task explicitly identifies the behavior or invariant being changed;
-2. current behavior is characterized with tests;
-3. relevant safety tests are run;
-4. backward compatibility is evaluated;
-5. changed invariants are listed in the Completion Report;
-6. the change does not silently weaken Approval Gate, audit, path, or raw-data
-   protections.
+- **触发条件**：修改 Agent Task schema、状态、计数、证据链接、结果摘要或用户文案。
+- **必须执行**：优先增加结构化字段并同步 backend schema、client wrapper、TypeScript type、i18n catalog 和中英文测试。遗留稳定摘要若必须解析，只能使用一个集中 parser。Runs 工作区必须合并后台任务记录与项目级 `/runs` 记录；Agent Task 创建的 project run 以 `run_id` 为标识并覆盖同 ID 的陈旧后台记录，不得因为旧 `/api/tasks` 列表为空而显示总数 0。
+- **禁止事项**：不得在多个组件用正则解析任意英文来推断计数、路径、能力或安全状态；不得把后端英文摘要直接当作唯一 UI 状态。
+- **验证方式**：API contract、client test、Agent workspace/controller test、project-run 映射/去重测试，以及 `en`/`zh-CN` 两种呈现。
+- **相关文件**：`src/backend/app/schemas/agent_task.py`、`src/frontend/src/lib/api/agentTasks.ts`、`src/frontend/src/lib/types/agentTask.ts`、`src/frontend/src/i18n/messages/`、`src/frontend/src/features/agent/`。
 
-Do not work around a core bug by duplicating logic in a route or service merely
-to avoid editing a protected module.
+### 5.6 写入范围必须完整且 rawdata 只读
 
-### 8.3 External execution
+- **触发条件**：修改审批 scope、项目路径、显式 output_dir、artifact 注册或打包/测试工作区。
+- **必须执行**：resolve 每个路径并验证在项目边界；审批范围保留配置的 `work/logs/reports/derivatives` 等根；项目托管的 `data/` 可保存数据索引等运行证据并作为只读产物发现根，但源 BIDS/NIfTI 和 rawdata 只能作为输入。转换或衍生输出必须是项目内独立目标。
+- **禁止事项**：不得因一个 node 给出显式输出而丢弃默认根；不得将项目根、系统目录、源数据或未解析变量设为写根。
+- **验证方式**：覆盖目录遍历、项目外路径、rawdata 输出/产物拒绝、project `data/` 证据接受、显式输出与默认根并存、路径大小写/符号链接等平台适用场景。
+- **相关文件**：`src/backend/app/runtime/path_safety.py`、Tool Catalog/Approval Summary、相关 service 和路径测试。
 
-MATLAB, SPM, DPABI, GPU, DICOM conversion, and similar external execution must
-remain:
+### 5.7 能力和完成状态必须反映真实产物
 
-* explicit;
-* reviewed;
-* audited;
-* environment-gated;
-* safe-path constrained;
-* disabled by default unless a reviewed task enables the path.
+- **触发条件**：新增/修改 ALFF/fALFF、ReHo、预处理、QC、报告、GPU 或外部工具能力。
+- **必须执行**：检查从请求到可重载数值产物的完整路径；记录算法、参数、输入标识、版本、backend、dtype、checksum、warning 和输出注册。
+- **禁止事项**：不得把 stub、plan、contract、metadata 或空报告标成计算完成；不得仅凭 route/service 测试声称算法 validated。
+- **验证方式**：kernel 单测、边界输入、产物重载、溯源、golden/独立参考，以及多 backend 容差测试（如适用）。
+- **相关文件**：科学 kernel、runner、artifact service、`docs/项目概览/能力矩阵.md` 和科学测试。
 
----
+### 5.8 桌面启动和打包结论必须分级
 
-## 9. Scientific Computing Contract
+- **触发条件**：修改 frontend build、sidecar、Electron、PyInstaller、启动健康检查或发行物。
+- **必须执行**：区分 build success、sidecar health、packaged launch、renderer smoke、人工 GUI workflow 和真实科学执行。packaged smoke 使用隔离 workspace/userData，并验证 sidecar ready、frontend index、React root、main landmark、无 renderer error、正常退出后 sidecar 停止；修改生命周期时还必须验证重复启动只保留一个 owner，以及主进程异常退出后 sidecar 自动停止。任何构建探测脚本都必须在返回前终止其完整 sidecar 进程树并确认构建 EXE 不再被占用。
+- **禁止事项**：不得把构建成功称为 GUI 验证；不得复用用户数据库/工作区；不得把 unpacked EXE 单独当作可携带应用，它依赖同目录 `resources/` 和 Electron 文件。
+- **验证方式**：`npm --prefix desktop/electron run check`，按任务运行 Windows 打包脚本及隔离 packaged smoke，并在报告逐层说明证据。
+- **相关文件**：`desktop/electron/`、`desktop/packaging/`、`tests/unit/test_desktop_packaging_contract.py`、`docs/桌面与前端/桌面应用打包.md`。
 
-Scientific correctness is a first-class repository invariant.
+### 5.9 打包产物只保留任务要求的最新表面
 
-A route returning HTTP 200 is not sufficient evidence that a scientific
-operation is implemented correctly.
+- **触发条件**：日常 Windows 验证或 release 打包。
+- **必须执行**：日常验证覆盖 canonical `desktop/electron/dist/win-unpacked/`；只有显式 Release 任务才生成 installer、portable、签名或版本化产物。先完成验证并核对 sidecar payload，再清理重复/中间产物。
+- **禁止事项**：不得每次源码修改都新增带时间戳或后缀的 EXE；不得在 smoke 前删除构建输入；不得删除 dependency cache、tracked 资源或用户状态来“清理”。
+- **验证方式**：清点 `desktop/electron/dist/` 和 `desktop/packaging/`，确认只保留请求的最新应用表面，并验证保留包可启动。
+- **相关文件**：`desktop/packaging/build_all_windows.ps1`、`build_backend.ps1`、`build_desktop.ps1`、Electron dist。
 
-### 9.1 Capability truth levels
+### 5.10 Windows 进程、端口和锁定目录必须按所有权处理
 
-Use the following conceptual capability levels consistently in code, status,
-documentation, and UI:
-
-| Level           | Meaning                                                                  |
-| --------------- | ------------------------------------------------------------------------ |
-| `unavailable`   | No executable implementation exists                                      |
-| `scaffolded`    | Interface or placeholder exists, but no valid computation is performed   |
-| `metadata_only` | Planning or metadata is produced without the declared numerical artifact |
-| `computed`      | The declared numerical artifact was created and can be reloaded          |
-| `validated`     | The computation passed defined numerical and reference validation        |
-
-Do not report `computed`, `completed`, or `succeeded` when only metadata,
-planned paths, shapes, or placeholder files exist.
-
-Do not report `validated` merely because unit tests execute without exceptions.
-
-### 9.2 End-to-end scientific path
-
-A complete scientific feature must cover:
-
-```text
-Request Parameters
-→ Schema Validation
-→ Service Orchestration
-→ Scientific Kernel
-→ Numerical Artifact
-→ Artifact Registration
-→ Provenance
-→ Workflow Status
-→ Reload and Validation Tests
-```
-
-Inspect all layers before declaring the feature complete.
-
-### 9.3 Single numerical source of truth
-
-* Numerical algorithms belong in dedicated scientific kernel modules.
-* Routes must not implement numerical algorithms.
-* Services should orchestrate kernels rather than reimplement them.
-* Runtime runners should call shared kernels rather than maintain divergent
-  copies.
-* Before adding a new implementation, search for an existing kernel.
-* When duplicate implementations exist, select one canonical implementation
-  and migrate callers through an explicit task.
-* Do not silently preserve two implementations with different formulas under
-  the same algorithm name.
-
-### 9.4 Artifact integrity
-
-A scientific computation is not complete unless the declared artifact:
-
-* exists;
-* contains the numerical result;
-* can be reopened;
-* has the expected shape and dtype;
-* is registered with the project;
-* is linked to its inputs and parameters;
-* has failure handling for partial writes.
-
-Examples:
-
-* A functional-connectivity operation must persist the actual matrix, not only
-  its shape or method name.
-* A ReHo operation must persist the resulting map, not only a completion flag.
-* An ALFF operation must persist the declared ALFF or fALFF map generated by
-  the documented algorithm.
-* Preview or sampled outputs must be labeled as preview or sampled outputs and
-  must not be presented as full-data results.
-
-Metadata sidecars supplement numerical artifacts. They do not replace them.
-
-### 9.5 Provenance requirements
-
-Scientific artifacts should record, where applicable:
-
-* algorithm ID;
-* algorithm version;
-* input paths or stable input identifiers;
-* input checksum or equivalent provenance identifier;
-* subject and session identifiers;
-* acquisition parameters;
-* TR;
-* frequency band;
-* atlas;
-* mask;
-* neighborhood definition;
-* nuisance-regression configuration;
-* filtering configuration;
-* backend;
-* precision and dtype;
-* random seed;
-* package versions;
-* parameters;
-* warnings;
-* output checksum;
-* creation timestamp.
-
-Do not encode private machine-specific absolute paths into portable provenance
-unless explicitly required for local runtime state.
-
-### 9.6 Numerical validation
-
-New or changed scientific kernels require validation appropriate to the
-algorithm.
-
-At minimum, consider:
-
-* synthetic input tests;
-* known-shape tests;
-* zero and constant-signal tests;
-* NaN and infinite-value handling;
-* insufficient-timepoint handling;
-* mask and atlas mismatch handling;
-* deterministic random-seed tests;
-* reload tests for persisted artifacts;
-* golden fixture comparison;
-* independent reference comparison;
-* CPU/GPU tolerance comparison when multiple backends exist.
-
-Document numerical tolerances. Do not choose tolerances only to make a failing
-test pass.
-
-### 9.7 CPU and GPU behavior
-
-When multiple backends exist:
-
-* backend selection must be explicit;
-* CPU must remain available unless the feature is explicitly GPU-only;
-* GPU fallback behavior must be defined;
-* backend-specific precision differences must be tested;
-* scaffold-only GPU paths must not be described as GPU implementations;
-* tests must verify that the intended backend was actually used where
-  observable.
-
-### 9.8 Simplified and partial algorithms
-
-If an implementation is scientifically simplified:
-
-* label it clearly;
-* describe the simplification;
-* do not use the full canonical algorithm name without qualification;
-* expose limitations in status and documentation;
-* do not silently upgrade a preview implementation to production status.
-
-If only a subset of subjects, voxels, timepoints, or files is processed:
-
-* make the subset rule explicit;
-* record it in provenance;
-* return a partial or preview status;
-* do not claim full-dataset completion.
+- **触发条件**：启动脚本、sidecar 健康超时、端口冲突、PyInstaller `_MEI*` 或打包目录被锁。
+- **必须执行**：终止进程前验证 PID、可执行路径和归属；递归删除前解析绝对路径、检查 Git tracking 并确认目标是预期生成目录。锁定残留必须报告准确路径和进程证据。
+- **禁止事项**：不得杀死未知端口占用进程；不得扩大 ACL、take ownership、删除父目录或使用宽泛通配符绕过锁。现有 `start.bat`/`start.sh` 的端口清理行为不得复制到新脚本，修改时必须先增加进程归属校验。
+- **验证方式**：清理后复查进程、端口、目录和 `git status --short`；无法安全删除时保留并报告，不得伪称清理完成。
+- **相关文件**：`start.bat`、`start.sh`、`desktop/packaging/`、Electron main process。
 
 ---
 
-## 10. Dependency and Reproducibility Rules
+## 6. 测试与验证要求
 
-* Do not introduce `"latest"` dependency versions.
-* Frontend manifest and lockfile changes must be committed together when
-  dependency changes are approved.
-* Backend dependency bounds must be intentional and documented.
-* Do not remove a dependency only because it appears unused without checking
-  optional execution paths and packaging.
-* Optional heavy dependencies must remain optional unless the task explicitly
-  changes installation requirements.
-* Do not hardcode a maintainer's local Python, Node, Conda, MATLAB, or CUDA
-  path in stable repository documentation.
-* Use the active environment interpreter unless the task supplies an explicit
-  environment.
-* Record exact toolchain versions in release or packaging validation records,
-  not in permanent generic commands.
-* Randomized scientific operations must accept or record a deterministic seed.
-* A release build must be reproducible from committed manifests, lockfiles, and
-  documented prerequisites.
+### 6.1 后端命令
 
----
+使用当前激活环境的 `python`，除非任务明确指定环境：
 
-## 11. Documentation and Task Lifecycle
-
-### 11.1 Stable documents
-
-* `AGENTS.md` defines stable repository policy.
-* `CLAUDE.md` is a thin tool-specific entry point and must not duplicate this
-  file.
-* `PROJECT_STATE.md` records current verified state, limitations, validation
-  environment, packaging status, and next work.
-* `docs/架构与决策/系统架构.md` describes current architecture.
-* `README.md` and `README_CN.md` are user and developer entry points.
-* `docs/发布记录/` contains version-specific historical records.
-
-Define each durable rule in one authoritative location.
-
-### 11.2 PROJECT_STATE
-
-`PROJECT_STATE.md` is not a development diary.
-
-Do not append:
-
-* daily logs;
-* every commit;
-* every task completion report;
-* long implementation narratives.
-
-Validation counts in `PROJECT_STATE.md` are informational snapshots.
-
-CI and current validation output remain authoritative for the latest result.
-
-### 11.3 Task handoffs
-
-Local temporary handoffs may live under `docs/临时任务/`.
-
-Do not assume an ignored local task file will be available:
-
-* in another branch;
-* in another worktree;
-* on another machine;
-* to another agent.
-
-For cross-agent or cross-machine handoff, use one of:
-
-* a GitHub issue;
-* a pull request description;
-* an explicitly approved, versioned plan file;
-* a task file explicitly included in the task's delivery files.
-
-Temporary task files should be removed after completion once durable
-information has been migrated.
-
-Completed task files must not accumulate indefinitely.
-
-### 11.4 Completion reports
-
-Routine Completion Reports belong in:
-
-* the final agent response;
-* the pull request description;
-* a commit message when appropriate;
-* a release record for release work.
-
-Phase-level or milestone-level completion reports may be retained as
-historical records under `specs/阶段记录/` when they:
-
-* document a completed phase's architecture decisions and outcomes;
-* serve as a historical reference for future developers;
-* are explicitly designated as deliverables.
-
-Do not create a per-fix or per-sprint Markdown report for routine work
-that duplicates commit history.
-
----
-
-## 12. Git and Artifact Rules
-
-### 12.1 Git operations
-
-* Do not run `git add .`.
-* Stage explicit paths only.
-* Do not commit, push, tag, merge, create releases, or upload artifacts unless
-  explicitly requested.
-* Do not modify unrelated user changes.
-* Do not use destructive Git commands to clean a working tree without explicit
-  approval.
-* Inspect `git status --short` before and after implementation.
-
-### 12.2 Tracked resources versus runtime artifacts
-
-Do not assume that an entire directory is disposable because its name resembles
-runtime output.
-
-Before deleting, restoring, ignoring, or excluding a path:
-
-1. check whether the path is tracked;
-2. inspect its repository purpose;
-3. identify whether it is source, fixture, configuration, or runtime output.
-
-Existing tracked resources under directories such as `memory/` must be
-preserved unless the task explicitly migrates or removes them.
-
-For example, a tracked knowledge-base or test resource is not equivalent to
-untracked runtime memory.
-
-Do not apply blanket cleanup rules that delete tracked source assets.
-
-### 12.3 Generated artifacts that must not be committed
-
-Unless an explicit release or fixture task says otherwise, do not commit:
-
-* runtime outputs;
-* converted user data;
-* DICOM, BIDS, or NIfTI user datasets;
-* temporary work directories;
-* local logs;
-* generated reports;
-* generated audit packages;
-* local SQLite databases;
-* test caches;
-* Python bytecode;
-* frontend build output;
-* coverage output;
-* PyInstaller temporary directories;
-* local installer output;
-* local absolute paths;
-* local agent settings;
-* secrets;
-* private environment files.
-
-Common examples include:
-
-```text
-outputs/
-work/
-logs/
-reports/
-.pytest_cache/
-.pytest_tmp*/
-__pycache__/
-src/frontend/dist/
-src/frontend/coverage/
-*.db
-*.sqlite
-*.sqlite3
-_MEI*/
-```
-
-Do not blanket-ignore or blanket-delete a directory that also contains tracked
-fixtures or source resources.
-
----
-
-## 13. Version Governance
-
-The authoritative application version is:
-
-```text
-APP_VERSION in src/backend/app/version.py
-```
-
-When changing the version:
-
-1. update `APP_VERSION`;
-2. update frontend package metadata;
-3. update Electron package metadata;
-4. update current user-facing version references;
-5. update current release documentation;
-6. verify all version surfaces agree.
-
-Do not maintain independent long-term version strings.
-
-Historical release notes remain tied to their tags and must not be rewritten
-with the current main-branch version.
-
-A version bump must be an explicit release task, not incidental cleanup.
-
----
-
-## 14. Validation Policy
-
-### 14.1 Validation authority
-
-CI is the authoritative continuous validation source.
-
-Local validation remains required before handoff but must not be presented as
-equivalent to:
-
-* another operating system;
-* a packaged desktop launch;
-* external MATLAB/SPM execution;
-* GPU execution;
-* full real-data validation.
-
-Exact pass counts must not be hardcoded in `AGENTS.md`.
-
-### 14.2 Interpreter selection
-
-Use the active environment's interpreter:
-
-```text
-python
-```
-
-A task may provide an explicit interpreter or environment command.
-
-Do not place a maintainer-specific absolute interpreter path in this stable
-guide.
-
-### 14.3 Backend commands
-
-Collection:
-
-```bash
+```powershell
 python -m pytest --collect-only -q --basetemp=.pytest_tmp
-```
-
-Focused tests:
-
-```bash
 python -m pytest <focused-test-paths> --tb=short --basetemp=.pytest_tmp
-```
-
-Full backend suite:
-
-```bash
 python -m pytest --tb=short --basetemp=.pytest_tmp
 ```
 
-If the current environment requires a different launcher, preserve the command
-semantics and report the exact command used.
+每次 pytest（成功、失败、中断或超时均包括）结束后必须：
 
-### 14.4 Mandatory pytest cleanup
+1. 保存退出码和输出；
+2. 确认 pytest 进程已退出；
+3. 只清理仓库根目录直接子项 `.pytest_cache/` 和 `.pytest_tmp*`；
+4. 删除前验证解析后的绝对路径、直接子项关系和名称；
+5. 确认零匹配残留并运行 `git status --short`。
 
-After every local `pytest` invocation, including collection, focused tests,
-full-suite tests, failed runs, interrupted runs, and timed-out runs, clean the
-pytest-generated workspace-root artifacts before handing control back or
-starting unrelated work.
+不得借此清理通用 tmp、`__pycache__`、fixture、用户数据或仓库外路径；清理失败不得掩盖测试失败。
 
-The cleanup scope is limited to direct children of the current repository root
-whose names are exactly:
+### 6.2 前端和桌面命令
 
-```text
-.pytest_cache/
-.pytest_tmp*
-```
+前端源码或配置变更至少运行：
 
-Cleanup requirements:
-
-1. capture and preserve the pytest exit status and validation output first;
-2. wait until the pytest process has exited before deleting its artifacts;
-3. resolve the repository root and every candidate target to absolute paths;
-4. verify each target is a direct child of the repository root and its name
-   matches `.pytest_cache` or `.pytest_tmp*` before recursive deletion;
-5. use one shell end-to-end and native filesystem operations for deletion;
-6. if a target is permission-restricted or locked, retry only with explicitly
-   approved elevation and report any artifact that still cannot be removed;
-7. verify that zero matching pytest artifact directories remain;
-8. inspect `git status --short` after cleanup and preserve unrelated changes.
-
-Do not use this rule to delete generic `tmp` directories, `__pycache__`
-directories, tracked test fixtures, user datasets, runtime outputs, or any path
-outside the repository root. Cleanup must never hide or replace reporting of a
-pytest failure.
-
-### 14.5 Frontend commands
-
-When frontend source or configuration changes, run:
-
-```bash
+```powershell
+npm --prefix src/frontend run format:check
 npm --prefix src/frontend run typecheck
 npm --prefix src/frontend run test
 npm --prefix src/frontend run build
 ```
 
-Do not claim lint or formatting validation unless the configured toolchain was
-actually installed and executed.
+共享 project-runs 行为变化时增加 `npm --prefix src/frontend run test:project-runs`。Lint 相关变更运行 `npm --prefix src/frontend run lint`；必须如实说明 CI 中 lint 是否为非阻塞，不能把未执行的检查写成通过。
 
-### 14.6 Validation matrix
+桌面主进程、preload 或 packaging contract 变更至少运行：
 
-#### Documentation-only task
+```powershell
+npm --prefix desktop/electron run check
+```
 
-Required:
+Release / Packaging 任务再按 `docs/桌面与前端/桌面应用打包.md` 运行 sidecar、unpacked、packaged smoke、版本一致性和产物清单；构建与 GUI 工作流验证必须分别报告。
 
-* inspect referenced paths and commands;
-* verify internal consistency;
-* report that executable tests were not required, when applicable.
+### 6.3 按变更类型的最小矩阵
 
-#### Focused Fix Mode
+| 变更 | 必须验证 |
+|---|---|
+| 文档 | Markdown 结构、真实路径、真实命令、链接/引用、重复与冲突；有配置的文档检查则运行 |
+| Focused Fix | 复现测试 + focused 回归；共享基础设施变化时扩大范围 |
+| API/schema | 后端 contract/API + 前端 client/type/caller + 兼容性 |
+| Feature Bundle | backend focused + frontend + success/failure/empty/unsafe + 关键状态迁移 |
+| Architecture/Refactor | characterization + 受影响层完整套件 + API/状态兼容 |
+| Scientific | kernel、边界、产物 reload、provenance、golden/reference、backend 等价（适用时） |
+| Agent Task | routing、create/update/approve/cancel/read/result、审批顺序、plan-only 零执行、重启投影、中英文前端 |
+| Release/Packaging | backend、frontend、sidecar、launcher/Electron、packaged smoke、版本和产物清单 |
 
-Required:
+### 6.4 测试隔离和失败报告
 
-* collection when collection behavior may be affected;
-* focused regression tests;
-* broader tests when shared infrastructure is changed.
-
-#### Feature Bundle Mode
-
-Required:
-
-* backend focused tests;
-* frontend tests when UI or client code changes;
-* API contract tests;
-* success and failure-path tests;
-* end-to-end state transition tests where feasible.
-
-#### Architecture and Refactor Mode
-
-Required:
-
-* characterization tests;
-* focused regression tests;
-* full affected-layer suite;
-* full backend or frontend suite when shared infrastructure changes;
-* API compatibility verification.
-
-#### Scientific Validation Mode
-
-Required:
-
-* kernel unit tests;
-* artifact persistence and reload tests;
-* provenance tests;
-* edge-case tests;
-* golden or reference tests;
-* backend equivalence tests where applicable;
-* workflow status truthfulness tests.
-
-#### Release and Packaging Mode
-
-Required as applicable:
-
-* backend suite;
-* frontend typecheck;
-* frontend tests;
-* frontend build;
-* sidecar build;
-* launcher smoke;
-* Electron unpacked build;
-* packaged launch smoke;
-* version consistency check;
-* artifact inventory.
-
-A successful build must not be reported as a successful GUI workflow test.
-
-### 14.7 Validation failures
-
-Never hide a failed validation command.
-
-Report:
-
-* the exact command;
-* whether failure is caused by the change;
-* whether it is environmental;
-* whether it is pre-existing;
-* any unvalidated area.
-
-Do not skip, delete, weaken, or mark tests as expected failures solely to obtain
-a passing result.
+- 测试必须用 dependency override、`monkeypatch`、临时 `SQLiteDesktopStore` 或临时工作区；禁止写持久桌面数据库。
+- CI 是持续验证权威；本地 Windows 结果不得外推到其他 OS、MATLAB/SPM、GPU 或真实数据。
+- 不得隐藏失败、删除/弱化测试或标记 xfail 只为获得通过。
+- 最终报告必须给出精确命令、结果、失败是否由本变更引起、环境限制和未验证区域。
 
 ---
 
-## 15. Completion Report
+## 7. 文档持续同步机制
 
-Every completed implementation task must include the following sections.
+### 7.1 每个任务都必须做文档影响检查
 
-### Task
+任何新功能、功能修改、重构、Bug 修复、API/数据/状态/配置/依赖/测试策略变化，在完成前必须检查：
 
-* Task mode;
-* delivery goal;
-* branch or worktree when relevant.
+- 是否新增或改变模块、目录、命令、环境变量、依赖、接口、字段、状态或用户流程；
+- README、专项文档和示例是否仍准确；
+- 本文件现有规则是否仍适用，是否出现可复发的新风险；
+- 旧命令、旧路径、旧字段、旧接口和旧能力声明是否残留；
+- 测试说明、验证命令和 CI 描述是否需要调整。
 
-### Files changed
+代码通过测试不能替代文档影响检查。
 
-Classify every changed file as:
+### 7.2 变更与文档映射
 
-* modified;
-* created;
-* restored;
-* deleted.
+| 变更类型 | 必须检查并按需更新 |
+|---|---|
+| 用户使用方式、安装、启动 | `README.md`、`README_CN.md`、相应使用/桌面文档 |
+| 架构、模块边界、目录 | `docs/架构与决策/系统架构.md`、`docs/文档索引.md` |
+| API、schema、状态、持久格式 | API/生命周期/架构文档、迁移说明、`PROJECT_STATE.md`（当前状态确有变化时） |
+| 安全、审批、路径、执行能力 | `AGENTS.md`、`docs/安全与审批/`、能力矩阵 |
+| 科学算法、backend、产物、验证等级 | `docs/项目概览/能力矩阵.md`、算法/验证文档、README 状态说明 |
+| 配置、环境变量、依赖 | `.env.example`、README、配置/打包文档、manifest/lockfile |
+| CI、测试策略和命令 | `AGENTS.md`、`docs/开发与测试/开发工作流.md`、CI 配置 |
+| 打包、版本、发行物 | `PROJECT_STATE.md`、打包文档、README、发布记录（只写当前版本） |
 
-Explain why each file changed.
+### 7.3 新功能、修改和重构
 
-### Behavior delivered
+- 新功能必须在任务完成前同步受影响文档，不得把文档留给后续任务。
+- 修改/重构必须查找并移除或标注旧描述；目录或命令变更必须验证所有文档引用。
+- 详细实现放入专项文档；`AGENTS.md` 只保留长期规则和链接。
 
-Describe:
+### 7.4 Bug 和测试问题
 
-* previous behavior;
-* new behavior;
-* relevant failure behavior;
-* compatibility impact.
+- 修复后必须判断是否可能复发。
+- 可能复发时，必须把根因转成可执行规则、补自动化回归并更新相应文档；禁止只记录错误日志或现象。
+- 如果判断无需更新 `AGENTS.md`，最终报告必须说明原因，例如问题是一次性数据、外部环境或已有规则已充分覆盖。
 
-### API and schema impact
+### 7.5 维护本文件
 
-State explicitly:
+- 优先修改、合并或删除已有规则，不得不断追加近似条款。
+- 删除失效规则和临时状态；不得写精确测试通过数量、个人环境路径、单次任务流水账或技术报告。
+- 每条规则必须能指导动作或验证；无法从代码、测试、日志、文档或已确认会话证据验证的内容只能标为待核实，不得写成强制事实。
+- 每次任务最终报告必须列出：已更新文档、检查后无需更新的文档、`AGENTS.md` 是否更新；未更新时给出具体原因。
 
-* no API or schema change; or
-* exact request, response, state, artifact, or migration changes.
+### 7.6 稳定文档职责
 
-### Scientific impact
-
-For scientific work, state:
-
-* canonical kernel used;
-* formula or algorithm implemented;
-* artifact written;
-* provenance recorded;
-* validation reference;
-* tolerance;
-* capability truth level achieved.
-
-### Validation
-
-List:
-
-* exact commands;
-* pass, fail, or skipped result;
-* environment limitations;
-* unvalidated execution paths.
-
-### Git and artifact classification
-
-List:
-
-* delivery files;
-* excluded runtime artifacts;
-* tracked resources preserved;
-* files requiring manual follow-up.
-
-### Remaining risks
-
-List:
-
-* known limitations;
-* compatibility risks;
-* scientific validation gaps;
-* packaging gaps;
-* recommended next work.
-
-Do not claim completion when acceptance criteria or required validation remain
-unmet.
+- `PROJECT_STATE.md` 是当前验证状态快照，不是开发日记，不得追加每次修复和测试计数。
+- 例行 Completion Report 放在最终回复、PR 或提交信息，不为每个小修创建 Markdown 报告。
+- 只有阶段/里程碑级架构结果才可按约定保留在 `specs/阶段记录/`。
+- 临时任务文件不得无限累积；耐久信息迁移后应按任务要求移除。
 
 ---
 
-## 16. Compliance and Enforcement
+## 8. 完成任务前检查清单（Definition of Done）
 
-### 16.1 Automated enforcement
+只有以下项目全部满足，任务才可声明完成：
 
-The following critical rules are enforced by CI. Pre-commit hook
-enforcement is **planned** (no `.pre-commit-config.yaml` exists yet):
+- [ ] 已声明任务模式、目标、范围和非目标。
+- [ ] 已对照方案确认所有当前范围必做项已实现，未只接通表层。
+- [ ] 关键 Route/Schema/Service/Runtime/Storage 或前端调用链已完整检查。
+- [ ] rawdata、Approval Gate、路径、审计、执行和科学真实性不变量未被削弱。
+- [ ] API、状态、配置、持久格式和旧调用方兼容性已处理。
+- [ ] 必要的回归、类型、构建、科学或 packaged smoke 已运行并如实记录。
+- [ ] pytest 临时目录和本任务生成物已按安全规则清理。
+- [ ] 已完成文档影响检查并同步相应文档；是否更新 `AGENTS.md` 有明确结论。
+- [ ] 已检查 `git diff` 和 `git status --short`，未覆盖无关用户修改，未包含秘密、用户数据或不应提交的产物。
+- [ ] 未发现重复代码、调试残留、虚假成功、临时兼容或未解释风险。
 
-| Rule | Enforcement | Mechanism |
-|:--|:--|:--|
-| `atomic_write_json()` for runtime state | pre-commit grep (planned) | `tests/unit/test_agents_md_compliance.py` |
-| No `write_text(json.dumps(...))` in services | pre-commit pygrep (planned) | `.pre-commit-config.yaml` (not yet created) |
-| `mock_store` coupling debt budget monitoring | CI compliance test (baseline + 5 budget) | `tests/unit/test_agents_md_compliance.py` |
-| Version consistency | CI version check | GitHub Actions |
-| Scientific artifact integrity | Backend CI job (full pytest) | `tests/test_scientific_golden.py`, `tests/test_scientific_gpu_consistency.py`, `tests/golden/test_algorithm_golden.py` |
+最终 Completion Report 必须包含：
 
-### 16.2 Known compliance debt
+1. **Task**：任务模式、交付目标、分支/工作区（适用时）；
+2. **Files changed**：逐个分类为 modified/created/restored/deleted 并说明原因；
+3. **Behavior delivered**：之前行为、现在行为、边界和失败状态；
+4. **API / Scientific impact**：contract、迁移、能力等级、产物与溯源影响；
+5. **Validation**：精确命令、结果、环境和未验证区域；
+6. **Documentation impact**：已更新、确认无需更新和 `AGENTS.md` 决策；
+7. **Git / artifacts**：保留的用户改动、排除的生成物和打包清单；
+8. **Remaining risks**：仅列真实阻塞、外部限制或尚未验证项；没有则明确写“无已知未完成项”。
 
-The following gaps are tracked for phased remediation. New code must not
-increase these counts.
-
-| Issue | Current scope | Target version |
-|:--|:--|:--|
-| `write_text` → `atomic_write_json` migration | ~28 service files | v0.7.0 |
-| `mock_store` DI migration in execution services | ~37 service files | v0.8.0 |
-
-Compliance debt is reduced incrementally. Each release that touches an affected
-file should migrate that file to the compliant pattern.
-
-This section must be updated whenever a new enforcement mechanism is added or
-a compliance debt target is met.
+禁止以“主要代码已完成”“测试大部分通过”或“构建成功”代替上述完成条件。

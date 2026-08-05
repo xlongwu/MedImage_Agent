@@ -5,8 +5,8 @@ import sys
 from src.backend.app.tools.cli_utils import emit_json, emit_json_result
 from src.backend.app.tools.reproducibility_bundle import (
     create_reproducibility_bundle,
-    list_reproducibility_bundles,
     inspect_reproducibility_bundle,
+    list_reproducibility_bundles,
 )
 
 

@@ -62,20 +62,22 @@ export function ResultsWorkspace({
 
       <TechnicalModuleSection
         ariaLabel={t("results.artifactModules")}
-        bodyVisible={hasProject}
+        bodyVisible={false}
         description={t("results.artifactModulesDescription")}
-        evidenceLevel={hasProject ? "backend_required" : "blocked"}
+        evidenceLevel={hasProject ? "unavailable" : "blocked"}
         fallback={
           <Card tone="muted">
             <EmptyState
-              title={t("results.modulesWaiting")}
-              description={t("results.modulesWaitingDescription")}
+              title={hasProject ? t("common.unavailable") : t("results.modulesWaiting")}
+              description={
+                hasProject ? t("results.legacyUnavailable") : t("results.modulesWaitingDescription")
+              }
             />
           </Card>
         }
-        helperText={hasProject ? t("results.modulesProjectHelp") : t("results.modulesSelectHelp")}
+        helperText={hasProject ? t("results.legacyUnavailable") : t("results.modulesSelectHelp")}
         safetyNote={t("results.modulesSafety")}
-        status={hasProject ? t("results.projectScoped") : t("results.selectProject")}
+        status={hasProject ? t("common.unavailable") : t("results.selectProject")}
         statusTone={hasProject ? "info" : "warning"}
         title={t("results.artifactModules")}
       >
@@ -92,25 +94,19 @@ export function ResultsWorkspace({
       </TechnicalModuleSection>
 
       <TechnicalModuleSection
-        actionDisabled={!hasProject}
+        actionDisabled
         actionSize="sm"
         actionVariant="secondary"
         ariaLabel={t("results.migratedModules")}
         description={t("results.migratedDescription")}
         disabledReason={t("results.migratedDisabled")}
-        evidenceLevel={hasProject ? "backend_required" : "blocked"}
+        evidenceLevel={hasProject ? "unavailable" : "blocked"}
         hideActionLabel={t("results.hideReports")}
         isOpen={showMigratedReports}
         onToggle={() => setShowMigratedReports((value) => !value)}
         openLabel={t("results.openReports")}
         safetyNote={t("results.migratedSafety")}
-        status={
-          hasProject
-            ? showMigratedReports
-              ? t("results.open")
-              : t("results.onDemand")
-            : t("results.selectProject")
-        }
+        status={hasProject ? t("common.unavailable") : t("results.selectProject")}
         statusTone={hasProject ? "info" : "warning"}
         title={t("results.migratedModules")}
       >

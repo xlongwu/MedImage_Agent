@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.backend.app.schemas.observation import ObservationSummary
 from src.backend.app.schemas.goal_contract import GoalEvaluationSummary
+from src.backend.app.schemas.observation import ObservationSummary
 from src.backend.app.schemas.recovery import DiagnosisSummary, RecoveryProposalSummary
-
 
 AgentLifecycleState = Literal[
     "CREATED",
+    "WAITING_FOR_INPUT",
     "CONTEXT_READY",
     "PLAN_DRAFTED",
+    "WAITING_FOR_SCIENCE_DECISION",
     "PLAN_VALIDATED",
     "WAITING_FOR_APPROVAL",
     "APPROVED",
@@ -35,7 +36,44 @@ AgentLifecycleState = Literal[
     "RECOVERY_READY",
     "RECOVERING",
     "HUMAN_HANDOFF",
+    "CANCELED",
 ]
+
+
+class PendingDecisionOption(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: str
+    label: str
+    description: str
+    recommended: bool = False
+
+
+class PendingDecision(BaseModel):
+    """Immutable question embedded in the canonical lifecycle context."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    decision_id: str
+    kind: Literal[
+        "missing_input",
+        "goal_revision",
+        "subject_id",
+        "atlas",
+        "global_signal_regression",
+        "repetition_time",
+        "template",
+        "overwrite",
+        "experimental_backend",
+        "other",
+    ]
+    question: str
+    options: tuple[PendingDecisionOption, ...] = ()
+    recommended_option: str | None = None
+    impact: str
+    plan_hash_before: str | None = None
+    source: Literal["planner", "memory_suggestion"] = "planner"
+    memory_id: str | None = None
 
 
 class LifecycleObservation(BaseModel):
@@ -77,10 +115,15 @@ class RetryProposal(BaseModel):
 class AgentLifecycleRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    schema_version: int = 2
+    schema_version: int = 3
     lifecycle_id: str
     project_id: str
     state: AgentLifecycleState = "CREATED"
+    goal_text: str | None = None
+    goal_hash: str | None = None
+    created_actor: str | None = None
+    command_context: dict[str, Any] = Field(default_factory=dict)
+    pending_decision: PendingDecision | None = None
     reviewed_plan_id: str | None = None
     execution_ticket_id: str | None = None
     parent_execution_ticket_id: str | None = None
@@ -106,8 +149,11 @@ class AgentLifecycleRecord(BaseModel):
     legacy_observation_needs_review: bool = False
     retry_proposal: RetryProposal | None = None
     last_error: str | None = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    canceled_at: datetime | None = None
+    canceled_by: str | None = None
+    cancellation_reason: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_command_id: str | None = None
 
     @model_validator(mode="before")

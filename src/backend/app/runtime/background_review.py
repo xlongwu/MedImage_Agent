@@ -10,6 +10,7 @@ from src.backend.app.runtime.memory_store import (
     ensure_memory_layout,
     match_error_patterns,
 )
+from src.backend.app.runtime.atomic_file import atomic_write_text
 
 
 def _load_yaml(path: str | Path) -> dict[str, Any]:
@@ -46,7 +47,7 @@ def run_background_review(
     agent_summary_path: str | None = None,
 ) -> dict[str, Any]:
     warnings: list[str] = []
-    errors: list[str] = []
+    _errors: list[str] = []
 
     ensure_memory_layout(".")
 
@@ -155,8 +156,15 @@ def run_background_review(
 
     patch_lines: list[str] = []
     patch_lines.append("# Proposed Memory Patch")
-    patch_lines.append("")
-    patch_lines.append("This file is a proposal only. Review before merging into MEMORY.md or LESSONS.md.")
+    patch_lines.extend(
+        [
+            "",
+            "> Compatibility projection only. This file is not a Memory Domain authority and is never imported into planning.",
+        ]
+    )
+    patch_lines.append(
+        "This file is a proposal only. Review before merging into MEMORY.md or LESSONS.md."
+    )
     patch_lines.append("")
     patch_lines.append("## Proposed Project Lesson")
     patch_lines.append("")
@@ -178,7 +186,7 @@ def run_background_review(
     patch_lines.append("Do not store PHI or raw imaging data in memory.")
 
     proposed_patch_path = agent_run_dir / "proposed_memory_patch.md"
-    proposed_patch_path.write_text("\n".join(patch_lines) + "\n", encoding="utf-8")
+    atomic_write_text(proposed_patch_path, "\n".join(patch_lines) + "\n")
 
     history_record = {
         "agent_run_id": agent_run_id,

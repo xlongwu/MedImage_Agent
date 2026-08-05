@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
 from src.backend.app.schemas.desktop import (
     DatasetSummary,
     ProjectDetail,
@@ -11,9 +12,8 @@ from src.backend.app.schemas.desktop import (
     StudyOverview,
 )
 from src.backend.app.schemas.execution_ticket import ExecutionTicket, ExecutionTicketEvent
-from src.backend.app.schemas.agent_lifecycle import AgentLifecycleEvent, AgentLifecycleRecord
-from src.backend.app.schemas.observation import ObservationRecord
 from src.backend.app.schemas.goal_contract import GoalEvaluationRecord
+from src.backend.app.schemas.observation import ObservationRecord
 from src.backend.app.schemas.recovery import DiagnosisRecord, RecoveryProposal
 from src.backend.app.schemas.recovery_attempt import (
     RecoveryApprovalEvent,
@@ -28,6 +28,10 @@ class ProjectStore(Protocol):
     def list_projects(self) -> list[ProjectSummary]: ...
 
     def get_project(self, project_id: str) -> ProjectDetail | None: ...
+
+    def update_project_metadata(
+        self, project_id: str, updates: dict[str, object]
+    ) -> ProjectDetail | None: ...
 
     def get_study_overview(self, study_id: str) -> StudyOverview | None: ...
 
@@ -208,8 +212,35 @@ class ProjectStore(Protocol):
         self, record: RecoveryQuotaReservation, *, expected_status: str
     ) -> RecoveryQuotaReservation: ...
 
+    def get_memory_consent(self, project_id: str) -> dict[str, object]: ...
 
-import src.backend.app.services.mock_store as _mock_store_module
+    def set_memory_consent(
+        self,
+        *,
+        project_id: str,
+        command_id: str,
+        principal: str,
+        generate_enabled: bool,
+        use_enabled: bool,
+        explicitly_authorized_backfill: bool = False,
+    ) -> dict[str, object]: ...
+
+    def list_memory_outbox(
+        self, project_id: str, *, after_sequence: int = 0, limit: int = 100
+    ) -> list[dict[str, object]]: ...
+
+    def get_memory_outbox_max_sequence(self, project_id: str) -> int: ...
+
+    def get_memory_source_projection(
+        self, *, project_id: str, source_type: str, source_id: str
+    ) -> dict[str, object] | None: ...
+
+    def append_memory_forget_ledger(self, **kwargs: object) -> dict[str, object]: ...
+
+    def list_memory_forget_ledger(self, project_id: str) -> list[dict[str, object]]: ...
+
+
+import src.backend.app.services.mock_store as _mock_store_module  # noqa: E402
 
 
 def get_project_store() -> ProjectStore:

@@ -18,6 +18,7 @@ def list_tasks(store: ProjectStore) -> list[dict[str, object]]:
 
 def get_task(task_id: str, store: ProjectStore) -> dict[str, object]:
     from fastapi import HTTPException
+
     from src.backend.app.services.mock_store import mock_store
 
     task = mock_store.get_task(task_id)
@@ -28,6 +29,7 @@ def get_task(task_id: str, store: ProjectStore) -> dict[str, object]:
 
 def list_task_events(task_id: str, store: ProjectStore) -> list[dict[str, object]]:
     from fastapi import HTTPException
+
     from src.backend.app.services.mock_store import mock_store
     from src.backend.app.services.task_manager import task_manager
 
@@ -42,7 +44,9 @@ async def approve_task(
     store: ProjectStore,
 ) -> dict[str, object]:
     import asyncio
+
     from fastapi import HTTPException
+
     from src.backend.app.schemas.desktop import TaskApprovalRequest
     from src.backend.app.services.mock_store import mock_store
     from src.backend.app.services.pipeline_runner import run_pipeline_task
@@ -105,6 +109,7 @@ def get_task_diagnostics(
     store: ProjectStore,
 ) -> dict[str, object]:
     from fastapi import HTTPException
+
     from src.backend.app.services.mock_store import mock_store
 
     task = mock_store.get_task(task_id)
@@ -154,7 +159,6 @@ def get_task_diagnostics(
                     }
                 )
 
-    from src.backend.app.services.mock_store import mock_store as ms
 
     if not diagnosis and task.status == "completed":
         diagnosis.append({"severity": "info", "code": "no_critical_findings", "message": "No critical diagnostics were recorded."})
@@ -179,6 +183,7 @@ def get_task_artifacts(
     store: ProjectStore,
 ) -> dict[str, object]:
     from fastapi import HTTPException
+
     from src.backend.app.services.mock_store import mock_store
 
     task = mock_store.get_task(task_id)
@@ -204,6 +209,7 @@ def generate_task_audit_package(
     from pathlib import Path
 
     from fastapi import HTTPException
+
     from src.backend.app.services.mock_store import mock_store
 
     task = mock_store.get_task(task_id)

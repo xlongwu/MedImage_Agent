@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -16,10 +17,9 @@ from src.backend.app.api import (
     project_routes,
 )
 from src.backend.app.main import app
-from src.backend.app.planner import project_context, reviewed_plan_store, pipeline_presets
+from src.backend.app.planner import pipeline_presets, project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import motion_qc_readiness, qc_evidence_roots
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -27,19 +27,33 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, motion_qc_readiness, qc_evidence_roots,
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        motion_qc_readiness,
+        qc_evidence_roots,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create_project(client: TestClient, tmp_path: Path) -> dict:
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Motion QC Project", "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
-        "project_dir": str(tmp_path / "motion_qc_proj"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Motion QC Project",
+            "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
+            "project_dir": str(tmp_path / "motion_qc_proj"),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -114,11 +128,14 @@ def test_registered_converted_bids_and_native_motion_outputs_are_used(tmp_path, 
         encoding="utf-8",
     )
 
-    created = client.post("/api/projects/create", json={
-        "project_name": "Native Motion QC",
-        "rawdata_dir": str(rawdata),
-        "project_dir": str(project_dir),
-    }).json()
+    created = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Native Motion QC",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(project_dir),
+        },
+    ).json()
     motion_dir = project_dir / "preprocessing_native_runs" / "pp-test" / "sub-001" / "motion_qc"
     motion_dir.mkdir(parents=True)
     fd_path = motion_dir / "sub-001_task-rest_bold_desc-framewise_displacement.tsv"
@@ -163,14 +180,19 @@ def test_unscoped_native_motion_outputs_are_used_as_project_level_evidence(tmp_p
             encoding="utf-8",
         )
 
-    created = client.post("/api/projects/create", json={
-        "project_name": "Unscoped Native Motion QC",
-        "rawdata_dir": str(rawdata),
-        "project_dir": str(project_dir),
-    }).json()
+    created = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Unscoped Native Motion QC",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(project_dir),
+        },
+    ).json()
     motion_dir = project_dir / "preprocessing_native_runs" / "pp-test" / "artifacts" / "motion_qc"
     motion_dir.mkdir(parents=True)
-    fd_path = motion_dir / "slice_timing_bold_desc-motion_parameters_desc-framewise_displacement.tsv"
+    fd_path = (
+        motion_dir / "slice_timing_bold_desc-motion_parameters_desc-framewise_displacement.tsv"
+    )
     fd_path.write_text("framewise_displacement\n0.00000000\n0.10000000\n", encoding="utf-8")
 
     project = store.get_project(created["project_id"])
@@ -186,10 +208,11 @@ def test_unscoped_native_motion_outputs_are_used_as_project_level_evidence(tmp_p
     assert body["missing_motion_param_count"] == 0
     assert body["fd_available_count"] == 2
     assert all(c["fd_source_path"] == str(fd_path.resolve()) for c in body["candidates"])
-    assert all("subject linkage is not explicit" in " ".join(c["warnings"]) for c in body["candidates"])
+    assert all(
+        "subject linkage is not explicit" in " ".join(c["warnings"]) for c in body["candidates"]
+    )
     assert any(
-        "2 BOLD candidate(s) across 2 subject(s)" in action
-        for action in body["next_actions"]
+        "2 BOLD candidate(s) across 2 subject(s)" in action for action in body["next_actions"]
     )
 
 

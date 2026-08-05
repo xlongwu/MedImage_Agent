@@ -7,14 +7,13 @@ modifies rawdata, never executes external tools.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 import src.backend.app.services.mock_store as mock_store_module
-
 from src.backend.app.schemas.desktop import (
     NiftiImageQcRecord,
     NiftiQcSnapshotResponse,
@@ -37,7 +36,7 @@ _BLOCKED_EXTENSIONS = {".par", ".rec", ".img"}
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _is_nifti(path: Path) -> bool:
@@ -57,7 +56,7 @@ def _discover_nifti(project_id: str, *, store: Any | None = None) -> list[Path]:
 
     roots = collect_qc_evidence_roots(
         project_id,
-        include_native_outputs=True,
+        include_native_outputs=False,
         store=store,
     )
     for root in roots:

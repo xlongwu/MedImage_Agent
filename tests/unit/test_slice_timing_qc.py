@@ -37,11 +37,13 @@ def test_build_slice_timing_parameters_from_bids_sidecar(tmp_path: Path):
     nib.save(img, str(bold))
 
     sidecar.write_text(
-        json.dumps({
-            "TaskName": "rest",
-            "RepetitionTime": 2.0,
-            "SliceTiming": [0.0, 1.0, 0.5, 1.5],
-        }),
+        json.dumps(
+            {
+                "TaskName": "rest",
+                "RepetitionTime": 2.0,
+                "SliceTiming": [0.0, 1.0, 0.5, 1.5],
+            }
+        ),
         encoding="utf-8",
     )
 

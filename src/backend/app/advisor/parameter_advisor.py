@@ -1,4 +1,5 @@
 """Parameter Advisor — explain and suggest preprocessing parameters."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -6,9 +7,7 @@ from typing import Any
 from src.backend.app.advisor.advisor_safety import (
     is_llm_enabled,
     wrap_advisor_response,
-    advisor_fallback,
 )
-
 
 _PARAMETER_KNOWLEDGE = {
     "filter_band": {
@@ -52,7 +51,7 @@ def advise_parameters(parameters: dict | None = None) -> dict[str, Any]:
     candidates = {}
     risks = []
 
-    for param_name, value in parameters.items():
+    for param_name, _value in parameters.items():
         kb = _PARAMETER_KNOWLEDGE.get(param_name)
         if kb:
             explanations[param_name] = kb["explanation"]
@@ -79,9 +78,10 @@ def advise_parameters(parameters: dict | None = None) -> dict[str, Any]:
 
 
 def _llm_parameter_advice(parameters: dict) -> dict:
-    from src.backend.app.advisor.protocol_advisor import _call_llm
-    from src.backend.app.advisor.advisor_safety import get_llm_config
     import json
+
+    from src.backend.app.advisor.advisor_safety import get_llm_config
+    from src.backend.app.advisor.protocol_advisor import _call_llm
 
     config = get_llm_config()
     prompt = (

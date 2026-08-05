@@ -201,6 +201,63 @@ describe("project inventory helpers", () => {
     expect(inventory.niftiFileCount).toBe(6);
   });
 
+  it("uses current BIDS validation counts when project diagnostics are stale", () => {
+    const inventory = buildProjectInventory(
+      project({ subjects_count: 2 }),
+      overview({ subjects: 2 }),
+      { nifti_file_count: 0, converted_subject_count: 2 },
+      {
+        ok: true,
+        project_id: "project-1",
+        status: "pass",
+        checked_at: "2026-07-25T00:00:00Z",
+        roots: ["D:\\study\\bids"],
+        subject_count: 2,
+        session_count: 0,
+        nifti_file_count: 4,
+        sidecar_json_count: 4,
+        tsv_file_count: 1,
+        issues: [],
+        repair_suggestions: [],
+        warnings: [],
+        errors: [],
+        next_actions: [],
+      },
+    );
+
+    expect(inventory.dataState).toBe("converted_bids");
+    expect(inventory.convertedSubjects).toBe(2);
+    expect(inventory.niftiFileCount).toBe(4);
+  });
+
+  it("ignores a BIDS validation response from the previously selected project", () => {
+    const inventory = buildProjectInventory(
+      project({ subjects_count: 2 }),
+      overview({ subjects: 2 }),
+      { nifti_file_count: 3 },
+      {
+        ok: true,
+        project_id: "project-previous",
+        status: "pass",
+        checked_at: "2026-07-25T00:00:00Z",
+        roots: ["D:\\study\\previous"],
+        subject_count: 5,
+        session_count: 0,
+        nifti_file_count: 10,
+        sidecar_json_count: 10,
+        tsv_file_count: 1,
+        issues: [],
+        repair_suggestions: [],
+        warnings: [],
+        errors: [],
+        next_actions: [],
+      },
+    );
+
+    expect(inventory.convertedSubjects).toBe(2);
+    expect(inventory.niftiFileCount).toBe(3);
+  });
+
   it("extracts directory basename across separators", () => {
     expect(directoryBasename("D:\\data\\StudyA\\")).toBe("StudyA");
     expect(directoryBasename("/tmp/StudyB")).toBe("StudyB");

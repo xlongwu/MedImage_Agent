@@ -22,10 +22,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.integration.test_real_project_safe_smoke import (
-    real_project_smoke,  # noqa: F401  — pytest fixture
-)
-
 from src.backend.app.planner.project_context import (
     apply_project_context_to_plan,
     load_project_context,
@@ -34,6 +30,9 @@ from src.backend.app.runtime.pipeline_executor import (
     run_pipeline as real_run_pipeline,
 )
 from tests.goal_contract_helpers import reviewed_goal_candidate
+from tests.integration.test_real_project_safe_smoke import (
+    real_project_smoke,  # noqa: F401  — pytest fixture
+)
 
 
 def _save_contract_smoke_plan(client, created: dict) -> dict:
@@ -135,7 +134,7 @@ def _execute_body(created: dict, plan: dict, reviewed_plan_id: str) -> dict:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def test_node_contract_happy_path(real_project_smoke, monkeypatch, tmp_path):
+def test_node_contract_happy_path(real_project_smoke, monkeypatch, tmp_path):  # noqa: F811
     """Full lifecycle with the contract_smoke node — happy path."""
     client = real_project_smoke["client"]
     created = real_project_smoke["created"]
@@ -206,9 +205,7 @@ def test_node_contract_happy_path(real_project_smoke, monkeypatch, tmp_path):
     # ══════════════════════════════════════════════════════════════════════
     # 5-6. Artifact discovery
     # ══════════════════════════════════════════════════════════════════════
-    artifacts_resp = client.get(
-        f"/api/projects/{project_id}/runs/{run_id}/artifacts"
-    )
+    artifacts_resp = client.get(f"/api/projects/{project_id}/runs/{run_id}/artifacts")
     assert artifacts_resp.status_code == 200, artifacts_resp.text
     artifacts = artifacts_resp.json()["artifacts"]
     assert isinstance(artifacts, list)
@@ -226,28 +223,29 @@ def test_node_contract_happy_path(real_project_smoke, monkeypatch, tmp_path):
     # ══════════════════════════════════════════════════════════════════════
     previewable = [a for a in artifacts if a.get("previewable")]
     assert len(previewable) >= 1, (
-        f"No previewable artifacts among "
-        f"{[(a['name'], a.get('kind')) for a in artifacts]}"
+        f"No previewable artifacts among {[(a['name'], a.get('kind')) for a in artifacts]}"
     )
     target = previewable[0]
     preview_resp = client.get(
-        f"/api/projects/{project_id}/runs/{run_id}"
-        f"/artifacts/{target['artifact_id']}"
+        f"/api/projects/{project_id}/runs/{run_id}/artifacts/{target['artifact_id']}"
     )
     assert preview_resp.status_code == 200, preview_resp.text
     preview = preview_resp.json()
     assert preview["ok"] is True
     assert preview["preview_type"] in (
-        "json", "csv", "markdown", "text", "log", "metadata_only",
+        "json",
+        "csv",
+        "markdown",
+        "text",
+        "log",
+        "metadata_only",
     )
     assert preview["artifact_id"] == target["artifact_id"]
     assert preview["exists"] is True
 
     # For JSON artifacts, json_summary must be populated
     if preview["preview_type"] == "json":
-        assert preview["json_summary"] is not None, (
-            f"json_summary missing for {target['name']}"
-        )
+        assert preview["json_summary"] is not None, f"json_summary missing for {target['name']}"
 
     # ══════════════════════════════════════════════════════════════════════
     # 9. Wrong-project scoping
@@ -263,19 +261,20 @@ def test_node_contract_happy_path(real_project_smoke, monkeypatch, tmp_path):
     assert second_resp.status_code == 200, second_resp.text
     second = second_resp.json()
 
-    assert client.get(
-        f"/api/projects/{second['project_id']}/runs/{run_id}"
-    ).status_code == 404
+    assert client.get(f"/api/projects/{second['project_id']}/runs/{run_id}").status_code == 404
 
-    assert client.get(
-        f"/api/projects/{second['project_id']}/runs/{run_id}/artifacts"
-    ).status_code == 404
+    assert (
+        client.get(f"/api/projects/{second['project_id']}/runs/{run_id}/artifacts").status_code
+        == 404
+    )
 
     existing_artifact_id = artifacts[0]["artifact_id"]
-    assert client.get(
-        f"/api/projects/{second['project_id']}/runs/{run_id}"
-        f"/artifacts/{existing_artifact_id}"
-    ).status_code == 404
+    assert (
+        client.get(
+            f"/api/projects/{second['project_id']}/runs/{run_id}/artifacts/{existing_artifact_id}"
+        ).status_code
+        == 404
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -283,7 +282,7 @@ def test_node_contract_happy_path(real_project_smoke, monkeypatch, tmp_path):
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-def test_node_contract_failure_path(real_project_smoke, monkeypatch, tmp_path):
+def test_node_contract_failure_path(real_project_smoke, monkeypatch, tmp_path):  # noqa: F811
     """The contract_smoke node with ``fail=true`` must return structured
     failure that the executor captures without raising an exception."""
     client = real_project_smoke["client"]
@@ -347,9 +346,7 @@ def test_node_contract_failure_path(real_project_smoke, monkeypatch, tmp_path):
     assert detail.status_code == 200
     run_link = detail.json()["run_link"]
     # Pipeline status is FAILED because the single node failed
-    assert run_link["status"] == "FAILED", (
-        f"Expected FAILED status, got {run_link['status']}"
-    )
+    assert run_link["status"] == "FAILED", f"Expected FAILED status, got {run_link['status']}"
 
     summary = detail.json()["summary_preview"]
     assert summary is not None
@@ -361,13 +358,9 @@ def test_node_contract_failure_path(real_project_smoke, monkeypatch, tmp_path):
     # not in the top-level summary (since the node returned ok=False
     # without raising an exception).  Verify the node state artifact
     # is discoverable and contains the error.
-    fail_artifacts_resp = client.get(
-        f"/api/projects/{project_id}/runs/{run_id}/artifacts"
-    )
+    fail_artifacts_resp = client.get(f"/api/projects/{project_id}/runs/{run_id}/artifacts")
     assert fail_artifacts_resp.status_code == 200
     fail_artifacts = fail_artifacts_resp.json()["artifacts"]
 
     # At minimum the summary.json and node state JSON are discoverable
-    assert len(fail_artifacts) >= 2, (
-        f"Expected ≥2 artifacts for failure run, got {fail_artifacts}"
-    )
+    assert len(fail_artifacts) >= 2, f"Expected ≥2 artifacts for failure run, got {fail_artifacts}"

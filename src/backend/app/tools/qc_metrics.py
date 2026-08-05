@@ -11,8 +11,8 @@ def compute_subject_qc(
     output_dir: str,
 ) -> dict[str, Any]:
     try:
-        import numpy as np
         import nibabel as nib
+        import numpy as np
     except ImportError as exc:
         return {
             "ok": False,

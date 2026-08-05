@@ -32,7 +32,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ── Skip predicates ──────────────────────────────────────────────────────
 
 _REQUIRED_PUBLIC_FLAGS = (
@@ -58,6 +57,7 @@ def _all_public_flags() -> bool:
 def _dcm2niix_ok() -> bool:
     import os
     import shutil
+
     # First check explicit path from env override or known locations
     explicit = os.environ.get("DCM2NIIX_PATH", "")
     if explicit and __import__("pathlib").Path(explicit).exists():
@@ -77,6 +77,7 @@ def _dcm2niix_ok() -> bool:
 def _pydicom_ok() -> bool:
     try:
         import pydicom  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -102,11 +103,11 @@ class TestPublicE2ESmoke:
         if not rawdata_dir or not Path(rawdata_dir).exists():
             pytest.skip("MEDIMAGE_E2E_SMOKE_RAWDATA_DIR not set or not found")
 
-        from src.backend.app.services.mock_store import mock_store
         from src.backend.app.schemas.desktop import ProjectDetail
+        from src.backend.app.services.mock_store import mock_store
 
         # ── 1. Create project ─────────────────────────────────────────
-        project_id = f"e2e-public-smoke-{abs(hash(str(tmp_path))) & 0xffffffff:x}"
+        project_id = f"e2e-public-smoke-{abs(hash(str(tmp_path))) & 0xFFFFFFFF:x}"
         project_dir = str(tmp_path / "project")
         Path(project_dir).mkdir(parents=True, exist_ok=True)
 
@@ -130,14 +131,14 @@ class TestPublicE2ESmoke:
         mock_store.add_project(project, health_status="Review", rawdata_dir=rawdata_dir)
 
         # ── 2. Persist approval package ───────────────────────────────
-        from src.backend.app.services.dicom_conversion_plan_persistence import (
-            persist_conversion_plan,
-        )
         from src.backend.app.schemas.dicom_conversion_approval import (
             DicomConversionApprovalRecord,
         )
         from src.backend.app.services.dicom_conversion_execution import (
             run_conversion_preflight,
+        )
+        from src.backend.app.services.dicom_conversion_plan_persistence import (
+            persist_conversion_plan,
         )
 
         preflight = run_conversion_preflight(project_id)
@@ -187,11 +188,11 @@ class TestPublicE2ESmoke:
         conversion_run_id = persist_result.conversion_run_id
 
         # ── 3. Persist release approval ───────────────────────────────
-        from src.backend.app.services.dicom_conversion_release_approval import (
-            persist_release_approval,
-        )
         from src.backend.app.schemas.dicom_conversion_release_approval import (
             DicomConversionReleaseApprovalRecord,
+        )
+        from src.backend.app.services.dicom_conversion_release_approval import (
+            persist_release_approval,
         )
 
         release_record = DicomConversionReleaseApprovalRecord(
@@ -209,7 +210,7 @@ class TestPublicE2ESmoke:
             frontend_execute_acknowledged=True,
             spm_dpabi_matlab_disabled_acknowledged=True,
         )
-        release_decision = persist_release_approval(
+        _release_decision = persist_release_approval(
             release_record,
             project_dir=project_dir,
             conversion_run_id=conversion_run_id,
@@ -220,6 +221,7 @@ class TestPublicE2ESmoke:
 
         # ── 4. Call public endpoint via TestClient ────────────────────
         from fastapi.testclient import TestClient
+
         from src.backend.app.main import app
 
         client = TestClient(app)
@@ -276,9 +278,7 @@ class TestPublicE2ESmoke:
 
         # ── 7. Verify rawdata unchanged ───────────────────────────
         dcm_count = len(list(Path(rawdata_dir).rglob("*.dcm")))
-        assert dcm_count == 1104, (
-            f"Rawdata DICOM count changed: expected 1104, got {dcm_count}"
-        )
+        assert dcm_count == 1104, f"Rawdata DICOM count changed: expected 1104, got {dcm_count}"
 
         # ── 8. Verify no output leaked to rawdata ─────────────────
         if data.get("output_root"):
@@ -286,9 +286,7 @@ class TestPublicE2ESmoke:
             if out_root.exists():
                 for p in out_root.rglob("*"):
                     if p.is_file():
-                        assert not str(p).startswith(rawdata_dir), (
-                            f"Output leaked to rawdata: {p}"
-                        )
+                        assert not str(p).startswith(rawdata_dir), f"Output leaked to rawdata: {p}"
 
         out_root = Path(data["output_root"])
         nifti_files = list(out_root.rglob("*.nii*"))
@@ -310,6 +308,7 @@ class TestPublicE2ESmoke:
     def test_public_endpoint_blocked_without_env_flags(self, tmp_path):
         """Public endpoint returns blocked when env flags are not all set."""
         from fastapi.testclient import TestClient
+
         from src.backend.app.main import app
 
         # Don't set any env flags explicitly — rely on test environment
@@ -325,15 +324,19 @@ class TestPublicE2ESmoke:
 
     def test_public_vs_internal_run_conversion_execute_still_blocked(self):
         """run_conversion_execute() — the original internal function — still blocked."""
-        from src.backend.app.services.dicom_conversion_execution import (
-            run_conversion_execute,
-        )
         from src.backend.app.schemas.dicom_conversion_execution import (
             DicomConversionExecutionRequest,
         )
+        from src.backend.app.services.dicom_conversion_execution import (
+            run_conversion_execute,
+        )
+
         result = run_conversion_execute("test", DicomConversionExecutionRequest())
         # In Phase 4B, run_conversion_execute is always disabled
-        assert result.status in ("disabled", "blocked") or result.safety_flags.conversion_disabled_by_default
+        assert (
+            result.status in ("disabled", "blocked")
+            or result.safety_flags.conversion_disabled_by_default
+        )
 
 
 def _assert_artifact_exists(data: dict, key: str):
@@ -344,5 +347,4 @@ def _assert_artifact_exists(data: dict, key: str):
     """
     path_str = data.get(key)
     assert path_str, f"Response missing required artifact key '{key}': {data}"
-    assert Path(path_str).exists(), (
-        f"Artifact for '{key}' does not exist on disk: {path_str}")
+    assert Path(path_str).exists(), f"Artifact for '{key}' does not exist on disk: {path_str}"

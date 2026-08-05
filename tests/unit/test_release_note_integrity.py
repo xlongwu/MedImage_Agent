@@ -7,10 +7,13 @@ Tests skip gracefully when the tag is unavailable (e.g. shallow CI clone
 without tags). The guard is intentional: we cannot verify integrity
 without the tag, but we must not silently pass either.
 """
+
 from __future__ import annotations
+
 import hashlib
 import subprocess
 from pathlib import Path
+
 import pytest
 
 # Git root relative to this test file
@@ -22,7 +25,9 @@ def _tag_exists(tag: str) -> bool:
     try:
         subprocess.check_output(
             ["git", "rev-parse", "--verify", f"refs/tags/{tag}"],
-            cwd=str(_PROJECT), stderr=subprocess.DEVNULL, text=True,
+            cwd=str(_PROJECT),
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
         return True
     except subprocess.CalledProcessError:
@@ -33,7 +38,9 @@ def _git_show_file(ref: str, path: str) -> str:
     """Return file contents from a specific git ref."""
     return subprocess.check_output(
         ["git", "show", f"{ref}:{path}"],
-        cwd=str(_PROJECT), text=True, encoding="utf-8",
+        cwd=str(_PROJECT),
+        text=True,
+        encoding="utf-8",
     )
 
 

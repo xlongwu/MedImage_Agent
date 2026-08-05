@@ -5,6 +5,10 @@ validates the project creation, reviewed plan, reviewed execution, run history,
 and artifact preview loop without adding new features or running external
 MATLAB, SPM, DPABI, GPU, or clinical workflows.
 
+This is the legacy real-project/run smoke surface. Current Agent Task and
+packaged-release status is authoritative in `PROJECT_STATE.md`, the lifecycle
+document, and the desktop packaging guide.
+
 ## Scope
 
 - Real BIDS/rawdata project plumbing is in scope.
@@ -27,57 +31,47 @@ MATLAB, SPM, DPABI, GPU, or clinical workflows.
 
 ## Required Environment
 
-Use the restored mamba validation environment:
+Use Python 3.11+ from the currently activated project environment:
 
 ```powershell
-D:\Anaconda3\envs\mamba\python.exe --version
-D:\Anaconda3\envs\mamba\python.exe -c "import sys; print(sys.executable)"
-D:\Anaconda3\envs\mamba\python.exe -c "import fastapi; print(fastapi.__version__)"
-D:\Anaconda3\envs\mamba\python.exe -c "import pydantic_core; print(pydantic_core.__file__)"
-D:\Anaconda3\envs\mamba\python.exe -c "import numpy; print(numpy.__version__)"
+python --version
+python -c "import sys; print(sys.executable)"
+python -c "import fastapi; print(fastapi.__version__)"
+python -c "import pydantic_core; print(pydantic_core.__file__)"
+python -c "import numpy; print(numpy.__version__)"
 ```
 
-The default `D:\Anaconda3\python.exe` is not the backend validation baseline
-when it lacks FastAPI.
+If these imports fail, activate or repair the project environment before
+continuing; do not substitute a maintainer-private interpreter path in stable
+documentation.
 
 ## Backend Automated Checks
 
 ```powershell
-D:\Anaconda3\envs\mamba\python.exe -m pytest tests/unit/test_project_history_plans.py -v
-D:\Anaconda3\envs\mamba\python.exe -m pytest tests/unit/test_project_history_runs.py -v
-D:\Anaconda3\envs\mamba\python.exe -m pytest tests/unit/test_run_summary_preview.py -v
-D:\Anaconda3\envs\mamba\python.exe -m pytest tests/unit/test_run_artifact_discovery.py -v
-D:\Anaconda3\envs\mamba\python.exe -m pytest tests/unit/test_run_artifact_preview.py -v
-D:\Anaconda3\envs\mamba\python.exe -m pytest tests/integration/test_real_project_safe_smoke.py -v
-D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short
+python -m pytest tests/unit/test_project_history_plans.py tests/unit/test_project_history_runs.py tests/unit/test_run_summary_preview.py tests/unit/test_run_artifact_discovery.py tests/unit/test_run_artifact_preview.py tests/integration/test_real_project_safe_smoke.py --tb=short --basetemp=.pytest_tmp
+python -m pytest --tb=short --basetemp=.pytest_tmp
 ```
 
 Expected result: all focused checks pass, and full pytest passes with only
 expected optional dependency or missing external BIDS skips.
 
-If the default Windows temp directory (`C:\Users\...\AppData\Local\Temp`) has
-stale permission-locked entries from previous runs, use `--basetemp`:
-
-```powershell
-D:\Anaconda3\envs\mamba\python.exe -m pytest --tb=short --basetemp=.pytest_tmp
-```
-
-If `PermissionError` persists and references `pytest-of-*` in system temp,
-the desktop SQLite store may contain stale import records. Delete it (it is
-gitignored and regenerated on next run):
-
-```powershell
-del outputs\work\desktop\desktop_state.sqlite
-```
+All pytest commands use the repository-local `--basetemp`. Tests must isolate
+state with dependency overrides, temporary `SQLiteDesktopStore` instances, and
+temporary workspaces. If a failure references the persistent desktop database,
+stop and fix the test isolation; never delete user desktop state to make a test
+pass. After every pytest invocation, follow the validated cleanup procedure in
+`AGENTS.md` and preserve the original test exit status.
 
 ## Frontend Automated Checks
 
-Run from `src/frontend`:
+Run from the repository root:
 
 ```powershell
-npm run test:project-runs
-npm run typecheck
-npm run build
+npm --prefix src/frontend run format:check
+npm --prefix src/frontend run typecheck
+npm --prefix src/frontend run test
+npm --prefix src/frontend run test:project-runs
+npm --prefix src/frontend run build
 ```
 
 If system Node/npm is unavailable, use the bundled Codex Node runtime and record

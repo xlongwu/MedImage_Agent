@@ -1,8 +1,8 @@
 .dashboardGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .summaryCard,
@@ -11,12 +11,24 @@
 .metricsCard,
 .visualSpecCard {
   display: grid;
+  height: 100%;
+  box-sizing: border-box;
   gap: 14px;
   min-width: 0;
 }
 
 .summaryCard {
-  grid-row: span 2;
+  grid-column: span 7;
+}
+
+.outlierCard {
+  grid-column: span 5;
+}
+
+.comparisonCard,
+.metricsCard,
+.visualSpecCard {
+  grid-column: span 4;
 }
 
 .cardHeader {
@@ -335,8 +347,12 @@
     grid-template-columns: 1fr;
   }
 
-  .summaryCard {
-    grid-row: auto;
+  .summaryCard,
+  .outlierCard,
+  .comparisonCard,
+  .metricsCard,
+  .visualSpecCard {
+    grid-column: auto;
   }
 
   .findingList li,

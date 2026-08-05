@@ -125,10 +125,39 @@ describe("design system stylesheets", () => {
     expect(tokens).toContain("--control-height-md");
     expect(tokens).toContain("--control-height-lg");
     expect(tokens).toContain("--motion-duration-fast");
-    expect(tokens).toContain("--shell-topbar-height: 48px");
+    expect(tokens).toContain("--shell-topbar-height: 52px");
     expect(tokens).toContain("--shell-lifecycle-height: 48px");
+    expect(tokens).toContain("--shell-global-rail-width: 56px");
+    expect(tokens).toContain("--shell-context-sidebar-width: 280px");
+    expect(tokens).toContain("--shell-inspector-width: 336px");
     expect(tokens).toContain("--shell-min-desktop-width: 1024px");
     expect(tokens).toMatch(/\[data-theme="dark"\]\s*{[\s\S]*--color-bg-app/);
+  });
+
+  it("keeps the light desktop theme aligned with the approved Apple palette", () => {
+    const tokens = readStyle("tokens.css");
+    const light = readCssBlock(tokens, ":root");
+    const globals = readStyle("globals.css");
+    const topBar = readSource("features/dashboard/TopBar.module.css");
+    const topBarBlock = readCssBlock(topBar, ".topbar");
+
+    expect(readToken(light, "color-bg-app")).toBe("#f5f5f7");
+    expect(readToken(light, "color-bg-sidebar")).toBe("#f7f7f9");
+    expect(readToken(light, "color-surface-primary")).toBe("#ffffff");
+    expect(readToken(light, "color-text-primary")).toBe("#1d1d1f");
+    expect(readToken(light, "color-text-secondary")).toBe("#6e6e73");
+    expect(readToken(light, "color-text-tertiary")).toBe("#8e8e93");
+    expect(readToken(light, "color-accent")).toBe("#007aff");
+    expect(readToken(light, "green")).toBe("#34c759");
+    expect(readToken(light, "amber")).toBe("#ff9f0a");
+    expect(readToken(light, "red")).toBe("#ff3b30");
+    expect(readToken(light, "font-weight-medium")).toBe("500");
+    expect(readToken(light, "font-weight-strong")).toBe("600");
+    expect(readToken(light, "color-material-toolbar")).toBe("rgba(255, 255, 255, 0.78)");
+    expect(globals).toContain("background: var(--color-surface-secondary)");
+    expect(topBarBlock).toContain("var(--color-material-toolbar)");
+    expect(topBarBlock).toContain("backdrop-filter: saturate(180%) blur(20px)");
+    expect(topBarBlock).not.toContain("#1d2026");
   });
 
   it("keeps generic button styling out of the global compatibility layer", () => {

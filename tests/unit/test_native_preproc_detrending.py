@@ -7,7 +7,7 @@ import pytest
 
 nib = pytest.importorskip("nibabel")
 
-from src.backend.app.native_preproc.stages.detrending import run_detrending
+from src.backend.app.native_preproc.stages.detrending import run_detrending  # noqa: E402
 
 
 def _save_bold(path: Path, data: np.ndarray) -> Path:

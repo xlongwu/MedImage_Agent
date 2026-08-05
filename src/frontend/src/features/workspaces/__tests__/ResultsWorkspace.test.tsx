@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "../../../i18n/I18nProvider";
@@ -55,31 +55,28 @@ describe("ResultsWorkspace", () => {
     ).toHaveTextContent("Artifact browser project-1");
     expect(screen.getByText("No preview selected")).toBeInTheDocument();
     expect(screen.queryByText("FC Matrix (12x12)")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Migrated report modules")).toHaveTextContent("On demand");
-    expect(
-      within(screen.getByLabelText("Migrated report modules")).getByTitle(
-        "Backend evidence is required before this state can be treated as complete.",
-      ),
-    ).toHaveTextContent("On demand");
+    expect(screen.getByLabelText("Migrated report modules")).toHaveTextContent("Unavailable");
     expect(screen.queryByTestId("report-viewer")).not.toBeInTheDocument();
   });
 
-  it("keeps artifact, export, and validation modules available for selected projects", () => {
+  it("keeps the real artifact browser available and disables legacy report actions", () => {
     renderWorkspace();
 
     expect(screen.getByTestId("artifact-browser")).toBeInTheDocument();
     expect(screen.getByTestId("artifact-browser")).toHaveTextContent("project-1");
-    expect(screen.getByTestId("rsfmri-report-exporter")).toBeInTheDocument();
-    expect(screen.getByTestId("rsfmri-report-validator")).toBeInTheDocument();
+    expect(screen.queryByTestId("rsfmri-report-exporter")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("rsfmri-report-validator")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Artifact and report modules")).toHaveTextContent(
+      "Legacy report export, validation, and group-summary actions are unavailable",
+    );
   });
 
-  it("opens report modules on demand", () => {
+  it("does not expose report controls backed by rejected legacy endpoints", () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open report modules" }));
-
-    expect(screen.getByTestId("rsfmri-group-summary-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("report-viewer")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open report modules" })).toBeDisabled();
+    expect(screen.queryByTestId("rsfmri-group-summary-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("report-viewer")).not.toBeInTheDocument();
   });
 
   it("does not render result modules until a project is selected", () => {

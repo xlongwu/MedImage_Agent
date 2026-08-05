@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from src.backend.app.api.dependencies import get_project_store
 from src.backend.app.core.exceptions import SafetyError
@@ -20,11 +21,11 @@ from src.backend.app.schemas.desktop import ProjectDetail, ReviewedPlanRecord, R
 from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.execution_ticket_service import ExecutionTicketService
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-from src.backend.app.services.preprocessing_artifact_registry import REGISTRY_FILENAME
 from src.backend.app.services.observation_collector import (
     ObservationCollector,
     calculate_observation_hash,
 )
+from src.backend.app.services.preprocessing_artifact_registry import REGISTRY_FILENAME
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -37,6 +38,7 @@ def _prepared_run(
     *,
     node_id: str = "data_inspection",
     numerical_artifact: bool = False,
+    reviewed_payload: dict[str, object] | None = None,
 ):
     project_dir = tmp_path / "project"
     rawdata = project_dir / "rawdata"
@@ -82,9 +84,20 @@ def _prepared_run(
         created_at="2020-01-01T00:00:00Z",
         updated_at="2020-01-01T00:00:00Z",
         approval_status="APPROVED",
-        payload={"plan": {"pipeline_id": "pipeline-1"}, "goal": "test"},
+        payload=reviewed_payload
+        or {"plan": {"pipeline_id": "pipeline-1"}, "goal": "test"},
     )
     store.add_reviewed_plan(reviewed)
+    goal_contract = (
+        reviewed.payload.get("goal_contract")
+        if isinstance(reviewed.payload, dict)
+        else None
+    )
+    goal_contract_hash = (
+        str(goal_contract.get("goal_contract_hash") or "legacy-unreviewed")
+        if isinstance(goal_contract, dict)
+        else "legacy-unreviewed"
+    )
 
     contract = get_node_contract(node_id)
     ticket_service = ExecutionTicketService(store)
@@ -105,6 +118,12 @@ def _prepared_run(
         normalized_params_hash="normalized-params-hash",
         contract_versions={node_id: contract.contract_version},
         audit_id="audit-1",
+        goal_contract_hash=goal_contract_hash,
+        evaluation_policy_version=(
+            str(goal_contract.get("evaluation_policy_version") or "goal-evaluator-v1")
+            if isinstance(goal_contract, dict)
+            else "legacy"
+        ),
     )
     orchestrator = AgentOrchestrator(store)
     lifecycle = orchestrator.prepare_reviewed_execution(
@@ -223,7 +242,7 @@ def test_collector_persists_immutable_traceable_snapshot_and_reloads(tmp_path):
     assert reopened.list_observations(
         "project-1", lifecycle_id=lifecycle.lifecycle_id, run_id="run-1"
     ) == [observation]
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         observation.pipeline.status = "FAILED"
 
 
@@ -233,6 +252,16 @@ def test_registered_reloadable_fc_artifact_is_computed_and_checksum_bound(tmp_pa
         node_id="functional_connectivity_subject",
         numerical_artifact=True,
     )
+    registry_path = (
+        tmp_path
+        / "project"
+        / "preprocessing_runs"
+        / "run-1"
+        / REGISTRY_FILENAME
+    )
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry["artifacts"][0]["subject_id"] = "sub-001"
+    _write_json(registry_path, registry)
     observation = ObservationCollector(store).collect(
         project_id="project-1", lifecycle_id=lifecycle.lifecycle_id
     )
@@ -244,8 +273,240 @@ def test_registered_reloadable_fc_artifact_is_computed_and_checksum_bound(tmp_pa
     assert fc.dtype == "float32"
     assert fc.registration_status == "registered"
     assert fc.provenance_id == "provenance-fc"
+    assert fc.subject_id == "sub-001"
     assert len(fc.checksum_sha256 or "") == 64
     assert observation.capability.defensible_level == "computed"
+
+
+def test_shared_reviewed_pipeline_link_is_not_misclassified_as_project_artifact(tmp_path):
+    store, _, lifecycle, _ = _prepared_run(tmp_path)
+    reviewed_pipeline = tmp_path / "reviewed-pipelines" / "reviewed.yaml"
+    reviewed_pipeline.parent.mkdir(parents=True)
+    reviewed_pipeline.write_text("nodes: []\n", encoding="utf-8")
+    run_link = store.get_run_link_by_run_id("project-1", "run-1")
+    assert run_link is not None
+    store.update_run_link(run_link.run_link_id, pipeline_path=str(reviewed_pipeline))
+
+    observation = ObservationCollector(store).collect(
+        project_id="project-1", lifecycle_id=lifecycle.lifecycle_id
+    )
+
+    assert "ARTIFACT_PATH_REJECTED" not in observation.completeness.blocking_facts
+    assert all(
+        artifact.relative_path != "reviewed.yaml" for artifact in observation.artifacts
+    )
+
+
+def test_native_validation_report_is_collected_as_formal_validation_evidence(tmp_path):
+    store, _, lifecycle, summary_path = _prepared_run(tmp_path)
+    validation_report = (
+        summary_path.parents[3]
+        / "preprocessing_native_runs"
+        / "run-1"
+        / "artifacts"
+        / "validation_report"
+        / "native_preproc_validation_report.json"
+    )
+    _write_json(
+        validation_report,
+        {
+            "status": "succeeded",
+            "errors": [],
+            "warnings": [],
+            "stage_results": [{"stage_id": "reho"}],
+        },
+    )
+
+    observation = ObservationCollector(store).collect(
+        project_id="project-1", lifecycle_id=lifecycle.lifecycle_id
+    )
+
+    validation = next(
+        item
+        for item in observation.validations
+        if item.validator_id == "native_full_preproc_validation"
+    )
+    assert validation.status == "passed"
+    assert validation.checks == ("reho",)
+    assert validation.report_ref and validation.report_ref.endswith(
+        "native_preproc_validation_report.json"
+    )
+
+
+def _write_native_minimal_evidence(
+    tmp_path: Path,
+    *,
+    simplified_realignment: bool = False,
+) -> tuple[SQLiteDesktopStore, object]:
+    goal_contract = {
+        "goal_contract_id": "goal-contract-native-minimal",
+        "goal_contract_hash": "goal-contract-native-minimal-hash",
+        "evaluation_policy_version": "goal-evaluator-v1",
+        "criteria": [
+            {"criterion_type": "artifact_present", "target": "residual_bold"},
+            {"criterion_type": "artifact_reloadable", "target": "residual_bold"},
+            {"criterion_type": "artifact_present", "target": "filtered_bold"},
+            {"criterion_type": "artifact_reloadable", "target": "filtered_bold"},
+        ]
+    }
+    store, _, lifecycle, summary_path = _prepared_run(
+        tmp_path,
+        node_id="native_preproc_full_execute",
+        reviewed_payload={
+            "plan": {"pipeline_id": "native_full_preprocessing"},
+            "goal": "preprocess sub-001",
+            "goal_contract": goal_contract,
+        },
+    )
+    project_dir = tmp_path / "project"
+    native_run = project_dir / "preprocessing_native_runs" / "run-1"
+    _write_json(
+        native_run / "native_full_progress.json",
+        {
+            "project_id": "project-1",
+            "run_id": "run-1",
+            "status": "succeeded",
+            "completed_subjects": 1,
+            "total_subjects": 1,
+            "subjects": {
+                "sub-001": {
+                    "status": "succeeded",
+                    "stage_id": "",
+                    "heartbeat_at": "2026-07-14T00:01:00Z",
+                }
+            },
+        },
+    )
+    artifact_dir = native_run / "sub-001" / "artifacts"
+    residual = artifact_dir / "nuisance_regression" / "residual.npy"
+    filtered = artifact_dir / "temporal_filtering" / "filtered.npy"
+    realigned = artifact_dir / "realignment" / "realigned.npy"
+    for path in (residual, filtered, realigned):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(path, np.ones((2, 2, 2, 4), dtype=np.float32))
+    registry_path = project_dir / "work" / "pipeline_runs" / "run-1" / REGISTRY_FILENAME
+    _write_json(
+        registry_path,
+        {
+            "artifacts": [
+                {
+                    "artifact_id": "artifact-realigned",
+                    "artifact_type": "bold_4d",
+                    "path": realigned.relative_to(project_dir).as_posix(),
+                    "path_kind": "project_relative",
+                    "stage_id": "realignment",
+                    "subject_id": "sub-001",
+                    "shape": [2, 2, 2, 4],
+                    "dtype": "float32",
+                    "provenance_id": "provenance-realignment",
+                    "metadata": {
+                        "stage_status": (
+                            "simplified" if simplified_realignment else "succeeded"
+                        ),
+                        "capability_level": (
+                            "simplified"
+                            if simplified_realignment
+                            else "numerically_implemented"
+                        ),
+                    },
+                },
+                {
+                    "artifact_id": "artifact-residual",
+                    "artifact_type": "residual_bold",
+                    "path": residual.relative_to(project_dir).as_posix(),
+                    "path_kind": "project_relative",
+                    "stage_id": "nuisance_regression",
+                    "subject_id": "sub-001",
+                    "shape": [2, 2, 2, 4],
+                    "dtype": "float32",
+                    "provenance_id": "provenance-residual",
+                    "metadata": {
+                        "stage_status": "succeeded",
+                        "capability_level": "numerically_implemented",
+                    },
+                },
+                {
+                    "artifact_id": "artifact-filtered",
+                    "artifact_type": "filtered_bold",
+                    "path": filtered.relative_to(project_dir).as_posix(),
+                    "path_kind": "project_relative",
+                    "stage_id": "temporal_filtering",
+                    "subject_id": "sub-001",
+                    "shape": [2, 2, 2, 4],
+                    "dtype": "float32",
+                    "provenance_id": "provenance-filtered",
+                    "metadata": {
+                        "stage_status": "succeeded",
+                        "capability_level": "numerically_implemented",
+                    },
+                },
+                {
+                    "artifact_id": "artifact-report",
+                    "artifact_type": "final_report",
+                    "path": "preprocessing_native_runs/run-1/final_report.json",
+                    "path_kind": "project_relative",
+                    "stage_id": "final_report",
+                    "subject_id": "sub-001",
+                    "metadata": {
+                        "stage_status": "metadata_only",
+                        "capability_level": "metadata_only",
+                    },
+                },
+            ]
+        },
+    )
+    _write_json(native_run / "final_report.json", {"status": "succeeded"})
+    _write_json(
+        native_run
+        / "artifacts"
+        / "validation_report"
+        / "native_preproc_validation_report.json",
+        {
+            "status": "succeeded",
+            "errors": [],
+            "warnings": [],
+            "stage_results": [
+                {"stage_id": "nuisance_regression"},
+                {"stage_id": "temporal_filtering"},
+            ],
+        },
+    )
+    return store, lifecycle
+
+
+def test_native_minimal_observation_uses_progress_and_reviewed_artifact_scope(tmp_path):
+    store, lifecycle = _write_native_minimal_evidence(tmp_path)
+
+    observation = ObservationCollector(store).collect(
+        project_id="project-1", lifecycle_id=lifecycle.lifecycle_id
+    )
+
+    subject = next(node for node in observation.nodes if node.subject_id == "sub-001")
+    assert subject.node_id == "native_preproc_subject"
+    assert subject.status == "SUCCEEDED"
+    assert observation.pipeline.ended_at is not None
+    assert observation.pipeline.nodes_succeeded == 1
+    assert observation.capability.defensible_level == "computed"
+    assert not any(
+        reason.startswith("REQUIRED_ARTIFACT_MISSING:")
+        for reason in observation.capability.downgrade_reasons
+    )
+
+
+def test_native_artifact_metadata_projects_scientific_simplification_only(tmp_path):
+    store, lifecycle = _write_native_minimal_evidence(
+        tmp_path,
+        simplified_realignment=True,
+    )
+
+    observation = ObservationCollector(store).collect(
+        project_id="project-1", lifecycle_id=lifecycle.lifecycle_id
+    )
+
+    assert observation.scientific.limitation_flags == ("simplified",)
+    assert observation.capability.observed_level == "computed"
+    assert observation.capability.defensible_level == "computed"
+    assert "LIMITED_ARTIFACT_NOT_FULL_COMPUTED" not in observation.capability.downgrade_reasons
 
 
 def test_missing_summary_is_reported_as_structured_partial_evidence(tmp_path):
@@ -427,6 +688,9 @@ def test_observation_api_collects_server_facts_and_rejects_client_booleans(tmp_p
             f"/api/projects/project-1/agent-lifecycles/{lifecycle.lifecycle_id}/observations/{observation_id}"
         )
         assert queried.status_code == 200
-        assert queried.json()["observation"]["observation_hash"] == payload["observation"]["observation_hash"]
+        assert (
+            queried.json()["observation"]["observation_hash"]
+            == payload["observation"]["observation_hash"]
+        )
     finally:
         app.dependency_overrides.pop(get_project_store, None)

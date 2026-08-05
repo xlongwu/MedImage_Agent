@@ -1,4 +1,8 @@
-import type { NativeFullPreprocResponse, ProjectCreateResponse } from "../types";
+import type {
+  BidsValidationResponse,
+  NativeFullPreprocResponse,
+  ProjectCreateResponse,
+} from "../types";
 import type { TaskStatus } from "./types/task";
 import type { ProjectDetail, ProjectSummary, StudyOverview } from "./types/project";
 
@@ -462,9 +466,11 @@ export function buildProjectInventory(
   project: ProjectDetail,
   overview: StudyOverview,
   diagnostics: Record<string, unknown>,
+  bidsValidation?: BidsValidationResponse | null,
 ): ProjectInventory {
   const projectMetadata = asSignalRecord(project.metadata);
   const preprocessingInputInventory = asSignalRecord(projectMetadata.preprocessing_input_inventory);
+  const currentBidsValidation = bidsValidation?.project_id === project.id ? bidsValidation : null;
   const metadataNiftiFileCount = maxNumericSignal(
     projectMetadata.last_conversion_nifti_count,
     projectMetadata.preprocessing_input_nifti_count,
@@ -490,7 +496,9 @@ export function buildProjectInventory(
     "nifti_files",
     "image_source_count",
   ]);
-  const resolvedNiftiFileCount = Math.max(niftiFileCount, metadataNiftiFileCount);
+  const resolvedNiftiFileCount = currentBidsValidation
+    ? maxNumericSignal(currentBidsValidation.nifti_file_count)
+    : Math.max(niftiFileCount, metadataNiftiFileCount);
   const convertedSubjectInventory = maxNumericSignal(
     firstDiagnosticNumber(diagnostics, [
       "converted_subject_count",
@@ -508,16 +516,18 @@ export function buildProjectInventory(
       (dicomFileCount > 0 || dicomSeriesCount > 0 ? project.subjects_count : 0),
   );
   const hasRawDicom = dicomFileCount > 0 || dicomSeriesCount > 0 || rawDicomCandidates > 0;
-  const convertedSubjects = hasRawDicom
-    ? maxNumericSignal(
-        firstDiagnosticNumber(diagnostics, [
-          "converted_subject_count",
-          "nifti_subject_count",
-          "image_subject_count",
-        ]),
-        metadataConvertedSubjects,
-      )
-    : convertedSubjectInventory;
+  const convertedSubjects = currentBidsValidation
+    ? maxNumericSignal(currentBidsValidation.subject_count)
+    : hasRawDicom
+      ? maxNumericSignal(
+          firstDiagnosticNumber(diagnostics, [
+            "converted_subject_count",
+            "nifti_subject_count",
+            "image_subject_count",
+          ]),
+          metadataConvertedSubjects,
+        )
+      : convertedSubjectInventory;
   const metadataOnlyNiftiInventory =
     resolvedNiftiFileCount === 0 && isMetadataOnlySignal(diagnostics);
   const workflowSignals: SignalRecord = {

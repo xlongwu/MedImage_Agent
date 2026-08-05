@@ -1,13 +1,20 @@
 """SPM Runtime Schema — Phase 5C."""
+
 from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 
 class SpmRuntimePreflightResponse(BaseModel):
-    ok: bool = False; status: str = "disabled"; project_id: str = ""
-    matlab_available: bool = False; matlab_executable: str = ""
+    ok: bool = False
+    status: str = "disabled"
+    project_id: str = ""
+    matlab_available: bool = False
+    matlab_executable: str = ""
     matlab_version: str = ""
-    spm_available: bool = False; spm_path: str = ""; spm_version: str = ""
+    spm_available: bool = False
+    spm_path: str = ""
+    spm_version: str = ""
     required_env_flags: list[str] = Field(default_factory=list)
     missing_env_flags: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
@@ -26,12 +33,19 @@ class SpmSyntheticSmokeRequest(BaseModel):
 
 
 class SpmSyntheticSmokeResponse(BaseModel):
-    ok: bool = False; status: str = "disabled"; project_id: str = ""
-    smoke_run_id: str = ""; smoke_dir: str = ""
-    synthetic_input_path: str = ""; synthetic_output_dir: str = ""
-    command_template_path: str = ""; batch_script_path: str = ""
-    stdout_log_path: str = ""; stderr_log_path: str = ""
-    manifest_path: str = ""; provenance_path: str = ""
+    ok: bool = False
+    status: str = "disabled"
+    project_id: str = ""
+    smoke_run_id: str = ""
+    smoke_dir: str = ""
+    synthetic_input_path: str = ""
+    synthetic_output_dir: str = ""
+    command_template_path: str = ""
+    batch_script_path: str = ""
+    stdout_log_path: str = ""
+    stderr_log_path: str = ""
+    manifest_path: str = ""
+    provenance_path: str = ""
     completed_steps: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
@@ -40,8 +54,10 @@ class SpmSyntheticSmokeResponse(BaseModel):
 
 
 _REQUIRED_SYNTHETIC_SPM_FLAGS = [
-    "MEDIMAGE_MATLAB_ENABLED", "MEDIMAGE_SPM_SMOKE_ENABLED",
-    "MEDIMAGE_ENABLE_REVIEWED_EXECUTION", "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
+    "MEDIMAGE_MATLAB_ENABLED",
+    "MEDIMAGE_SPM_SMOKE_ENABLED",
+    "MEDIMAGE_ENABLE_REVIEWED_EXECUTION",
+    "MEDIMAGE_ENABLE_REAL_PREPROCESSING",
     "MEDIMAGE_ALLOW_SYNTHETIC_SPM_PREPROCESSING_SMOKE",
 ]
 
@@ -52,7 +68,14 @@ def validate_synthetic_spm_env(env: dict[str, str]) -> tuple[bool, list[str]]:
 
 
 def safety_flags_spm() -> dict[str, bool]:
-    return {"spm_execution_disabled_by_default": True, "matlab_execution_disabled_by_default": True,
-            "synthetic_only": True, "no_user_rawdata_execution": True,
-            "no_full_preprocessing": True, "no_dpabi_execution": True,
-            "rawdata_not_modified": True, "research_use_only": True, "clinical_use_prohibited": True}
+    return {
+        "spm_execution_disabled_by_default": True,
+        "matlab_execution_disabled_by_default": True,
+        "synthetic_only": True,
+        "no_user_rawdata_execution": True,
+        "no_full_preprocessing": True,
+        "no_dpabi_execution": True,
+        "rawdata_not_modified": True,
+        "research_use_only": True,
+        "clinical_use_prohibited": True,
+    }

@@ -15,7 +15,7 @@ from src.backend.app.api import (
     project_routes,
 )
 from src.backend.app.main import app
-from src.backend.app.planner import project_context, reviewed_plan_store, llm_planner
+from src.backend.app.planner import llm_planner, project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
@@ -24,22 +24,37 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, preset_routes):
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        preset_routes,
+    ):
         monkeypatch.setattr(module, "mock_store", store)
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create_project(client: TestClient, tmp_path: Path) -> dict:
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Preset Project", "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
-        "project_dir": str(tmp_path / "preset_proj"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Preset Project",
+            "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
+            "project_dir": str(tmp_path / "preset_proj"),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
 
 # ── Preset list / get ────────────────────────────────────────────────────────
+
 
 def test_list_presets_returns_rsfmri_preproc_mvp():
     client = TestClient(app)
@@ -71,10 +86,13 @@ def test_get_unknown_preset_returns_404():
 
 # ── Instantiate ──────────────────────────────────────────────────────────────
 
+
 def test_instantiate_project_not_found(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
-    resp = client.post("/api/projects/nonexistent/pipeline-presets/rsfmri_preproc_mvp/instantiate", json={})
+    resp = client.post(
+        "/api/projects/nonexistent/pipeline-presets/rsfmri_preproc_mvp/instantiate", json={}
+    )
     assert resp.status_code == 404
 
 
@@ -112,8 +130,12 @@ def test_instantiated_plan_validates(tmp_path, monkeypatch):
 def test_preset_nodes_in_tool_catalog():
     client = TestClient(app)
     for node_id in [
-        "data_readiness_check", "bids_validation_check", "rsfmri_bold_reference_check",
-        "rsfmri_motion_qc_plan", "rsfmri_preprocessing_plan_stub", "rsfmri_report_plan_stub",
+        "data_readiness_check",
+        "bids_validation_check",
+        "rsfmri_bold_reference_check",
+        "rsfmri_motion_qc_plan",
+        "rsfmri_preprocessing_plan_stub",
+        "rsfmri_report_plan_stub",
     ]:
         resp = client.get(f"/api/tools/catalog/{node_id}")
         assert resp.status_code == 200, f"{node_id} not in catalog: {resp.text}"
@@ -121,6 +143,7 @@ def test_preset_nodes_in_tool_catalog():
 
 
 # ── Planner integration ─────────────────────────────────────────────────────
+
 
 def test_planner_maps_rsfmri_preprocessing_goal():
     result = llm_planner.generate_plan_from_goal("rs-fMRI preprocessing", provider="mock")

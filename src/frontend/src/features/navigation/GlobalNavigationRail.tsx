@@ -1,0 +1,95 @@
+import { Icon } from "../../components/ui";
+import { useI18n } from "../../i18n/useI18n";
+import type { MessageKey } from "../../i18n/messages/en";
+import type { AppLocation, LegacyWorkspace, ProjectWorkspace } from "./workspaceModel";
+import styles from "./GlobalNavigationRail.module.css";
+
+type RailItem = {
+  icon:
+    | "folder"
+    | "spark"
+    | "overview"
+    | "data"
+    | "plan"
+    | "preprocessing"
+    | "runs"
+    | "qc"
+    | "results"
+    | "settings";
+  key: MessageKey;
+  workspace?: LegacyWorkspace | ProjectWorkspace;
+};
+
+const items: RailItem[] = [
+  { icon: "folder", key: "nav.projects" },
+  { icon: "spark", key: "nav.agent", workspace: "agent" },
+  { icon: "overview", key: "nav.overview", workspace: "overview" },
+  { icon: "data", key: "nav.data", workspace: "data" },
+  { icon: "plan", key: "nav.plan", workspace: "plan" },
+  { icon: "preprocessing", key: "nav.preprocessing", workspace: "preprocessing" },
+  { icon: "runs", key: "nav.runs", workspace: "runs" },
+  { icon: "qc", key: "nav.qc", workspace: "qc" },
+  { icon: "results", key: "nav.results", workspace: "results" },
+  { icon: "settings", key: "nav.settings", workspace: "settings" },
+];
+
+export function GlobalNavigationRail({
+  location,
+  projectId,
+  onOpenProjects,
+  onOpenLegacyWorkspace,
+  onOpenWorkspace,
+}: {
+  location: AppLocation;
+  projectId: string | null;
+  onOpenProjects: () => void;
+  onOpenLegacyWorkspace: (projectId: string, workspace: LegacyWorkspace) => void;
+  onOpenWorkspace: (projectId: string, workspace: ProjectWorkspace) => void;
+}) {
+  const { t } = useI18n();
+
+  return (
+    <nav className={styles.rail} aria-label={t("nav.primary")}>
+      <div className={styles.items}>
+        {items.map((item, index) => {
+          const isProjects = !item.workspace;
+          const selected = isProjects
+            ? location.kind === "projects"
+            : location.kind !== "projects" && location.workspace === item.workspace;
+          const disabled = !isProjects && !projectId;
+          return (
+            <button
+              aria-current={selected ? "page" : undefined}
+              aria-label={t(item.key)}
+              className={styles.item}
+              data-selected={selected}
+              disabled={disabled}
+              key={item.key}
+              onClick={() => {
+                if (isProjects) {
+                  onOpenProjects();
+                  return;
+                }
+                if (!projectId || !item.workspace) return;
+                if (
+                  item.workspace === "agent" ||
+                  item.workspace === "runs" ||
+                  item.workspace === "settings"
+                ) {
+                  onOpenWorkspace(projectId, item.workspace);
+                } else {
+                  onOpenLegacyWorkspace(projectId, item.workspace);
+                }
+              }}
+              title={disabled ? t("nav.selectProjectFirst") : t(item.key)}
+              type="button"
+            >
+              <Icon height={18} name={item.icon} width={18} />
+              {index === 0 ? <span className={styles.divider} aria-hidden="true" /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}

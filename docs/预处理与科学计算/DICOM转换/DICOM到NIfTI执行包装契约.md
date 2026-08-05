@@ -5,6 +5,10 @@
 **Date:** 2026-06-08
 **Parent:** `docs/预处理与科学计算/原生预处理/真实预处理执行契约.md` (Phase 4A)
 
+> Historical contract: the external `dcm2niix` wrapper described below is
+> superseded. Current conversion uses the in-project Python converter inside
+> the reviewed gateway and does not require or package `dcm2niix`.
+
 ---
 
 ## 1. Purpose and Scope

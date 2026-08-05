@@ -7,16 +7,11 @@ Old routes remain registered in ``dashboard_routes.py`` with ``deprecated=True``
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, Depends, Query
 
 from src.backend.app.api.dependencies import ProjectStore
 from src.backend.app.schemas.desktop import (
     ImagePlane,
-    ImagePreviewResponse,
-    ImageSourcesResponse,
-    ImageValidationReport,
 )
 from src.backend.app.services.artifact_adapter import (
     build_image_preview,

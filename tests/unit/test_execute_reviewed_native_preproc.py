@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 
 from src.backend.app.main import app
 
-
 client = TestClient(app)
 
 
@@ -57,14 +56,10 @@ def _attach_persisted_review_context(monkeypatch, tmp_path, body):
     )
     for module in (execute_reviewed_routes, project_context, reviewed_plan_store):
         monkeypatch.setattr(module, "mock_store", store)
-    context = project_context.load_project_context(
-        project_id, body["project_config_path"]
-    )
+    context = project_context.load_project_context(project_id, body["project_config_path"])
     plan = project_context.apply_project_context_to_plan(body["plan"], context)
     body["plan"] = plan
-    goal_candidate = build_goal_contract_semantics(
-        plan, "native preprocessing test"
-    )
+    goal_candidate = build_goal_contract_semantics(plan, "native preprocessing test")
     assert goal_candidate.ok and goal_candidate.semantics is not None
     record = reviewed_plan_store.save_reviewed_plan(
         project_id=project_id,
@@ -107,12 +102,10 @@ def _native_execute_plan() -> dict[str, object]:
                 "depends_on": [],
                 "params": {
                     "input_bold": (
-                        "examples/synthetic_bids/sub-001/func/"
-                        "sub-001_task-rest_bold.nii.gz"
+                        "examples/synthetic_bids/sub-001/func/sub-001_task-rest_bold.nii.gz"
                     ),
                     "sidecar_json": (
-                        "examples/synthetic_bids/sub-001/func/"
-                        "sub-001_task-rest_bold.json"
+                        "examples/synthetic_bids/sub-001/func/sub-001_task-rest_bold.json"
                     ),
                     "output_dir": "derivatives/native-full",
                     "confirmations": {
@@ -416,9 +409,7 @@ def test_conversion_handoff_readiness_allows_explicit_metric_only_scope(
     )
     rawdata = tmp_path / "rawdata"
     rawdata.mkdir()
-    project = SimpleNamespace(
-        metadata={"project_dir": str(tmp_path), "rawdata_dir": str(rawdata)}
-    )
+    project = SimpleNamespace(metadata={"project_dir": str(tmp_path), "rawdata_dir": str(rawdata)})
     monkeypatch.setattr(
         execute_reviewed_routes,
         "mock_store",
@@ -475,9 +466,7 @@ def test_conversion_handoff_readiness_blocks_unavailable_template_and_atlas(
     )
     rawdata = tmp_path / "rawdata"
     rawdata.mkdir()
-    project = SimpleNamespace(
-        metadata={"project_dir": str(tmp_path), "rawdata_dir": str(rawdata)}
-    )
+    project = SimpleNamespace(metadata={"project_dir": str(tmp_path), "rawdata_dir": str(rawdata)})
     monkeypatch.setattr(
         execute_reviewed_routes,
         "mock_store",

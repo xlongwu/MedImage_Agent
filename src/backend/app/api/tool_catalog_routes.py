@@ -10,7 +10,10 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
-from src.backend.app.runtime.tool_catalog import build_tool_catalog, catalog_as_dicts, get_tool_catalog_item
+from src.backend.app.runtime.tool_catalog import (
+    catalog_as_dicts,
+    get_tool_catalog_item,
+)
 
 router = APIRouter()
 
@@ -31,11 +34,11 @@ def api_get_tool_catalog_item(node_id: str) -> dict[str, Any]:
     """Return metadata for a single tool by node id."""
     try:
         item = get_tool_catalog_item(node_id)
-    except KeyError:
+    except KeyError as exc:
         raise HTTPException(
             status_code=404,
             detail=f"Tool catalog item not found: {node_id}",
-        )
+        ) from exc
     return {
         "ok": True,
         "item": {

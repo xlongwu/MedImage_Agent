@@ -11,36 +11,34 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
     project_history_routes,
     project_routes,
 )
-from src.backend.app.main import app
 from src.backend.app.api.dependencies import get_project_store
+from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import (
     bold_reference_readiness,
-    motion_qc_readiness,
-)
-from src.backend.app.services import (
     conversion_planner,
     data_readiness,
     dicom_conversion_execution,
+    motion_qc_readiness,
 )
 from src.backend.app.services.funraw_t1raw_detector import (
     _normalize_subject_id,
     detect_funraw_t1raw_layout,
 )
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _make_funraw_t1raw_fixture(tmp_path: Path) -> Path:
     """Create a minimal FunRaw/T1Raw DICOM fixture."""
@@ -56,7 +54,9 @@ def _make_funraw_t1raw_fixture(tmp_path: Path) -> Path:
         sub_fun = funraw / f"Sub_00{i}"
         sub_fun.mkdir()
         for j in range(1, 3 if i == 1 else 2):
-            (sub_fun / f"00000{j}.dcm").write_text(f"mock DICOM fun sub{i} file{j}", encoding="utf-8")
+            (sub_fun / f"00000{j}.dcm").write_text(
+                f"mock DICOM fun sub{i} file{j}", encoding="utf-8"
+            )
 
         sub_t1 = t1raw / f"Sub_00{i}"
         sub_t1.mkdir()
@@ -68,32 +68,41 @@ def _make_funraw_t1raw_fixture(tmp_path: Path) -> Path:
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
     monkeypatch.setitem(app.dependency_overrides, get_project_store, lambda: store)
-    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH",
-                        tmp_path / "cfg.json")
-    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT",
-                        tmp_path / "prj")
-    for mod in (project_routes, dashboard_routes, project_context,
-                reviewed_plan_store, project_history_routes,
-                execute_reviewed_routes, bold_reference_readiness,
-                motion_qc_readiness, conversion_planner,
-                data_readiness, dicom_conversion_execution,
-                mock_store_module):
+    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "cfg.json")
+    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "prj")
+    for mod in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+        conversion_planner,
+        data_readiness,
+        dicom_conversion_execution,
+        mock_store_module,
+    ):
         monkeypatch.setattr(mod, "mock_store", store)
-    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
-                        tmp_path / "audit")
+    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR", tmp_path / "audit")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
-        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create_project(client: TestClient, tmp_path: Path, rawdata: Path) -> dict:
     pj = tmp_path / "project"
-    resp = client.post("/api/projects/create", json={
-        "project_name": "FunRaw T1Raw Test",
-        "rawdata_dir": str(rawdata),
-        "project_dir": str(pj),
-        "overwrite": True,
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "FunRaw T1Raw Test",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(pj),
+            "overwrite": True,
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -101,6 +110,7 @@ def _create_project(client: TestClient, tmp_path: Path, rawdata: Path) -> dict:
 # ═══════════════════════════════════════════════════════════════════════
 # Group 1 — Detector unit tests
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_detector_finds_funraw_t1raw_layout(tmp_path):
     root = _make_funraw_t1raw_fixture(tmp_path)
@@ -128,7 +138,9 @@ def test_detector_counts_dicom_files(tmp_path):
 def test_detector_series_count(tmp_path):
     root = _make_funraw_t1raw_fixture(tmp_path)
     result = detect_funraw_t1raw_layout(str(root))
-    assert result["series_count"] == 4  # FunRaw/Sub_001 + FunRaw/Sub_002 + T1Raw/Sub_001 + T1Raw/Sub_002
+    assert (
+        result["series_count"] == 4
+    )  # FunRaw/Sub_001 + FunRaw/Sub_002 + T1Raw/Sub_001 + T1Raw/Sub_002
 
 
 def test_detector_normalizes_subject_ids(tmp_path):
@@ -137,8 +149,9 @@ def test_detector_normalizes_subject_ids(tmp_path):
     records = result["per_subject_modality"]
     # Check all subject IDs are BIDS-normalized
     for r in records:
-        assert r["subject_id"].startswith("sub-"), \
+        assert r["subject_id"].startswith("sub-"), (
             f"Expected BIDS-style subject, got: {r['subject_id']}"
+        )
 
 
 def test_detector_maps_funraw_to_bold(tmp_path):
@@ -180,6 +193,7 @@ def test_normalize_subject_id():
 # Group 2 — Conversion dry-run integration
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_conversion_dry_run_creates_mapping_for_funraw_t1raw(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
@@ -192,8 +206,9 @@ def test_conversion_dry_run_creates_mapping_for_funraw_t1raw(tmp_path, monkeypat
     )
     assert resp.status_code == 200, resp.text
     data = resp.json()
-    assert data["status"] in ("ready", "warning"), \
+    assert data["status"] in ("ready", "warning"), (
         f"Got status: {data['status']}, blocking: {data.get('blocking_issues')}"
+    )
     assert len(data["mapping_preview"]) == 4  # 2 FunRaw subjects + 2 T1Raw subjects
 
 
@@ -274,15 +289,14 @@ def test_conversion_dry_run_confidence_high(tmp_path, monkeypatch):
 # Group 3 — Data readiness integration
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_data_readiness_reports_dicom_count(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     root = _make_funraw_t1raw_fixture(tmp_path)
     created = _create_project(client, tmp_path, root)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["dicom_file_count"] == 5
@@ -295,9 +309,7 @@ def test_data_readiness_reports_subject_count(tmp_path, monkeypatch):
     root = _make_funraw_t1raw_fixture(tmp_path)
     created = _create_project(client, tmp_path, root)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     data = resp.json()
     assert data["subject_count"] == 2
 
@@ -310,15 +322,12 @@ def test_data_readiness_detects_dicom_layout(tmp_path, monkeypatch):
     root = _make_funraw_t1raw_fixture(tmp_path)
     created = _create_project(client, tmp_path, root)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/data-readiness"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/data-readiness")
     data = resp.json()
     assert data["dicom_file_count"] > 0
     assert data["subject_count"] > 0
     # DICOM-only project with FunRaw/T1Raw layout should be warning, not blocked
-    assert data["status"] == "warning", \
-        f"Expected warning, got {data['status']}"
+    assert data["status"] == "warning", f"Expected warning, got {data['status']}"
     # Should NOT have image validation error
     errors_text = " ".join(data.get("errors", []))
     assert "image validation failed" not in errors_text.lower()
@@ -334,15 +343,14 @@ def test_data_readiness_detects_dicom_layout(tmp_path, monkeypatch):
 # Group 4 — NIfTI QC still clean (no synthetic fallback)
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_nifti_qc_still_zero_for_dicom_only(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     root = _make_funraw_t1raw_fixture(tmp_path)
     created = _create_project(client, tmp_path, root)
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/nifti-qc/snapshot"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/nifti-qc/snapshot")
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["image_count"] == 0
@@ -353,8 +361,7 @@ def test_nifti_qc_still_zero_for_dicom_only(tmp_path, monkeypatch):
     warnings_text = " ".join(data.get("warnings", []))
     assert "no nifti" in warnings_text.lower() or "conversion" in warnings_text.lower()
     # Warning count should reflect the top-level warning
-    assert data["warning_count"] >= 1, \
-        f"Expected warning_count >= 1, got {data['warning_count']}"
+    assert data["warning_count"] >= 1, f"Expected warning_count >= 1, got {data['warning_count']}"
 
 
 def test_rawdata_mtime_unchanged(tmp_path, monkeypatch):
@@ -369,10 +376,10 @@ def test_rawdata_mtime_unchanged(tmp_path, monkeypatch):
 
     # Call multiple read-only endpoints
     client.get(f"/api/projects/{created['project_id']}/data-readiness")
-    client.post(f"/api/projects/{created['project_id']}/conversion/dry-run",
-                json={"include_dicom": True})
+    client.post(
+        f"/api/projects/{created['project_id']}/conversion/dry-run", json={"include_dicom": True}
+    )
     client.get(f"/api/projects/{created['project_id']}/nifti-qc/snapshot")
 
     mtime_after = sentinel.stat().st_mtime
-    assert mtime_before == mtime_after, \
-        f"Rawdata mtime changed: {mtime_before} → {mtime_after}"
+    assert mtime_before == mtime_after, f"Rawdata mtime changed: {mtime_before} → {mtime_after}"

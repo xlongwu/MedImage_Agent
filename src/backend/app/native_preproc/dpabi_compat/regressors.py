@@ -1,14 +1,14 @@
 """Regressor construction helpers for DPABI-like native nuisance regression."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 
 from src.backend.app.native_preproc.dpabi_compat.qc_rules import rank_qc
-
 
 MOTION_COLUMNS = ("trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z")
 

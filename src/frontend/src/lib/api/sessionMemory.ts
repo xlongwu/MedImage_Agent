@@ -1,5 +1,9 @@
 import { requestJson } from "./legacyCore";
 
+// Deprecated compatibility client for the old SessionDB run-history surface.
+// This is not the project-scoped long-term memory API; new code uses
+// project-history APIs for runs and ./memory for reviewed project memory.
+
 export async function getSessionRuns(baseUrl: string, status?: string) {
   const params = status ? `?status=${encodeURIComponent(status)}` : "";
   return requestJson<Record<string, unknown>>(baseUrl, `/api/sessions/runs${params}`);

@@ -247,18 +247,16 @@ def test_real_project_safe_reviewed_execute_uses_real_executor(
     }
 
     for payload in (first_payload, second_payload):
-        run_detail = client.get(
-            f"/api/projects/{created['project_id']}/runs/{payload['run_id']}"
-        )
+        run_detail = client.get(f"/api/projects/{created['project_id']}/runs/{payload['run_id']}")
         assert run_detail.status_code == 200
         run_link = run_detail.json()["run_link"]
         assert run_link["status"] == "SUCCESS"
         assert run_link["reviewed_plan_id"] == reviewed["reviewed_plan_id"]
         assert Path(run_link["summary_path"]).is_file()
 
-    assert _rawdata_snapshot(real_project_smoke["rawdata_dir"]) == real_project_smoke[
-        "rawdata_before"
-    ]
+    assert (
+        _rawdata_snapshot(real_project_smoke["rawdata_dir"]) == real_project_smoke["rawdata_before"]
+    )
 
 
 def test_real_project_safe_reviewed_execute_still_requires_confirmation(
@@ -290,9 +288,10 @@ def test_real_project_safe_reviewed_execute_still_requires_confirmation(
     assert response.json()["status"] == "CONFIRMATION_REQUIRED"
     assert response.json()["execution"]["executor_called"] is False
     assert executor_called is False
-    assert real_project_smoke["store"].list_run_links(
-        real_project_smoke["created"]["project_id"]
-    ) == []
-    assert _rawdata_snapshot(real_project_smoke["rawdata_dir"]) == real_project_smoke[
-        "rawdata_before"
-    ]
+    assert (
+        real_project_smoke["store"].list_run_links(real_project_smoke["created"]["project_id"])
+        == []
+    )
+    assert (
+        _rawdata_snapshot(real_project_smoke["rawdata_dir"]) == real_project_smoke["rawdata_before"]
+    )

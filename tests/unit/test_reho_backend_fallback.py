@@ -1,10 +1,11 @@
 """Tests for ReHo backend GPU/CPU selection and experimental gating."""
-from __future__ import annotations
-import numpy as np
-import pytest
 
+from __future__ import annotations
+
+import numpy as np
 
 # ── Helper: create synthetic 4D data ──
+
 
 def _make_data(shape=(8, 8, 8, 20), ties=False):
     """Create synthetic 4D BOLD data, optionally with tied values."""
@@ -20,21 +21,27 @@ def _make_data(shape=(8, 8, 8, 20), ties=False):
 
 # ── Mock GPU — available ──
 
+
 def _mock_cupy_available(monkeypatch):
     """Monkeypatch so that `import cupy` succeeds."""
     import types
+
     cupy_mod = types.ModuleType("cupy")
     monkeypatch.setitem(
-        __import__("sys").modules, "cupy", cupy_mod,
+        __import__("sys").modules,
+        "cupy",
+        cupy_mod,
     )
 
 
 # ── Mock GPU — unavailable ──
 
+
 def _mock_cupy_unavailable(monkeypatch):
     """Restore normal import (CuPy not installed)."""
-    import sys
     import builtins
+    import sys
+
     # Remove cupy from sys.modules if it was added
     sys.modules.pop("cupy", None)
     original_import = builtins.__import__
@@ -49,6 +56,7 @@ def _mock_cupy_unavailable(monkeypatch):
 
 # ── Tests ──
 
+
 class TestRehoBackendTiesFallback:
     """Test experimental ReHo GPU selection without probabilistic tie gates."""
 
@@ -59,14 +67,25 @@ class TestRehoBackendTiesFallback:
         data = _make_data(ties=True)
         _mock_cupy_available(monkeypatch)
 
-        monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_cupy", lambda *a, **kw: {
-            "ok": True, "backend": "gpu-cupy", "reho": np.zeros(data.shape[:3], dtype=np.float32),
-            "valid_voxel_count": 1, "skipped_voxel_count": 0, "warnings": [], "errors": [], "runtime_seconds": 0.01,
-        })
+        monkeypatch.setattr(
+            "src.backend.app.tools.reho_compute.compute_reho_cupy",
+            lambda *a, **kw: {
+                "ok": True,
+                "backend": "gpu-cupy",
+                "reho": np.zeros(data.shape[:3], dtype=np.float32),
+                "valid_voxel_count": 1,
+                "skipped_voxel_count": 0,
+                "warnings": [],
+                "errors": [],
+                "runtime_seconds": 0.01,
+            },
+        )
 
         result = compute_reho_backend(
-            data, neighborhood=7,
-            prefer_gpu=True, require_gpu=False,
+            data,
+            neighborhood=7,
+            prefer_gpu=True,
+            require_gpu=False,
             allow_unvalidated_gpu=True,
         )
         assert result["ok"], result.get("errors")
@@ -79,14 +98,25 @@ class TestRehoBackendTiesFallback:
         data = _make_data(ties=True)
         _mock_cupy_available(monkeypatch)
 
-        monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_cupy", lambda *a, **kw: {
-            "ok": True, "backend": "gpu-cupy", "reho": np.zeros(data.shape[:3], dtype=np.float32),
-            "valid_voxel_count": 1, "skipped_voxel_count": 0, "warnings": [], "errors": [], "runtime_seconds": 0.01,
-        })
+        monkeypatch.setattr(
+            "src.backend.app.tools.reho_compute.compute_reho_cupy",
+            lambda *a, **kw: {
+                "ok": True,
+                "backend": "gpu-cupy",
+                "reho": np.zeros(data.shape[:3], dtype=np.float32),
+                "valid_voxel_count": 1,
+                "skipped_voxel_count": 0,
+                "warnings": [],
+                "errors": [],
+                "runtime_seconds": 0.01,
+            },
+        )
 
         result = compute_reho_backend(
-            data, neighborhood=7,
-            prefer_gpu=True, require_gpu=True,
+            data,
+            neighborhood=7,
+            prefer_gpu=True,
+            require_gpu=True,
             allow_unvalidated_gpu=True,
         )
         assert result["ok"]
@@ -100,14 +130,16 @@ class TestRehoBackendTiesFallback:
         _mock_cupy_unavailable(monkeypatch)
 
         result = compute_reho_backend(
-            data, neighborhood=7,
+            data,
+            neighborhood=7,
             require_gpu=True,
         )
         assert not result["ok"]
         assert result["backend"] == "none"
         errors = result.get("errors", [])
-        assert any("CuPy is not available" in e for e in errors), \
+        assert any("CuPy is not available" in e for e in errors), (
             f"Expected CuPy unavailable error, got: {errors}"
+        )
 
     def test_uses_gpu_for_tie_free_data_with_opt_in(self, monkeypatch):
         """allow_unvalidated_gpu=True + no ties → GPU path used."""
@@ -119,25 +151,30 @@ class TestRehoBackendTiesFallback:
         # Mock GPU compute to return a success
         def mock_cupy(*a, **kw):
             return {
-                "ok": True, "backend": "gpu-cupy",
+                "ok": True,
+                "backend": "gpu-cupy",
                 "reho": np.zeros(data.shape[:3], dtype=np.float32),
-                "valid_voxel_count": 10, "skipped_voxel_count": 0,
-                "warnings": [], "errors": [],
+                "valid_voxel_count": 10,
+                "skipped_voxel_count": 0,
+                "warnings": [],
+                "errors": [],
                 "runtime_seconds": 0.01,
             }
+
         monkeypatch.setattr(
             "src.backend.app.tools.reho_compute.compute_reho_cupy",
             mock_cupy,
         )
 
         result = compute_reho_backend(
-            data, neighborhood=7,
-            prefer_gpu=True, require_gpu=False,
+            data,
+            neighborhood=7,
+            prefer_gpu=True,
+            require_gpu=False,
             allow_unvalidated_gpu=True,
         )
         assert result["ok"]
-        assert result["backend"] == "gpu-cupy", \
-            f"Expected GPU, got {result['backend']}"
+        assert result["backend"] == "gpu-cupy", f"Expected GPU, got {result['backend']}"
 
     def test_cpu_only_without_allow_unvalidated(self, monkeypatch):
         """prefer_gpu=True + allow_unvalidated_gpu=False → CPU only (safety gate)."""
@@ -148,26 +185,32 @@ class TestRehoBackendTiesFallback:
 
         # Should never call GPU in default experimental-off mode.
         gpu_called = [False]
+
         def mock_cupy(*a, **kw):
             gpu_called[0] = True
             return {"ok": True, "backend": "gpu-cupy"}
+
         monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute.compute_reho_cupy", mock_cupy,
+            "src.backend.app.tools.reho_compute.compute_reho_cupy",
+            mock_cupy,
         )
 
         result = compute_reho_backend(
-            data, neighborhood=7,
-            prefer_gpu=True, require_gpu=False,
+            data,
+            neighborhood=7,
+            prefer_gpu=True,
+            require_gpu=False,
             allow_unvalidated_gpu=False,  # default
         )
         assert result["ok"]
-        assert result["backend"] == "cpu-numpy", \
+        assert result["backend"] == "cpu-numpy", (
             f"Expected CPU when allow_unvalidated_gpu=False, got {result['backend']}"
+        )
         assert not gpu_called[0], "GPU should not be called without opt-in"
-        safety_warnings = [w for w in result.get("warnings", [])
-                          if "experimental" in w]
-        assert len(safety_warnings) >= 1, \
+        safety_warnings = [w for w in result.get("warnings", []) if "experimental" in w]
+        assert len(safety_warnings) >= 1, (
             "Expected safety-gate warning explaining allow_unvalidated_gpu"
+        )
 
     def test_allow_unvalidated_gpu_tie_free_uses_gpu(self, monkeypatch):
         """allow_unvalidated_gpu=True + ties free → GPU used."""
@@ -178,19 +221,26 @@ class TestRehoBackendTiesFallback:
 
         def mock_cupy(*a, **kw):
             return {
-                "ok": True, "backend": "gpu-cupy",
+                "ok": True,
+                "backend": "gpu-cupy",
                 "reho": np.zeros(data.shape[:3], dtype=np.float32),
-                "valid_voxel_count": 10, "skipped_voxel_count": 0,
-                "warnings": [], "errors": [],
+                "valid_voxel_count": 10,
+                "skipped_voxel_count": 0,
+                "warnings": [],
+                "errors": [],
                 "runtime_seconds": 0.01,
             }
+
         monkeypatch.setattr(
-            "src.backend.app.tools.reho_compute.compute_reho_cupy", mock_cupy,
+            "src.backend.app.tools.reho_compute.compute_reho_cupy",
+            mock_cupy,
         )
 
         result = compute_reho_backend(
-            data, neighborhood=7,
-            prefer_gpu=True, require_gpu=False,
+            data,
+            neighborhood=7,
+            prefer_gpu=True,
+            require_gpu=False,
             allow_unvalidated_gpu=True,
         )
         assert result["ok"]
@@ -203,14 +253,25 @@ class TestRehoBackendTiesFallback:
         data = _make_data(ties=False)
         _mock_cupy_available(monkeypatch)
 
-        monkeypatch.setattr("src.backend.app.tools.reho_compute.compute_reho_cupy", lambda *a, **kw: {
-            "ok": False, "backend": "gpu-cupy", "reho": None,
-            "valid_voxel_count": 0, "skipped_voxel_count": 0, "warnings": [], "errors": ["forced failure"], "runtime_seconds": 0.01,
-        })
+        monkeypatch.setattr(
+            "src.backend.app.tools.reho_compute.compute_reho_cupy",
+            lambda *a, **kw: {
+                "ok": False,
+                "backend": "gpu-cupy",
+                "reho": None,
+                "valid_voxel_count": 0,
+                "skipped_voxel_count": 0,
+                "warnings": [],
+                "errors": ["forced failure"],
+                "runtime_seconds": 0.01,
+            },
+        )
 
         result = compute_reho_backend(
-            data, neighborhood=7,
-            prefer_gpu=True, require_gpu=False,
+            data,
+            neighborhood=7,
+            prefer_gpu=True,
+            require_gpu=False,
             allow_unvalidated_gpu=True,
         )
         assert result["ok"]
@@ -226,7 +287,8 @@ class TestRehoBackendDirectCpu:
 
         data = _make_data(ties=False)
         result = compute_reho_backend(
-            data, neighborhood=7,
+            data,
+            neighborhood=7,
             prefer_gpu=False,
         )
         assert result["ok"]

@@ -4,26 +4,34 @@ The planner is deliberately independent of the scientific kernels.  It may
 choose resources, but it never changes a scientific parameter or turns an
 unsafe GPU request into a successful CPU execution.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import tempfile
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from src.backend.app.safety.gpu_safety import validate_live_gpu_memory
 from src.backend.app.schemas.native_preproc_api import NativeComputePolicy
 from src.backend.app.tools.gpu_utils import detect_gpu
 
-
-GPU_CAPABLE_STAGES = frozenset({
-    "alff", "falff", "temporal_filtering", "nuisance_regression", "functional_connectivity",
-    "smoothing", "atlas_resampling",
-})
+GPU_CAPABLE_STAGES = frozenset(
+    {
+        "alff",
+        "falff",
+        "temporal_filtering",
+        "nuisance_regression",
+        "functional_connectivity",
+        "smoothing",
+        "atlas_resampling",
+    }
+)
 
 # These are conservative peak-workspace multipliers, not hardware limits.  A
 # kernel performs a second live preflight immediately before allocation.
@@ -88,7 +96,12 @@ def _dtype_bytes(policy: NativeComputePolicy) -> int:
 def _live_gpu_snapshot() -> dict[str, Any]:
     """Return CuPy capability plus live memory without importing CuPy on CPU use."""
     capability = detect_gpu()
-    snapshot: dict[str, Any] = {**capability, "free_vram_bytes": None, "total_vram_bytes": None, "gpu_utilization_percent": None}
+    snapshot: dict[str, Any] = {
+        **capability,
+        "free_vram_bytes": None,
+        "total_vram_bytes": None,
+        "gpu_utilization_percent": None,
+    }
     if not capability.get("gpu_available"):
         return snapshot
     try:
@@ -130,14 +143,14 @@ def plan_gpu_stage(
     workspace_factor = _WORKSPACE_FACTORS.get(stage_id, 1.0)
     estimated_peak = int(input_bytes * workspace_factor)
     fallback_allowed = requested == "auto" and policy.allow_cpu_fallback
-    base = dict(
-        stage_id=stage_id,
-        requested_backend=requested,
-        fallback_allowed=fallback_allowed,
-        estimated_input_bytes=input_bytes,
-        estimated_peak_bytes=estimated_peak,
-        validation_level=validation_level,
-    )
+    base = {
+        "stage_id": stage_id,
+        "requested_backend": requested,
+        "fallback_allowed": fallback_allowed,
+        "estimated_input_bytes": input_bytes,
+        "estimated_peak_bytes": estimated_peak,
+        "validation_level": validation_level,
+    }
 
     if stage_id not in GPU_CAPABLE_STAGES:
         return GpuStagePlan(
@@ -158,7 +171,9 @@ def plan_gpu_stage(
             predicted_cpu_seconds=None,
             predicted_gpu_seconds=None,
             limiting_factors=["stage_is_cpu_only"],
-            blocking_issues=([] if requested != "gpu" else ["GPU backend is not released for this stage."]),
+            blocking_issues=(
+                [] if requested != "gpu" else ["GPU backend is not released for this stage."]
+            ),
         )
 
     if requested == "cpu":
@@ -206,7 +221,11 @@ def plan_gpu_stage(
     elif gpu_available:
         limiting.append("live_vram_probe_failed")
 
-    spatial_items = max(1, int(input_shape[0]) * int(input_shape[1]) * int(input_shape[2])) if len(input_shape) >= 3 else max(1, element_count)
+    spatial_items = (
+        max(1, int(input_shape[0]) * int(input_shape[1]) * int(input_shape[2]))
+        if len(input_shape) >= 3
+        else max(1, element_count)
+    )
     per_item_peak = max(1, int(estimated_peak / spatial_items))
     max_chunk = spatial_items
     if policy.chunk_size is not None:
@@ -233,10 +252,17 @@ def plan_gpu_stage(
         limiting.append("auto_gpu_not_released_for_stage")
 
     selected = "gpu"
-    if not gpu_available or usable is None or "insufficient_vram" in limiting or (requested == "auto" and not allow_auto_gpu):
+    if (
+        not gpu_available
+        or usable is None
+        or "insufficient_vram" in limiting
+        or (requested == "auto" and not allow_auto_gpu)
+    ):
         selected = "cpu" if requested == "auto" else "blocked"
         if requested == "gpu":
-            blocking.append("GPU backend preflight did not satisfy capability, validation, or memory requirements.")
+            blocking.append(
+                "GPU backend preflight did not satisfy capability, validation, or memory requirements."
+            )
 
     return GpuStagePlan(
         **base,
@@ -246,8 +272,12 @@ def plan_gpu_stage(
         device_id="cuda:0" if gpu_available else None,
         device_name=str(snapshot.get("device_name")) if snapshot.get("device_name") else None,
         cupy_version=str(snapshot.get("cupy_version")) if snapshot.get("cupy_version") else None,
-        cuda_runtime_version=int(snapshot["cuda_runtime_version"]) if isinstance(snapshot.get("cuda_runtime_version"), int) else None,
-        driver_version=int(snapshot["driver_version"]) if isinstance(snapshot.get("driver_version"), int) else None,
+        cuda_runtime_version=int(snapshot["cuda_runtime_version"])
+        if isinstance(snapshot.get("cuda_runtime_version"), int)
+        else None,
+        driver_version=int(snapshot["driver_version"])
+        if isinstance(snapshot.get("driver_version"), int)
+        else None,
         total_vram_bytes=int(total_bytes) if isinstance(total_bytes, int) else None,
         free_vram_bytes=int(free_bytes) if isinstance(free_bytes, int) else None,
         usable_vram_bytes=usable,
@@ -287,7 +317,15 @@ def gpu_device_lock(device_id: str = "cuda:0", *, max_jobs: int = 1) -> Iterator
         raise RuntimeError("GPU_DEVICE_BUSY: all reviewed GPU device tokens are currently held.")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump({"pid": os.getpid(), "device": device_id, "created_at": time.time(), "max_jobs": max_jobs}, handle)
+            json.dump(
+                {
+                    "pid": os.getpid(),
+                    "device": device_id,
+                    "created_at": time.time(),
+                    "max_jobs": max_jobs,
+                },
+                handle,
+            )
         yield
     finally:
         try:

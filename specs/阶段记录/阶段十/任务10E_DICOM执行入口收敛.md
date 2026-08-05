@@ -1,6 +1,10 @@
 # 任务 10E：DICOM 执行入口收敛
 
-> 状态：Blocked — requires explicit maintainer approval after 10D
+> 状态：Controlled source gateway contract implemented；packaged visible-UI 与新 rawdata
+> manifest 验收延期。
+>
+> 本文正文保留实施前要求；其中旧入口描述、清单和 Stop Conditions 是历史方案，当前结果
+> 以 `README.md` 和 `evidence/阶段十_E2E验收记录.md` 为准。
 >
 > 任务模式：Feature Bundle Mode + protected execution change；真实转换验证适用 Scientific Validation Mode 的 artifact/provenance 规则
 >

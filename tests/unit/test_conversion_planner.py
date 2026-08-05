@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -17,7 +18,6 @@ from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services import conversion_planner
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -277,15 +277,16 @@ def test_output_root_preview_is_scoped(tmp_path, monkeypatch):
 
 def test_plan_conversion_supports_dict_shaped_input(tmp_path, monkeypatch):
     from src.backend.app.services.conversion_planner import plan_conversion
+
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     created = _create_project(client, tmp_path)
-    
+
     # Call plan_conversion directly with a raw dict request
     raw_dict = {
         "output_root_name": "custom_root_dict",
         "include_dicom": True,
-        "source_import_ids": []
+        "source_import_ids": [],
     }
     res = plan_conversion(created["project_id"], raw_dict)
     assert res.ok is True

@@ -8,11 +8,13 @@ from fastapi import FastAPI
 def test_app_imports():
     """The FastAPI app must be importable from its expected module path."""
     from src.backend.app.main import app
+
     assert isinstance(app, FastAPI)
 
 
 def test_app_has_title():
     from src.backend.app.main import app
+
     assert app.title is not None
     assert len(app.title) > 0
 
@@ -20,6 +22,7 @@ def test_app_has_title():
 def test_app_has_routes():
     """App should have at least the /health route."""
     from src.backend.app.main import app
+
     schema = app.openapi()
     route_paths = list(schema.get("paths", {}).keys())
     assert "/health" in route_paths, f"Expected /health in routes, got {route_paths}"

@@ -4,22 +4,26 @@ Ensures that:
 - ALFF/ReHo only returns 'partial' for an explicit preview_limit.
 - FC returns 'partial' when some selected files fail to produce matrices.
 """
-from __future__ import annotations
-from pathlib import Path
-import json, pytest
-import numpy as np
-import nibabel as nib
 
+from __future__ import annotations
+
+import json
+
+import nibabel as nib
+import numpy as np
 
 # ── ALFF/ReHo helpers ──
 
 _ALL_AR = {"MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1", "MEDIMAGE_ALLOW_SANDBOXED_ALFF_REHO": "1"}
 
+
 def _setup_ar(tmp_path, monkeypatch):
     from src.backend.app.services.mock_store import SQLiteDesktopStore
+
     store = SQLiteDesktopStore(tmp_path / "db_ar.sqlite")
     monkeypatch.setattr(
-        "src.backend.app.services.preprocessing_alff_reho_execution.mock_store", store,
+        "src.backend.app.services.preprocessing_alff_reho_execution.mock_store",
+        store,
     )
     return store
 
@@ -69,15 +73,21 @@ class TestAlffRehoPartialStatus:
 
         _make_dry_run_ar(tmp_path)
         req = AlffRehoSandboxExecutionRequest(
-            dry_run_id="dr-synth", functional_input_dir=str(func_dir),
+            dry_run_id="dr-synth",
+            functional_input_dir=str(func_dir),
             confirm_sandbox_copy=True,
         )
         result = run_alff_reho_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL_AR, project_dir=str(tmp_path),
+            "proj",
+            "pp-test",
+            req,
+            env=_ALL_AR,
+            project_dir=str(tmp_path),
         )
         assert result.ok
-        assert result.status == "succeeded", \
+        assert result.status == "succeeded", (
             f"Expected succeeded for default full-dataset ALFF/ReHo, got {result.status}: {result.warnings}"
+        )
         assert result.files_discovered == 15
         assert result.files_selected == 15
         assert result.dataset_complete
@@ -100,22 +110,31 @@ class TestAlffRehoPartialStatus:
 
         _make_dry_run_ar(tmp_path)
         req = AlffRehoSandboxExecutionRequest(
-            dry_run_id="dr-synth", functional_input_dir=str(func_dir),
-            confirm_sandbox_copy=True, preview_limit=10,
+            dry_run_id="dr-synth",
+            functional_input_dir=str(func_dir),
+            confirm_sandbox_copy=True,
+            preview_limit=10,
         )
         result = run_alff_reho_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL_AR, project_dir=str(tmp_path),
+            "proj",
+            "pp-test",
+            req,
+            env=_ALL_AR,
+            project_dir=str(tmp_path),
         )
         assert result.ok
-        assert result.status == "partial", \
+        assert result.status == "partial", (
             f"Expected partial for explicit preview limit, got {result.status}: {result.warnings}"
+        )
         assert result.files_discovered == 15
         assert result.files_selected == 10
         assert not result.dataset_complete
-        preview_warnings = [w for w in result.warnings if "preview" in w.lower()
-                           or "only" in w.lower()]
-        assert len(preview_warnings) >= 1, \
+        preview_warnings = [
+            w for w in result.warnings if "preview" in w.lower() or "only" in w.lower()
+        ]
+        assert len(preview_warnings) >= 1, (
             f"Expected explicit preview warning, got warnings: {result.warnings}"
+        )
 
     def test_10_or_fewer_files_all_succeed_returns_succeeded(self, tmp_path, monkeypatch):
         """10 or fewer files with all metrics succeeding → status='succeeded'."""
@@ -135,15 +154,21 @@ class TestAlffRehoPartialStatus:
 
         _make_dry_run_ar(tmp_path)
         req = AlffRehoSandboxExecutionRequest(
-            dry_run_id="dr-synth", functional_input_dir=str(func_dir),
+            dry_run_id="dr-synth",
+            functional_input_dir=str(func_dir),
             confirm_sandbox_copy=True,
         )
         result = run_alff_reho_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL_AR, project_dir=str(tmp_path),
+            "proj",
+            "pp-test",
+            req,
+            env=_ALL_AR,
+            project_dir=str(tmp_path),
         )
         assert result.ok
-        assert result.status == "succeeded", \
+        assert result.status == "succeeded", (
             f"Expected succeeded for 3 files, got {result.status}: {result.warnings}"
+        )
         assert result.dataset_complete
         assert result.files_discovered == 3
         assert result.files_selected == 3
@@ -153,11 +178,14 @@ class TestAlffRehoPartialStatus:
 
 _ALL_FC = {"MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1", "MEDIMAGE_ALLOW_SANDBOXED_FC": "1"}
 
+
 def _setup_fc(tmp_path, monkeypatch):
     from src.backend.app.services.mock_store import SQLiteDesktopStore
+
     store = SQLiteDesktopStore(tmp_path / "db_fc.sqlite")
     monkeypatch.setattr(
-        "src.backend.app.services.preprocessing_fc_execution.mock_store", store,
+        "src.backend.app.services.preprocessing_fc_execution.mock_store",
+        store,
     )
     return store
 
@@ -202,15 +230,21 @@ class TestFcPartialStatus:
 
         _make_dry_run_fc(tmp_path)
         req = FcSandboxExecutionRequest(
-            dry_run_id="dr-fc", functional_input_dir=str(func_dir),
+            dry_run_id="dr-fc",
+            functional_input_dir=str(func_dir),
             confirm_sandbox_copy=True,
         )
         result = run_fc_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL_FC, project_dir=str(tmp_path),
+            "proj",
+            "pp-test",
+            req,
+            env=_ALL_FC,
+            project_dir=str(tmp_path),
         )
         assert result.ok
-        assert result.status == "partial", \
+        assert result.status == "partial", (
             f"Expected partial for >10 FC files, got {result.status}: {result.warnings}"
+        )
         assert result.files_discovered == 15
         assert result.files_selected == 10
         assert not result.dataset_complete
@@ -238,21 +272,27 @@ class TestFcPartialStatus:
 
         _make_dry_run_fc(tmp_path)
         req = FcSandboxExecutionRequest(
-            dry_run_id="dr-fc", functional_input_dir=str(func_dir),
+            dry_run_id="dr-fc",
+            functional_input_dir=str(func_dir),
             confirm_sandbox_copy=True,
         )
         result = run_fc_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL_FC, project_dir=str(tmp_path),
+            "proj",
+            "pp-test",
+            req,
+            env=_ALL_FC,
+            project_dir=str(tmp_path),
         )
         assert result.ok
-        assert result.status == "partial", \
+        assert result.status == "partial", (
             f"Expected partial when some files fail, got {result.status}: {result.warnings}"
-        assert result.subjects_succeeded == 4, \
+        )
+        assert result.subjects_succeeded == 4, (
             f"Expected 4 succeeded (sub-003 too few timepoints), got {result.subjects_succeeded}"
+        )
         assert result.subjects_failed == 1
         fail_warnings = [w for w in result.warnings if "too few timepoints" in w.lower()]
-        assert len(fail_warnings) >= 1, \
-            f"Expected timepoint warning, got: {result.warnings}"
+        assert len(fail_warnings) >= 1, f"Expected timepoint warning, got: {result.warnings}"
 
     def test_all_files_succeed_returns_succeeded(self, tmp_path, monkeypatch):
         """All files succeed → status='succeeded'."""
@@ -272,15 +312,21 @@ class TestFcPartialStatus:
 
         _make_dry_run_fc(tmp_path)
         req = FcSandboxExecutionRequest(
-            dry_run_id="dr-fc", functional_input_dir=str(func_dir),
+            dry_run_id="dr-fc",
+            functional_input_dir=str(func_dir),
             confirm_sandbox_copy=True,
         )
         result = run_fc_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL_FC, project_dir=str(tmp_path),
+            "proj",
+            "pp-test",
+            req,
+            env=_ALL_FC,
+            project_dir=str(tmp_path),
         )
         assert result.ok
-        assert result.status == "succeeded", \
+        assert result.status == "succeeded", (
             f"Expected succeeded, got {result.status}: {result.warnings}"
+        )
         assert result.subjects_succeeded == 3
         assert result.subjects_failed == 0
         assert result.subjects_partial == 0
@@ -304,14 +350,20 @@ class TestFcPartialStatus:
 
         _make_dry_run_fc(tmp_path)
         req = FcSandboxExecutionRequest(
-            dry_run_id="dr-fc", functional_input_dir=str(func_dir),
+            dry_run_id="dr-fc",
+            functional_input_dir=str(func_dir),
             confirm_sandbox_copy=True,
         )
         result = run_fc_sandbox_execution(
-            "proj", "pp-test", req, env=_ALL_FC, project_dir=str(tmp_path),
+            "proj",
+            "pp-test",
+            req,
+            env=_ALL_FC,
+            project_dir=str(tmp_path),
         )
         assert result.ok
-        assert result.status == "warning", \
+        assert result.status == "warning", (
             f"Expected warning when all fail, got {result.status}: {result.warnings}"
+        )
         assert result.subjects_succeeded == 0
         assert result.subjects_failed == 3

@@ -164,6 +164,11 @@ function getSuggestedPrompts(
       { kind: kinds.summary, text: t("assistant.prompt.defaultSummary") },
       { kind: kinds.draft, text: t("assistant.prompt.defaultDraft") },
     ],
+    agent: [
+      { kind: kinds.explanation, text: t("assistant.prompt.agentExplain") },
+      { kind: kinds.summary, text: t("assistant.prompt.agentSummary") },
+      { kind: kinds.draft, text: t("assistant.prompt.agentDraft") },
+    ],
     qc: [
       { kind: kinds.explanation, text: t("assistant.prompt.qcExplain") },
       { kind: kinds.summary, text: t("assistant.prompt.qcSummary") },
@@ -191,6 +196,7 @@ function getSuggestedPrompts(
     ],
   };
 
+  if (activePageLabel === t("nav.agent") || activePageLabel === "Agent") return promptSets.agent;
   if (activePageLabel === t("nav.qc") || activePageLabel === "QC") return promptSets.qc;
   if (activePageLabel === t("nav.results") || activePageLabel === "Results") {
     return promptSets.results;

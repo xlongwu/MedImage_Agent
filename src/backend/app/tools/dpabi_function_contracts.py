@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 DPABI_SINGLE_FUNCTION_CONTRACTS: dict[str, dict[str, Any]] = {
     "y_Smooth": {
         "description": "Spatial smoothing for one image or image list.",

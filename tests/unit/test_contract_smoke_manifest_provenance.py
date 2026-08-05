@@ -24,7 +24,6 @@ from src.backend.app.runtime import desktop_config
 from src.backend.app.schemas.execution_manifest import (
     ExecutionProvenance,
     OutputManifest,
-    OutputManifestItem,
 )
 from src.backend.app.services import (
     bold_reference_readiness,
@@ -33,26 +32,30 @@ from src.backend.app.services import (
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 from tests.goal_contract_helpers import reviewed_goal_candidate
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
-    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH",
-                        tmp_path / "desktop_config.json")
-    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT",
-                        tmp_path / "projects")
-    for mod in (project_routes, dashboard_routes, project_context,
-                reviewed_plan_store, project_history_routes,
-                execute_reviewed_routes, bold_reference_readiness,
-                motion_qc_readiness):
+    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
+    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
+    for mod in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+    ):
         monkeypatch.setattr(mod, "mock_store", store)
-    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
-                        tmp_path / "audit_records")
+    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR", tmp_path / "audit_records")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
-        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
@@ -64,13 +67,17 @@ def _create_project(client: TestClient, tmp_path: Path) -> dict:
     rd = tmp_path / "rawdata"
     rd.mkdir(parents=True, exist_ok=True)
     (rd / "dataset_description.json").write_text(
-        '{"Name": "test", "BIDSVersion": "1.8.0"}', encoding="utf-8")
+        '{"Name": "test", "BIDSVersion": "1.8.0"}', encoding="utf-8"
+    )
     pj = tmp_path / "project"
-    resp = client.post("/api/projects/create", json={
-        "project_name": "MVP Manifest Test",
-        "rawdata_dir": str(rd),
-        "project_dir": str(pj),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "MVP Manifest Test",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -87,8 +94,7 @@ def _make_plan(created: dict) -> dict:
             "diagnostics": created.get("diagnostics", {}),
         },
         "nodes": [
-            {"id": "contract_smoke", "backend": "python",
-             "depends_on": [], "params": {}},
+            {"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}},
         ],
     }
 
@@ -111,22 +117,26 @@ def _save_plan(client: TestClient, created: dict, plan: dict) -> str:
     return resp.json()["reviewed_plan"]["reviewed_plan_id"]
 
 
-def _execute(client: TestClient, created: dict, plan: dict,
-             reviewed_plan_id: str) -> dict:
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": {
-            "approved": True, "approved_by": "test",
-            "approved_nodes": ["*"], "rejected_nodes": [],
+def _execute(client: TestClient, created: dict, plan: dict, reviewed_plan_id: str) -> dict:
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": {
+                "approved": True,
+                "approved_by": "test",
+                "approved_nodes": ["*"],
+                "rejected_nodes": [],
+            },
+            "project_id": created["project_id"],
+            "reviewed_plan_id": reviewed_plan_id,
+            "project_config_path": created["project_config_path"],
+            "dry_run": False,
+            "confirm_execution": True,
+            "persist_audit": True,
+            "write_pipeline_yaml": True,
         },
-        "project_id": created["project_id"],
-        "reviewed_plan_id": reviewed_plan_id,
-        "project_config_path": created["project_config_path"],
-        "dry_run": False,
-        "confirm_execution": True,
-        "persist_audit": True,
-        "write_pipeline_yaml": True,
-    })
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -142,9 +152,7 @@ def _setup_executed(tmp_path, monkeypatch, client):
 
 def _get_artifacts(client, project_id, run_id) -> list:
     """Fetch artifact list from the API, handling dict wrapper."""
-    resp = client.get(
-        f"/api/projects/{project_id}/runs/{run_id}/artifacts"
-    )
+    resp = client.get(f"/api/projects/{project_id}/runs/{run_id}/artifacts")
     assert resp.status_code == 200, resp.text
     data = resp.json()
     if isinstance(data, list):
@@ -157,6 +165,7 @@ def _get_artifacts(client, project_id, run_id) -> list:
 # ═══════════════════════════════════════════════════════════════════════
 # Group 1 — Output manifest artifact
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_contract_smoke_writes_output_manifest(tmp_path, monkeypatch):
     """contract_smoke execution produces output_manifest.json artifact."""
@@ -173,8 +182,9 @@ def test_contract_smoke_writes_output_manifest(tmp_path, monkeypatch):
 
     # Find manifest
     manifest_names = [a.get("name", "") for a in artifacts]
-    assert "contract_smoke_output_manifest.json" in manifest_names, \
+    assert "contract_smoke_output_manifest.json" in manifest_names, (
         f"Manifest not found in artifacts: {manifest_names}"
+    )
 
 
 def test_contract_smoke_output_manifest_schema_valid(tmp_path, monkeypatch):
@@ -189,8 +199,7 @@ def test_contract_smoke_output_manifest_schema_valid(tmp_path, monkeypatch):
 
     # Find and load manifest
     manifest_artifact = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_output_manifest.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_output_manifest.json"),
         None,
     )
     assert manifest_artifact is not None, "Manifest artifact not found"
@@ -219,8 +228,7 @@ def test_manifest_items_reference_existing_files(tmp_path, monkeypatch):
     artifacts = _get_artifacts(client, created["project_id"], run_id)
 
     manifest_artifact = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_output_manifest.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_output_manifest.json"),
         None,
     )
     assert manifest_artifact is not None
@@ -239,6 +247,7 @@ def test_manifest_items_reference_existing_files(tmp_path, monkeypatch):
 # Group 2 — Execution provenance artifact
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_contract_smoke_writes_execution_provenance(tmp_path, monkeypatch):
     """contract_smoke execution produces provenance JSON artifact."""
     _isolated_store(tmp_path, monkeypatch)
@@ -250,8 +259,9 @@ def test_contract_smoke_writes_execution_provenance(tmp_path, monkeypatch):
     artifacts = _get_artifacts(client, created["project_id"], run_id)
 
     provenance_names = [a.get("name", "") for a in artifacts]
-    assert "contract_smoke_execution_provenance.json" in provenance_names, \
+    assert "contract_smoke_execution_provenance.json" in provenance_names, (
         f"Provenance not found: {provenance_names}"
+    )
 
 
 def test_contract_smoke_provenance_schema_valid(tmp_path, monkeypatch):
@@ -265,8 +275,7 @@ def test_contract_smoke_provenance_schema_valid(tmp_path, monkeypatch):
     artifacts = _get_artifacts(client, created["project_id"], run_id)
 
     prov_artifact = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_execution_provenance.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_execution_provenance.json"),
         None,
     )
     assert prov_artifact is not None, "Provenance artifact not found"
@@ -288,6 +297,7 @@ def test_contract_smoke_provenance_schema_valid(tmp_path, monkeypatch):
 # Group 3 — Artifact preview
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_manifest_and_provenance_previewable(tmp_path, monkeypatch):
     """Manifest and provenance artifacts are JSON-previewable."""
     _isolated_store(tmp_path, monkeypatch)
@@ -298,8 +308,7 @@ def test_manifest_and_provenance_previewable(tmp_path, monkeypatch):
     run_id = exec_data.get("run_id")
     artifacts = _get_artifacts(client, created["project_id"], run_id)
 
-    for name in ("contract_smoke_output_manifest.json",
-                 "contract_smoke_execution_provenance.json"):
+    for name in ("contract_smoke_output_manifest.json", "contract_smoke_execution_provenance.json"):
         art = next((a for a in artifacts if a.get("name") == name), None)
         assert art is not None, f"{name} not found"
         assert art.get("previewable") is True, f"{name} should be previewable"
@@ -309,16 +318,15 @@ def test_manifest_and_provenance_previewable(tmp_path, monkeypatch):
         aid = art.get("artifact_id")
         # Artifact detail endpoint returns preview payload directly
         preview_resp = client.get(
-            f"/api/projects/{created['project_id']}/runs/{run_id}"
-            f"/artifacts/{aid}"
+            f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts/{aid}"
         )
-        assert preview_resp.status_code == 200, \
-            f"Preview failed for {name}: {preview_resp.text}"
+        assert preview_resp.status_code == 200, f"Preview failed for {name}: {preview_resp.text}"
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Group 4 — Safety boundaries
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_manifest_does_not_modify_rawdata(tmp_path, monkeypatch):
     """contract_smoke with manifest does not modify rawdata."""
@@ -333,11 +341,14 @@ def test_manifest_does_not_modify_rawdata(tmp_path, monkeypatch):
     mtime_before = sentinel.stat().st_mtime
 
     pj = tmp_path / "project_man"
-    create_resp = client.post("/api/projects/create", json={
-        "project_name": "Manifest Safety",
-        "rawdata_dir": str(rd),
-        "project_dir": str(pj),
-    })
+    create_resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Manifest Safety",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert create_resp.status_code == 200, create_resp.text
     created = create_resp.json()
 
@@ -346,8 +357,9 @@ def test_manifest_does_not_modify_rawdata(tmp_path, monkeypatch):
     _execute(client, created, plan, rpid)
 
     mtime_after = sentinel.stat().st_mtime
-    assert mtime_before == mtime_after, \
+    assert mtime_before == mtime_after, (
         f"Rawdata sentinel mtime changed: {mtime_before} → {mtime_after}"
+    )
 
 
 def test_manifest_no_external_subprocess(tmp_path, monkeypatch):
@@ -356,6 +368,7 @@ def test_manifest_no_external_subprocess(tmp_path, monkeypatch):
     _enable_env(monkeypatch)
 
     import subprocess
+
     original_run = subprocess.run
     called_matlab = []
 
@@ -379,6 +392,7 @@ def test_manifest_no_external_subprocess(tmp_path, monkeypatch):
 def test_spm_realign_still_not_executable():
     """spm_realign_subject remains not executable."""
     from src.backend.app.runtime.tool_catalog import get_tool_catalog_item
+
     item = get_tool_catalog_item("spm_realign_subject")
     assert item.manual_required is True
     assert item.risk_level == "high"
@@ -388,6 +402,7 @@ def test_spm_realign_still_not_executable():
 # ═══════════════════════════════════════════════════════════════════════
 # Group 5 — Run history still visible
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_run_history_still_visible_with_manifest_artifacts(tmp_path, monkeypatch):
     """Run history and detail remain readable after manifest integration."""
@@ -405,7 +420,5 @@ def test_run_history_still_visible_with_manifest_artifacts(tmp_path, monkeypatch
 
     # Run detail
     run_id = exec_data.get("run_id")
-    detail_resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}"
-    )
+    detail_resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}")
     assert detail_resp.status_code == 200, detail_resp.text

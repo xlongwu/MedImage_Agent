@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
-from src.backend.app.runtime.agent_plan import _load_project_config, create_agent_plan
+from src.backend.app.core.exceptions import SafetyError
+from src.backend.app.runtime.agent_plan import create_agent_plan
 from src.backend.app.runtime.hook_manager import (
-    run_after_execute,
-    run_before_execute,
     run_on_error,
 )
 from src.backend.app.runtime.tool_registry import assert_tool_allowed
-from src.backend.app.core.exceptions import SafetyError
 
 
 def run_orchestrator_plan(

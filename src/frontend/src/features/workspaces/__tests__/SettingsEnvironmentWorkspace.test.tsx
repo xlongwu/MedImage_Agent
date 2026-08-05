@@ -50,15 +50,22 @@ vi.mock("../../../components/RsfmriReleaseReadinessPanel", () => ({
   ),
 }));
 
-function renderWorkspace(locale: "en" | "zh-CN" = "en") {
+vi.mock("../../memory/MemorySettingsPanel", () => ({
+  MemorySettingsPanel: () => <div data-testid="memory-settings-panel">Memory settings panel</div>,
+}));
+
+function renderWorkspace(locale: "en" | "zh-CN" = "en", advancedMode = false) {
   const onThemePreferenceChange = vi.fn();
+  const onAdvancedModeChange = vi.fn();
 
   render(
     <I18nProvider locale={locale}>
       <SettingsEnvironmentWorkspace
+        advancedMode={advancedMode}
         baseUrl="http://localhost"
         localePreference={locale}
         onLocalePreferenceChange={vi.fn()}
+        onAdvancedModeChange={onAdvancedModeChange}
         onThemePreferenceChange={onThemePreferenceChange}
         projectId="project-1"
         rawdataDir={"D:\\DemoData\\rawdata"}
@@ -68,7 +75,7 @@ function renderWorkspace(locale: "en" | "zh-CN" = "en") {
     </I18nProvider>,
   );
 
-  return { onThemePreferenceChange };
+  return { onAdvancedModeChange, onThemePreferenceChange };
 }
 
 describe("SettingsEnvironmentWorkspace", () => {
@@ -79,6 +86,7 @@ describe("SettingsEnvironmentWorkspace", () => {
       "Diagnostics",
     );
     expect(screen.getByRole("heading", { name: "Settings map" })).toBeInTheDocument();
+    expect(screen.getByTestId("memory-settings-panel")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Settings domains" })).toHaveTextContent("Safety");
     expect(screen.getByRole("heading", { name: "General and integrations" })).toBeInTheDocument();
     expect(screen.getByRole("radiogroup", { name: "Theme preference" })).toBeInTheDocument();
@@ -91,18 +99,13 @@ describe("SettingsEnvironmentWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Safety gates" })).toBeInTheDocument();
     expect(screen.getAllByText("Backend gated").length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Safety policy matrix" })).toBeInTheDocument();
-    expect(screen.getByText("Readiness only")).toBeInTheDocument();
-    expect(screen.getByText("Readiness only")).toHaveAttribute(
-      "title",
-      "Metadata exists without enough persisted numerical or artifact evidence.",
-    );
     expect(screen.getByRole("table", { name: "Safety policy matrix" })).toHaveTextContent(
       "Rawdata read-only",
     );
     expect(screen.getByRole("table", { name: "Safety policy matrix" })).toHaveTextContent(
       "External execution",
     );
-    expect(screen.getByLabelText("Environment setup modules")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Environment setup modules")).not.toBeInTheDocument();
   });
 
   it("routes theme preference changes through app state", () => {
@@ -115,17 +118,43 @@ describe("SettingsEnvironmentWorkspace", () => {
     expect(onThemePreferenceChange).toHaveBeenCalledWith("dark");
   });
 
-  it("keeps environment setup panels visible by default", () => {
+  it("keeps Advanced Mode off and warns before opt-in", () => {
+    const { onAdvancedModeChange } = renderWorkspace();
+
+    expect(screen.getByRole("radio", { name: "Off" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText(/change scientific meaning or comparability/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "On" }));
+    expect(onAdvancedModeChange).toHaveBeenCalledWith(true);
+  });
+
+  it("keeps manual environment tools out of the standard settings path", () => {
     renderWorkspace();
 
+    expect(screen.queryByTestId("environment-health-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("spm-realign-dry-run-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("spm-realign-wrapper-skeleton-panel")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("rsfmri-preset-panel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open diagnostics modules" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reveals compatibility environment tools only in Advanced Mode", () => {
+    renderWorkspace("en", true);
+
+    expect(screen.getByText("Readiness only")).toHaveAttribute(
+      "title",
+      "Metadata exists without enough persisted numerical or artifact evidence.",
+    );
     expect(screen.getByTestId("environment-health-panel")).toBeInTheDocument();
     expect(screen.getByTestId("spm-realign-dry-run-panel")).toBeInTheDocument();
     expect(screen.getByTestId("spm-realign-wrapper-skeleton-panel")).toBeInTheDocument();
     expect(screen.getByTestId("rsfmri-preset-panel")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open diagnostics modules" })).toBeInTheDocument();
   });
 
   it("loads migrated diagnostics modules only on demand", () => {
-    renderWorkspace();
+    renderWorkspace("en", true);
 
     expect(screen.queryByTestId("desktop-settings-panel")).not.toBeInTheDocument();
     expect(screen.queryByTestId("external-smoke-panel")).not.toBeInTheDocument();
@@ -156,6 +185,6 @@ describe("SettingsEnvironmentWorkspace", () => {
     expect(screen.getByRole("table", { name: "设置域" })).toHaveTextContent("后端门控");
     expect(screen.getByRole("radiogroup", { name: "主题偏好" })).toHaveTextContent("深色");
     expect(screen.getByRole("table", { name: "安全策略矩阵" })).toHaveTextContent("rawdata 只读");
-    expect(screen.getByRole("button", { name: "打开诊断模块" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "打开诊断模块" })).not.toBeInTheDocument();
   });
 });

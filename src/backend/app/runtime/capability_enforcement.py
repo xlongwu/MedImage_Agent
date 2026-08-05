@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.runtime.execution_gateway import current_safe_allowlist_fingerprint
 from src.backend.app.runtime.node_contract_registry import get_node_contract
-from src.backend.app.schemas.node_contract import NodeContract
 from src.backend.app.runtime.tool_execution_context import ToolExecutionContext
-from src.backend.app.schemas.pipeline_schema import PipelineNode
 from src.backend.app.schemas.execution_ticket import ExecutionTicket
-
+from src.backend.app.schemas.node_contract import NodeContract
+from src.backend.app.schemas.pipeline_schema import PipelineNode
 
 _READ_FIELDS = {
     "atlas",
@@ -62,7 +61,7 @@ def _canonical(value: str) -> Path:
 def _values(value: object) -> list[str]:
     if isinstance(value, str) and value.strip():
         return [value]
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         return [item for item in value if isinstance(item, str) and item.strip()]
     return []
 

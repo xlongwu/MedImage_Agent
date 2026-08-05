@@ -10,19 +10,19 @@ calls external tools.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from src.backend.app.schemas.execution_state import (
-    is_node_reuse_eligible,
     is_node_retry_eligible,
+    is_node_reuse_eligible,
     is_node_terminal,
     is_run_resume_eligible,
     is_run_retry_eligible,
     is_run_terminal,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. State normalization
@@ -236,6 +236,22 @@ def build_run_state_timeline(
                 node_id=nid,
                 metadata={"level": level},
             ))
+
+    def _event_sort_key(event: RunStateTimelineEvent) -> tuple[int, str, int]:
+        if not event.timestamp:
+            return (1, "", 0)
+        try:
+            normalized = event.timestamp.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            timestamp = parsed.astimezone(UTC).isoformat()
+        except (TypeError, ValueError):
+            timestamp = event.timestamp
+        state_order = {"created": 0, "running": 1}.get(event.state, 2)
+        return (0, timestamp, state_order)
+
+    events.sort(key=_event_sort_key)
 
     # ── Build node records ─────────────────────────────────────────────
     nodes: list[NodeStateTimelineRecord] = []

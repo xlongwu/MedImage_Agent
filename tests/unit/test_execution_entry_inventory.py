@@ -31,7 +31,10 @@ def test_public_api_modules_do_not_import_pipeline_executor_directly():
     for path in api_dir.glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module == "src.backend.app.runtime.pipeline_executor":
+            if (
+                isinstance(node, ast.ImportFrom)
+                and node.module == "src.backend.app.runtime.pipeline_executor"
+            ):
                 offenders.append(str(path))
     assert offenders == []
 

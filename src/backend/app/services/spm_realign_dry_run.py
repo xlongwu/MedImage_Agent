@@ -7,14 +7,13 @@ creates files or directories.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.schemas.desktop import (
     SpmRealignDryRunResponse,
     SpmRealignInputPreview,
-    SpmRealignPredictedOutput,
 )
 from src.backend.app.services.bold_reference_readiness import (
     build_bold_reference_readiness,
@@ -22,13 +21,12 @@ from src.backend.app.services.bold_reference_readiness import (
 from src.backend.app.services.environment_health import build_matlab_spm_health
 from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.spm_realign_params import (
-    default_spm_realign_params,
     validate_spm_realign_params,
 )
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _safe_slug(value: str) -> str:

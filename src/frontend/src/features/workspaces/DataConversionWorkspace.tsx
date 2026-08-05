@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { WorkspaceHeader } from "../dashboard/DashboardChrome";
 import BidsValidationPanel from "../../components/BidsValidationPanel";
+import type { BidsValidationViewState } from "../../components/BidsValidationPanel";
 import DataReadinessPanel from "../../components/DataReadinessPanel";
 import ConversionDryRunPanel from "../../components/ConversionDryRunPanel";
 import DicomConversionReviewPanel from "../../components/DicomConversionReviewPanel";
@@ -25,6 +26,7 @@ export interface DataConversionWorkspaceProps {
   inventory: ProjectInventory;
   onSelectedDataSeriesChange?: (selection: DataSeriesSelection | null) => void;
   onConversionRegistered?: () => void | Promise<void>;
+  bidsValidation?: BidsValidationViewState;
 }
 
 export function DataConversionWorkspace({
@@ -33,6 +35,7 @@ export function DataConversionWorkspace({
   inventory,
   onSelectedDataSeriesChange,
   onConversionRegistered,
+  bidsValidation,
 }: DataConversionWorkspaceProps) {
   const { t } = useI18n();
   const [dryRun, setDryRun] = useState<ConversionDryRunResponse | null>(null);
@@ -155,6 +158,7 @@ export function DataConversionWorkspace({
               baseUrl={baseUrl}
               projectId={projectId}
               projectState={inventory.dataState}
+              validation={bidsValidation}
             />
           </div>
         </div>
@@ -167,6 +171,7 @@ export function DataConversionWorkspace({
           onToggle={() => setDetailedChecksOpen((open) => !open)}
           onConversionRegistered={onConversionRegistered}
           projectId={projectId}
+          bidsValidation={bidsValidation}
         />
       </div>
     );
@@ -221,6 +226,7 @@ export function DataConversionWorkspace({
         onToggle={() => setDetailedChecksOpen((open) => !open)}
         onConversionRegistered={onConversionRegistered}
         projectId={projectId}
+        bidsValidation={bidsValidation}
       />
     </div>
   );
@@ -235,6 +241,7 @@ function DetailedDataChecks({
   onToggle,
   onConversionRegistered,
   projectId,
+  bidsValidation,
 }: {
   baseUrl: string;
   includeBidsValidation: boolean;
@@ -244,6 +251,7 @@ function DetailedDataChecks({
   onToggle: () => void;
   onConversionRegistered?: () => void | Promise<void>;
   projectId: string | null;
+  bidsValidation?: BidsValidationViewState;
 }) {
   const { t } = useI18n();
   const isEmpty = inventory.dataState === "empty" || inventory.dataState === "unknown";
@@ -283,6 +291,7 @@ function DetailedDataChecks({
             baseUrl={baseUrl}
             projectId={projectId}
             projectState={inventory.dataState}
+            validation={bidsValidation}
           />
         </div>
       ) : null}

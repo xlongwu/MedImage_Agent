@@ -31,6 +31,7 @@ def load_latest_qc_dashboard_report(
     store: ProjectStore,
 ) -> dict[str, object]:
     from fastapi import HTTPException
+
     from src.backend.app.services.qc_dashboard_report import (
         load_latest_qc_dashboard_report as _load,
     )

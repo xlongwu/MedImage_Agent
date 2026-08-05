@@ -9,7 +9,6 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
 
-
 OUTPUT_ITEM_LIMIT = 50
 ARTIFACT_PREVIEW_MAX_BYTES = 80_000
 ARTIFACT_CSV_MAX_LINES = 100
@@ -32,7 +31,7 @@ def _json_value_type(value: Any) -> str:
         return "null"
     if isinstance(value, bool):
         return "boolean"
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return "number"
     if isinstance(value, str):
         return "string"
@@ -88,7 +87,7 @@ def _json_status_value(value: Any) -> Any:
         return None
     for key in ("status", "pipeline_status", "ok", "success"):
         candidate = value.get(key)
-        if isinstance(candidate, (str, int, float, bool)) or candidate is None:
+        if isinstance(candidate, str | int | float | bool) or candidate is None:
             return candidate
     return None
 

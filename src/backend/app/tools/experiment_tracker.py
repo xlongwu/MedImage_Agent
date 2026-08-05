@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from src.backend.app.tools.artifact_utils import is_safe_artifact_id, read_json_artifact, write_json_artifact
+from src.backend.app.tools.artifact_utils import (
+    is_safe_artifact_id,
+    read_json_artifact,
+    write_json_artifact,
+)
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _count_node_status(summary: dict[str, Any]) -> dict[str, int]:

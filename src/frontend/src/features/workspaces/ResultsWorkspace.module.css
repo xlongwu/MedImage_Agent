@@ -2,11 +2,13 @@
   display: grid;
   grid-template-columns: minmax(300px, 0.78fr) minmax(420px, 1.22fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .artifactListCard,
 .viewerCard {
+  height: 100%;
+  box-sizing: border-box;
   min-width: 0;
   padding: 0;
   overflow: hidden;
@@ -16,8 +18,13 @@
   min-height: 480px;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1120px) {
   .artifactViewerGrid {
-    grid-template-columns: minmax(280px, 0.9fr) minmax(380px, 1.1fr);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .artifactListCard,
+  .viewerCard {
+    height: auto;
   }
 }

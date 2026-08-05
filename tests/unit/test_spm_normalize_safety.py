@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json, subprocess
-from pathlib import Path
-import pytest
+import json
+import subprocess
+
 from src.backend.app.tools.spm_normalize_runner import run_spm_normalize_subject
 
 
@@ -20,12 +20,17 @@ def _make_env(tmp_path, *, create_def=True, create_func=True):
 
 # ── safety preflight ──
 
+
 def test_matlab_with_args_blocked(tmp_path):
     _make_env(tmp_path)
     result = run_spm_normalize_subject(
-        matlab_command="matlab -r evil", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
+        matlab_command="matlab -r evil",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        derivatives_dir=str(tmp_path / "derivatives"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
     )
     assert result["ok"] is False
     assert result.get("stage") == "matlab_safety_preflight"
@@ -34,24 +39,37 @@ def test_matlab_with_args_blocked(tmp_path):
 def test_safety_error_no_subprocess(monkeypatch, tmp_path):
     _make_env(tmp_path)
     called = []
-    def _track(*a, **kw): called.append(1); return subprocess.CompletedProcess([], 0)
+
+    def _track(*a, **kw):
+        called.append(1)
+        return subprocess.CompletedProcess([], 0)
+
     monkeypatch.setattr(subprocess, "run", _track)
     run_spm_normalize_subject(
-        matlab_command="python", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
+        matlab_command="python",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        derivatives_dir=str(tmp_path / "derivatives"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
     )
     assert len(called) == 0
 
 
 # ── def field + functional ──
 
+
 def test_missing_def_field_blocked(tmp_path):
     _make_env(tmp_path, create_def=False)
     result = run_spm_normalize_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        derivatives_dir=str(tmp_path / "derivatives"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
     )
     assert result["ok"] is False
     assert "deformation field" in str(result["errors"])
@@ -60,9 +78,13 @@ def test_missing_def_field_blocked(tmp_path):
 def test_missing_func_blocked(tmp_path):
     _make_env(tmp_path, create_func=False)
     result = run_spm_normalize_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        derivatives_dir=str(tmp_path / "derivatives"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
     )
     assert result["ok"] is False
     assert "functional" in str(result["errors"]).lower()
@@ -70,28 +92,41 @@ def test_missing_func_blocked(tmp_path):
 
 def test_approved_false_blocks(tmp_path):
     result = run_spm_normalize_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=False,
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        derivatives_dir=str(tmp_path / "derivatives"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=False,
     )
     assert result["ok"] is False
 
 
 # ── misc ──
 
+
 def test_result_json_serializable(tmp_path):
     result = run_spm_normalize_subject(
-        matlab_command="python", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
+        matlab_command="python",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        derivatives_dir=str(tmp_path / "derivatives"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
     )
     json.dumps(result, default=str)
 
 
 def test_no_real_matlab(tmp_path):
     result = run_spm_normalize_subject(
-        matlab_command="python", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"), approved=True,
+        matlab_command="python",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        derivatives_dir=str(tmp_path / "derivatives"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
     )
     assert result.get("matlab_called") is False

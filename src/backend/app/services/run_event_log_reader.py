@@ -7,7 +7,6 @@ existing run data and read bounded previews of discovered log files.
 
 from __future__ import annotations
 
-import json
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -19,7 +18,6 @@ from src.backend.app.services.run_summary_preview import (
     resolve_run_summary_path,
 )
 from src.backend.app.tools.artifact_utils import read_json_artifact
-
 
 DEFAULT_MAX_BYTES = 20_000
 MIN_MAX_BYTES = 1_000
@@ -68,9 +66,7 @@ def _file_metadata(path: Path) -> dict[str, Any]:
         "modified_at": (
             None
             if stat.st_mtime == 0
-            else __import__("datetime")
-            .datetime.fromtimestamp(stat.st_mtime)
-            .isoformat()
+            else __import__("datetime").datetime.fromtimestamp(stat.st_mtime).isoformat()
         ),
     }
 
@@ -91,6 +87,7 @@ def _is_log_like_artifact(artifact: dict[str, Any]) -> bool:
 
 
 # ── Event discovery ──────────────────────────────────────────────────────────
+
 
 def discover_run_events(
     project: ProjectDetail,
@@ -130,7 +127,8 @@ def discover_run_events(
 
     # ── 2. Summary preview events ──
     summary, summary_warnings, summary_error = load_run_summary_preview(
-        project, record,
+        project,
+        record,
     )
     warnings.extend(summary_warnings)
     if summary_error:
@@ -277,6 +275,7 @@ def discover_run_events(
 
 # ── Log discovery ────────────────────────────────────────────────────────────
 
+
 def discover_run_logs(
     project: ProjectDetail,
     record: RunLinkRecord,
@@ -377,7 +376,10 @@ def discover_run_logs(
                         log_path = state_data.get("log_path") or state_data.get("stdout_log")
                         stderr_path = state_data.get("stderr_log")
 
-                        for log_type, log_file_str in [("stdout", log_path), ("stderr", stderr_path)]:
+                        for log_type, log_file_str in [
+                            ("stdout", log_path),
+                            ("stderr", stderr_path),
+                        ]:
                             if not log_file_str or not isinstance(log_file_str, str):
                                 continue
                             try:
@@ -386,9 +388,11 @@ def discover_run_logs(
                                 continue
                             meta = _file_metadata(log_file)
                             # Skip if already covered
-                            if any(l["path"] == str(log_file) for l in logs):
+                            if any(line["path"] == str(log_file) for line in logs):
                                 continue
-                            node_id = state_data.get("node") or state_data.get("node_id") or "unknown"
+                            node_id = (
+                                state_data.get("node") or state_data.get("node_id") or "unknown"
+                            )
                             log_entry = {
                                 "log_id": f"log_{record.run_id}_node_{len(logs)}",
                                 "name": f"{node_id}_{log_type}.log",
@@ -401,7 +405,12 @@ def discover_run_logs(
                                 "truncated": False,
                                 "warnings": [],
                             }
-                            if log_entry["exists"] and include_content and meta["size_bytes"] is not None and meta["size_bytes"] > 0:
+                            if (
+                                log_entry["exists"]
+                                and include_content
+                                and meta["size_bytes"] is not None
+                                and meta["size_bytes"] > 0
+                            ):
                                 try:
                                     content, truncated = _safe_utf8_read(log_file, effective_max)
                                     log_entry["content"] = content

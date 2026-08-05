@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+
 from src.backend.app.api.execution_contract import reject_execution_contract
 
 router = APIRouter()

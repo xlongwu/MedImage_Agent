@@ -7,7 +7,7 @@ readiness summary.  Never modifies rawdata, never executes external tools.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,7 @@ from src.backend.app.services.mock_store import mock_store
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _string_list(items: Any) -> list[str]:
@@ -82,14 +82,15 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     dataset_index_path = str(metadata.get("dataset_index_path") or "")
 
     rawdata_exists = bool(rawdata_dir) and Path(rawdata_dir).exists()
-    config_exists = bool(project_config_path) and Path(project_config_path).exists()
+    _config_exists = bool(project_config_path) and Path(project_config_path).exists()
     dataset_index_exists = bool(dataset_index_path) and Path(dataset_index_path).exists()
 
     checks.append(
         _build_check(
             "project_metadata",
             "pass" if (rawdata_dir and project_config_path) else "warning",
-            "Project metadata is present." if (rawdata_dir and project_config_path)
+            "Project metadata is present."
+            if (rawdata_dir and project_config_path)
             else "Project metadata is incomplete.",
             {
                 "rawdata_dir": rawdata_dir or None,
@@ -126,24 +127,23 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     imports: list[DatasetImportRecord] = []
     try:
         imports = [
-            DatasetImportRecord(**item)
-            for item in mock_store.list_import_records(project_id)
+            DatasetImportRecord(**item) for item in mock_store.list_import_records(project_id)
         ]
     except Exception as exc:
         warnings.append(f"IMPORT_RECORDS_FAILED: {exc}")
 
     import_count = len(imports)
-    import_paths_exist = sum(
-        1 for imp in imports if Path(imp.path).exists()
-    )
+    import_paths_exist = sum(1 for imp in imports if Path(imp.path).exists())
     has_imports = import_count > 0
     has_dicom = any(imp.dataset_type == "dicom" for imp in imports)
 
     checks.append(
         _build_check(
             "import_records",
-            "pass" if has_imports and import_paths_exist == import_count
-            else "warning" if has_imports
+            "pass"
+            if has_imports and import_paths_exist == import_count
+            else "warning"
+            if has_imports
             else "warning",
             f"{import_count} import(s) recorded, {import_paths_exist} path(s) exist."
             if has_imports
@@ -159,7 +159,9 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     if import_count > import_paths_exist:
         warnings.append(f"{import_count - import_paths_exist} import path(s) are missing on disk.")
     if not has_imports:
-        warnings.append("No dataset imports recorded. Import a dataset root to enable image discovery.")
+        warnings.append(
+            "No dataset imports recorded. Import a dataset root to enable image discovery."
+        )
 
     # ── 4. Image source discovery ──
     image_source_count = 0
@@ -178,9 +180,7 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     checks.append(
         _build_check(
             "image_source_discovery",
-            "pass" if image_source_count > 0
-            else "warning" if has_imports
-            else "fail",
+            "pass" if image_source_count > 0 else "warning" if has_imports else "fail",
             f"{image_source_count} image source(s) found across {subject_count} subject(s), "
             f"{sequence_count} sequence(s)."
             if image_source_count > 0
@@ -220,10 +220,14 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
 
     # When DICOM data exists but no NIfTI, downgrade image_validation from fail to warning
     check_status = (
-        "pass" if validation_status == "pass"
-        else "warning" if validation_status == "warning"
-        else "warning" if validation_status == "fail" and has_dicom_fallback and not image_source_count
-        else "fail" if validation_status == "fail"
+        "pass"
+        if validation_status == "pass"
+        else "warning"
+        if validation_status == "warning"
+        else "warning"
+        if validation_status == "fail" and has_dicom_fallback and not image_source_count
+        else "fail"
+        if validation_status == "fail"
         else "unknown"
     )
 
@@ -256,9 +260,7 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     checks.append(
         _build_check(
             "dataset_index",
-            "pass" if dataset_index_exists
-            else "warning" if image_source_count > 0
-            else "unknown",
+            "pass" if dataset_index_exists else "warning" if image_source_count > 0 else "unknown",
             f"Dataset index exists: {dataset_index_path}"
             if dataset_index_exists
             else "Dataset index has not been generated.",
@@ -276,7 +278,12 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
         )
 
     # ── 7. BIDS validation ──
-    bids_check = {"name": "bids_validation", "status": "unknown", "message": "BIDS validation not run.", "details": {}}
+    bids_check = {
+        "name": "bids_validation",
+        "status": "unknown",
+        "message": "BIDS validation not run.",
+        "details": {},
+    }
     roots_for_bids: list[str] = []
     if rawdata_dir:
         roots_for_bids.append(rawdata_dir)
@@ -333,8 +340,7 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
                 _build_check(
                     "dicom_preflight",
                     "pass" if dicom_file_count > 0 else "warning",
-                    f"DICOM preflight: {dicom_file_count} file(s), "
-                    f"{dicom_series_count} series."
+                    f"DICOM preflight: {dicom_file_count} file(s), {dicom_series_count} series."
                     if dicom_file_count > 0
                     else "DICOM preflight found no DICOM files.",
                     {
@@ -419,11 +425,17 @@ def build_data_readiness(project_id: str) -> DataReadinessResponse:
     elif validation_status == "fail" and has_dicom_data:
         next_actions.append("Run Conversion Dry-Run to plan DICOM-to-NIfTI conversion.")
     if validation_status == "warning":
-        next_actions.append("Review image validation warnings; expected sequences may be incomplete.")
+        next_actions.append(
+            "Review image validation warnings; expected sequences may be incomplete."
+        )
     if has_dicom and dicom_file_count > 0:
-        next_actions.append("Run DICOM-to-BIDS conversion to produce a BIDS-compatible rawdata tree.")
+        next_actions.append(
+            "Run DICOM-to-BIDS conversion to produce a BIDS-compatible rawdata tree."
+        )
     if not dataset_index_exists and image_source_count > 0:
-        next_actions.append("Generate a dataset index by re-creating the project with run_inspection=true.")
+        next_actions.append(
+            "Generate a dataset index by re-creating the project with run_inspection=true."
+        )
     if overall in ("ready", "warning"):
         next_actions.append("Generate a reviewed preprocessing plan in Plan Review.")
     if not next_actions:

@@ -8,7 +8,9 @@ import pytest
 
 nib = pytest.importorskip("nibabel")
 
-from src.backend.app.native_preproc.stages.slice_timing import run_slice_timing_correction
+from src.backend.app.native_preproc.stages.slice_timing import (  # noqa: E402
+    run_slice_timing_correction,  # noqa: E402
+)
 
 
 def _save_nifti(path: Path, data: np.ndarray) -> Path:
@@ -47,7 +49,9 @@ def test_slice_timing_corrects_shifted_sine_wave_and_preserves_shape(tmp_path: P
 
 
 def test_slice_timing_blocks_when_sidecar_metadata_is_missing(tmp_path: Path) -> None:
-    bold = _save_nifti(tmp_path / "sub-01_task-rest_bold.nii.gz", np.zeros((2, 2, 2, 4), dtype=np.float32))
+    bold = _save_nifti(
+        tmp_path / "sub-01_task-rest_bold.nii.gz", np.zeros((2, 2, 2, 4), dtype=np.float32)
+    )
 
     result = run_slice_timing_correction(bold, tmp_path / "native")
 

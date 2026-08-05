@@ -21,8 +21,11 @@ def test_smoothing_qc_computes_variance_ratio(tmp_path: Path):
     nib.save(nib.Nifti1Image(smoothed_data, affine), str(smoothed))
 
     result = compute_smoothing_qc_for_subject(
-        subject_id="sub-001", input_nii=str(input_func), smoothed_nii=str(smoothed),
-        derivatives_dir=str(derivatives), fwhm=[6.0, 6.0, 6.0],
+        subject_id="sub-001",
+        input_nii=str(input_func),
+        smoothed_nii=str(smoothed),
+        derivatives_dir=str(derivatives),
+        fwhm=[6.0, 6.0, 6.0],
     )
 
     assert result["ok"] is True

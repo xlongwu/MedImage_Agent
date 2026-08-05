@@ -1,5 +1,6 @@
-from src.backend.app.main import create_app
 from fastapi.routing import APIRoute
+
+from src.backend.app.main import create_app
 
 app = create_app()
 seen = {}

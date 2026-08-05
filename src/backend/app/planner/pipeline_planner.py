@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.planner.llm_provider import PlannerProviderError, get_planner_provider_from_env
 from src.backend.app.runtime.node_registry import get_node_runner
 from src.backend.app.schemas.pipeline_schema import PipelineValidationError, load_pipeline_yaml
-
 
 PLANNER_ROOT = Path("outputs/work/planner")
 EXTERNAL_BACKEND_TOKENS = ("matlab", "spm", "dpabi", "gui")
@@ -24,7 +23,7 @@ CANDIDATE_PIPELINES = [
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _stable_id(prefix: str, payload: dict[str, Any]) -> str:

@@ -8,7 +8,7 @@ files, never executes external tools, never accepts arbitrary paths.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any
@@ -19,20 +19,53 @@ from src.backend.app.schemas.desktop import (
     BidsValidationResponse,
 )
 
-
 BIDSMODALITIES = {"anat", "func", "dwi", "fmap", "perf", "beh", "eeg", "meg", "ieeg", "pet"}
 KNOWN_NIFTI_SUFFIXES = {
-    "T1w", "T2w", "T2star", "FLAIR", "PD", "PDT2", "inplaneT1", "inplaneT2",
-    "angio", "bold", "cbv", "phase", "sbref", "epi", "dwi", "dti",
-    "fieldmap", "magnitude", "magnitude1", "magnitude2", "phase1", "phase2",
-    "phasediff", "asl", "m0scan", "events", "channels", "coordsys", "photo",
-    "defacemask", "head", "brain", "probseg", "mask", "label", "dseg",
-    "ROI", "cbf", "ct", "pet",
+    "T1w",
+    "T2w",
+    "T2star",
+    "FLAIR",
+    "PD",
+    "PDT2",
+    "inplaneT1",
+    "inplaneT2",
+    "angio",
+    "bold",
+    "cbv",
+    "phase",
+    "sbref",
+    "epi",
+    "dwi",
+    "dti",
+    "fieldmap",
+    "magnitude",
+    "magnitude1",
+    "magnitude2",
+    "phase1",
+    "phase2",
+    "phasediff",
+    "asl",
+    "m0scan",
+    "events",
+    "channels",
+    "coordsys",
+    "photo",
+    "defacemask",
+    "head",
+    "brain",
+    "probseg",
+    "mask",
+    "label",
+    "dseg",
+    "ROI",
+    "cbf",
+    "ct",
+    "pet",
 }
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _issue(
@@ -137,16 +170,24 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
             continue
         if not root.exists() or not root.is_dir():
             warnings.append(f"BIDS_ROOT_MISSING: {root}")
-            issues.append(_issue("error", "ROOT_MISSING", f"Root does not exist: {root}", file_path=str(root)))
+            issues.append(
+                _issue("error", "ROOT_MISSING", f"Root does not exist: {root}", file_path=str(root))
+            )
             continue
         valid_roots.append(str(root))
         all_roots.append(root)
 
     if not all_roots:
         return BidsValidationResponse(
-            ok=True, project_id="", status="fail", checked_at=now,
-            roots=valid_roots, issues=[BidsValidationIssue(**i) for i in issues],
-            repair_suggestions=[], warnings=warnings, errors=errors,
+            ok=True,
+            project_id="",
+            status="fail",
+            checked_at=now,
+            roots=valid_roots,
+            issues=[BidsValidationIssue(**i) for i in issues],
+            repair_suggestions=[],
+            warnings=warnings,
+            errors=errors,
             next_actions=["Provide a valid BIDS or BIDS-like rawdata directory."],
         )
 
@@ -157,32 +198,42 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
             try:
                 json.loads(dd.read_text(encoding="utf-8-sig"))
             except (JSONDecodeError, OSError):
-                issues.append(_issue(
-                    "error", "DATASET_DESC_MALFORMED",
-                    f"dataset_description.json exists but is not valid JSON: {dd}",
-                    file_path=str(dd),
-                ))
-                repairs.append(_repair(
-                    "manual_review",
-                    "Fix or regenerate dataset_description.json",
-                    "The file is present but could not be parsed. Review the file and fix JSON syntax.",
-                    source_path=str(dd),
-                    related_issue_codes=["DATASET_DESC_MALFORMED"],
-                ))
+                issues.append(
+                    _issue(
+                        "error",
+                        "DATASET_DESC_MALFORMED",
+                        f"dataset_description.json exists but is not valid JSON: {dd}",
+                        file_path=str(dd),
+                    )
+                )
+                repairs.append(
+                    _repair(
+                        "manual_review",
+                        "Fix or regenerate dataset_description.json",
+                        "The file is present but could not be parsed. Review the file and fix JSON syntax.",
+                        source_path=str(dd),
+                        related_issue_codes=["DATASET_DESC_MALFORMED"],
+                    )
+                )
         else:
-            issues.append(_issue(
-                "warning", "DATASET_DESC_MISSING",
-                f"No dataset_description.json found in root: {root}",
-                file_path=str(root),
-            ))
-            repairs.append(_repair(
-                "metadata_suggestion",
-                "Create dataset_description.json",
-                "A minimal dataset_description.json is required for BIDS compliance. "
-                "Create one with at least Name and BIDSVersion fields.",
-                suggested_path=str(root / "dataset_description.json"),
-                related_issue_codes=["DATASET_DESC_MISSING"],
-            ))
+            issues.append(
+                _issue(
+                    "warning",
+                    "DATASET_DESC_MISSING",
+                    f"No dataset_description.json found in root: {root}",
+                    file_path=str(root),
+                )
+            )
+            repairs.append(
+                _repair(
+                    "metadata_suggestion",
+                    "Create dataset_description.json",
+                    "A minimal dataset_description.json is required for BIDS compliance. "
+                    "Create one with at least Name and BIDSVersion fields.",
+                    suggested_path=str(root / "dataset_description.json"),
+                    related_issue_codes=["DATASET_DESC_MISSING"],
+                )
+            )
 
         pt = root / "participants.tsv"
         if pt.is_file():
@@ -210,20 +261,25 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
     subject_count = len(all_subject_dirs)
 
     for nifti_path in loose_nifti[:20]:
-        issues.append(_issue(
-            "error", "LOOSE_NIFTI",
-            f"NIfTI file outside BIDS subject folder: {nifti_path.name}",
-            file_path=str(nifti_path),
-        ))
+        issues.append(
+            _issue(
+                "error",
+                "LOOSE_NIFTI",
+                f"NIfTI file outside BIDS subject folder: {nifti_path.name}",
+                file_path=str(nifti_path),
+            )
+        )
     if loose_nifti:
-        repairs.append(_repair(
-            "conversion_required",
-            "Move or convert loose NIfTI files into BIDS structure",
-            f"{len(loose_nifti)} NIfTI or sidecar file(s) were found outside "
-            "subject folders. These should be moved into a proper sub-*/ses-*/modality/ "
-            "structure. A future DICOM-to-BIDS conversion workflow can automate this.",
-            related_issue_codes=["LOOSE_NIFTI"],
-        ))
+        repairs.append(
+            _repair(
+                "conversion_required",
+                "Move or convert loose NIfTI files into BIDS structure",
+                f"{len(loose_nifti)} NIfTI or sidecar file(s) were found outside "
+                "subject folders. These should be moved into a proper sub-*/ses-*/modality/ "
+                "structure. A future DICOM-to-BIDS conversion workflow can automate this.",
+                related_issue_codes=["LOOSE_NIFTI"],
+            )
+        )
 
     # ── C/D/E. Per-subject checks ──
     seen_sessions: set[str] = set()
@@ -236,14 +292,28 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
         if ses_dirs:
             for ses_dir in ses_dirs:
                 seen_sessions.add(f"{subj_id}/{ses_dir.name}")
-                _check_modality_dir(subj_dir, ses_dir, subj_id, issues, repairs,
-                                    nifti_count_ref := [0], json_count_ref := [0])
+                _check_modality_dir(
+                    subj_dir,
+                    ses_dir,
+                    subj_id,
+                    issues,
+                    repairs,
+                    nifti_count_ref := [0],
+                    json_count_ref := [0],
+                )
                 nifti_file_count += nifti_count_ref[0]
                 sidecar_json_count += json_count_ref[0]
             session_count += len(ses_dirs)
         else:
-            _check_modality_dir(subj_dir, subj_dir, subj_id, issues, repairs,
-                                nifti_count_ref := [0], json_count_ref := [0])
+            _check_modality_dir(
+                subj_dir,
+                subj_dir,
+                subj_id,
+                issues,
+                repairs,
+                nifti_count_ref := [0],
+                json_count_ref := [0],
+            )
             nifti_file_count += nifti_count_ref[0]
             sidecar_json_count += json_count_ref[0]
 
@@ -252,11 +322,15 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
             if child.is_file():
                 for ext in (".nii.gz", ".nii"):
                     if child.name.endswith(ext):
-                        issues.append(_issue(
-                            "warning", "NIFTI_OUTSIDE_MODALITY",
-                            f"NIfTI file not inside a modality folder: {child.name}",
-                            subject_id=subj_id, file_path=str(child),
-                        ))
+                        issues.append(
+                            _issue(
+                                "warning",
+                                "NIFTI_OUTSIDE_MODALITY",
+                                f"NIfTI file not inside a modality folder: {child.name}",
+                                subject_id=subj_id,
+                                file_path=str(child),
+                            )
+                        )
                         break
 
     # Detect subject mismatch between folder and filename
@@ -276,11 +350,14 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
                     break
             file_subj = _parse_subject_id(Path(base))
             if not file_subj:
-                issues.append(_issue(
-                    "warning", "FILENAME_MISSING_SUB",
-                    f"Filename does not contain sub-* entity: {nifti.name}",
-                    file_path=str(nifti),
-                ))
+                issues.append(
+                    _issue(
+                        "warning",
+                        "FILENAME_MISSING_SUB",
+                        f"Filename does not contain sub-* entity: {nifti.name}",
+                        file_path=str(nifti),
+                    )
+                )
                 continue
             # Walk up to find parent sub- directory
             parent_subj = None
@@ -290,26 +367,33 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
                     parent_subj = anc_subj
                     break
             if parent_subj and file_subj != parent_subj:
-                issues.append(_issue(
-                    "warning", "SUBJECT_MISMATCH",
-                    f"Subject in filename ({file_subj}) does not match "
-                    f"parent folder ({parent_subj}): {nifti.name}",
-                    subject_id=parent_subj, file_path=str(nifti),
-                    details={"file_subject": file_subj, "folder_subject": parent_subj},
-                ))
-                repairs.append(_repair(
-                    "manual_review",
-                    f"Review subject mismatch: {file_subj} vs {parent_subj}",
-                    f"The file {nifti.name} contains sub-{file_subj} but is inside "
-                    f"a folder named {parent_subj}. Manually verify which subject "
-                    "this file belongs to and rename or move accordingly.",
-                    source_path=str(nifti),
-                    related_issue_codes=["SUBJECT_MISMATCH"],
-                ))
+                issues.append(
+                    _issue(
+                        "warning",
+                        "SUBJECT_MISMATCH",
+                        f"Subject in filename ({file_subj}) does not match "
+                        f"parent folder ({parent_subj}): {nifti.name}",
+                        subject_id=parent_subj,
+                        file_path=str(nifti),
+                        details={"file_subject": file_subj, "folder_subject": parent_subj},
+                    )
+                )
+                repairs.append(
+                    _repair(
+                        "manual_review",
+                        f"Review subject mismatch: {file_subj} vs {parent_subj}",
+                        f"The file {nifti.name} contains sub-{file_subj} but is inside "
+                        f"a folder named {parent_subj}. Manually verify which subject "
+                        "this file belongs to and rename or move accordingly.",
+                        source_path=str(nifti),
+                        related_issue_codes=["SUBJECT_MISMATCH"],
+                    )
+                )
 
     # ── Determine status ──
     dicom_count = 0
     from src.backend.app.services.funraw_t1raw_detector import detect_funraw_t1raw_layout
+
     for root in all_roots:
         ft = detect_funraw_t1raw_layout(root)
         if ft["layout_type"] == "funraw_t1raw":
@@ -317,14 +401,16 @@ def validate_bids(roots: list[str]) -> BidsValidationResponse:
         else:
             try:
                 for child in root.rglob("*"):
-                    if child.is_file() and (child.suffix.lower() in (".dcm", ".ima") or child.name.isdigit()):
+                    if child.is_file() and (
+                        child.suffix.lower() in (".dcm", ".ima") or child.name.isdigit()
+                    ):
                         dicom_count += 1
                         if dicom_count > 10:
                             break
             except Exception:
                 pass
 
-    is_raw_dicom = (nifti_file_count == 0 and dicom_count > 0)
+    is_raw_dicom = nifti_file_count == 0 and dicom_count > 0
 
     if not all_roots:
         status = "fail"
@@ -393,9 +479,7 @@ def _check_modality_dir(
     """Check modality subdirectories for NIfTI and sidecar structure."""
     ses_id = _parse_session_id(target_dir.name) if target_dir != subj_dir else None
 
-    for mod_dir_name in sorted(set(
-        d.name for d in target_dir.iterdir() if d.is_dir()
-    )):
+    for mod_dir_name in sorted({d.name for d in target_dir.iterdir() if d.is_dir()}):
         if mod_dir_name in BIDSMODALITIES:
             mod_dir = target_dir / mod_dir_name
             for nifti_path in sorted(mod_dir.rglob("*.nii*")):
@@ -419,57 +503,80 @@ def _check_modality_dir(
                     try:
                         json.loads(json_path.read_text(encoding="utf-8"))
                     except (JSONDecodeError, OSError):
-                        issues.append(_issue(
-                            "warning", "SIDECAR_JSON_MALFORMED",
-                            f"Sidecar JSON is not valid: {json_path.name}",
-                            subject_id=subj_id, session_id=ses_id,
-                            modality=mod_dir_name, file_path=str(json_path),
-                        ))
-                        repairs.append(_repair(
-                            "manual_review",
-                            "Fix malformed sidecar JSON",
-                            f"The sidecar {json_path.name} could not be parsed. "
-                            "Review and fix the JSON syntax.",
-                            source_path=str(json_path),
-                            related_issue_codes=["SIDECAR_JSON_MALFORMED"],
-                        ))
+                        issues.append(
+                            _issue(
+                                "warning",
+                                "SIDECAR_JSON_MALFORMED",
+                                f"Sidecar JSON is not valid: {json_path.name}",
+                                subject_id=subj_id,
+                                session_id=ses_id,
+                                modality=mod_dir_name,
+                                file_path=str(json_path),
+                            )
+                        )
+                        repairs.append(
+                            _repair(
+                                "manual_review",
+                                "Fix malformed sidecar JSON",
+                                f"The sidecar {json_path.name} could not be parsed. "
+                                "Review and fix the JSON syntax.",
+                                source_path=str(json_path),
+                                related_issue_codes=["SIDECAR_JSON_MALFORMED"],
+                            )
+                        )
 
                 # Bold-specific sidecar checks
                 if bids_suffix == "bold" and not has_json:
-                    issues.append(_issue(
-                        "warning", "BOLD_SIDECAR_MISSING",
-                        f"BOLD file missing sidecar JSON: {name}",
-                        subject_id=subj_id, session_id=ses_id,
-                        modality=mod_dir_name, file_path=str(nifti_path),
-                    ))
-                    repairs.append(_repair(
-                        "metadata_suggestion",
-                        "Create missing BOLD sidecar JSON",
-                        f"The BOLD file {name} should have a companion "
-                        f"{base_name}.json sidecar with at minimum "
-                        "RepetitionTime and TaskName fields.",
-                        suggested_path=str(json_path),
-                        related_issue_codes=["BOLD_SIDECAR_MISSING"],
-                    ))
+                    issues.append(
+                        _issue(
+                            "warning",
+                            "BOLD_SIDECAR_MISSING",
+                            f"BOLD file missing sidecar JSON: {name}",
+                            subject_id=subj_id,
+                            session_id=ses_id,
+                            modality=mod_dir_name,
+                            file_path=str(nifti_path),
+                        )
+                    )
+                    repairs.append(
+                        _repair(
+                            "metadata_suggestion",
+                            "Create missing BOLD sidecar JSON",
+                            f"The BOLD file {name} should have a companion "
+                            f"{base_name}.json sidecar with at minimum "
+                            "RepetitionTime and TaskName fields.",
+                            suggested_path=str(json_path),
+                            related_issue_codes=["BOLD_SIDECAR_MISSING"],
+                        )
+                    )
 
                 # Warn on unknown BIDS suffix
                 if bids_suffix and bids_suffix not in KNOWN_NIFTI_SUFFIXES:
-                    issues.append(_issue(
-                        "warning", "UNKNOWN_NIFTI_SUFFIX",
-                        f"Unknown BIDS suffix '{bids_suffix}' for file: {name}",
-                        subject_id=subj_id, session_id=ses_id,
-                        modality=mod_dir_name, file_path=str(nifti_path),
-                        details={"suffix": bids_suffix},
-                    ))
+                    issues.append(
+                        _issue(
+                            "warning",
+                            "UNKNOWN_NIFTI_SUFFIX",
+                            f"Unknown BIDS suffix '{bids_suffix}' for file: {name}",
+                            subject_id=subj_id,
+                            session_id=ses_id,
+                            modality=mod_dir_name,
+                            file_path=str(nifti_path),
+                            details={"suffix": bids_suffix},
+                        )
+                    )
         else:
             # Unknown modality folder
             mod_dir = target_dir / mod_dir_name
-            issues.append(_issue(
-                "warning", "UNKNOWN_MODALITY",
-                f"Unknown modality folder: {mod_dir_name}",
-                subject_id=subj_id, session_id=ses_id,
-                file_path=str(mod_dir),
-            ))
+            issues.append(
+                _issue(
+                    "warning",
+                    "UNKNOWN_MODALITY",
+                    f"Unknown modality folder: {mod_dir_name}",
+                    subject_id=subj_id,
+                    session_id=ses_id,
+                    file_path=str(mod_dir),
+                )
+            )
 
 
 def bids_summary_check(roots: list[str]) -> dict[str, Any]:
@@ -491,8 +598,10 @@ def bids_summary_check(roots: list[str]) -> dict[str, Any]:
     return {
         "name": "bids_validation",
         "status": (
-            "pass" if result.status == "pass"
-            else "warning" if result.status == "warning"
+            "pass"
+            if result.status == "pass"
+            else "warning"
+            if result.status == "warning"
             else "fail"
         ),
         "message": (

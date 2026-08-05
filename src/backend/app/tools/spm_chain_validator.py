@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 CHAIN_NODES = [
     {
         "node_id": "spm_slice_timing",

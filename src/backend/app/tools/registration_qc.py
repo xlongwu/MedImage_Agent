@@ -7,6 +7,7 @@ from typing import Any
 
 try:
     import numpy as np
+
     _HAS_NUMPY = True
 except ImportError:
     np = None  # type: ignore
@@ -53,7 +54,7 @@ def _load_meta(path: Path) -> dict[str, Any]:
 
 
 def _euclidean(a: list[float], b: list[float]) -> float:
-    return float(sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5)
+    return float(sum((x - y) ** 2 for x, y in zip(a, b, strict=False)) ** 0.5)
 
 
 def compute_registration_qc_for_subject(
@@ -77,11 +78,7 @@ def compute_registration_qc_for_subject(
     source_path = Path(source_nii)
     coreg_path = Path(coregistered_nii)
 
-    missing = [
-        str(path)
-        for path in [reference_path, source_path, coreg_path]
-        if not path.exists()
-    ]
+    missing = [str(path) for path in [reference_path, source_path, coreg_path] if not path.exists()]
 
     if missing:
         result = {
@@ -167,7 +164,9 @@ def compute_registration_qc_for_subject(
     lines.append(f"- Reference: `{result.get('reference_nii')}`")
     lines.append(f"- Source: `{result.get('source_nii')}`")
     lines.append(f"- Coregistered: `{result.get('coregistered_nii')}`")
-    lines.append(f"- Affine translation distance mm: {result.get('affine_translation_distance_mm')}")
+    lines.append(
+        f"- Affine translation distance mm: {result.get('affine_translation_distance_mm')}"
+    )
     lines.append(f"- Center distance mm: {result.get('center_of_mass_distance_mm')}")
     lines.append("")
     lines.append("## Safety Note")
@@ -269,7 +268,9 @@ def write_registration_qc_dataset_report(
     lines.append("")
     lines.append("## Safety Note")
     lines.append("")
-    lines.append("This report summarizes derivative registration QC outputs only. It does not modify rawdata.")
+    lines.append(
+        "This report summarizes derivative registration QC outputs only. It does not modify rawdata."
+    )
 
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

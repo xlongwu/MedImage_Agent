@@ -7,11 +7,6 @@ No frontend execute button.  No public endpoint.
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-import pytest
-
 
 class _NoProjectStore:
     def get_project(self, project_id: str):  # noqa: ANN001
@@ -27,6 +22,7 @@ def test_disk_space_sufficient():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_disk_space_check,
     )
+
     result = evaluate_disk_space_check(
         output_root="/tmp/test",
         estimated_required_bytes=1000,
@@ -40,6 +36,7 @@ def test_disk_space_insufficient():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_disk_space_check,
     )
+
     result = evaluate_disk_space_check(
         output_root="/tmp/test",
         estimated_required_bytes=10000,
@@ -53,6 +50,7 @@ def test_disk_space_no_output_root():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_disk_space_check,
     )
+
     result = evaluate_disk_space_check(output_root="")
     assert result.ok is False
 
@@ -61,6 +59,7 @@ def test_disk_space_unknown_free():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_disk_space_check,
     )
+
     result = evaluate_disk_space_check(
         output_root="/tmp/test",
         estimated_required_bytes=1000,
@@ -79,6 +78,7 @@ def test_runtime_policy_warnings_when_unsupported():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_runtime_policy,
     )
+
     result = evaluate_runtime_policy(
         cancellation_supported=False,
         resume_supported=False,
@@ -93,6 +93,7 @@ def test_runtime_policy_no_warnings_when_supported():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_runtime_policy,
     )
+
     result = evaluate_runtime_policy(
         cancellation_supported=True,
         resume_supported=True,
@@ -111,6 +112,7 @@ def test_readiness_blocked_if_gates_not_all_met():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(gates_met=25, gates_total=32)
     assert report.status == "blocked"
     assert len(report.blocking_issues) > 0
@@ -126,10 +128,14 @@ def test_readiness_blocked_if_public_endpoint_enabled():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     # Legacy binary flag alone → blocked (backward compat)
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         public_endpoint_enabled=True,
     )
     assert report.status == "blocked"
@@ -137,8 +143,11 @@ def test_readiness_blocked_if_public_endpoint_enabled():
 
     # present_unsafe → blocked
     report2 = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         public_endpoint_enabled=True,
         public_endpoint_state="present_unsafe",
     )
@@ -146,8 +155,11 @@ def test_readiness_blocked_if_public_endpoint_enabled():
 
     # present_default_blocked → NOT blocked (warning only)
     report3 = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         public_endpoint_enabled=True,
         public_endpoint_state="present_default_blocked",
     )
@@ -158,8 +170,11 @@ def test_readiness_blocked_if_public_endpoint_enabled():
 
     # present_enabled → NOT blocked (warning only)
     report4 = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         public_endpoint_enabled=True,
         public_endpoint_state="present_enabled",
     )
@@ -171,9 +186,13 @@ def test_readiness_blocked_if_frontend_execute_enabled():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         frontend_execute_enabled=True,
     )
     assert report.status == "blocked"
@@ -185,9 +204,13 @@ def test_readiness_blocked_if_spm_enabled():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         spm_dpabi_matlab_enabled=True,
     )
     assert report.status == "blocked"
@@ -198,9 +221,13 @@ def test_readiness_blocked_if_preprocessing_enabled():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         full_preprocessing_enabled=True,
     )
     assert report.status == "blocked"
@@ -211,11 +238,14 @@ def test_readiness_blocked_if_disk_insufficient():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32,
+        gates_met=32,
+        gates_total=32,
         disk_space_ok=False,
         disk_errors=["Insufficient disk space: 100 bytes free, 1500 bytes required"],
-        rollback_ready=True, approval_audit_ready=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
     )
     assert report.status == "blocked"
 
@@ -225,9 +255,13 @@ def test_readiness_warning_if_cancellation_unsupported():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         cancellation_supported=False,
     )
     assert report.status in ("warning", "ready_for_human_release_review")
@@ -240,9 +274,13 @@ def test_readiness_warning_if_resume_unsupported():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
         resume_supported=False,
     )
     assert report.status in ("warning", "ready_for_human_release_review")
@@ -253,8 +291,11 @@ def test_readiness_ready_for_human_review_when_all_met():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, gate_status="CONDITIONAL_GO",
+        gates_met=32,
+        gates_total=32,
+        gate_status="CONDITIONAL_GO",
         disk_space_ok=True,
         rollback_ready=True,
         approval_audit_ready=True,
@@ -282,9 +323,13 @@ def test_human_release_approval_required():
     from src.backend.app.schemas.dicom_conversion_release_readiness import (
         evaluate_release_readiness,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
     )
     assert report.human_release_approval_required is True
 
@@ -297,12 +342,16 @@ def test_human_release_approval_required():
 def test_service_does_not_call_dcm2niix():
     """Gate 11: Service does not call or import dcm2niix in executable code."""
     import inspect
+
     from src.backend.app.services import dicom_conversion_release_readiness as mod
+
     source = inspect.getsource(mod.evaluate_conversion_release_readiness)
     # Exclude docstring and comment lines
-    code_lines = [l for l in source.splitlines()
-                  if '"""' not in l and "dcm2niix" not in l.lower()
-                  and not l.strip().startswith("#")]
+    code_lines = [
+        line
+        for line in source.splitlines()
+        if '"""' not in line and "dcm2niix" not in line.lower() and not line.strip().startswith("#")
+    ]
     code = "\n".join(code_lines)
     # The word "subprocess" may appear in docstrings filtered above;
     # test_service_imports_no_subprocess already verifies no import.
@@ -313,10 +362,14 @@ def test_service_does_not_call_dcm2niix():
 def test_service_does_not_modify_rawdata():
     """Gate 12: Service does not modify rawdata."""
     import inspect
+
     from src.backend.app.services import dicom_conversion_release_readiness as mod
+
     source = inspect.getsource(mod.evaluate_conversion_release_readiness)
     # Exclude docstring lines — rawdata appears in docstring for documentation
-    code_lines = [l for l in source.splitlines() if '"""' not in l and "rawdata" not in l.lower()]
+    code_lines = [
+        line for line in source.splitlines() if '"""' not in line and "rawdata" not in line.lower()
+    ]
     code = "\n".join(code_lines)
     assert "open(" not in code
 
@@ -324,6 +377,7 @@ def test_service_does_not_modify_rawdata():
 def test_service_imports_no_subprocess():
     """Gate 13: Service does not import subprocess."""
     import src.backend.app.services.dicom_conversion_release_readiness as mod
+
     source = open(mod.__file__, encoding="utf-8").read()
     assert "import subprocess" not in source
     assert "from subprocess" not in source
@@ -332,6 +386,7 @@ def test_service_imports_no_subprocess():
 def test_service_does_not_scan_frontend_source_for_readiness():
     """Release readiness must use runtime flags/config, not packaged source scans."""
     import inspect
+
     import src.backend.app.services.dicom_conversion_release_readiness as mod
 
     source = inspect.getsource(mod._is_frontend_execute_button_present)
@@ -400,6 +455,7 @@ def test_no_public_conversion_execute_endpoint():
     Without env flags, it returns 200 with status=disabled/blocked.
     """
     from fastapi.testclient import TestClient
+
     from src.backend.app.api.dependencies import get_project_store
     from src.backend.app.main import app
 
@@ -412,7 +468,9 @@ def test_no_public_conversion_execute_endpoint():
         assert detail["error_code"] == "EXECUTION_CONTRACT_REQUIRED"
         assert detail["replacement"] == "/api/plans/execute-reviewed"
         resp2 = client.post("/api/projects/test/conversion/run", json={})
-        assert resp2.status_code in (404, 405, 422), f"Expected 404/405/422, got {resp2.status_code}"
+        assert resp2.status_code in (404, 405, 422), (
+            f"Expected 404/405/422, got {resp2.status_code}"
+        )
     finally:
         app.dependency_overrides.pop(get_project_store, None)
 
@@ -420,6 +478,7 @@ def test_no_public_conversion_execute_endpoint():
 def test_no_frontend_execute_button():
     """Gate 16: No frontend 'Run Conversion' onClick handler exists."""
     import os
+
     panel_paths = [
         "src/frontend/src/components/DicomConversionReviewPanel.tsx",
         "src/frontend/src/components/DicomConversionReviewPanel.jsx",
@@ -431,9 +490,15 @@ def test_no_frontend_execute_button():
             lines = open(full, encoding="utf-8").read().splitlines()
             for line in lines:
                 stripped = line.strip()
-                if stripped.startswith("//") or stripped.startswith("/*") or stripped.startswith("*"):
+                if (
+                    stripped.startswith("//")
+                    or stripped.startswith("/*")
+                    or stripped.startswith("*")
+                ):
                     continue
-                if "onClick" in stripped and ("Run Conversion" in stripped or "runConversion" in stripped):
+                if "onClick" in stripped and (
+                    "Run Conversion" in stripped or "runConversion" in stripped
+                ):
                     found = True
     assert not found, "No 'Run Conversion' onClick handler must exist"
 
@@ -443,6 +508,7 @@ def test_go_no_go_32_gates_met():
     from src.backend.app.schemas.dicom_conversion_go_no_go import (
         build_default_go_no_go_review,
     )
+
     review = build_default_go_no_go_review()
     assert review.met_count == 32
     assert review.partial_count == 0
@@ -452,6 +518,7 @@ def test_go_no_go_32_gates_met():
 def test_schema_helpers_are_pure():
     """All schema helpers must be pure — no file I/O, no subprocess."""
     import src.backend.app.schemas.dicom_conversion_release_readiness as mod
+
     source = open(mod.__file__, encoding="utf-8").read()
     assert "import subprocess" not in source
     assert "from subprocess" not in source
@@ -463,11 +530,17 @@ def test_summarize_release_blockers():
         evaluate_release_readiness,
         summarize_release_blockers,
     )
+
     report = evaluate_release_readiness(
-        gates_met=32, gates_total=32, disk_space_ok=True,
-        rollback_ready=True, approval_audit_ready=True,
-        public_endpoint_enabled=False, frontend_execute_enabled=False,
-        spm_dpabi_matlab_enabled=False, full_preprocessing_enabled=False,
+        gates_met=32,
+        gates_total=32,
+        disk_space_ok=True,
+        rollback_ready=True,
+        approval_audit_ready=True,
+        public_endpoint_enabled=False,
+        frontend_execute_enabled=False,
+        spm_dpabi_matlab_enabled=False,
+        full_preprocessing_enabled=False,
     )
     summary = summarize_release_blockers(report)
     assert summary["human_release_approval_required"] is True

@@ -111,6 +111,7 @@ a = Analysis(
         # CUDA compiler dependency graph.  PyInstaller cannot discover that
         # import from the frozen backend entry point.
         "graphlib",
+        "pydicom",
         "ssl",
         "_ssl",
     ] + _scipy_hiddenimports + _cupy_hiddenimports,

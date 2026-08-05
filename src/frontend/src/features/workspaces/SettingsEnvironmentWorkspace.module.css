@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .domainNav {
@@ -56,12 +56,14 @@
 .safetyCard,
 .policyCard {
   display: grid;
+  height: 100%;
+  box-sizing: border-box;
   gap: 14px;
   min-width: 0;
 }
 
 .mapCard {
-  grid-row: span 2;
+  grid-row: auto;
 }
 
 .cardHeader,

@@ -7,7 +7,7 @@ import pytest
 
 nib = pytest.importorskip("nibabel")
 
-from src.backend.app.native_preproc.stages.roi_timeseries import run_roi_timeseries
+from src.backend.app.native_preproc.stages.roi_timeseries import run_roi_timeseries  # noqa: E402
 
 
 def _save(path: Path, data: np.ndarray) -> Path:

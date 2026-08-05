@@ -17,11 +17,18 @@ SID = None  # populated per-test where needed
 
 
 def _session(**kw):
-    return client.post("/api/gui-agent/sessions", json={
-        "provider": "mock", "target_app": "a", "target_window": "w",
-        "allowed_action_tiers": [0], "file_scope": ["outputs/work/gui_agent/"],
-        "approved": True, **kw,
-    })
+    return client.post(
+        "/api/gui-agent/sessions",
+        json={
+            "provider": "mock",
+            "target_app": "a",
+            "target_window": "w",
+            "allowed_action_tiers": [0],
+            "file_scope": ["outputs/work/gui_agent/"],
+            "approved": True,
+            **kw,
+        },
+    )
 
 
 def _sid():
@@ -31,21 +38,31 @@ def _sid():
 
 
 def _step(session_id, fixture_id, submit=True, dry=False):
-    return client.post("/api/gui-agent/mock-adapter/step", json={
-        "session_id": session_id, "fixture_id": fixture_id,
-        "submit_to_guard": submit, "dry_run": dry,
-    })
+    return client.post(
+        "/api/gui-agent/mock-adapter/step",
+        json={
+            "session_id": session_id,
+            "fixture_id": fixture_id,
+            "submit_to_guard": submit,
+            "dry_run": dry,
+        },
+    )
 
 
 def _dry(fixture_id):
-    return client.post("/api/gui-agent/mock-adapter/step", json={
-        "fixture_id": fixture_id, "dry_run": True,
-    })
+    return client.post(
+        "/api/gui-agent/mock-adapter/step",
+        json={
+            "fixture_id": fixture_id,
+            "dry_run": True,
+        },
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # A. Fixture Catalog Endpoint
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_e2e_fixtures_200():
     r = client.get("/api/gui-agent/mock-adapter/fixtures")
@@ -59,14 +76,18 @@ def test_e2e_fixtures_count():
 
 
 def test_e2e_fixtures_include_safe():
-    ids = {f["fixture_id"] for f in
-           client.get("/api/gui-agent/mock-adapter/fixtures").json()["fixtures"]}
+    ids = {
+        f["fixture_id"]
+        for f in client.get("/api/gui-agent/mock-adapter/fixtures").json()["fixtures"]
+    }
     assert "safe_observe_current_state" in ids
 
 
 def test_e2e_fixtures_include_unsafe():
-    ids = {f["fixture_id"] for f in
-           client.get("/api/gui-agent/mock-adapter/fixtures").json()["fixtures"]}
+    ids = {
+        f["fixture_id"]
+        for f in client.get("/api/gui-agent/mock-adapter/fixtures").json()["fixtures"]
+    }
     assert "click_run" in ids
 
 
@@ -91,6 +112,7 @@ def test_e2e_fixtures_no_raw_text():
 # B. Safe Fixture Dry-Run E2E
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_e2e_dry_run_mapped():
     r = _dry("safe_observe_current_state")
     assert r.json()["status"] == "MODEL_ACTION_MAPPED_DRY_RUN"
@@ -109,9 +131,11 @@ def test_e2e_dry_run_adapter_provider_false():
 
 def test_e2e_dry_run_no_provider_call(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda s, se, a, p: calls.append(1) or {"executed": False})
+    monkeypatch.setattr(
+        MockGuiProvider, "perform_step", lambda s, se, a, p: calls.append(1) or {"executed": False}
+    )
     _dry("safe_observe_current_state")
     assert len(calls) == 0
 
@@ -119,6 +143,7 @@ def test_e2e_dry_run_no_provider_call(monkeypatch):
 # ══════════════════════════════════════════════════════════════════════════════
 # C. Safe Fixture Submit E2E
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_e2e_submit_200():
     r = _step(_sid(), "safe_observe_current_state")
@@ -134,7 +159,10 @@ def test_e2e_submit_adapter_decision():
 
 
 def test_e2e_submit_action_type():
-    assert _step(_sid(), "safe_observe_current_state").json()["normalized_action_type"] == "record_observation"
+    assert (
+        _step(_sid(), "safe_observe_current_state").json()["normalized_action_type"]
+        == "record_observation"
+    )
 
 
 def test_e2e_submit_guard_ok():
@@ -154,16 +182,23 @@ def test_e2e_submit_provider_flags():
 
 def test_e2e_submit_safety_flags():
     r = _step(_sid(), "safe_observe_current_state")
-    for k in ("desktop_touched", "screenshot_captured", "clipboard_accessed",
-              "mouse_used", "keyboard_used"):
+    for k in (
+        "desktop_touched",
+        "screenshot_captured",
+        "clipboard_accessed",
+        "mouse_used",
+        "keyboard_used",
+    ):
         assert r.json().get(k) is False
 
 
 def test_e2e_submit_calls_mock_provider(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda s, se, a, p: calls.append(a) or {"executed": False})
+    monkeypatch.setattr(
+        MockGuiProvider, "perform_step", lambda s, se, a, p: calls.append(a) or {"executed": False}
+    )
     _step(_sid(), "safe_observe_current_state")
     assert calls == ["record_observation"]
 
@@ -173,6 +208,7 @@ def test_e2e_submit_increments_count():
     _step(sid, "safe_observe_current_state")
     _step(sid, "safe_observe_current_state")
     from src.backend.app.runtime.gui_agent import _read_session
+
     s = _read_session(sid)
     assert s["step_count"] >= 2
 
@@ -180,6 +216,7 @@ def test_e2e_submit_increments_count():
 # ══════════════════════════════════════════════════════════════════════════════
 # D. Rejected Fixture E2E
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_e2e_rejected_status():
     r = _step(_sid(), "click_run")
@@ -199,16 +236,23 @@ def test_e2e_rejected_provider_false():
 
 def test_e2e_rejected_safety():
     r = _step(_sid(), "click_run")
-    for k in ("desktop_touched", "screenshot_captured", "clipboard_accessed",
-              "mouse_used", "keyboard_used"):
+    for k in (
+        "desktop_touched",
+        "screenshot_captured",
+        "clipboard_accessed",
+        "mouse_used",
+        "keyboard_used",
+    ):
         assert r.json()[k] is False
 
 
 def test_e2e_rejected_no_provider_call(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda s, se, a, p: calls.append(1) or {"executed": False})
+    monkeypatch.setattr(
+        MockGuiProvider, "perform_step", lambda s, se, a, p: calls.append(1) or {"executed": False}
+    )
     _step(_sid(), "click_run")
     assert len(calls) == 0
 
@@ -239,31 +283,42 @@ def test_e2e_rejected_fixture(fid, category):
 # E. Request Validation E2E
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_e2e_unknown_fixture():
     r = client.post("/api/gui-agent/mock-adapter/step", json={"fixture_id": "no_such"})
     assert r.json()["status"] == "MOCK_MODEL_FIXTURE_NOT_FOUND"
 
 
 def test_e2e_no_session_submit():
-    r = client.post("/api/gui-agent/mock-adapter/step", json={
-        "fixture_id": "safe_observe_current_state", "submit_to_guard": True,
-    })
+    r = client.post(
+        "/api/gui-agent/mock-adapter/step",
+        json={
+            "fixture_id": "safe_observe_current_state",
+            "submit_to_guard": True,
+        },
+    )
     assert r.json()["ok"] is False
 
 
 def test_e2e_dry_submit_no_submit():
-    r = client.post("/api/gui-agent/mock-adapter/step", json={
-        "fixture_id": "safe_observe_current_state",
-        "submit_to_guard": True, "dry_run": True,
-    })
+    r = client.post(
+        "/api/gui-agent/mock-adapter/step",
+        json={
+            "fixture_id": "safe_observe_current_state",
+            "submit_to_guard": True,
+            "dry_run": True,
+        },
+    )
     assert r.json()["submitted_to_guard"] is False
 
 
 def test_e2e_invalid_session_no_provider(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda s, se, a, p: calls.append(1) or {"executed": False})
+    monkeypatch.setattr(
+        MockGuiProvider, "perform_step", lambda s, se, a, p: calls.append(1) or {"executed": False}
+    )
     r = _step("nonexistent_session_id_xyz", "safe_observe_current_state")
     assert r.status_code == 200
     assert r.json()["ok"] is False
@@ -274,6 +329,7 @@ def test_e2e_invalid_session_no_provider(monkeypatch):
 # ══════════════════════════════════════════════════════════════════════════════
 # F. Guard Failure E2E
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_e2e_aborted_session_blocked():
     sid = _sid()
@@ -292,9 +348,11 @@ def test_e2e_step_limit_blocked():
 
 def test_e2e_guard_failure_no_provider(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda s, se, a, p: calls.append(1) or {"executed": False})
+    monkeypatch.setattr(
+        MockGuiProvider, "perform_step", lambda s, se, a, p: calls.append(1) or {"executed": False}
+    )
     sid = _sid()
     client.post(f"/api/gui-agent/sessions/{sid}/abort")
     _step(sid, "safe_observe_current_state")
@@ -312,8 +370,10 @@ def test_e2e_guard_failure_no_provider_true():
 # G. Non-Call / Isolation Assertions
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_e2e_no_pywinauto_module():
     import sys
+
     assert "pywinauto" not in sys.modules
 
 
@@ -331,6 +391,7 @@ def test_e2e_no_rawdata_write():
 # ══════════════════════════════════════════════════════════════════════════════
 # H. Regression
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_e2e_mock_fixture_tests_pass():
     pass
@@ -350,30 +411,54 @@ def test_e2e_guarded_api_tests_pass():
 
 def test_e2e_gui_blocklist_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
+
     p = classify_plan_nodes({"pipeline_id": "t", "nodes": [{"id": "gui_e2e", "depends_on": []}]})
     assert "gui_e2e" in p["blocked_unknown_nodes"]
 
 
 def test_e2e_spm_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]})
-    assert "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {
+                    "id": "spm_realign_subject",
+                    "depends_on": [],
+                    "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+                },
+            ],
+        }
+    )
+    assert (
+        "spm_realign_subject" not in p["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_e2e_dpabi_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "dpabi_capability_inspection" in p["allowed_dpabi_metadata_nodes"]
 
 
 def test_e2e_gpu_ok():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    p = classify_plan_nodes({"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]})
+
+    p = classify_plan_nodes(
+        {
+            "pipeline_id": "t",
+            "nodes": [
+                {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+            ],
+        }
+    )
     assert "gpu_alff_subject" in p["allowed_gpu_nodes"]

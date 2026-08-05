@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -30,33 +31,48 @@ from src.backend.app.services import (
     spm_realign_dry_run,
     spm_realign_wrapper_skeleton,
 )
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-from src.backend.app.services.spm_realign_params import default_spm_realign_params
 
 
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, motion_qc_readiness, spm_realign_dry_run, spm_realign_wrapper_skeleton,
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+        spm_realign_dry_run,
+        spm_realign_wrapper_skeleton,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
 def _create_project(client: TestClient, tmp_path: Path) -> dict:
-    resp = client.post("/api/projects/create", json={
-        "project_name": "Policy Guard Project", "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
-        "project_dir": str(tmp_path / "policy_proj"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "Policy Guard Project",
+            "rawdata_dir": str(Path("examples/synthetic_bids/rawdata").resolve()),
+            "project_dir": str(tmp_path / "policy_proj"),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
 
 # ── 1. Catalog metadata guard ────────────────────────────────────────────────
+
 
 def test_spm_realign_not_marked_executable():
     item = get_tool_catalog_item("spm_realign_subject")
@@ -67,6 +83,7 @@ def test_spm_realign_not_marked_executable():
 
 
 # ── 2. Dry-run does not enable execution ────────────────────────────────────
+
 
 def test_spm_realign_dry_run_does_not_enable_execution(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
@@ -82,6 +99,7 @@ def test_spm_realign_dry_run_does_not_enable_execution(tmp_path, monkeypatch):
 
 
 # ── 3. Wrapper skeleton does not enable execution ───────────────────────────
+
 
 def test_spm_wrapper_skeleton_does_not_enable_execution(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
@@ -101,6 +119,7 @@ def test_spm_wrapper_skeleton_does_not_enable_execution(tmp_path, monkeypatch):
 
 # ── 4. Synthetic smoke skipped without env flags ────────────────────────────
 
+
 def test_synthetic_smoke_skipped_without_env_flags():
     """Verify the required env flags are NOT set in normal test environment."""
     assert os.environ.get("MEDIMAGE_MATLAB_ENABLED") != "1", (
@@ -116,14 +135,19 @@ def test_synthetic_smoke_skipped_without_env_flags():
 
 # ── 5. Approval alone not sufficient for execution ──────────────────────────
 
+
 def test_external_tool_approval_not_sufficient_for_execution():
     """Even with all approval fields, allowlist/execution path is absent."""
     plan = {
         "pipeline_id": "test_approval_not_enough",
-        "nodes": [{
-            "id": "spm_smooth_subject", "backend": "matlab-spm",
-            "depends_on": [], "params": {},
-        }],
+        "nodes": [
+            {
+                "id": "spm_smooth_subject",
+                "backend": "matlab-spm",
+                "depends_on": [],
+                "params": {},
+            }
+        ],
     }
     val = validate_plan(plan).to_dict()
     # All 6 external-tool fields present
@@ -152,6 +176,7 @@ def test_external_tool_approval_not_sufficient_for_execution():
 
 # ── 6. No subprocess call in dry-run/wrapper skeleton path ──────────────────
 
+
 def test_no_spm_realign_subprocess_called(tmp_path, monkeypatch):
     """Dry-run and wrapper skeleton must not invoke real SPM realignment.
 
@@ -160,6 +185,7 @@ def test_no_spm_realign_subprocess_called(tmp_path, monkeypatch):
     But no real SPM jobman/spm realign call should occur.
     """
     import subprocess as sp_module
+
     original_run = sp_module.run
     calls = []
 
@@ -178,8 +204,13 @@ def test_no_spm_realign_subprocess_called(tmp_path, monkeypatch):
     # Allowed: environment health version query (disp(version); exit)
     # Forbidden: realign, jobman, spm('realign'), estwrite, etc.
     realign_calls = [
-        c for c in calls
-        if any(keyword in str(a).lower() for keyword in ("realign", "jobman", "estwrite", "spm_realign") for a in c[0])
+        c
+        for c in calls
+        if any(
+            keyword in str(a).lower()
+            for keyword in ("realign", "jobman", "estwrite", "spm_realign")
+            for a in c[0]
+        )
     ]
     assert len(realign_calls) == 0, (
         f"Dry-run/wrapper skeleton must not call real SPM realignment: {realign_calls}"

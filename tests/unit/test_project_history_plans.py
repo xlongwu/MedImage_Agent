@@ -163,9 +163,7 @@ def test_reviewed_plan_is_stable_listed_and_snapshotted(tmp_path, monkeypatch):
         first["reviewed_plan_id"]
     ]
 
-    detail = client.get(
-        f"/api/projects/{created['project_id']}/plans/{first['reviewed_plan_id']}"
-    )
+    detail = client.get(f"/api/projects/{created['project_id']}/plans/{first['reviewed_plan_id']}")
     assert detail.status_code == 200
     assert detail.json()["reviewed_plan"]["payload"]["plan"] == normalized_plan
 
@@ -200,14 +198,11 @@ def test_goal_contract_candidate_is_visible_editable_and_hash_bound(tmp_path, mo
     assert contract["goal_contract_hash"]
     assert contract["project_id"] == created["project_id"]
 
-    changed = save(
-        _reviewed_goal_candidate(plan, terminal_statuses=["COMPLETED"])
-    )
+    changed = save(_reviewed_goal_candidate(plan, terminal_statuses=["COMPLETED"]))
     assert changed["reviewed_plan_id"] != first["reviewed_plan_id"]
     assert changed["plan_hash"] != first["plan_hash"]
     assert (
-        changed["payload"]["goal_contract"]["goal_contract_hash"]
-        != contract["goal_contract_hash"]
+        changed["payload"]["goal_contract"]["goal_contract_hash"] != contract["goal_contract_hash"]
     )
 
 
@@ -258,9 +253,7 @@ def test_missing_snapshot_is_reported_without_losing_sqlite_plan(tmp_path, monke
     record = _save_plan(client, created, _reviewed_plan(created))
     Path(record["plan_path"]).unlink()
 
-    detail = client.get(
-        f"/api/projects/{created['project_id']}/plans/{record['reviewed_plan_id']}"
-    )
+    detail = client.get(f"/api/projects/{created['project_id']}/plans/{record['reviewed_plan_id']}")
 
     assert detail.status_code == 200
     assert "PLAN_SNAPSHOT_MISSING" in detail.json()["reviewed_plan"]["warnings"]

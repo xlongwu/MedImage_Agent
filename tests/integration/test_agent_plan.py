@@ -12,38 +12,49 @@ def test_agent_plan_does_not_execute_pipeline(tmp_path: Path):
     pipeline = tmp_path / "pipeline.yaml"
 
     project_config.write_text(
-        yaml.safe_dump({
-            "project": {"name": "test_project", "root_dir": "."},
-            "third_party": {"spm_dir": "./third_party/spm12", "dpabi_dir": "./third_party/DPABI"},
-            "runtime": {"work_dir": str(tmp_path / "work"), "log_dir": str(tmp_path / "logs"), "report_dir": str(tmp_path / "reports")},
-            "safety": {"rawdata_readonly": True},
-        }),
+        yaml.safe_dump(
+            {
+                "project": {"name": "test_project", "root_dir": "."},
+                "third_party": {
+                    "spm_dir": "./third_party/spm12",
+                    "dpabi_dir": "./third_party/DPABI",
+                },
+                "runtime": {
+                    "work_dir": str(tmp_path / "work"),
+                    "log_dir": str(tmp_path / "logs"),
+                    "report_dir": str(tmp_path / "reports"),
+                },
+                "safety": {"rawdata_readonly": True},
+            }
+        ),
         encoding="utf-8",
     )
 
     pipeline.write_text(
-        yaml.safe_dump({
-            "pipeline_id": "test_plan_pipeline",
-            "version": "0.1.0",
-            "modality": "test",
-            "description": "plan only",
-            "execution": {"run_id": "run_plan_only"},
-            "nodes": [
-                {
-                    "id": "data_inspection",
-                    "name": "Data Inspection",
-                    "agent": "data-inspector",
-                    "backend": "python",
-                    "depends_on": [],
-                    "inputs": [],
-                    "outputs": ["./work/dataset_index/dataset_index.json"],
-                    "params": {},
-                    "parallel_level": "project",
-                    "gpu_supported": False,
-                    "cache": False,
-                }
-            ],
-        }),
+        yaml.safe_dump(
+            {
+                "pipeline_id": "test_plan_pipeline",
+                "version": "0.1.0",
+                "modality": "test",
+                "description": "plan only",
+                "execution": {"run_id": "run_plan_only"},
+                "nodes": [
+                    {
+                        "id": "data_inspection",
+                        "name": "Data Inspection",
+                        "agent": "data-inspector",
+                        "backend": "python",
+                        "depends_on": [],
+                        "inputs": [],
+                        "outputs": ["./work/dataset_index/dataset_index.json"],
+                        "params": {},
+                        "parallel_level": "project",
+                        "gpu_supported": False,
+                        "cache": False,
+                    }
+                ],
+            }
+        ),
         encoding="utf-8",
     )
 

@@ -1,21 +1,24 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.agent_orchestrator as agent_orchestrator_module
 from src.backend.app.api.dependencies import get_project_store
 from src.backend.app.core.exceptions import SafetyError
 from src.backend.app.main import app
-from src.backend.app.runtime.execution_gateway import ExecutionGateway, current_safe_allowlist_fingerprint
+from src.backend.app.runtime.execution_gateway import (
+    ExecutionGateway,
+    current_safe_allowlist_fingerprint,
+)
 from src.backend.app.schemas.agent_lifecycle import LifecycleObservation
 from src.backend.app.schemas.desktop import ProjectDetail
 from src.backend.app.services.agent_orchestrator import AgentOrchestrator
 from src.backend.app.services.execution_ticket_service import ExecutionTicketService
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-import src.backend.app.services.agent_orchestrator as agent_orchestrator_module
 
 
 def _store(tmp_path: Path) -> SQLiteDesktopStore:
@@ -109,7 +112,7 @@ def _dispatch(service, ticket, orchestrator, lifecycle, *, status="SUCCESS"):
 
 
 def test_state_chain_persists_and_reloads_with_event_ledger(tmp_path, monkeypatch):
-    fixed_time = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    fixed_time = datetime(2099, 1, 1, tzinfo=UTC)
 
     class FrozenDateTime(datetime):
         @classmethod
@@ -122,8 +125,14 @@ def test_state_chain_persists_and_reloads_with_event_ledger(tmp_path, monkeypatc
     assert lifecycle.state == "RUNNING"
     events = orchestrator.events(project_id="project-1", lifecycle_id=lifecycle.lifecycle_id)
     assert [event.to_state for event in events] == [
-        "CREATED", "CONTEXT_READY", "PLAN_DRAFTED", "PLAN_VALIDATED",
-        "WAITING_FOR_APPROVAL", "APPROVED", "EXECUTION_READY", "RUNNING",
+        "CREATED",
+        "CONTEXT_READY",
+        "PLAN_DRAFTED",
+        "PLAN_VALIDATED",
+        "WAITING_FOR_APPROVAL",
+        "APPROVED",
+        "EXECUTION_READY",
+        "RUNNING",
     ]
 
     reloaded = SQLiteDesktopStore(store.db_path)
@@ -139,32 +148,54 @@ def test_illegal_replayed_missing_ticket_and_cross_project_commands_are_rejected
     lifecycle = orchestrator.create(project_id="project-1", command_id="create-1", actor="user")
     with pytest.raises(SafetyError, match="LIFECYCLE_TRANSITION_INVALID"):
         orchestrator.transition(
-            project_id="project-1", lifecycle_id=lifecycle.lifecycle_id,
-            to_state="RUNNING", command_id="illegal", actor="user", source_command="start",
+            project_id="project-1",
+            lifecycle_id=lifecycle.lifecycle_id,
+            to_state="RUNNING",
+            command_id="illegal",
+            actor="user",
+            source_command="start",
         )
     lifecycle = orchestrator.transition(
-        project_id="project-1", lifecycle_id=lifecycle.lifecycle_id,
-        to_state="CONTEXT_READY", command_id="shared-command", actor="user", source_command="context_ready",
+        project_id="project-1",
+        lifecycle_id=lifecycle.lifecycle_id,
+        to_state="CONTEXT_READY",
+        command_id="shared-command",
+        actor="user",
+        source_command="context_ready",
     )
     with pytest.raises(SafetyError, match="LIFECYCLE_COMMAND_REPLAYED"):
         orchestrator.transition(
-            project_id="project-1", lifecycle_id=lifecycle.lifecycle_id,
-            to_state="PLAN_DRAFTED", command_id="shared-command", actor="user", source_command="plan_drafted",
+            project_id="project-1",
+            lifecycle_id=lifecycle.lifecycle_id,
+            to_state="PLAN_DRAFTED",
+            command_id="shared-command",
+            actor="user",
+            source_command="plan_drafted",
         )
     with pytest.raises(SafetyError, match="LIFECYCLE_NOT_FOUND"):
         orchestrator.get(project_id="project-2", lifecycle_id=lifecycle.lifecycle_id)
 
     lifecycle2 = orchestrator.create(project_id="project-1", command_id="create-2", actor="user")
-    for index, state in enumerate(("CONTEXT_READY", "PLAN_DRAFTED", "PLAN_VALIDATED", "WAITING_FOR_APPROVAL", "APPROVED")):
+    for index, state in enumerate(
+        ("CONTEXT_READY", "PLAN_DRAFTED", "PLAN_VALIDATED", "WAITING_FOR_APPROVAL", "APPROVED")
+    ):
         lifecycle2 = orchestrator.transition(
-            project_id="project-1", lifecycle_id=lifecycle2.lifecycle_id,
-            to_state=state, command_id=f"step-{index}", actor="user", source_command="test",
+            project_id="project-1",
+            lifecycle_id=lifecycle2.lifecycle_id,
+            to_state=state,
+            command_id=f"step-{index}",
+            actor="user",
+            source_command="test",
             updates={"reviewed_plan_id": "reviewed-1"} if state != "CONTEXT_READY" else None,
         )
     with pytest.raises(SafetyError, match="LIFECYCLE_TICKET_REQUIRED"):
         orchestrator.transition(
-            project_id="project-1", lifecycle_id=lifecycle2.lifecycle_id,
-            to_state="EXECUTION_READY", command_id="ready", actor="user", source_command="ready",
+            project_id="project-1",
+            lifecycle_id=lifecycle2.lifecycle_id,
+            to_state="EXECUTION_READY",
+            command_id="ready",
+            actor="user",
+            source_command="ready",
         )
 
 
@@ -183,15 +214,25 @@ def test_retry_is_quota_risk_and_contract_bound(tmp_path):
     store, service, ticket, orchestrator, lifecycle = _prepared(tmp_path, retry_quota=1)
     _, _, lifecycle = _dispatch(service, ticket, orchestrator, lifecycle)
     lifecycle = orchestrator.transition(
-        project_id="project-1", lifecycle_id=lifecycle.lifecycle_id,
-        to_state="FAILED", command_id="run-failed", actor="observer", source_command="observe",
+        project_id="project-1",
+        lifecycle_id=lifecycle.lifecycle_id,
+        to_state="FAILED",
+        command_id="run-failed",
+        actor="observer",
+        source_command="observe",
     )
     proposal = orchestrator.propose_retry(
-        project_id="project-1", lifecycle_id=lifecycle.lifecycle_id,
-        command_id="retry-proposal", actor="diagnoser",
-        node_ids=["data_inspection"], backend_ids=["python"], params={},
-        input_roots=list(ticket.input_roots), output_roots=list(ticket.output_roots),
-        classifier="transient_io", risk="low",
+        project_id="project-1",
+        lifecycle_id=lifecycle.lifecycle_id,
+        command_id="retry-proposal",
+        actor="diagnoser",
+        node_ids=["data_inspection"],
+        backend_ids=["python"],
+        params={},
+        input_roots=list(ticket.input_roots),
+        output_roots=list(ticket.output_roots),
+        classifier="transient_io",
+        risk="low",
     )
     assert proposal.state == "RETRY_PROPOSED"
     assert proposal.retry_proposal is not None
@@ -200,15 +241,25 @@ def test_retry_is_quota_risk_and_contract_bound(tmp_path):
     _, service2, ticket2, orchestrator2, lifecycle2 = _prepared(tmp_path / "changed", retry_quota=1)
     _, _, lifecycle2 = _dispatch(service2, ticket2, orchestrator2, lifecycle2)
     lifecycle2 = orchestrator2.transition(
-        project_id="project-1", lifecycle_id=lifecycle2.lifecycle_id,
-        to_state="FAILED", command_id="failed-changed", actor="observer", source_command="observe",
+        project_id="project-1",
+        lifecycle_id=lifecycle2.lifecycle_id,
+        to_state="FAILED",
+        command_id="failed-changed",
+        actor="observer",
+        source_command="observe",
     )
     changed = orchestrator2.propose_retry(
-        project_id="project-1", lifecycle_id=lifecycle2.lifecycle_id,
-        command_id="changed-contract", actor="diagnoser",
-        node_ids=["new_node"], backend_ids=["python"], params={"changed": True},
-        input_roots=list(ticket2.input_roots), output_roots=list(ticket2.output_roots),
-        classifier="unknown", risk="low",
+        project_id="project-1",
+        lifecycle_id=lifecycle2.lifecycle_id,
+        command_id="changed-contract",
+        actor="diagnoser",
+        node_ids=["new_node"],
+        backend_ids=["python"],
+        params={"changed": True},
+        input_roots=list(ticket2.input_roots),
+        output_roots=list(ticket2.output_roots),
+        classifier="unknown",
+        risk="low",
     )
     assert changed.state == "PLAN_DRAFTED"
     assert changed.reviewed_plan_id is None
@@ -217,16 +268,26 @@ def test_retry_is_quota_risk_and_contract_bound(tmp_path):
     _, service3, ticket3, orchestrator3, lifecycle3 = _prepared(tmp_path / "quota", retry_quota=0)
     _, _, lifecycle3 = _dispatch(service3, ticket3, orchestrator3, lifecycle3)
     lifecycle3 = orchestrator3.transition(
-        project_id="project-1", lifecycle_id=lifecycle3.lifecycle_id,
-        to_state="FAILED", command_id="failed-quota", actor="observer", source_command="observe",
+        project_id="project-1",
+        lifecycle_id=lifecycle3.lifecycle_id,
+        to_state="FAILED",
+        command_id="failed-quota",
+        actor="observer",
+        source_command="observe",
     )
     with pytest.raises(SafetyError, match="LIFECYCLE_RETRY_QUOTA_EXCEEDED"):
         orchestrator3.propose_retry(
-            project_id="project-1", lifecycle_id=lifecycle3.lifecycle_id,
-            command_id="quota-exceeded", actor="diagnoser",
-            node_ids=["data_inspection"], backend_ids=["python"], params={},
-            input_roots=list(ticket3.input_roots), output_roots=list(ticket3.output_roots),
-            classifier="transient_io", risk="low",
+            project_id="project-1",
+            lifecycle_id=lifecycle3.lifecycle_id,
+            command_id="quota-exceeded",
+            actor="diagnoser",
+            node_ids=["data_inspection"],
+            backend_ids=["python"],
+            params={},
+            input_roots=list(ticket3.input_roots),
+            output_roots=list(ticket3.output_roots),
+            classifier="transient_io",
+            risk="low",
         )
 
 
@@ -250,6 +311,9 @@ def test_lifecycle_api_is_project_scoped_and_queryable(tmp_path):
         queried = client.get(f"/api/projects/project-1/agent-lifecycles/{lifecycle_id}")
         assert queried.status_code == 200
         assert len(queried.json()["events"]) == 2
-        assert client.get(f"/api/projects/project-2/agent-lifecycles/{lifecycle_id}").status_code == 404
+        assert (
+            client.get(f"/api/projects/project-2/agent-lifecycles/{lifecycle_id}").status_code
+            == 404
+        )
     finally:
         app.dependency_overrides.pop(get_project_store, None)

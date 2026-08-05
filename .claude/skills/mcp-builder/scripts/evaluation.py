@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import Any
 
 from anthropic import Anthropic
-
 from connections import create_connection
 
 EVALUATION_PROMPT = """You are an AI assistant with access to tools.
@@ -114,7 +113,7 @@ async def agent_loop(
         tool_start_ts = time.time()
         try:
             tool_result = await connection.call_tool(tool_name, tool_input)
-            tool_response = json.dumps(tool_result) if isinstance(tool_result, (dict, list)) else str(tool_result)
+            tool_response = json.dumps(tool_result) if isinstance(tool_result, dict | list) else str(tool_result)
         except Exception as e:
             tool_response = f"Error executing tool {tool_name}: {str(e)}\n"
             tool_response += traceback.format_exc()
@@ -266,7 +265,7 @@ async def run_evaluation(
             summary=result["summary"] or "N/A",
             feedback=result["feedback"] or "N/A",
         )
-        for i, (qa_pair, result) in enumerate(zip(qa_pairs, results))
+        for i, (qa_pair, result) in enumerate(zip(qa_pairs, results, strict=False))
     ])
 
     return report

@@ -33,27 +33,31 @@ from src.backend.app.services import (
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 from tests.goal_contract_helpers import reviewed_goal_candidate
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     """Create a fresh SQLite store isolated to tmp_path."""
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
-    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH",
-                        tmp_path / "desktop_config.json")
-    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT",
-                        tmp_path / "projects")
-    for mod in (project_routes, dashboard_routes, project_context,
-                reviewed_plan_store, project_history_routes,
-                execute_reviewed_routes, bold_reference_readiness,
-                motion_qc_readiness):
+    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
+    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
+    for mod in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+    ):
         monkeypatch.setattr(mod, "mock_store", store)
-    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
-                        tmp_path / "audit_records")
+    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR", tmp_path / "audit_records")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
-        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
@@ -66,13 +70,17 @@ def _create_project(client: TestClient, tmp_path: Path) -> dict:
     rd = tmp_path / "rawdata"
     rd.mkdir(parents=True, exist_ok=True)
     (rd / "dataset_description.json").write_text(
-        '{"Name": "test", "BIDSVersion": "1.8.0"}', encoding="utf-8")
+        '{"Name": "test", "BIDSVersion": "1.8.0"}', encoding="utf-8"
+    )
     pj = tmp_path / "project"
-    resp = client.post("/api/projects/create", json={
-        "project_name": "MVP Test",
-        "rawdata_dir": str(rd),
-        "project_dir": str(pj),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "MVP Test",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -88,12 +96,14 @@ def _make_plan(created: dict, **extra_nodes) -> dict:
         },
     ]
     for nid, ndata in extra_nodes.items():
-        nodes.append({
-            "id": nid,
-            "backend": ndata.get("backend", "python"),
-            "depends_on": ndata.get("depends_on", ["contract_smoke"]),
-            "params": ndata.get("params", {}),
-        })
+        nodes.append(
+            {
+                "id": nid,
+                "backend": ndata.get("backend", "python"),
+                "depends_on": ndata.get("depends_on", ["contract_smoke"]),
+                "params": ndata.get("params", {}),
+            }
+        )
     return {
         "pipeline_id": "test_mvp",
         "project_context": {
@@ -127,8 +137,9 @@ def _save_plan(client: TestClient, created: dict, plan: dict) -> str:
     return resp.json()["reviewed_plan"]["reviewed_plan_id"]
 
 
-def _execute(client: TestClient, created: dict, plan: dict,
-             reviewed_plan_id: str, **overrides) -> dict:
+def _execute(
+    client: TestClient, created: dict, plan: dict, reviewed_plan_id: str, **overrides
+) -> dict:
     """Execute a reviewed plan and return the response dict."""
     body = {
         "plan": plan,
@@ -165,6 +176,7 @@ def _approval() -> dict:
 # Group 1 — Catalog & validation
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_python_only_node_in_catalog():
     """contract_smoke exists in tool catalog with safe metadata."""
     item = get_tool_catalog_item("contract_smoke")
@@ -181,10 +193,10 @@ def test_python_only_node_in_catalog():
 def test_python_only_node_plan_validates():
     """A plan with only contract_smoke passes plan validation."""
     from src.backend.app.planner.plan_validator import validate_plan
+
     plan = {
         "pipeline_id": "test",
-        "nodes": [{"id": "contract_smoke", "backend": "python",
-                   "depends_on": [], "params": {}}],
+        "nodes": [{"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}}],
     }
     result = validate_plan(plan).to_dict()
     assert result.get("ok") is True
@@ -196,10 +208,10 @@ def test_python_only_node_no_external_tool_approval():
     """contract_smoke does NOT require external_tool_acknowledgement."""
     from src.backend.app.planner.approval_gate import check_approval_gate
     from src.backend.app.planner.plan_validator import validate_plan
+
     plan = {
         "pipeline_id": "test",
-        "nodes": [{"id": "contract_smoke", "backend": "python",
-                   "depends_on": [], "params": {}}],
+        "nodes": [{"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}}],
     }
     val = validate_plan(plan).to_dict()
     gate = check_approval_gate(plan, val, _approval()).to_dict()
@@ -213,6 +225,7 @@ def test_python_only_node_no_external_tool_approval():
 # Group 2 — Dry-run & execution
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_python_only_node_dry_run_ok(tmp_path, monkeypatch):
     """Dry-run of contract_smoke plan returns DRY_RUN_OK."""
     _isolated_store(tmp_path, monkeypatch)
@@ -220,13 +233,16 @@ def test_python_only_node_dry_run_ok(tmp_path, monkeypatch):
     created = _create_project(client, tmp_path)
     plan = _make_plan(created)
 
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": _approval(),
-        "project_id": created["project_id"],
-        "project_config_path": created["project_config_path"],
-        "dry_run": True,
-    })
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": _approval(),
+            "project_id": created["project_id"],
+            "project_config_path": created["project_config_path"],
+            "dry_run": True,
+        },
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["status"] == "DRY_RUN_OK"
@@ -246,7 +262,9 @@ def test_python_only_node_execution_succeeds(tmp_path, monkeypatch):
     data = _execute(client, created, plan, rpid)
     # Should report success — execution submitted/succeeded
     assert data["status"] in (
-        "SUCCESS", "EXECUTION_SUBMITTED", "EXECUTION_SUCCEEDED",
+        "SUCCESS",
+        "EXECUTION_SUBMITTED",
+        "EXECUTION_SUCCEEDED",
         "EXECUTION_PREFLIGHT_READY",
     ), f"Got status: {data['status']}, errors: {data.get('errors')}"
 
@@ -263,8 +281,9 @@ def test_python_only_node_produces_run_identity(tmp_path, monkeypatch):
     data = _execute(client, created, plan, rpid)
     run_id = data.get("run_id")
     run_link_id = data.get("run_link_id")
-    assert run_id is not None or run_link_id is not None, \
+    assert run_id is not None or run_link_id is not None, (
         f"Expected run_id or run_link_id in: {json.dumps(data, indent=2)}"
+    )
 
 
 def test_python_only_node_run_history_visible(tmp_path, monkeypatch):
@@ -309,15 +328,14 @@ def test_python_only_node_run_detail_readable(tmp_path, monkeypatch):
         run_id = runs[0].get("run_id") or runs[0].get("run_link_id")
     assert run_id is not None, "No run ID available"
 
-    detail_resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}"
-    )
+    detail_resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}")
     assert detail_resp.status_code == 200, detail_resp.text
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Group 3 — Execution failure path
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_python_only_node_failure_path_still_safe(tmp_path, monkeypatch):
     """contract_smoke with fail=true returns controlled failure, not crash."""
@@ -340,6 +358,7 @@ def test_python_only_node_failure_path_still_safe(tmp_path, monkeypatch):
 # Group 4 — Safety boundaries
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_python_only_node_does_not_modify_rawdata(tmp_path, monkeypatch):
     """contract_smoke execution does not modify rawdata."""
     _isolated_store(tmp_path, monkeypatch)
@@ -353,11 +372,14 @@ def test_python_only_node_does_not_modify_rawdata(tmp_path, monkeypatch):
     mtime_before = sentinel.stat().st_mtime
 
     pj = tmp_path / "project_mvp"
-    create_resp = client.post("/api/projects/create", json={
-        "project_name": "MVP Rawdata Safety",
-        "rawdata_dir": str(rd),
-        "project_dir": str(pj),
-    })
+    create_resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "MVP Rawdata Safety",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert create_resp.status_code == 200, create_resp.text
     created = create_resp.json()
 
@@ -366,8 +388,9 @@ def test_python_only_node_does_not_modify_rawdata(tmp_path, monkeypatch):
     _execute(client, created, plan, rpid)
 
     mtime_after = sentinel.stat().st_mtime
-    assert mtime_before == mtime_after, \
+    assert mtime_before == mtime_after, (
         f"Rawdata sentinel mtime changed: {mtime_before} → {mtime_after}"
+    )
 
 
 def test_spm_realign_still_not_executable():
@@ -385,19 +408,25 @@ def test_spm_realign_blocked_by_adapter_policy(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create_project(client, tmp_path)
 
-    plan = _make_plan(created, spm_realign_subject={
-        "backend": "matlab-spm",
-        "depends_on": ["contract_smoke"],
-        "params": {},
-    })
+    plan = _make_plan(
+        created,
+        spm_realign_subject={
+            "backend": "matlab-spm",
+            "depends_on": ["contract_smoke"],
+            "params": {},
+        },
+    )
 
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": _approval(),
-        "project_id": created["project_id"],
-        "project_config_path": created["project_config_path"],
-        "dry_run": True,
-    })
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": _approval(),
+            "project_id": created["project_id"],
+            "project_config_path": created["project_config_path"],
+            "dry_run": True,
+        },
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     # Dry-run should still return a result — check that spm_realign is
@@ -405,7 +434,7 @@ def test_spm_realign_blocked_by_adapter_policy(tmp_path, monkeypatch):
     validation = data.get("validation", {}) or {}
     warnings = validation.get("warnings", [])
     # SPM realign should generate a not-executable warning
-    spm_warnings = [w for w in warnings if "spm" in str(w).lower()]
+    _spm_warnings = [w for w in warnings if "spm" in str(w).lower()]
     # At minimum, the catalog marks it as not-executable;
     # validation may or may not warn — just verify no crash
     assert resp.status_code == 200
@@ -417,6 +446,7 @@ def test_no_matlab_subprocess_called(tmp_path, monkeypatch):
     _enable_env(monkeypatch)
 
     import subprocess
+
     original_run = subprocess.run
     called_with_matlab = []
 
@@ -434,13 +464,13 @@ def test_no_matlab_subprocess_called(tmp_path, monkeypatch):
     rpid = _save_plan(client, created, plan)
     _execute(client, created, plan, rpid)
 
-    assert len(called_with_matlab) == 0, \
-        f"MATLAB/SPM subprocess called: {called_with_matlab}"
+    assert len(called_with_matlab) == 0, f"MATLAB/SPM subprocess called: {called_with_matlab}"
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Group 5 — Execution preflight gates still require env flag
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_execution_blocked_without_env_flag(tmp_path, monkeypatch):
     """Without MEDIMAGE_ENABLE_REVIEWED_EXECUTION, execution is blocked."""
@@ -450,16 +480,19 @@ def test_execution_blocked_without_env_flag(tmp_path, monkeypatch):
     created = _create_project(client, tmp_path)
     plan = _make_plan(created)
 
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": _approval(),
-        "project_id": created["project_id"],
-        "project_config_path": created["project_config_path"],
-        "dry_run": False,
-        "confirm_execution": True,
-        "persist_audit": True,
-        "write_pipeline_yaml": True,
-    })
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": _approval(),
+            "project_id": created["project_id"],
+            "project_config_path": created["project_config_path"],
+            "dry_run": False,
+            "confirm_execution": True,
+            "persist_audit": True,
+            "write_pipeline_yaml": True,
+        },
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["status"] == "REVIEWED_EXECUTION_DISABLED"
@@ -474,16 +507,19 @@ def test_execution_blocked_without_confirm(tmp_path, monkeypatch):
     created = _create_project(client, tmp_path)
     plan = _make_plan(created)
 
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": _approval(),
-        "project_id": created["project_id"],
-        "project_config_path": created["project_config_path"],
-        "dry_run": False,
-        "confirm_execution": False,
-        "persist_audit": True,
-        "write_pipeline_yaml": True,
-    })
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": _approval(),
+            "project_id": created["project_id"],
+            "project_config_path": created["project_config_path"],
+            "dry_run": False,
+            "confirm_execution": False,
+            "persist_audit": True,
+            "write_pipeline_yaml": True,
+        },
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["status"] == "CONFIRMATION_REQUIRED"
@@ -497,16 +533,19 @@ def test_execution_blocked_without_audit(tmp_path, monkeypatch):
     created = _create_project(client, tmp_path)
     plan = _make_plan(created)
 
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": _approval(),
-        "project_id": created["project_id"],
-        "project_config_path": created["project_config_path"],
-        "dry_run": False,
-        "confirm_execution": True,
-        "persist_audit": False,
-        "write_pipeline_yaml": True,
-    })
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": _approval(),
+            "project_id": created["project_id"],
+            "project_config_path": created["project_config_path"],
+            "dry_run": False,
+            "confirm_execution": True,
+            "persist_audit": False,
+            "write_pipeline_yaml": True,
+        },
+    )
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["status"] == "AUDIT_REQUIRED"

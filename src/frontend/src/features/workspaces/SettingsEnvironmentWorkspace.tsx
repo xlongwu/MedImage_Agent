@@ -10,6 +10,7 @@ import SpmRealignDryRunPanel from "../../components/SpmRealignDryRunPanel";
 import SpmRealignWrapperSkeletonPanel from "../../components/SpmRealignWrapperSkeletonPanel";
 import RsfmriPresetPanel from "../../components/RsfmriPresetPanel";
 import { EvidenceBadge } from "../../components/domain/EvidenceBadge";
+import { MemorySettingsPanel } from "../memory/MemorySettingsPanel";
 import { Badge, Button, Card, SegmentedControl, Table } from "../../components/ui";
 import type { LocalePreference, ThemePreference } from "../../hooks/useAppState";
 import { useI18n } from "../../i18n/useI18n";
@@ -20,7 +21,9 @@ import layoutStyles from "./WorkspaceLayout.module.css";
 type Translate = ReturnType<typeof useI18n>["t"];
 
 export interface SettingsEnvironmentWorkspaceProps {
+  advancedMode: boolean;
   baseUrl: string;
+  onAdvancedModeChange: (enabled: boolean) => void;
   onThemePreferenceChange: (themePreference: ThemePreference) => void;
   projectId: string | null;
   rawdataDir?: string | null;
@@ -31,7 +34,9 @@ export interface SettingsEnvironmentWorkspaceProps {
 }
 
 export function SettingsEnvironmentWorkspace({
+  advancedMode,
   baseUrl,
+  onAdvancedModeChange,
   onThemePreferenceChange,
   projectId,
   rawdataDir,
@@ -58,6 +63,8 @@ export function SettingsEnvironmentWorkspace({
         status={t("settings.planningOnly")}
       />
       <div className="planning-note">{t("settings.planningNote")}</div>
+
+      <MemorySettingsPanel baseUrl={baseUrl} projectId={projectId} />
 
       <nav className={styles.domainNav} aria-label={t("settings.domains")}>
         {settingsDomains.map((item) => (
@@ -127,6 +134,22 @@ export function SettingsEnvironmentWorkspace({
             </div>
             <div className={styles.preferenceRow}>
               <div>
+                <span className={styles.preferenceLabel}>{t("settings.advancedMode")}</span>
+                <p>{t("settings.advancedModeDescription")}</p>
+                <p className={styles.preferenceSafety}>{t("settings.advancedModeWarning")}</p>
+              </div>
+              <SegmentedControl
+                aria-label={t("settings.advancedMode")}
+                options={[
+                  { label: t("common.off"), value: "off" },
+                  { label: t("common.on"), value: "on" },
+                ]}
+                value={advancedMode ? "on" : "off"}
+                onChange={(value) => onAdvancedModeChange(value === "on")}
+              />
+            </div>
+            <div className={styles.preferenceRow}>
+              <div>
                 <span className={styles.preferenceLabel}>{t("settings.theme")}</span>
                 <p>{t("settings.themeDescription")}</p>
               </div>
@@ -184,9 +207,11 @@ export function SettingsEnvironmentWorkspace({
               <dd>{t("settings.diagnosticsDescription")}</dd>
             </div>
           </dl>
-          <Button variant="secondary" onClick={() => setShowDiagnostics((value) => !value)}>
-            {showDiagnostics ? t("settings.hideDiagnostics") : t("settings.openDiagnostics")}
-          </Button>
+          {advancedMode ? (
+            <Button variant="secondary" onClick={() => setShowDiagnostics((value) => !value)}>
+              {showDiagnostics ? t("settings.hideDiagnostics") : t("settings.openDiagnostics")}
+            </Button>
+          ) : null}
         </Card>
 
         <Card className={styles.policyCard} id="settings-diagnostics">
@@ -222,39 +247,41 @@ export function SettingsEnvironmentWorkspace({
         </Card>
       </section>
 
-      <section
-        className={styles.sectionStack}
-        id="settings-environment"
-        aria-label={t("settings.environmentModules")}
-      >
-        <div className={styles.sectionHeader}>
-          <div>
-            <h3>{t("settings.environmentSetup")}</h3>
-            <p>{t("settings.environmentDescription")}</p>
+      {advancedMode ? (
+        <section
+          className={styles.sectionStack}
+          id="settings-environment"
+          aria-label={t("settings.environmentModules")}
+        >
+          <div className={styles.sectionHeader}>
+            <div>
+              <h3>{t("settings.environmentSetup")}</h3>
+              <p>{t("settings.environmentDescription")}</p>
+            </div>
+            <EvidenceBadge level="metadata_only">{t("settings.readinessOnly")}</EvidenceBadge>
           </div>
-          <EvidenceBadge level="metadata_only">{t("settings.readinessOnly")}</EvidenceBadge>
-        </div>
-        <div className={layoutStyles.panelGrid}>
-          <div id="environment-health-panel">
-            <EnvironmentHealthPanel baseUrl={baseUrl} />
+          <div className={layoutStyles.panelGrid}>
+            <div id="environment-health-panel">
+              <EnvironmentHealthPanel baseUrl={baseUrl} />
+            </div>
+            <div id="spm-realign-dry-run-panel">
+              <SpmRealignDryRunPanel baseUrl={baseUrl} projectId={projectId} />
+            </div>
+            <div id="spm-realign-wrapper-skeleton-panel">
+              <SpmRealignWrapperSkeletonPanel baseUrl={baseUrl} projectId={projectId} />
+            </div>
+            <div id="rsfmri-preset-panel">
+              <RsfmriPresetPanel
+                baseUrl={baseUrl}
+                projectId={projectId}
+                onReviewDraft={onReviewDraft}
+              />
+            </div>
           </div>
-          <div id="spm-realign-dry-run-panel">
-            <SpmRealignDryRunPanel baseUrl={baseUrl} projectId={projectId} />
-          </div>
-          <div id="spm-realign-wrapper-skeleton-panel">
-            <SpmRealignWrapperSkeletonPanel baseUrl={baseUrl} projectId={projectId} />
-          </div>
-          <div id="rsfmri-preset-panel">
-            <RsfmriPresetPanel
-              baseUrl={baseUrl}
-              projectId={projectId}
-              onReviewDraft={onReviewDraft}
-            />
-          </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
-      {showDiagnostics ? (
+      {advancedMode && showDiagnostics ? (
         <section
           className={styles.sectionStack}
           aria-label={t("settings.systemDiagnosticsModules")}

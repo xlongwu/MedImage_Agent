@@ -1,6 +1,10 @@
 """Run full real-data preprocessing pipeline on DemoData (DICOM->NIfTI converted)."""
-import json, time, numpy as np, nibabel as nib
+import json
+import time
 from pathlib import Path
+
+import nibabel as nib
+import numpy as np
 
 deriv = Path("outputs/derivatives/demo_real")
 subjects = ["Sub_001", "Sub_002", "Sub_003"]
@@ -67,7 +71,7 @@ for sid in subjects:
         "ok": True, "subject_id": sid, "tr": tr, "low_hz": 0.01, "high_hz": 0.08,
         "filtering_qc_status": "PASS"
     }))
-    print(f"  [2/5] Temporal Filter (0.01-0.08 Hz): ok=True")
+    print("  [2/5] Temporal Filter (0.01-0.08 Hz): ok=True")
 
     # ---- Step 3: ALFF/fALFF ----
     data_filt = filtered - filtered.mean(axis=3, keepdims=True)
@@ -178,7 +182,7 @@ for sid in subjects:
 # ============================================================
 total_time = time.time() - total_start
 print(f"\n{'='*60}")
-print(f"REAL DATA PIPELINE COMPLETE")
+print("REAL DATA PIPELINE COMPLETE")
 print(f"{'='*60}")
 print(f"Subjects: {len(subjects)}")
 print(f"Total time: {total_time:.1f}s ({total_time/60:.1f} min)")
@@ -221,5 +225,5 @@ work_dir = Path("outputs/work/demo_real")
 work_dir.mkdir(parents=True, exist_ok=True)
 (work_dir / "pipeline_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2))
 
-print(f"\nPipeline summary: work/demo_real/pipeline_summary.json")
-print(f"NIfTI outputs: derivatives/demo_real/rsfmri_preproc/, rsfmri_metrics/, rsfmri_fc/, rsfmri_qc/")
+print("\nPipeline summary: work/demo_real/pipeline_summary.json")
+print("NIfTI outputs: derivatives/demo_real/rsfmri_preproc/, rsfmri_metrics/, rsfmri_fc/, rsfmri_qc/")

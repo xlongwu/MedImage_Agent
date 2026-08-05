@@ -9,7 +9,7 @@ Design principles:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +58,7 @@ class ProjectSettings:
     source_path: str = ""
 
     @classmethod
-    def from_yaml(cls, path: str | Path) -> "ProjectSettings":
+    def from_yaml(cls, path: str | Path) -> ProjectSettings:
         """Load ProjectSettings from a YAML project config file.
 
         Args:

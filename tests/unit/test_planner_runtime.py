@@ -9,12 +9,14 @@ from src.backend.app.planner.pipeline_planner import (
 
 
 def test_planner_drafts_task_specific_pipeline():
-    draft = draft_pipeline_plan({
-        "disease_type": "Alzheimer",
-        "downstream_task": "ALFF/fALFF analysis",
-        "available_data": ["T1w", "BOLD"],
-        "constraints": [],
-    })
+    draft = draft_pipeline_plan(
+        {
+            "disease_type": "Alzheimer",
+            "downstream_task": "ALFF/fALFF analysis",
+            "available_data": ["T1w", "BOLD"],
+            "constraints": [],
+        }
+    )
 
     assert draft["ok"] is True
     assert draft["advice_only"] is True
@@ -24,21 +26,25 @@ def test_planner_drafts_task_specific_pipeline():
 
 
 def test_planner_validate_rejects_unknown_pipeline():
-    result = validate_pipeline_plan({
-        "draft": {
-            "plan_id": "bad",
-            "recommended_pipeline_path": "examples/not_a_pipeline.yaml",
+    result = validate_pipeline_plan(
+        {
+            "draft": {
+                "plan_id": "bad",
+                "recommended_pipeline_path": "examples/not_a_pipeline.yaml",
+            }
         }
-    })
+    )
 
     assert result["ok"] is False
     assert result["errors"]
 
 
 def test_planner_history_returns_drafts():
-    draft_pipeline_plan({
-        "downstream_task": "functional connectivity",
-    })
+    draft_pipeline_plan(
+        {
+            "downstream_task": "functional connectivity",
+        }
+    )
     history = get_planner_history(limit=5)
 
     assert history["ok"] is True
@@ -68,14 +74,16 @@ def test_planner_rejects_llm_path_traversal(monkeypatch):
 
 
 def test_planner_execution_requires_approval_for_external_pipeline():
-    result = execute_pipeline_plan({
-        "draft": {
-            "plan_id": "external-approval-test",
-            "recommended_pipeline_path": "examples/pipeline_mvp.yaml",
-            "request": {"project_config_path": "examples/project_config_dataset.yaml"},
-        },
-        "approved": False,
-    })
+    result = execute_pipeline_plan(
+        {
+            "draft": {
+                "plan_id": "external-approval-test",
+                "recommended_pipeline_path": "examples/pipeline_mvp.yaml",
+                "request": {"project_config_path": "examples/project_config_dataset.yaml"},
+            },
+            "approved": False,
+        }
+    )
 
     assert result["ok"] is False
     assert result["status"] == "EXECUTION_CONTRACT_REQUIRED"

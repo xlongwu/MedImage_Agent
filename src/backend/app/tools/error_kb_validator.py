@@ -1,7 +1,6 @@
 """ERROR_KB schema validator."""
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from src.backend.app.tools.error_classifier import _load_error_kb

@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 GUI_ENTRYPOINTS = {"DPABI", "DPARSF", "DPARSFA"}
 FULL_PIPELINE_RUNNERS = {"DPARSF_run", "DPARSFA_run"}
 SAFE_IO = {"y_Read", "y_Write", "rest_readfile", "rest_writefile"}
@@ -24,7 +23,6 @@ SINGLE_FUNCTION_CANDIDATES = {
     "y_CalcReHo",
     "rest_Smooth",
     "rest_RegressOutCovariates",
-    "y_RegressOutImgCovariates",
     "y_bandpass",
 }
 
@@ -43,7 +41,7 @@ def _yaml_scalar(value: Any) -> str:
         return "true" if value else "false"
     if value is None:
         return "null"
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return str(value)
     return '"' + str(value).replace('"', '\\"') + '"'
 

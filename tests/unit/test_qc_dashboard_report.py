@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.api import (
     dashboard_routes,
     execute_reviewed_routes,
@@ -24,12 +25,11 @@ from src.backend.app.services import (
     conversion_planner,
     data_readiness,
     motion_qc_readiness,
-    qc_evidence_roots,
     qc_dashboard_report,
+    qc_evidence_roots,
     spm_realign_dry_run,
     spm_realign_wrapper_skeleton,
 )
-import src.backend.app.services.mock_store as mock_store_module
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
@@ -37,13 +37,31 @@ def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "desktop_state.sqlite")
     monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "desktop_config.json")
     monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "projects")
-    for module in (project_routes, dashboard_routes, project_context, reviewed_plan_store, project_history_routes, execute_reviewed_routes, bold_reference_readiness, conversion_planner, data_readiness, motion_qc_readiness, qc_evidence_roots, spm_realign_dry_run, spm_realign_wrapper_skeleton, qc_dashboard_report,
+    for module in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        conversion_planner,
+        data_readiness,
+        motion_qc_readiness,
+        qc_evidence_roots,
+        spm_realign_dry_run,
+        spm_realign_wrapper_skeleton,
+        qc_dashboard_report,
         mock_store_module,
     ):
         monkeypatch.setattr(module, "mock_store", store)
     # Isolate report directory to tmp_path
-    monkeypatch.setattr(qc_dashboard_report, "_REPORT_DIR", tmp_path / "outputs" / "reports" / "qc_dashboard")
-    desktop_config.DESKTOP_CONFIG_PATH.write_text(json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+    monkeypatch.setattr(
+        qc_dashboard_report, "_REPORT_DIR", tmp_path / "outputs" / "reports" / "qc_dashboard"
+    )
+    desktop_config.DESKTOP_CONFIG_PATH.write_text(
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
@@ -51,11 +69,15 @@ def _create(client: TestClient, tmp_path: Path, name_suffix: str = "") -> dict:
     rawdata = tmp_path / "rawdata"
     rawdata.mkdir()
     proj = tmp_path / f"proj_{uuid.uuid4().hex[:8]}"
-    tag = (name_suffix or uuid.uuid4().hex[:4])
-    resp = client.post("/api/projects/create", json={
-        "project_name": f"QCDash-{tag}", "rawdata_dir": str(rawdata),
-        "project_dir": str(proj),
-    })
+    tag = name_suffix or uuid.uuid4().hex[:4]
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": f"QCDash-{tag}",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(proj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -75,8 +97,13 @@ def test_returns_structured_response(tmp_path, monkeypatch):
     assert isinstance(body["modules"], list)
     assert len(body["modules"]) == 8
     module_ids = {m["module_id"] for m in body["modules"]}
-    for m_id in ("data_readiness", "bids_validation", "nifti_qc_snapshot",
-                 "bold_reference_readiness", "motion_qc_readiness"):
+    for m_id in (
+        "data_readiness",
+        "bids_validation",
+        "nifti_qc_snapshot",
+        "bold_reference_readiness",
+        "motion_qc_readiness",
+    ):
         assert m_id in module_ids, f"Module {m_id} missing"
     # Some modules may be not_run/unknown if sub-services lack mock_store patch
     for m in body["modules"]:
@@ -87,8 +114,16 @@ def test_safety_flags_all_true(tmp_path, monkeypatch):
     _isolated_store(tmp_path, monkeypatch)
     client = TestClient(app)
     c = _create(client, tmp_path)
-    flags = client.post(f"/api/projects/{c['project_id']}/qc-dashboard/report").json()["safety_flags"]
-    for key in ("read_only_inputs", "rawdata_not_modified", "no_preprocessing_executed", "qc_dashboard_report_only", "clinical_use_prohibited"):
+    flags = client.post(f"/api/projects/{c['project_id']}/qc-dashboard/report").json()[
+        "safety_flags"
+    ]
+    for key in (
+        "read_only_inputs",
+        "rawdata_not_modified",
+        "no_preprocessing_executed",
+        "qc_dashboard_report_only",
+        "clinical_use_prohibited",
+    ):
         assert flags.get(key) is True
 
 
@@ -111,7 +146,11 @@ def test_markdown_contains_disclaimer(tmp_path, monkeypatch):
     body = client.post(f"/api/projects/{c['project_id']}/qc-dashboard/report").json()
     md = body.get("report_markdown") or ""
     if md:
-        assert "research-use" in md.lower() or "clinical_use_prohibited" in md.lower() or "Non-Goals" in md
+        assert (
+            "research-use" in md.lower()
+            or "clinical_use_prohibited" in md.lower()
+            or "Non-Goals" in md
+        )
 
 
 def test_markdown_uses_structured_module_warning_count(tmp_path, monkeypatch):
@@ -180,7 +219,10 @@ def test_blocks_have_counters(tmp_path, monkeypatch):
     assert isinstance(body["ready_count"], int)
     assert isinstance(body["warning_count"], int)
     assert isinstance(body["blocked_count"], int)
-    assert body["ready_count"] + body["warning_count"] + body["blocked_count"] <= body["modules"].__len__()
+    assert (
+        body["ready_count"] + body["warning_count"] + body["blocked_count"]
+        <= body["modules"].__len__()
+    )
 
 
 def test_bids_validation_module_counts_issue_list(tmp_path, monkeypatch):
@@ -188,11 +230,11 @@ def test_bids_validation_module_counts_issue_list(tmp_path, monkeypatch):
     client = TestClient(app)
     created = _create(client, tmp_path, name_suffix="bids-issue-count")
 
+    import src.backend.app.services.bids_validation as bids_validation_service
     from src.backend.app.schemas.desktop import (
         BidsValidationIssue,
         BidsValidationResponse,
     )
-    import src.backend.app.services.bids_validation as bids_validation_service
 
     def fake_validate_bids(_roots):
         return BidsValidationResponse(
@@ -207,9 +249,7 @@ def test_bids_validation_module_counts_issue_list(tmp_path, monkeypatch):
                     message="dataset_description.json exists but is not valid JSON",
                 )
             ],
-            next_actions=[
-                "Fix or regenerate dataset_description.json in the root directory."
-            ],
+            next_actions=["Fix or regenerate dataset_description.json in the root directory."],
         )
 
     monkeypatch.setattr(
@@ -230,6 +270,7 @@ def test_bids_validation_module_counts_issue_list(tmp_path, monkeypatch):
 
 def test_report_does_not_modify_rawdata(tmp_path, monkeypatch):
     import os
+
     rawdata = tmp_path / "rawdata_rm"
     rawdata.mkdir()
     marker = rawdata / "marker.txt"
@@ -291,7 +332,7 @@ def test_optional_module_failure_is_captured_not_500(tmp_path, monkeypatch):
     """Monkeypatch a non-essential module to raise; ensure 200 not 500."""
     import src.backend.app.services.qc_dashboard_report as dash
 
-    orig = dash._run_motion_metrics_draft
+    _orig = dash._run_motion_metrics_draft
 
     def failing(*a, **kw):
         raise RuntimeError("synthetic failure")
@@ -313,12 +354,18 @@ def test_blocked_essential_module_drives_overall_blocked(tmp_path, monkeypatch):
     """Monkeypatch an essential module to return blocked → overall blocked."""
     import src.backend.app.services.qc_dashboard_report as dash
 
-    orig = dash._run_bold_reference_readiness
+    _orig = dash._run_bold_reference_readiness
 
     def blocked_fn(*a, **kw):
-        return {"status": "blocked", "ok": False, "summary": "blocked",
-                "key_metrics": {}, "warnings": [], "errors": ["test block"],
-                "next_actions": []}
+        return {
+            "status": "blocked",
+            "ok": False,
+            "summary": "blocked",
+            "key_metrics": {},
+            "warnings": [],
+            "errors": ["test block"],
+            "next_actions": [],
+        }
 
     monkeypatch.setattr(dash, "_run_bold_reference_readiness", blocked_fn)
     _isolated_store(tmp_path, monkeypatch)
@@ -334,20 +381,38 @@ def test_warning_without_blocked_drives_overall_warning(tmp_path, monkeypatch):
 
     # Make all essentials ready
     def ready_fn(*a, **kw):
-        return {"status": "ready", "ok": True, "summary": "ok",
-                "key_metrics": {}, "warnings": [], "errors": [], "next_actions": []}
+        return {
+            "status": "ready",
+            "ok": True,
+            "summary": "ok",
+            "key_metrics": {},
+            "warnings": [],
+            "errors": [],
+            "next_actions": [],
+        }
 
-    for name in ("_run_data_readiness", "_run_bids_validation",
-                 "_run_nifti_qc_snapshot", "_run_bold_reference_readiness",
-                 "_run_motion_qc_readiness"):
+    for name in (
+        "_run_data_readiness",
+        "_run_bids_validation",
+        "_run_nifti_qc_snapshot",
+        "_run_bold_reference_readiness",
+        "_run_motion_qc_readiness",
+    ):
         if hasattr(dash, name):
             monkeypatch.setattr(dash, name, ready_fn)
 
     # One non-essential warns
     def warn_fn(*a, **kw):
-        return {"status": "warning", "ok": True, "summary": "warn",
-                "key_metrics": {}, "warnings": ["test warn"], "errors": [],
-                "next_actions": []}
+        return {
+            "status": "warning",
+            "ok": True,
+            "summary": "warn",
+            "key_metrics": {},
+            "warnings": ["test warn"],
+            "errors": [],
+            "next_actions": [],
+        }
+
     monkeypatch.setattr(dash, "_run_conversion_dry_run", warn_fn)
 
     _isolated_store(tmp_path, monkeypatch)
@@ -397,11 +462,14 @@ def test_registered_converted_bids_suppresses_conversion_guidance(tmp_path, monk
         str(anat / "sub-001_T1w.nii.gz"),
     )
 
-    resp = client.post("/api/projects/create", json={
-        "project_name": "QCDash-converted",
-        "rawdata_dir": str(rawdata),
-        "project_dir": str(tmp_path / "proj_converted"),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "QCDash-converted",
+            "rawdata_dir": str(rawdata),
+            "project_dir": str(tmp_path / "proj_converted"),
+        },
+    )
     assert resp.status_code == 200, resp.text
     created = resp.json()
     project = store.get_project(created["project_id"])
@@ -561,9 +629,7 @@ def test_native_success_suppresses_stale_preprocessing_next_actions(tmp_path, mo
         lambda _project_id: module(),
     )
 
-    body = client.post(
-        f"/api/projects/{created['project_id']}/qc-dashboard/report"
-    ).json()
+    body = client.post(f"/api/projects/{created['project_id']}/qc-dashboard/report").json()
 
     actions = body["next_actions"]
     assert actions[0] == "Review generated native preprocessing, QC, and FC artifacts."
@@ -587,14 +653,15 @@ def test_native_success_suppresses_stale_preprocessing_next_actions(tmp_path, mo
         body.get("report_markdown") or ""
     )
 
-    latest = client.get(
-        f"/api/projects/{created['project_id']}/qc-dashboard/report/latest"
-    ).json()
+    latest = client.get(f"/api/projects/{created['project_id']}/qc-dashboard/report/latest").json()
     assert latest["next_actions"] == actions
-    assert "generate a reviewed preprocessing plan" not in json.dumps(
-        latest["next_actions"],
-        ensure_ascii=False,
-    ).lower()
+    assert (
+        "generate a reviewed preprocessing plan"
+        not in json.dumps(
+            latest["next_actions"],
+            ensure_ascii=False,
+        ).lower()
+    )
     latest_markdown = (latest.get("report_markdown") or "").lower()
     assert "generate a reviewed preprocessing plan" not in latest_markdown
     assert "generate a preprocessing plan" not in latest_markdown
@@ -647,7 +714,8 @@ def test_cache_json_artifact_includes_mode(tmp_path, monkeypatch):
     # Read the JSON artifact directly
     if body.get("json_path"):
         import json as jm
-        artifact = jm.loads(open(body["json_path"]).read())
+
+        _artifact = jm.loads(open(body["json_path"]).read())
         # Cache isn't in the JSON payload because it's not serialized there
         # But the response body has it — already verified above
     assert True  # Contract test — no crash
@@ -752,6 +820,7 @@ def test_latest_report_normalizes_stale_motion_auxiliary_warnings(tmp_path, monk
 
 def test_latest_report_does_not_modify_rawdata(tmp_path, monkeypatch):
     import os
+
     rawdata = tmp_path / "rawdata_lr"
     rawdata.mkdir()
     marker = rawdata / "marker.txt"
@@ -771,7 +840,9 @@ def test_latest_report_ignores_arbitrary_path_query(tmp_path, monkeypatch):
     client = TestClient(app)
     c = _create(client, tmp_path)
     client.post(f"/api/projects/{c['project_id']}/qc-dashboard/report")
-    resp = client.get(f"/api/projects/{c['project_id']}/qc-dashboard/report/latest?path=../../secret")
+    resp = client.get(
+        f"/api/projects/{c['project_id']}/qc-dashboard/report/latest?path=../../secret"
+    )
     assert resp.status_code == 200
     assert "../../secret" not in json.dumps(resp.json())
 
@@ -789,6 +860,7 @@ def test_latest_report_does_not_call_subservices(tmp_path, monkeypatch):
     # Now monkeypatch sub-service and try latest — should still work
     def failing(*a, **kw):
         raise RuntimeError("should not be called")
+
     monkeypatch.setattr(dash, "_run_data_readiness", failing)
     resp = client.get(f"/api/projects/{c['project_id']}/qc-dashboard/report/latest")
     assert resp.status_code == 200

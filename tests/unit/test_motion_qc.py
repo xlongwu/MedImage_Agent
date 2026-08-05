@@ -11,11 +11,13 @@ def test_motion_qc_computes_fd(tmp_path: Path):
     motion_file = tmp_path / "rp_test.txt"
 
     motion_file.write_text(
-        "\n".join([
-            "0 0 0 0 0 0",
-            "1 0 0 0 0 0",
-            "1 1 0 0 0.01 0",
-        ]),
+        "\n".join(
+            [
+                "0 0 0 0 0 0",
+                "1 0 0 0 0 0",
+                "1 1 0 0 0.01 0",
+            ]
+        ),
         encoding="utf-8",
     )
 

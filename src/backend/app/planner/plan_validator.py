@@ -11,21 +11,20 @@ MATLAB/SPM/DPABI, and never writes files.
 
 from __future__ import annotations
 
+import re
 from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
-import re
 
-from src.backend.app.planner.audit_record import stable_hash
 from src.backend.app.core.exceptions import SafetyError
+from src.backend.app.planner.audit_record import stable_hash
 from src.backend.app.runtime.node_contract_registry import (
     get_node_contract,
     validate_and_normalize_parameters,
 )
-from src.backend.app.services.spm_realign_params import validate_spm_realign_params
 from src.backend.app.schemas.goal_contract import GoalContract
-
+from src.backend.app.services.spm_realign_params import validate_spm_realign_params
 
 # ── Output dataclasses ────────────────────────────────────────────────────────
 
@@ -524,7 +523,7 @@ def _build_catalog_map() -> dict[str, Any]:
 
 def _topological_sort(node_ids: list[str], nodes: list[dict[str, Any]]) -> list[str]:
     """Kahn's algorithm. Returns topological order or partial on cycle."""
-    in_degree: dict[str, int] = {nid: 0 for nid in node_ids}
+    in_degree: dict[str, int] = dict.fromkeys(node_ids, 0)
     adj: dict[str, list[str]] = {nid: [] for nid in node_ids}
 
     for node in nodes:

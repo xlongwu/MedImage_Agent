@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import re
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
-import re
 
 from src.backend.app.core.exceptions import SafetyError, StateStoreError
 from src.backend.app.planner.audit_record import stable_hash
@@ -200,25 +200,33 @@ class ObservationCollector:
     def _capability(
         contracts: list[NodeContract],
         facts,
+        *,
+        required_artifact_types: set[str] | None = None,
     ) -> tuple[CapabilityObservation, ScientificObservation]:
         declared = _minimum_level([contract.capability_level for contract in contracts])
-        required_numerical = {
-            _canonical_artifact_type(artifact.artifact_type)
-            for contract in contracts
-            for artifact in contract.output_schema
-            if (artifact.required or artifact.reload_required) and (
-                artifact.reload_required or artifact.artifact_type in {
-                    "alff_map",
-                    "falff_map",
-                    "reho_map",
-                    "fc_matrix",
-                    "fisher_z_matrix",
-                    "roi_timeseries",
-                    "filtered_bold",
-                    "denoised_bold",
-                }
-            )
-        }
+        if required_artifact_types is None:
+            required_numerical = {
+                _canonical_artifact_type(artifact.artifact_type)
+                for contract in contracts
+                for artifact in contract.output_schema
+                if (artifact.required or artifact.reload_required) and (
+                    artifact.reload_required or artifact.artifact_type in {
+                        "alff_map",
+                        "falff_map",
+                        "reho_map",
+                        "fc_matrix",
+                        "fisher_z_matrix",
+                        "roi_timeseries",
+                        "filtered_bold",
+                        "denoised_bold",
+                    }
+                )
+            }
+        else:
+            required_numerical = {
+                _canonical_artifact_type(value)
+                for value in required_artifact_types
+            }
         artifact_by_type = {
             artifact_type: [
                 artifact
@@ -228,13 +236,21 @@ class ObservationCollector:
             for artifact_type in required_numerical
         }
         downgrade_reasons: list[str] = []
-        limitation_flags = sorted(
-            {
-                flag
-                for artifact in facts.artifacts
-                for flag in artifact.limitation_flags
-            }
+        limitation_flags = {
+            flag
+            for artifact in facts.artifacts
+            for flag in artifact.limitation_flags
+            if flag in {"simplified", "preview_only", "partial"}
+        }
+        limitation_flags.update(
+            flag
+            for artifact in facts.artifacts
+            if _canonical_artifact_type(artifact.artifact_type)
+            in required_numerical
+            for flag in artifact.limitation_flags
+            if flag == "metadata_only"
         )
+        limitation_flags = sorted(limitation_flags)
         if facts.pipeline.status not in {"SUCCESS", "COMPLETED"}:
             observed: CapabilityLevel = "unavailable"
             downgrade_reasons.append("PIPELINE_NOT_SUCCESSFUL")
@@ -260,10 +276,11 @@ class ObservationCollector:
                 observed = "metadata_only"
                 downgrade_reasons.extend(f"REQUIRED_ARTIFACT_MISSING:{item}" for item in missing)
                 downgrade_reasons.extend(f"ARTIFACT_INTEGRITY_FAILED:{item}" for item in invalid)
-            elif limitation_flags:
-                observed = "metadata_only"
-                downgrade_reasons.append("LIMITED_ARTIFACT_NOT_FULL_COMPUTED")
-            elif facts.validations and all(item.status == "passed" for item in facts.validations):
+            elif (
+                not limitation_flags
+                and facts.validations
+                and all(item.status == "passed" for item in facts.validations)
+            ):
                 observed = "validated"
             else:
                 observed = "computed"
@@ -298,6 +315,33 @@ class ObservationCollector:
         )
         return capability, scientific
 
+    @staticmethod
+    def _goal_required_artifact_types(
+        reviewed_plan: ReviewedPlanRecord,
+    ) -> set[str] | None:
+        payload = (
+            reviewed_plan.payload.get("goal_contract")
+            if isinstance(reviewed_plan.payload, dict)
+            else None
+        )
+        if not isinstance(payload, dict):
+            return None
+        criteria = payload.get("criteria")
+        if not isinstance(criteria, list):
+            return None
+        return {
+            str(criterion.get("target"))
+            for criterion in criteria
+            if isinstance(criterion, dict)
+            and criterion.get("criterion_type")
+            in {
+                "artifact_present",
+                "artifact_reloadable",
+                "artifact_registered",
+            }
+            and criterion.get("target")
+        }
+
     def collect(
         self,
         *,
@@ -310,7 +354,7 @@ class ObservationCollector:
             project_id=project_id,
             lifecycle_id=lifecycle_id,
         )
-        collected_at = datetime.now(timezone.utc)
+        collected_at = datetime.now(UTC)
         facts = adapt_observation_sources(project, run_link, collected_at=collected_at)
         contracts, contract_sources, contract_conflicts = self._contract_sources(
             ticket,
@@ -322,7 +366,13 @@ class ObservationCollector:
             facts.missing_sources.append("node_contracts")
         if facts.pipeline.nodes_total == 0 and not facts.nodes and facts.pipeline.status != "UNKNOWN":
             facts.pipeline = facts.pipeline.model_copy(update={"summary_consistent": True, "active_nodes": 0})
-        capability, scientific = self._capability(contracts, facts)
+        capability, scientific = self._capability(
+            contracts,
+            facts,
+            required_artifact_types=self._goal_required_artifact_types(
+                reviewed_plan
+            ),
+        )
         if facts.conflicts or facts.blocking_facts:
             completeness_status = "invalid"
         elif facts.missing_sources:

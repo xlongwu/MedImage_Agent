@@ -6,15 +6,15 @@ import ntpath
 import posixpath
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
 
 from src.backend.app.api._errors import raise_api_error
-from src.backend.app.core.exceptions import StateStoreError
 from src.backend.app.api.models import ProjectCreateRequest, ProjectCreateResponse
+from src.backend.app.core.exceptions import StateStoreError
 from src.backend.app.runtime.desktop_config import (
     add_authorized_data_dir,
     add_recent_project,
@@ -250,6 +250,29 @@ def _diagnostics_from_dataset_index(
         for subject in subjects
         if isinstance(subject, dict)
     ]
+    nifti_file_count = 0
+    for subject in subjects:
+        if not isinstance(subject, dict):
+            continue
+        sessions = subject.get("sessions", [])
+        for session in sessions if isinstance(sessions, list) else []:
+            if not isinstance(session, dict):
+                continue
+            anat = session.get("anat", {})
+            if (
+                isinstance(anat, dict)
+                and anat.get("exists")
+                and isinstance(anat.get("t1w"), str)
+            ):
+                nifti_file_count += 1
+            func = session.get("func", [])
+            for run in func if isinstance(func, list) else []:
+                if (
+                    isinstance(run, dict)
+                    and run.get("exists")
+                    and isinstance(run.get("bold"), str)
+                ):
+                    nifti_file_count += 1
     subjects_total = len(statuses)
     subjects_complete = statuses.count("COMPLETE")
     subjects_warning = sum(
@@ -280,6 +303,7 @@ def _diagnostics_from_dataset_index(
             "subjects_complete": subjects_complete,
             "subjects_warning": subjects_warning,
             "subjects_incomplete": subjects_incomplete,
+            "nifti_file_count": nifti_file_count,
             "status": status,
         },
         warnings,
@@ -446,7 +470,7 @@ def _dashboard_project_from_create_response(
     response: ProjectCreateResponse,
     existing: ProjectDetail | None = None,
 ) -> ProjectDetail:
-    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    now = datetime.now(UTC).replace(microsecond=0).isoformat()
     existing_created_at = (
         existing.metadata.get("created_at")
         if existing and isinstance(existing.metadata, dict)

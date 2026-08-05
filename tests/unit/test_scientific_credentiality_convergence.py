@@ -10,17 +10,18 @@ used by the Phase 5M/5N contract tests) and assert that:
   * Each metric reports a per-metric status that distinguishes
     "sandbox prepared" from "numerically computed".
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 
 def _make_synthetic_bold(path: Path, shape=(8, 8, 6, 40), seed=7) -> None:
     import nibabel as nib
+
     rng = np.random.default_rng(seed)
     data = rng.normal(500, 50, shape).astype(np.float32)
     # Add a low-frequency oscillation so ALFF band has power at 0.01-0.08 Hz.
@@ -31,22 +32,23 @@ def _make_synthetic_bold(path: Path, shape=(8, 8, 6, 40), seed=7) -> None:
 
 def _setup_store(tmp_path, monkeypatch):
     from src.backend.app.services.mock_store import SQLiteDesktopStore
+
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
     monkeypatch.setattr(
-        "src.backend.app.services.preprocessing_alff_reho_execution.mock_store", store)
-    monkeypatch.setattr(
-        "src.backend.app.services.preprocessing_fc_execution.mock_store", store)
+        "src.backend.app.services.preprocessing_alff_reho_execution.mock_store", store
+    )
+    monkeypatch.setattr("src.backend.app.services.preprocessing_fc_execution.mock_store", store)
     return store
 
 
-_ALL_ALFF = {"MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1",
-             "MEDIMAGE_ALLOW_SANDBOXED_ALFF_REHO": "1"}
+_ALL_ALFF = {"MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1", "MEDIMAGE_ALLOW_SANDBOXED_ALFF_REHO": "1"}
 _ALL_FC = {"MEDIMAGE_ENABLE_REVIEWED_EXECUTION": "1", "MEDIMAGE_ALLOW_SANDBOXED_FC": "1"}
 
 
 def _prep_bold_input(tmp_path: Path) -> Path:
     func = tmp_path / "preprocessing_runs" / "pp-test" / "spm_exec" / "tf-ex" / "sandbox_output"
-    sub = func / "sub-001"; sub.mkdir(parents=True)
+    sub = func / "sub-001"
+    sub.mkdir(parents=True)
     _make_synthetic_bold(sub / "filtered_sub-001_task-rest_bold.nii.gz")
     dd = tmp_path / "preprocessing_runs" / "pp-test" / "spm_dry_runs" / "dr-test"
     dd.mkdir(parents=True)
@@ -57,18 +59,23 @@ def _prep_bold_input(tmp_path: Path) -> Path:
 
 # ── ALFF / fALFF / ReHo ──
 
+
 def test_alff_reho_produces_real_nifti_maps(tmp_path, monkeypatch):
     _setup_store(tmp_path, monkeypatch)
     func_dir = _prep_bold_input(tmp_path)
     from src.backend.app.schemas.preprocessing_alff_reho_execution import (
-        AlffRehoSandboxExecutionRequest)
+        AlffRehoSandboxExecutionRequest,
+    )
     from src.backend.app.services.preprocessing_alff_reho_execution import (
-        run_alff_reho_sandbox_execution)
+        run_alff_reho_sandbox_execution,
+    )
 
     req = AlffRehoSandboxExecutionRequest(
-        dry_run_id="dr-test", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
-    res = run_alff_reho_sandbox_execution("brain-tumor-study", "pp-test", req,
-                                          env=_ALL_ALFF, project_dir=str(tmp_path))
+        dry_run_id="dr-test", functional_input_dir=str(func_dir), confirm_sandbox_copy=True
+    )
+    res = run_alff_reho_sandbox_execution(
+        "brain-tumor-study", "pp-test", req, env=_ALL_ALFF, project_dir=str(tmp_path)
+    )
 
     assert res.ok, res.warnings
     assert res.alff_computed, f"ALFF not computed: {res.warnings}"
@@ -78,6 +85,7 @@ def test_alff_reho_produces_real_nifti_maps(tmp_path, monkeypatch):
     assert res.reho_computed, f"ReHo not computed: {res.warnings}"
 
     import nibabel as nib
+
     # Output dir uses full BIDS prefix from filename (sub-001_task-rest)
     out_root = Path(res.execution_dir) / "sandbox_output"
     alff_files = list(out_root.rglob("*desc-alff_map.nii.gz"))
@@ -104,6 +112,7 @@ def test_alff_reho_produces_real_nifti_maps(tmp_path, monkeypatch):
 
 # ── FC ──
 
+
 def test_fc_produces_real_matrices(tmp_path, monkeypatch):
     _setup_store(tmp_path, monkeypatch)
     func_dir = _prep_bold_input(tmp_path)
@@ -111,9 +120,11 @@ def test_fc_produces_real_matrices(tmp_path, monkeypatch):
     from src.backend.app.services.preprocessing_fc_execution import run_fc_sandbox_execution
 
     req = FcSandboxExecutionRequest(
-        dry_run_id="dr-test", functional_input_dir=str(func_dir), confirm_sandbox_copy=True)
-    res = run_fc_sandbox_execution("brain-tumor-study", "pp-test", req,
-                                   env=_ALL_FC, project_dir=str(tmp_path))
+        dry_run_id="dr-test", functional_input_dir=str(func_dir), confirm_sandbox_copy=True
+    )
+    res = run_fc_sandbox_execution(
+        "brain-tumor-study", "pp-test", req, env=_ALL_FC, project_dir=str(tmp_path)
+    )
 
     assert res.ok, res.warnings
     assert res.fc_computed, f"FC not computed: {res.warnings}"

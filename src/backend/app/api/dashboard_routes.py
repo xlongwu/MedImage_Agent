@@ -2,17 +2,27 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 import zipfile
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    Query,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+)
 
 from src.backend.app.api.dependencies import ProjectStore
 from src.backend.app.api.execution_contract import reject_execution_contract
-from src.backend.app.core.config import get_backend_settings
+from src.backend.app.core.config import ConfigService
 from src.backend.app.schemas.desktop import (
     AssistantChatRequest,
     AssistantChatResponse,
@@ -21,15 +31,6 @@ from src.backend.app.schemas.desktop import (
     ConversionDryRunRequest,
     ConversionDryRunResponse,
     DataReadinessResponse,
-    MotionMetricsDraftResponse,
-    MotionQcReadinessResponse,
-    NiftiQcSnapshotResponse,
-    NiftiThumbnailResponse,
-    QcDashboardFingerprintResponse,
-    QcDashboardReportResponse,
-    RsfmriQcPlanningReportResponse,
-    SpmRealignDryRunResponse,
-    SpmRealignWrapperSkeletonResponse,
     DatasetDiagnosticsPackageResponse,
     DatasetDiagnosticsPackageStatusResponse,
     DatasetDiagnosticsPackageVerifyResponse,
@@ -45,44 +46,60 @@ from src.backend.app.schemas.desktop import (
     ImageSourcesResponse,
     ImageValidationReport,
     ModelStatus,
-    TaskApprovalRequest,
-    TaskApprovalResponse,
-    TaskAuditPackageResponse,
-    TaskArtifactsResponse,
-    TaskDiagnosticsResponse,
+    MotionMetricsDraftResponse,
+    MotionQcReadinessResponse,
+    NiftiQcSnapshotResponse,
+    NiftiThumbnailResponse,
     PipelineRunRequest,
     PipelineRunResponse,
     ProjectDetail,
     ProjectSummary,
+    QcDashboardFingerprintResponse,
+    QcDashboardReportResponse,
+    RsfmriQcPlanningReportResponse,
+    SpmRealignDryRunResponse,
+    SpmRealignWrapperSkeletonResponse,
     StudyOverview,
+    TaskApprovalRequest,
+    TaskApprovalResponse,
+    TaskArtifactsResponse,
+    TaskAuditPackageResponse,
     TaskDetail,
+    TaskDiagnosticsResponse,
     TaskEvent,
     TaskLogEntry,
 )
 from src.backend.app.services.bids_validation import validate_bids
-from src.backend.app.services.conversion_planner import plan_conversion
 from src.backend.app.services.bold_reference_readiness import build_bold_reference_readiness
+from src.backend.app.services.conversion_planner import plan_conversion
+from src.backend.app.services.data_readiness import build_data_readiness
+from src.backend.app.services.dicom_preflight import build_dicom_preflight
+from src.backend.app.services.image_preview import (
+    build_image_preview,
+    build_image_validation_report,
+    list_image_sources,
+)
+from src.backend.app.services.mock_store import mock_store
 from src.backend.app.services.motion_metrics_draft import build_motion_metrics_draft
-from src.backend.app.services.spm_realign_dry_run import build_spm_realign_dry_run
-from src.backend.app.services.spm_realign_wrapper_skeleton import build_spm_realign_wrapper_skeleton
 from src.backend.app.services.motion_qc_readiness import build_motion_qc_readiness
 from src.backend.app.services.nifti_qc_snapshot import build_nifti_qc_snapshot
 from src.backend.app.services.nifti_thumbnail import build_nifti_thumbnail
+from src.backend.app.services.pipeline_runner import run_pipeline_task
+from src.backend.app.services.qc_dashboard_fingerprint import collect_qc_dashboard_fingerprint_roots
 from src.backend.app.services.qc_dashboard_report import (
     build_qc_dashboard_report,
     load_latest_qc_dashboard_report,
 )
 from src.backend.app.services.rawdata_fingerprint import build_rawdata_fingerprint
-from src.backend.app.services.qc_dashboard_fingerprint import collect_qc_dashboard_fingerprint_roots
 from src.backend.app.services.rsfmri_qc_planning_report import build_rsfmri_qc_planning_report
-from src.backend.app.services.data_readiness import build_data_readiness
-from src.backend.app.services.dicom_preflight import build_dicom_preflight
-from src.backend.app.services.image_preview import build_image_preview, build_image_validation_report, list_image_sources
-from src.backend.app.services.mock_store import mock_store
-from src.backend.app.services.pipeline_runner import run_pipeline_task
+from src.backend.app.services.spm_realign_dry_run import build_spm_realign_dry_run
+from src.backend.app.services.spm_realign_wrapper_skeleton import build_spm_realign_wrapper_skeleton
 from src.backend.app.services.task_manager import task_manager
 
 router = APIRouter()
+
+DESKTOP_HEALTH_NONCE_HEADER = "X-MedImage-Desktop-Health-Nonce"
+DESKTOP_HEALTH_PROOF_HEADER = "X-MedImage-Desktop-Health-Proof"
 
 
 def get_dashboard_store() -> ProjectStore:
@@ -90,7 +107,10 @@ def get_dashboard_store() -> ProjectStore:
 
 
 def _safe_artifact_part(value: str) -> str:
-    return "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in value)[:80] or "project"
+    return (
+        "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in value)[:80]
+        or "project"
+    )
 
 
 def _zip_if_exists(archive: zipfile.ZipFile, source_path: str | None, arcname: str) -> None:
@@ -170,8 +190,20 @@ def _build_import_file_inventory(imports: list[DatasetImportRecord]) -> dict[str
 
 
 @router.get("/api/health", response_model=HealthResponse)
-def api_health() -> HealthResponse:
-    settings = get_backend_settings()
+def api_health(
+    response: Response,
+    desktop_health_nonce: Annotated[
+        str | None, Header(alias=DESKTOP_HEALTH_NONCE_HEADER)
+    ] = None,
+) -> HealthResponse:
+    settings = ConfigService().server
+    if settings.desktop_session_token and desktop_health_nonce:
+        proof = hmac.new(
+            settings.desktop_session_token.encode("utf-8"),
+            desktop_health_nonce.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        response.headers[DESKTOP_HEALTH_PROOF_HEADER] = proof
     return HealthResponse(
         status="ok",
         service=settings.service_name,
@@ -245,7 +277,9 @@ def get_dicom_preflight(
 
 
 @router.post("/api/datasets/diagnostics/package", response_model=DatasetDiagnosticsPackageResponse)
-def create_dataset_diagnostics_package(project_id: str = Query(...)) -> DatasetDiagnosticsPackageResponse:
+def create_dataset_diagnostics_package(
+    project_id: str = Query(...),
+) -> DatasetDiagnosticsPackageResponse:
     project = mock_store.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -260,7 +294,9 @@ def create_dataset_diagnostics_package(project_id: str = Query(...)) -> DatasetD
         search_roots=search_roots,
     )
     dicom_roots = [item.path for item in imports if item.dataset_type == "dicom"]
-    dicom_preflight = build_dicom_preflight(project_id=project_id, roots=dicom_roots) if dicom_roots else None
+    dicom_preflight = (
+        build_dicom_preflight(project_id=project_id, roots=dicom_roots) if dicom_roots else None
+    )
     generated_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     package_dir = Path("outputs/reports/import_diagnostics") / _safe_artifact_part(project_id)
     package_dir.mkdir(parents=True, exist_ok=True)
@@ -307,8 +343,14 @@ def create_dataset_diagnostics_package(project_id: str = Query(...)) -> DatasetD
         (sources.manifest_path, "artifacts/image_source_manifest.json"),
         (validation.report_path, "artifacts/image_validation_report.md"),
         (validation.json_path, "artifacts/image_validation_report.json"),
-        (dicom_preflight.report_path if dicom_preflight else None, "artifacts/dicom_preflight_report.md"),
-        (dicom_preflight.json_path if dicom_preflight else None, "artifacts/dicom_preflight_result.json"),
+        (
+            dicom_preflight.report_path if dicom_preflight else None,
+            "artifacts/dicom_preflight_report.md",
+        ),
+        (
+            dicom_preflight.json_path if dicom_preflight else None,
+            "artifacts/dicom_preflight_result.json",
+        ),
     ]:
         if source_path and Path(source_path).is_file():
             package_files.append((Path(source_path), arcname))
@@ -346,8 +388,13 @@ def create_dataset_diagnostics_package(project_id: str = Query(...)) -> DatasetD
     )
 
 
-@router.get("/api/datasets/diagnostics/package/latest", response_model=DatasetDiagnosticsPackageStatusResponse)
-def get_latest_dataset_diagnostics_package(project_id: str = Query(...)) -> DatasetDiagnosticsPackageStatusResponse:
+@router.get(
+    "/api/datasets/diagnostics/package/latest",
+    response_model=DatasetDiagnosticsPackageStatusResponse,
+)
+def get_latest_dataset_diagnostics_package(
+    project_id: str = Query(...),
+) -> DatasetDiagnosticsPackageStatusResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     package_dir = Path("outputs/reports/import_diagnostics") / _safe_artifact_part(project_id)
@@ -371,11 +418,21 @@ def get_latest_dataset_diagnostics_package(project_id: str = Query(...)) -> Data
             errors=[f"Failed to parse import diagnostics package: {exc}"],
             next_actions=["Regenerate the import diagnostics handoff package."],
         )
-    validation = payload.get("validation", {}) if isinstance(payload.get("validation"), dict) else {}
-    image_sources = payload.get("image_sources", {}) if isinstance(payload.get("image_sources"), dict) else {}
-    dicom_preflight = payload.get("dicom_preflight", {}) if isinstance(payload.get("dicom_preflight"), dict) else {}
+    validation = (
+        payload.get("validation", {}) if isinstance(payload.get("validation"), dict) else {}
+    )
+    image_sources = (
+        payload.get("image_sources", {}) if isinstance(payload.get("image_sources"), dict) else {}
+    )
+    dicom_preflight = (
+        payload.get("dicom_preflight", {})
+        if isinstance(payload.get("dicom_preflight"), dict)
+        else {}
+    )
     imports = payload.get("imports", []) if isinstance(payload.get("imports"), list) else []
-    file_inventory = payload.get("file_inventory") if isinstance(payload.get("file_inventory"), dict) else {}
+    file_inventory = (
+        payload.get("file_inventory") if isinstance(payload.get("file_inventory"), dict) else {}
+    )
     latest = DatasetDiagnosticsPackageResponse(
         ok=bool(payload.get("ok", False)),
         project_id=project_id,
@@ -387,23 +444,40 @@ def get_latest_dataset_diagnostics_package(project_id: str = Query(...)) -> Data
         checksum_path=str(payload.get("checksum_path") or checksum_path),
         report_text=report_path.read_text(encoding="utf-8") if report_path.is_file() else "",
         checksums=_parse_checksum_file(checksum_path),
-        safety_flags=payload.get("safety_flags") if isinstance(payload.get("safety_flags"), dict) else _diagnostics_package_safety_flags(),
+        safety_flags=payload.get("safety_flags")
+        if isinstance(payload.get("safety_flags"), dict)
+        else _diagnostics_package_safety_flags(),
         file_inventory=file_inventory,
-        manifest_path=(payload.get("artifacts") or {}).get("manifest_path") if isinstance(payload.get("artifacts"), dict) else None,
-        validation_report_path=(payload.get("artifacts") or {}).get("validation_report_path") if isinstance(payload.get("artifacts"), dict) else None,
+        manifest_path=(payload.get("artifacts") or {}).get("manifest_path")
+        if isinstance(payload.get("artifacts"), dict)
+        else None,
+        validation_report_path=(payload.get("artifacts") or {}).get("validation_report_path")
+        if isinstance(payload.get("artifacts"), dict)
+        else None,
         import_count=len(imports),
         image_source_count=len(image_sources.get("manifest", [])),
         validation_issue_count=len(validation.get("issues", [])),
-        dicom_preflight_report_path=(payload.get("artifacts") or {}).get("dicom_preflight_report_path") if isinstance(payload.get("artifacts"), dict) else None,
-        dicom_preflight_json_path=(payload.get("artifacts") or {}).get("dicom_preflight_json_path") if isinstance(payload.get("artifacts"), dict) else None,
+        dicom_preflight_report_path=(payload.get("artifacts") or {}).get(
+            "dicom_preflight_report_path"
+        )
+        if isinstance(payload.get("artifacts"), dict)
+        else None,
+        dicom_preflight_json_path=(payload.get("artifacts") or {}).get("dicom_preflight_json_path")
+        if isinstance(payload.get("artifacts"), dict)
+        else None,
         dicom_file_count=int(dicom_preflight.get("dicom_file_count") or 0),
         dicom_series_count=int(dicom_preflight.get("series_count") or 0),
     )
     return DatasetDiagnosticsPackageStatusResponse(ok=True, project_id=project_id, latest=latest)
 
 
-@router.post("/api/datasets/diagnostics/package/verify", response_model=DatasetDiagnosticsPackageVerifyResponse)
-def verify_dataset_diagnostics_package(project_id: str = Query(...)) -> DatasetDiagnosticsPackageVerifyResponse:
+@router.post(
+    "/api/datasets/diagnostics/package/verify",
+    response_model=DatasetDiagnosticsPackageVerifyResponse,
+)
+def verify_dataset_diagnostics_package(
+    project_id: str = Query(...),
+) -> DatasetDiagnosticsPackageVerifyResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     checked_at = datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -464,9 +538,13 @@ def import_dataset(request: DatasetImportRequest) -> DatasetImportResponse:
         raise HTTPException(status_code=400, detail="Dataset path is required")
     try:
         response = mock_store.import_dataset(request)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Project not found: {request.project_id}")
-    sources = list_image_sources(project_id=request.project_id, search_roots=mock_store.list_import_paths(request.project_id))
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Project not found: {request.project_id}"
+        ) from exc
+    sources = list_image_sources(
+        project_id=request.project_id, search_roots=mock_store.list_import_paths(request.project_id)
+    )
     project = mock_store.get_project(request.project_id)
     validation = build_image_validation_report(
         project_id=request.project_id,
@@ -493,7 +571,9 @@ def import_dataset(request: DatasetImportRequest) -> DatasetImportResponse:
 def get_model_status(project_id: str = Query(...)) -> ModelStatus:
     status = mock_store.get_model_status(project_id)
     if not status:
-        raise HTTPException(status_code=404, detail=f"Model status not found for project: {project_id}")
+        raise HTTPException(
+            status_code=404, detail=f"Model status not found for project: {project_id}"
+        )
     return status
 
 
@@ -523,9 +603,13 @@ async def approve_task(task_id: str, request: TaskApprovalRequest) -> TaskApprov
     if not task:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
     if task.execution_mode != "external_smoke":
-        raise HTTPException(status_code=400, detail="Only external_smoke tasks can receive run-level approval")
+        raise HTTPException(
+            status_code=400, detail="Only external_smoke tasks can receive run-level approval"
+        )
     if not request.approved:
-        raise HTTPException(status_code=403, detail="approved=true is required before launching approved smoke")
+        raise HTTPException(
+            status_code=403, detail="approved=true is required before launching approved smoke"
+        )
     if not request.approved_by.strip():
         raise HTTPException(status_code=400, detail="approved_by is required")
 
@@ -559,7 +643,9 @@ async def approve_task(task_id: str, request: TaskApprovalRequest) -> TaskApprov
     return TaskApprovalResponse(ok=True, approval=approval, message="Approved smoke run queued")
 
 
-@router.get("/api/tasks/{task_id}/diagnostics", response_model=TaskDiagnosticsResponse, deprecated=True)
+@router.get(
+    "/api/tasks/{task_id}/diagnostics", response_model=TaskDiagnosticsResponse, deprecated=True
+)
 def get_task_diagnostics(task_id: str) -> TaskDiagnosticsResponse:
     task = mock_store.get_task(task_id)
     if not task:
@@ -583,7 +669,9 @@ def get_task_artifacts(task_id: str) -> TaskArtifactsResponse:
     )
 
 
-@router.post("/api/tasks/{task_id}/audit-package", response_model=TaskAuditPackageResponse, deprecated=True)
+@router.post(
+    "/api/tasks/{task_id}/audit-package", response_model=TaskAuditPackageResponse, deprecated=True
+)
 def generate_task_audit_package(task_id: str) -> TaskAuditPackageResponse:
     task = mock_store.get_task(task_id)
     if not task:
@@ -606,16 +694,28 @@ async def run_pipeline(request: PipelineRunRequest) -> PipelineRunResponse:
         reject_execution_contract("dashboard.pipeline", project_id=request.project_id)
     if not request.input_sequences:
         raise HTTPException(status_code=400, detail="input_sequences must not be empty")
-    if request.execution_mode == "external_smoke" and request.external_smoke_mode == "approved_smoke":
+    if (
+        request.execution_mode == "external_smoke"
+        and request.external_smoke_mode == "approved_smoke"
+    ):
         if not request.approved:
-            raise HTTPException(status_code=403, detail="approved=true is required for approved_smoke")
+            raise HTTPException(
+                status_code=403, detail="approved=true is required for approved_smoke"
+            )
         if not (request.approved_by or "").strip():
-            raise HTTPException(status_code=400, detail="approved_by is required for approved_smoke")
+            raise HTTPException(
+                status_code=400, detail="approved_by is required for approved_smoke"
+            )
     try:
         task = task_manager.create_pipeline_task(request)
-    except KeyError:
-        raise HTTPException(status_code=404, detail=f"Project not found: {request.project_id}")
-    if request.execution_mode == "external_smoke" and request.external_smoke_mode == "approved_smoke":
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Project not found: {request.project_id}"
+        ) from exc
+    if (
+        request.execution_mode == "external_smoke"
+        and request.external_smoke_mode == "approved_smoke"
+    ):
         approval = mock_store.add_approval(
             task.id,
             approved=True,
@@ -670,35 +770,15 @@ async def task_stream(websocket: WebSocket, task_id: str) -> None:
 
 @router.post("/api/assistant/chat", response_model=AssistantChatResponse, deprecated=True)
 def assistant_chat(request: AssistantChatRequest) -> AssistantChatResponse:
-    project = mock_store.get_project(request.project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail=f"Project not found: {request.project_id}")
+    from src.backend.app.services.assistant_service import build_assistant_reply
 
-    message = request.message.lower()
-    dataset = mock_store.get_dataset_summary(request.project_id)
-    if "pipeline" in message or "workflow" in message:
-        reply = (
-            f"Current pipeline is {project.current_pipeline_id}. Use approved runs for SPM/DPABI "
-            "steps and keep rawdata read-only. The UI can start a simulated run now; real runners "
-            "should plug into the same task event stream."
-        )
-    elif "failed" in message or "error" in message or "log" in message:
-        reply = (
-            "For failed tasks, open the latest task detail and inspect logs/result_path first. "
-            "If it is an external SPM/DPABI smoke failure, verify the MATLAB stdout/stderr and "
-            "expected result JSON path."
-        )
-    elif "dataset" in message or "data" in message:
-        reply = (
-            f"{project.name} currently has {dataset.subjects if dataset else project.subjects_count} subjects, "
-            f"{dataset.scans if dataset else project.scans_count} scans, and health status "
-            f"{dataset.health_status if dataset else 'Unknown'}."
-        )
-    else:
-        reply = (
-            "I can help review dataset readiness, explain pipeline settings, summarize task failures, "
-            "or prepare the next auditable SPM/DPABI smoke run. TODO: connect this panel to a real LLM provider."
-        )
+    reply = build_assistant_reply(
+        store=mock_store,
+        project_id=request.project_id,
+        message=request.message,
+    )
+    if reply is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {request.project_id}")
     return AssistantChatResponse(reply=reply)
 
 
@@ -727,14 +807,18 @@ def image_preview(
 def image_sources(project_id: str = Query(...)) -> ImageSourcesResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    return list_image_sources(project_id=project_id, search_roots=mock_store.list_import_paths(project_id))
+    return list_image_sources(
+        project_id=project_id, search_roots=mock_store.list_import_paths(project_id)
+    )
 
 
 @router.get("/api/images/manifest", response_model=ImageSourcesResponse, deprecated=True)
 def image_manifest(project_id: str = Query(...)) -> ImageSourcesResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    return list_image_sources(project_id=project_id, search_roots=mock_store.list_import_paths(project_id))
+    return list_image_sources(
+        project_id=project_id, search_roots=mock_store.list_import_paths(project_id)
+    )
 
 
 @router.get("/api/images/validation", response_model=ImageValidationReport, deprecated=True)
@@ -749,7 +833,11 @@ def image_validation(project_id: str = Query(...)) -> ImageValidationReport:
     )
 
 
-@router.post("/api/projects/{project_id}/qc-dashboard/report", response_model=QcDashboardReportResponse, deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/qc-dashboard/report",
+    response_model=QcDashboardReportResponse,
+    deprecated=True,
+)
 def post_qc_dashboard_report(
     project_id: str,
     cache: str = "off",
@@ -757,21 +845,33 @@ def post_qc_dashboard_report(
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     if cache not in ("off", "prefer", "refresh"):
-        raise HTTPException(status_code=400, detail=f"Invalid cache mode: {cache}. Use off, prefer, or refresh.")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid cache mode: {cache}. Use off, prefer, or refresh."
+        )
     return build_qc_dashboard_report(project_id, cache_mode=cache)
 
 
-@router.get("/api/projects/{project_id}/qc-dashboard/report/latest", response_model=QcDashboardReportResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/qc-dashboard/report/latest",
+    response_model=QcDashboardReportResponse,
+    deprecated=True,
+)
 def get_latest_qc_dashboard_report(project_id: str) -> QcDashboardReportResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     result = load_latest_qc_dashboard_report(project_id)
     if result is None:
-        raise HTTPException(status_code=404, detail="No QC dashboard report has been generated yet.")
+        raise HTTPException(
+            status_code=404, detail="No QC dashboard report has been generated yet."
+        )
     return result
 
 
-@router.get("/api/projects/{project_id}/qc-dashboard/fingerprint", response_model=QcDashboardFingerprintResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/qc-dashboard/fingerprint",
+    response_model=QcDashboardFingerprintResponse,
+    deprecated=True,
+)
 def get_qc_dashboard_fingerprint(project_id: str) -> QcDashboardFingerprintResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
@@ -787,21 +887,32 @@ def get_qc_dashboard_fingerprint(project_id: str) -> QcDashboardFingerprintRespo
         warnings=fp.warnings,
         errors=fp.errors,
         safety_flags={
-            "read_only": True, "rawdata_not_modified": True,
-            "metadata_only": True, "no_cache_files_created": True,
-            "no_preprocessing_executed": True, "no_external_tools_executed": True,
+            "read_only": True,
+            "rawdata_not_modified": True,
+            "metadata_only": True,
+            "no_cache_files_created": True,
+            "no_preprocessing_executed": True,
+            "no_external_tools_executed": True,
         },
     )
 
 
-@router.get("/api/projects/{project_id}/data-readiness", response_model=DataReadinessResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/data-readiness",
+    response_model=DataReadinessResponse,
+    deprecated=True,
+)
 def get_project_data_readiness(project_id: str) -> DataReadinessResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_data_readiness(project_id)
 
 
-@router.get("/api/projects/{project_id}/bids-validation", response_model=BidsValidationResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/bids-validation",
+    response_model=BidsValidationResponse,
+    deprecated=True,
+)
 def get_project_bids_validation(project_id: str) -> BidsValidationResponse:
     project = mock_store.get_project(project_id)
     if not project:
@@ -823,59 +934,92 @@ def get_project_bids_validation(project_id: str) -> BidsValidationResponse:
     return result
 
 
-@router.get("/api/projects/{project_id}/bold-reference/readiness", response_model=BoldReferenceReadinessResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/bold-reference/readiness",
+    response_model=BoldReferenceReadinessResponse,
+    deprecated=True,
+)
 def get_project_bold_reference_readiness(project_id: str) -> BoldReferenceReadinessResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_bold_reference_readiness(project_id)
 
 
-@router.post("/api/projects/{project_id}/rsfmri-qc/planning-report", response_model=RsfmriQcPlanningReportResponse, deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/rsfmri-qc/planning-report",
+    response_model=RsfmriQcPlanningReportResponse,
+    deprecated=True,
+)
 def post_rsfmri_qc_planning_report(project_id: str) -> RsfmriQcPlanningReportResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_rsfmri_qc_planning_report(project_id)
 
 
-@router.post("/api/projects/{project_id}/motion-qc/metrics-draft", response_model=MotionMetricsDraftResponse, deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/motion-qc/metrics-draft",
+    response_model=MotionMetricsDraftResponse,
+    deprecated=True,
+)
 def post_motion_metrics_draft(project_id: str) -> MotionMetricsDraftResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_motion_metrics_draft(project_id)
 
 
-@router.post("/api/projects/{project_id}/spm-realign/dry-run", response_model=SpmRealignDryRunResponse, deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/spm-realign/dry-run",
+    response_model=SpmRealignDryRunResponse,
+    deprecated=True,
+)
 def post_spm_realign_dry_run(project_id: str) -> SpmRealignDryRunResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_spm_realign_dry_run(project_id)
 
 
-@router.post("/api/projects/{project_id}/spm-realign/wrapper-skeleton", response_model=SpmRealignWrapperSkeletonResponse, deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/spm-realign/wrapper-skeleton",
+    response_model=SpmRealignWrapperSkeletonResponse,
+    deprecated=True,
+)
 def post_spm_realign_wrapper_skeleton(project_id: str) -> SpmRealignWrapperSkeletonResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_spm_realign_wrapper_skeleton(project_id)
 
 
-@router.get("/api/projects/{project_id}/nifti-qc/snapshot", response_model=NiftiQcSnapshotResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/nifti-qc/snapshot",
+    response_model=NiftiQcSnapshotResponse,
+    deprecated=True,
+)
 def get_project_nifti_qc_snapshot(project_id: str) -> NiftiQcSnapshotResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_nifti_qc_snapshot(project_id)
 
 
-@router.get("/api/projects/{project_id}/nifti-qc/images/{image_id}/thumbnail", response_model=NiftiThumbnailResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/nifti-qc/images/{image_id}/thumbnail",
+    response_model=NiftiThumbnailResponse,
+    deprecated=True,
+)
 def get_project_nifti_thumbnail(
-    project_id: str, image_id: str,
-    view: str = "all", volume_index: int | None = None, size: int | None = None,
+    project_id: str,
+    image_id: str,
+    view: str = "all",
+    volume_index: int | None = None,
+    size: int | None = None,
 ) -> NiftiThumbnailResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     if view not in ("axial", "coronal", "sagittal", "all"):
         raise HTTPException(status_code=400, detail=f"Invalid view: {view}")
     if volume_index is not None and volume_index < 0:
-        raise HTTPException(status_code=400, detail=f"volume_index must be >= 0, got {volume_index}")
+        raise HTTPException(
+            status_code=400, detail=f"volume_index must be >= 0, got {volume_index}"
+        )
     try:
         return build_nifti_thumbnail(project_id, image_id, view, volume_index, size)
     except ValueError as exc:
@@ -885,14 +1029,22 @@ def get_project_nifti_thumbnail(
         raise
 
 
-@router.get("/api/projects/{project_id}/motion-qc/readiness", response_model=MotionQcReadinessResponse, deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/motion-qc/readiness",
+    response_model=MotionQcReadinessResponse,
+    deprecated=True,
+)
 def get_project_motion_qc_readiness(project_id: str) -> MotionQcReadinessResponse:
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return build_motion_qc_readiness(project_id)
 
 
-@router.post("/api/projects/{project_id}/conversion/dry-run", response_model=ConversionDryRunResponse, deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/conversion/dry-run",
+    response_model=ConversionDryRunResponse,
+    deprecated=True,
+)
 def post_conversion_dry_run(
     project_id: str,
     request: ConversionDryRunRequest = ConversionDryRunRequest(),
@@ -925,6 +1077,7 @@ def post_conversion_preflight(
     # Check dcm2niix availability independently
     env_flags: dict[str, str] = {}
     import os
+
     for flag in [
         "MEDIMAGE_ENABLE_DICOM_CONVERSION",
         "MEDIMAGE_MATLAB_ENABLED",
@@ -1004,7 +1157,6 @@ def post_conversion_persist_plan(
 
     from src.backend.app.schemas.dicom_conversion_approval import (
         DicomConversionApprovalRecord,
-        evaluate_conversion_approval_gate,
     )
     from src.backend.app.services.dicom_conversion_plan_persistence import (
         persist_conversion_plan,
@@ -1031,7 +1183,9 @@ def post_conversion_persist_plan(
         dcm2niix_availability_confirmed=body.get("dcm2niix_availability_confirmed", False),
         env_flags_confirmed=body.get("env_flags_confirmed", False),
         rollback_policy_acknowledged=body.get("rollback_policy_acknowledged", False),
-        clinical_use_prohibited_acknowledged=body.get("clinical_use_prohibited_acknowledged", False),
+        clinical_use_prohibited_acknowledged=body.get(
+            "clinical_use_prohibited_acknowledged", False
+        ),
         external_tool_acknowledgement=body.get("external_tool_acknowledgement", False),
         risk_acknowledgement=body.get("risk_acknowledgement", False),
         confirm_execution=body.get("confirm_execution", False),
@@ -1058,7 +1212,9 @@ def post_conversion_persist_plan(
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}", deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}", deprecated=True
+)
 def get_conversion_review_package(
     project_id: str,
     conversion_run_id: str,
@@ -1089,7 +1245,10 @@ def get_conversion_review_package(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}/export", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/conversion/approval/packages/{conversion_run_id}/export",
+    deprecated=True,
+)
 def post_conversion_review_package_export(
     project_id: str,
     conversion_run_id: str,
@@ -1122,7 +1281,9 @@ def post_conversion_review_package_export(
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/conversion/release-readiness/{conversion_run_id}", deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/conversion/release-readiness/{conversion_run_id}", deprecated=True
+)
 def get_conversion_release_readiness(
     project_id: str,
     conversion_run_id: str,
@@ -1158,6 +1319,7 @@ def get_conversion_release_readiness(
 # ═══════════════════════════════════════════════════════════════════════
 # DICOM conversion public execute endpoint — Phase 4L-2
 # ═══════════════════════════════════════════════════════════════════════
+
 
 @router.post("/api/projects/{project_id}/conversion/execute", deprecated=True)
 def post_conversion_execute(
@@ -1198,9 +1360,6 @@ def post_conversion_execute(
         DicomConversionPublicExecutionSafetyFlags,
         validate_public_execution_env_flags,
         validate_public_execution_request_acknowledgements,
-    )
-    from src.backend.app.schemas.dicom_conversion_release_approval import (
-        is_release_approval_complete,
     )
 
     # ── 0. Parse request ──────────────────────────────────────────
@@ -1245,9 +1404,7 @@ def post_conversion_execute(
             status="blocked",
             project_id=project_id,
             conversion_run_id=req.conversion_run_id,
-            blocking_issues=[
-                f"Operator confirmations missing: {', '.join(missing_confirm)}."
-            ],
+            blocking_issues=[f"Operator confirmations missing: {', '.join(missing_confirm)}."],
             safety_flags=DicomConversionPublicExecutionSafetyFlags(
                 conversion_disabled_by_default=True,
             ),
@@ -1303,9 +1460,8 @@ def post_conversion_execute(
             status="blocked",
             project_id=project_id,
             conversion_run_id=req.conversion_run_id,
-            blocking_issues=approval.blocking_issues or [
-                f"Release approval is not valid: status={approval_status}."
-            ],
+            blocking_issues=approval.blocking_issues
+            or [f"Release approval is not valid: status={approval_status}."],
             safety_flags=DicomConversionPublicExecutionSafetyFlags(
                 conversion_disabled_by_default=True,
                 release_approval_obtained=False,
@@ -1330,7 +1486,8 @@ def post_conversion_execute(
             status="blocked",
             project_id=project_id,
             conversion_run_id=req.conversion_run_id,
-            blocking_issues=readiness.blocking_issues or [
+            blocking_issues=readiness.blocking_issues
+            or [
                 f"Release readiness is '{readiness.status}', "
                 f"must be 'ready_for_human_release_review'."
             ],
@@ -1364,8 +1521,10 @@ def post_conversion_execute(
     )
 
     pkg = read_conversion_review_package(
-        project_id, req.conversion_run_id,
-        project_dir=project_dir, rawdata_dir=rawdata_dir,
+        project_id,
+        req.conversion_run_id,
+        project_dir=project_dir,
+        rawdata_dir=rawdata_dir,
     )
 
     if not pkg.ok:
@@ -1399,9 +1558,7 @@ def post_conversion_execute(
         ).model_dump()
 
     # ── 9. Rollback plan validation ───────────────────────────────
-    rollback_plan_path = next(
-        (f.path for f in pkg.files if f.kind == "rollback_plan_dry_run"), ""
-    )
+    rollback_plan_path = next((f.path for f in pkg.files if f.kind == "rollback_plan_dry_run"), "")
     if not rollback_plan_path or not Path(rollback_plan_path).exists():
         return DicomConversionPublicExecutionResponse(
             ok=False,
@@ -1485,14 +1642,16 @@ def post_conversion_execute(
         ).model_dump()
 
     # ── 13. Execute ───────────────────────────────────────────────
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     from src.backend.app.services.dicom_conversion_execution import (
         run_internal_user_dicom_conversion_from_persisted_package,
     )
 
-    started_at = datetime.now(timezone.utc).isoformat()
-    execution_id = f"pubexec-{project_id}-{req.conversion_run_id}-{int(datetime.now(timezone.utc).timestamp())}"
+    started_at = datetime.now(UTC).isoformat()
+    execution_id = (
+        f"pubexec-{project_id}-{req.conversion_run_id}-{int(datetime.now(UTC).timestamp())}"
+    )
 
     try:
         internal_result = run_internal_user_dicom_conversion_from_persisted_package(
@@ -1510,7 +1669,7 @@ def post_conversion_execute(
             conversion_run_id=req.conversion_run_id,
             execution_id=execution_id,
             started_at=started_at,
-            finished_at=datetime.now(timezone.utc).isoformat(),
+            finished_at=datetime.now(UTC).isoformat(),
             output_root=output_root,
             errors=[f"Internal execution failed: {exc}"],
             safety_flags=DicomConversionPublicExecutionSafetyFlags(
@@ -1533,7 +1692,7 @@ def post_conversion_execute(
             ),
         ).model_dump()
 
-    finished_at = datetime.now(timezone.utc).isoformat()
+    finished_at = datetime.now(UTC).isoformat()
 
     # Map internal status to public status
     internal_status = getattr(internal_result, "status", "failed")
@@ -1602,6 +1761,7 @@ def post_conversion_execute(
 # ═══════════════════════════════════════════════════════════════════════
 # Preprocessing handoff — Phase 5A
 # ═══════════════════════════════════════════════════════════════════════
+
 
 @router.post("/api/projects/{project_id}/preprocessing/input/register-converted", deprecated=True)
 def post_register_converted_preprocessing_input(
@@ -1681,6 +1841,7 @@ def post_preprocessing_plan_preview(
 # Preprocessing run workspace — Phase 5B
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.post("/api/projects/{project_id}/preprocessing/runs", deprecated=True)
 def post_create_preprocessing_run(
     project_id: str,
@@ -1714,7 +1875,10 @@ def post_create_preprocessing_run(
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/execute-python-preflight", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/execute-python-preflight",
+    deprecated=True,
+)
 def post_execute_python_preflight(
     project_id: str,
     preprocessing_run_id: str,
@@ -1760,17 +1924,21 @@ def get_preprocessing_run(
 # SPM/MATLAB runtime preflight — Phase 5C
 # ═══════════════════════════════════════════════════════════════════════
 
+
 @router.get("/api/projects/{project_id}/preprocessing/spm-runtime/preflight", deprecated=True)
 def get_spm_runtime_preflight(project_id: str) -> dict[str, Any]:
     """Check MATLAB/SPM availability for synthetic smoke."""
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.services.spm_runtime import spm_runtime_preflight
+
     result = spm_runtime_preflight(project_id)
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/spm-runtime/synthetic-smoke", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/spm-runtime/synthetic-smoke", deprecated=True
+)
 def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str, Any]:
     """Generate synthetic SPM Slice Timing + Realign smoke artifacts."""
     reject_execution_contract("dashboard.spm_synthetic_smoke", project_id=project_id)
@@ -1778,6 +1946,7 @@ def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str,
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.spm_runtime import SpmSyntheticSmokeRequest
     from src.backend.app.services.spm_runtime import run_synthetic_spm_smoke
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SpmSyntheticSmokeRequest(
@@ -1792,7 +1961,10 @@ def post_spm_synthetic_smoke(project_id: str, body: dict[str, Any]) -> dict[str,
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/dry-run", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/dry-run",
+    deprecated=True,
+)
 def post_spm_slice_timing_realign_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1801,21 +1973,29 @@ def post_spm_slice_timing_realign_dry_run(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_spm_dry_run import SliceTimingRealignDryRunRequest
     from src.backend.app.services.preprocessing_spm_dry_run import run_slice_timing_realign_dry_run
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SliceTimingRealignDryRunRequest(
-        tr=body.get("tr"), num_slices=body.get("num_slices"),
-        slice_order=body.get("slice_order", ""), reference_slice=body.get("reference_slice"),
+        tr=body.get("tr"),
+        num_slices=body.get("num_slices"),
+        slice_order=body.get("slice_order", ""),
+        reference_slice=body.get("reference_slice"),
         confirm_dry_run_only=body.get("confirm_dry_run_only", False),
         confirm_no_matlab_execution=body.get("confirm_no_matlab_execution", False),
         confirm_no_image_modification=body.get("confirm_no_image_modification", False),
         confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
     )
-    result = run_slice_timing_realign_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_slice_timing_realign_dry_run(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/execute-sandbox", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/slice-timing-realign/execute-sandbox",
+    deprecated=True,
+)
 def post_spm_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1825,25 +2005,34 @@ def post_spm_sandbox_execution(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_spm_execution import SpmSandboxExecutionRequest
     from src.backend.app.services.preprocessing_spm_execution import run_sandbox_spm_execution
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SpmSandboxExecutionRequest(
         dry_run_id=body.get("dry_run_id", ""),
         confirm_sandbox_copy=body.get("confirm_sandbox_copy", False),
         confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
-        confirm_no_converted_input_modification=body.get("confirm_no_converted_input_modification", False),
+        confirm_no_converted_input_modification=body.get(
+            "confirm_no_converted_input_modification", False
+        ),
         confirm_slice_timing_realign_only=body.get("confirm_slice_timing_realign_only", False),
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
         preview_limit=int(body["preview_limit"]) if body.get("preview_limit") is not None else None,
         matlab_executable=body.get("matlab_executable", "matlab"),
-        spm_path=body.get("spm_path", ""), timeout_seconds=body.get("timeout_seconds", 600),
+        spm_path=body.get("spm_path", ""),
+        timeout_seconds=body.get("timeout_seconds", 600),
     )
-    result = run_sandbox_spm_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_sandbox_spm_execution(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-sandbox-spm", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-sandbox-spm",
+    deprecated=True,
+)
 def post_register_sandbox_spm_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1852,6 +2041,7 @@ def post_register_sandbox_spm_outputs(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
     from src.backend.app.services.preprocessing_stage_outputs import register_sandbox_spm_outputs
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
@@ -1862,11 +2052,16 @@ def post_register_sandbox_spm_outputs(
         confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
         confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
     )
-    result = register_sandbox_spm_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = register_sandbox_spm_outputs(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/dry-run", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/dry-run",
+    deprecated=True,
+)
 def post_coreg_norm_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1875,6 +2070,7 @@ def post_coreg_norm_dry_run(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_coreg_norm_dry_run import CoregNormDryRunRequest
     from src.backend.app.services.preprocessing_coreg_norm_dry_run import run_coreg_norm_dry_run
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = CoregNormDryRunRequest(
@@ -1889,11 +2085,16 @@ def post_coreg_norm_dry_run(
         write_normalized_functional=body.get("write_normalized_functional", True),
         write_normalized_t1w=body.get("write_normalized_t1w", True),
     )
-    result = run_coreg_norm_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_coreg_norm_dry_run(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/execute-sandbox", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/coreg-normalize/execute-sandbox",
+    deprecated=True,
+)
 def post_coreg_norm_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1901,8 +2102,13 @@ def post_coreg_norm_sandbox_execution(
     reject_execution_contract("dashboard.coreg_normalize", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    from src.backend.app.schemas.preprocessing_coreg_norm_execution import CoregNormSandboxExecutionRequest
-    from src.backend.app.services.preprocessing_coreg_norm_execution import run_coreg_norm_sandbox_execution
+    from src.backend.app.schemas.preprocessing_coreg_norm_execution import (
+        CoregNormSandboxExecutionRequest,
+    )
+    from src.backend.app.services.preprocessing_coreg_norm_execution import (
+        run_coreg_norm_sandbox_execution,
+    )
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = CoregNormSandboxExecutionRequest(
@@ -1910,19 +2116,29 @@ def post_coreg_norm_sandbox_execution(
         functional_input_dir=body.get("functional_input_dir", ""),
         confirm_sandbox_copy=body.get("confirm_sandbox_copy", False),
         confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
-        confirm_no_converted_input_modification=body.get("confirm_no_converted_input_modification", False),
-        confirm_no_previous_output_modification=body.get("confirm_no_previous_output_modification", False),
+        confirm_no_converted_input_modification=body.get(
+            "confirm_no_converted_input_modification", False
+        ),
+        confirm_no_previous_output_modification=body.get(
+            "confirm_no_previous_output_modification", False
+        ),
         confirm_coreg_norm_only=body.get("confirm_coreg_norm_only", False),
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
         matlab_executable=body.get("matlab_executable", "matlab"),
-        spm_path=body.get("spm_path", ""), timeout_seconds=body.get("timeout_seconds", 600),
+        spm_path=body.get("spm_path", ""),
+        timeout_seconds=body.get("timeout_seconds", 600),
     )
-    result = run_coreg_norm_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_coreg_norm_sandbox_execution(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-coreg-norm", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-coreg-norm",
+    deprecated=True,
+)
 def post_register_coreg_norm_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1931,6 +2147,7 @@ def post_register_coreg_norm_outputs(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
     from src.backend.app.services.preprocessing_stage_outputs import register_coreg_norm_outputs
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
@@ -1941,11 +2158,16 @@ def post_register_coreg_norm_outputs(
         confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
         confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
     )
-    result = register_coreg_norm_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = register_coreg_norm_outputs(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/dry-run", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/dry-run",
+    deprecated=True,
+)
 def post_smoothing_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1954,6 +2176,7 @@ def post_smoothing_dry_run(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_smoothing_dry_run import SmoothingDryRunRequest
     from src.backend.app.services.preprocessing_smoothing_dry_run import run_smoothing_dry_run
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SmoothingDryRunRequest(
@@ -1966,11 +2189,16 @@ def post_smoothing_dry_run(
         confirm_rawdata_readonly=body.get("confirm_rawdata_readonly", False),
         confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
     )
-    result = run_smoothing_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_smoothing_dry_run(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/execute-sandbox", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/spm/smoothing/execute-sandbox",
+    deprecated=True,
+)
 def post_smoothing_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -1978,8 +2206,13 @@ def post_smoothing_sandbox_execution(
     reject_execution_contract("dashboard.smoothing", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    from src.backend.app.schemas.preprocessing_smoothing_execution import SmoothingSandboxExecutionRequest
-    from src.backend.app.services.preprocessing_smoothing_execution import run_smoothing_sandbox_execution
+    from src.backend.app.schemas.preprocessing_smoothing_execution import (
+        SmoothingSandboxExecutionRequest,
+    )
+    from src.backend.app.services.preprocessing_smoothing_execution import (
+        run_smoothing_sandbox_execution,
+    )
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = SmoothingSandboxExecutionRequest(
@@ -1987,19 +2220,27 @@ def post_smoothing_sandbox_execution(
         functional_input_dir=body.get("functional_input_dir", ""),
         confirm_sandbox_copy=body.get("confirm_sandbox_copy", False),
         confirm_no_rawdata_modification=body.get("confirm_no_rawdata_modification", False),
-        confirm_no_converted_input_modification=body.get("confirm_no_converted_input_modification", False),
+        confirm_no_converted_input_modification=body.get(
+            "confirm_no_converted_input_modification", False
+        ),
         confirm_previous_stage_readonly=body.get("confirm_previous_stage_readonly", False),
         confirm_smoothing_only=body.get("confirm_smoothing_only", False),
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
         matlab_executable=body.get("matlab_executable", "matlab"),
-        spm_path=body.get("spm_path", ""), timeout_seconds=body.get("timeout_seconds", 600),
+        spm_path=body.get("spm_path", ""),
+        timeout_seconds=body.get("timeout_seconds", 600),
     )
-    result = run_smoothing_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_smoothing_sandbox_execution(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-smoothing", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-smoothing",
+    deprecated=True,
+)
 def post_register_smoothing_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2008,6 +2249,7 @@ def post_register_smoothing_outputs(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
     from src.backend.app.services.preprocessing_stage_outputs import register_smoothing_outputs
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
@@ -2018,11 +2260,16 @@ def post_register_smoothing_outputs(
         confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
         confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
     )
-    result = register_smoothing_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = register_smoothing_outputs(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/dry-run", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/dry-run",
+    deprecated=True,
+)
 def post_nuisance_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2031,6 +2278,7 @@ def post_nuisance_dry_run(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_nuisance_dry_run import NuisanceDryRunRequest
     from src.backend.app.services.preprocessing_nuisance_dry_run import run_nuisance_dry_run
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = NuisanceDryRunRequest(
@@ -2046,11 +2294,16 @@ def post_nuisance_dry_run(
         confirm_no_external_tools=body.get("confirm_no_external_tools", False),
         confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
     )
-    result = run_nuisance_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_nuisance_dry_run(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/execute-sandbox", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/nuisance-regression/execute-sandbox",
+    deprecated=True,
+)
 def post_nuisance_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2058,8 +2311,13 @@ def post_nuisance_sandbox_execution(
     reject_execution_contract("dashboard.nuisance_regression", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    from src.backend.app.schemas.preprocessing_nuisance_execution import NuisanceSandboxExecutionRequest
-    from src.backend.app.services.preprocessing_nuisance_execution import run_nuisance_sandbox_execution
+    from src.backend.app.schemas.preprocessing_nuisance_execution import (
+        NuisanceSandboxExecutionRequest,
+    )
+    from src.backend.app.services.preprocessing_nuisance_execution import (
+        run_nuisance_sandbox_execution,
+    )
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = NuisanceSandboxExecutionRequest(
@@ -2072,11 +2330,16 @@ def post_nuisance_sandbox_execution(
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
     )
-    result = run_nuisance_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_nuisance_sandbox_execution(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-nuisance", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-nuisance",
+    deprecated=True,
+)
 def post_register_nuisance_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2085,6 +2348,7 @@ def post_register_nuisance_outputs(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
     from src.backend.app.services.preprocessing_stage_outputs import register_nuisance_outputs
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
@@ -2095,11 +2359,16 @@ def post_register_nuisance_outputs(
         confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
         confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
     )
-    result = register_nuisance_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = register_nuisance_outputs(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/dry-run", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/dry-run",
+    deprecated=True,
+)
 def post_filtering_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2108,22 +2377,29 @@ def post_filtering_dry_run(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_filtering_dry_run import FilteringDryRunRequest
     from src.backend.app.services.preprocessing_filtering_dry_run import run_filtering_dry_run
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FilteringDryRunRequest(
         registered_stage_output_id=body.get("registered_stage_output_id", ""),
         functional_input_dir=body.get("functional_input_dir", ""),
-        low_cut_hz=body.get("low_cut_hz", 0.01), high_cut_hz=body.get("high_cut_hz", 0.08),
+        low_cut_hz=body.get("low_cut_hz", 0.01),
+        high_cut_hz=body.get("high_cut_hz", 0.08),
         confirm_dry_run_only=body.get("confirm_dry_run_only", False),
         confirm_no_image_modification=body.get("confirm_no_image_modification", False),
         confirm_no_external_tools=body.get("confirm_no_external_tools", False),
         confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
     )
-    result = run_filtering_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_filtering_dry_run(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/execute-sandbox", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/temporal-filtering/execute-sandbox",
+    deprecated=True,
+)
 def post_filtering_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2131,8 +2407,13 @@ def post_filtering_sandbox_execution(
     reject_execution_contract("dashboard.temporal_filtering", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    from src.backend.app.schemas.preprocessing_filtering_execution import FilteringSandboxExecutionRequest
-    from src.backend.app.services.preprocessing_filtering_execution import run_filtering_sandbox_execution
+    from src.backend.app.schemas.preprocessing_filtering_execution import (
+        FilteringSandboxExecutionRequest,
+    )
+    from src.backend.app.services.preprocessing_filtering_execution import (
+        run_filtering_sandbox_execution,
+    )
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FilteringSandboxExecutionRequest(
@@ -2145,11 +2426,16 @@ def post_filtering_sandbox_execution(
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
     )
-    result = run_filtering_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_filtering_sandbox_execution(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-filtering", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-filtering",
+    deprecated=True,
+)
 def post_register_filtering_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2158,6 +2444,7 @@ def post_register_filtering_outputs(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
     from src.backend.app.services.preprocessing_stage_outputs import register_filtering_outputs
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
@@ -2168,11 +2455,16 @@ def post_register_filtering_outputs(
         confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
         confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
     )
-    result = register_filtering_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = register_filtering_outputs(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/dry-run", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/dry-run",
+    deprecated=True,
+)
 def post_alff_reho_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2181,23 +2473,31 @@ def post_alff_reho_dry_run(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_alff_reho_dry_run import AlffRehoDryRunRequest
     from src.backend.app.services.preprocessing_alff_reho_dry_run import run_alff_reho_dry_run
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = AlffRehoDryRunRequest(
         registered_stage_output_id=body.get("registered_stage_output_id", ""),
         functional_input_dir=body.get("functional_input_dir", ""),
-        compute_alff=body.get("compute_alff", True), compute_falff=body.get("compute_falff", True),
-        compute_reho=body.get("compute_reho", True), reho_neighbors=body.get("reho_neighbors", 27),
+        compute_alff=body.get("compute_alff", True),
+        compute_falff=body.get("compute_falff", True),
+        compute_reho=body.get("compute_reho", True),
+        reho_neighbors=body.get("reho_neighbors", 27),
         confirm_dry_run_only=body.get("confirm_dry_run_only", False),
         confirm_no_image_modification=body.get("confirm_no_image_modification", False),
         confirm_no_external_tools=body.get("confirm_no_external_tools", False),
         confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
     )
-    result = run_alff_reho_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_alff_reho_dry_run(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/execute-sandbox", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/alff-reho/execute-sandbox",
+    deprecated=True,
+)
 def post_alff_reho_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2205,8 +2505,13 @@ def post_alff_reho_sandbox_execution(
     reject_execution_contract("dashboard.alff_reho", project_id=project_id)
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    from src.backend.app.schemas.preprocessing_alff_reho_execution import AlffRehoSandboxExecutionRequest
-    from src.backend.app.services.preprocessing_alff_reho_execution import run_alff_reho_sandbox_execution
+    from src.backend.app.schemas.preprocessing_alff_reho_execution import (
+        AlffRehoSandboxExecutionRequest,
+    )
+    from src.backend.app.services.preprocessing_alff_reho_execution import (
+        run_alff_reho_sandbox_execution,
+    )
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = AlffRehoSandboxExecutionRequest(
@@ -2220,11 +2525,16 @@ def post_alff_reho_sandbox_execution(
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
     )
-    result = run_alff_reho_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_alff_reho_sandbox_execution(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-alff-reho", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-alff-reho",
+    deprecated=True,
+)
 def post_register_alff_reho_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2233,6 +2543,7 @@ def post_register_alff_reho_outputs(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
     from src.backend.app.services.preprocessing_stage_outputs import register_alff_reho_outputs
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
@@ -2243,11 +2554,16 @@ def post_register_alff_reho_outputs(
         confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
         confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
     )
-    result = register_alff_reho_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = register_alff_reho_outputs(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/dry-run", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/dry-run",
+    deprecated=True,
+)
 def post_fc_dry_run(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2256,12 +2572,14 @@ def post_fc_dry_run(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_fc_dry_run import FcDryRunRequest
     from src.backend.app.services.preprocessing_fc_dry_run import run_fc_dry_run
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FcDryRunRequest(
         filtered_stage_output_id=body.get("filtered_stage_output_id", ""),
         functional_input_dir=body.get("functional_input_dir", ""),
-        atlas_name=body.get("atlas_name", ""), atlas_path=body.get("atlas_path", ""),
+        atlas_name=body.get("atlas_name", ""),
+        atlas_path=body.get("atlas_path", ""),
         correlation_method=body.get("correlation_method", "pearson"),
         fisher_z=body.get("fisher_z", True),
         confirm_dry_run_only=body.get("confirm_dry_run_only", False),
@@ -2269,11 +2587,16 @@ def post_fc_dry_run(
         confirm_no_external_tools=body.get("confirm_no_external_tools", False),
         confirm_previous_outputs_readonly=body.get("confirm_previous_outputs_readonly", False),
     )
-    result = run_fc_dry_run(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_fc_dry_run(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/execute-sandbox", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/fc/execute-sandbox",
+    deprecated=True,
+)
 def post_fc_sandbox_execution(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2283,6 +2606,7 @@ def post_fc_sandbox_execution(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_fc_execution import FcSandboxExecutionRequest
     from src.backend.app.services.preprocessing_fc_execution import run_fc_sandbox_execution
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = FcSandboxExecutionRequest(
@@ -2297,11 +2621,16 @@ def post_fc_sandbox_execution(
         confirm_no_full_preprocessing=body.get("confirm_no_full_preprocessing", False),
         confirm_research_use_only=body.get("confirm_research_use_only", False),
     )
-    result = run_fc_sandbox_execution(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = run_fc_sandbox_execution(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.post("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-fc", deprecated=True)
+@router.post(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/stage-outputs/register-fc",
+    deprecated=True,
+)
 def post_register_fc_outputs(
     project_id: str, preprocessing_run_id: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -2310,6 +2639,7 @@ def post_register_fc_outputs(
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.schemas.preprocessing_stage_outputs import StageOutputRegistrationRequest
     from src.backend.app.services.preprocessing_stage_outputs import register_fc_outputs
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
     req = StageOutputRegistrationRequest(
@@ -2320,31 +2650,46 @@ def post_register_fc_outputs(
         confirm_no_additional_execution=body.get("confirm_no_additional_execution", False),
         confirm_use_as_next_stage_input=body.get("confirm_use_as_next_stage_input", False),
     )
-    result = register_fc_outputs(project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", "")))
+    result = register_fc_outputs(
+        project_id, preprocessing_run_id, req, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/report", deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/report", deprecated=True
+)
 def get_pipeline_report(project_id: str, preprocessing_run_id: str) -> dict[str, Any]:
     """Export preprocessing pipeline report."""
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     from src.backend.app.services.preprocessing_pipeline_report import generate_pipeline_report
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
-    result = generate_pipeline_report(project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", "")))
+    result = generate_pipeline_report(
+        project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
-@router.get("/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/validation", deprecated=True)
+@router.get(
+    "/api/projects/{project_id}/preprocessing/runs/{preprocessing_run_id}/validation",
+    deprecated=True,
+)
 def get_pipeline_validation(project_id: str, preprocessing_run_id: str) -> dict[str, Any]:
     """End-to-end preprocessing pipeline validation."""
     if not mock_store.get_project(project_id):
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-    from src.backend.app.services.preprocessing_pipeline_validation import validate_preprocessing_pipeline
+    from src.backend.app.services.preprocessing_pipeline_validation import (
+        validate_preprocessing_pipeline,
+    )
+
     project = mock_store.get_project(project_id)
     meta = project.metadata if project and isinstance(project.metadata, dict) else {}
-    result = validate_preprocessing_pipeline(project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", "")))
+    result = validate_preprocessing_pipeline(
+        project_id, preprocessing_run_id, project_dir=str(meta.get("project_dir", ""))
+    )
     return result.model_dump()
 
 
@@ -2387,7 +2732,9 @@ def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
         for item in imports:
             if isinstance(item, dict):
                 exists = "exists" if item.get("exists") else "missing"
-                lines.append(f"- [{exists}] {item.get('dataset_id')} ({item.get('dataset_type')}): {item.get('path')}")
+                lines.append(
+                    f"- [{exists}] {item.get('dataset_id')} ({item.get('dataset_type')}): {item.get('path')}"
+                )
     else:
         lines.append("- No imported roots recorded.")
     lines += ["", "## File Inventory", ""]
@@ -2403,9 +2750,13 @@ def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
     if isinstance(issues, list) and issues:
         for issue in issues:
             if isinstance(issue, dict):
-                scope = " / ".join(str(item) for item in [issue.get("subject_id"), issue.get("sequence")] if item)
+                scope = " / ".join(
+                    str(item) for item in [issue.get("subject_id"), issue.get("sequence")] if item
+                )
                 scope_text = f" ({scope})" if scope else ""
-                lines.append(f"- [{issue.get('severity')}] {issue.get('code')}{scope_text}: {issue.get('message')}")
+                lines.append(
+                    f"- [{issue.get('severity')}] {issue.get('code')}{scope_text}: {issue.get('message')}"
+                )
     else:
         lines.append("- No validation issues detected.")
     lines += ["", "## DICOM Metadata Preflight", ""]
@@ -2415,7 +2766,9 @@ def _render_import_diagnostics_markdown(payload: dict[str, Any]) -> str:
         lines.append(f"- Files: {dicom_preflight.get('dicom_file_count', 0)}")
         lines.append(f"- Sampled: {dicom_preflight.get('sampled_file_count', 0)}")
         lines.append(f"- Series: {dicom_preflight.get('series_count', 0)}")
-        lines.append(f"- Subjects: {', '.join(dicom_preflight.get('subjects', [])) if isinstance(dicom_preflight.get('subjects'), list) else 'Not detected'}")
+        lines.append(
+            f"- Subjects: {', '.join(dicom_preflight.get('subjects', [])) if isinstance(dicom_preflight.get('subjects'), list) else 'Not detected'}"
+        )
         if isinstance(safety_flags, dict):
             for key, value in sorted(safety_flags.items()):
                 lines.append(f"- {key}: {bool(value)}")
@@ -2488,7 +2841,13 @@ def _build_task_diagnostics(task: TaskDetail) -> TaskDiagnosticsResponse:
             }
         )
     if not diagnosis and task.status == "completed":
-        diagnosis.append({"severity": "info", "code": "no_critical_findings", "message": "No critical diagnostics were recorded."})
+        diagnosis.append(
+            {
+                "severity": "info",
+                "code": "no_critical_findings",
+                "message": "No critical diagnostics were recorded.",
+            }
+        )
 
     logs = [event.message for event in events] or task.logs
     return TaskDiagnosticsResponse(
@@ -2514,7 +2873,9 @@ def _load_artifact_payload(task: TaskDetail) -> dict[str, Any]:
             payload = {
                 **payload,
                 "artifacts": parsed.get("artifacts", payload.get("artifacts", {})),
-                "external_tool_results": parsed.get("external_tool_results", payload.get("external_tool_results", [])),
+                "external_tool_results": parsed.get(
+                    "external_tool_results", payload.get("external_tool_results", [])
+                ),
                 "checks": parsed.get("checks", payload.get("checks", [])),
                 "errors": parsed.get("errors", payload.get("errors", [])),
                 "warnings": parsed.get("warnings", payload.get("warnings", [])),
@@ -2569,7 +2930,9 @@ def _write_task_audit_package(
             "approval_required_for_approved_smoke": task.execution_mode == "external_smoke",
         },
     }
-    report_text = _render_task_audit_markdown(task, diagnostics, artifact_response, generated_at, events)
+    report_text = _render_task_audit_markdown(
+        task, diagnostics, artifact_response, generated_at, events
+    )
     json_path = package_dir / "task_audit_package.json"
     report_path = package_dir / "task_audit_report.md"
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -2634,7 +2997,9 @@ def _render_task_audit_markdown(
     lines.extend(["", "## Diagnostics", ""])
     if diagnostics.diagnosis:
         for item in diagnostics.diagnosis:
-            lines.append(f"- [{item.get('severity', 'info')}] {item.get('code', 'diagnostic')}: {item.get('message', '')}")
+            lines.append(
+                f"- [{item.get('severity', 'info')}] {item.get('code', 'diagnostic')}: {item.get('message', '')}"
+            )
     else:
         lines.append("- No diagnostics recorded.")
 
@@ -2642,7 +3007,9 @@ def _render_task_audit_markdown(
     if diagnostics.external_tool_results:
         for index, result in enumerate(diagnostics.external_tool_results, start=1):
             command = result.get("command", result.get("function", f"external-run-{index}"))
-            lines.append(f"- {index}. command: `{command}`; returncode: `{result.get('returncode', 'n/a')}`")
+            lines.append(
+                f"- {index}. command: `{command}`; returncode: `{result.get('returncode', 'n/a')}`"
+            )
     else:
         lines.append("- No external tool results recorded.")
 
@@ -2656,7 +3023,9 @@ def _render_task_audit_markdown(
     lines.extend(["", "## Event Timeline", ""])
     if events:
         for event in events:
-            lines.append(f"- {event.timestamp} | {event.status} | {event.progress}% | {event.message}")
+            lines.append(
+                f"- {event.timestamp} | {event.status} | {event.progress}% | {event.message}"
+            )
     else:
         lines.append("- No events recorded.")
 

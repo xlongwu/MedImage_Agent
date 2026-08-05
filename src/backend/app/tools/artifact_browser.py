@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import json
 import mimetypes
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.backend.app.tools.artifact_utils import write_json_artifact
-
 
 TEXT_EXTENSIONS = {
     ".json",
@@ -25,7 +24,7 @@ EXCLUDED_PARTS = {"third_party", ".git", "node_modules", "__pycache__", "rawdata
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _is_nifti(path: Path) -> bool:
@@ -121,7 +120,7 @@ def _artifact_record(path: Path) -> dict[str, Any]:
         "name": path.name,
         "extension": ext,
         "size_bytes": stat.st_size,
-        "modified_time": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+        "modified_time": datetime.fromtimestamp(stat.st_mtime, UTC).isoformat(),
         "category": _category_for(path),
         "preview_supported": preview_type in {"text", "nifti_metadata"},
         "preview_type": preview_type,

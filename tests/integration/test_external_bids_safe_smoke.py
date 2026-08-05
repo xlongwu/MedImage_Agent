@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 import yaml
-from tests.goal_contract_helpers import reviewed_goal_candidate
 
+from tests.goal_contract_helpers import reviewed_goal_candidate
 
 EXTERNAL_BIDS_ENV = "MEDIMAGE_EXTERNAL_BIDS_SMOKE_DIR"
 MAX_FILES_ENV = "MEDIMAGE_EXTERNAL_BIDS_SMOKE_MAX_FILES"
@@ -135,8 +135,7 @@ def _collect_files_bounded(
             total_bytes += stat_result.st_size
             if stat_result.st_size > MAX_SINGLE_FILE_BYTES:
                 errors.append(
-                    f"File is too large for this smoke test: {path} "
-                    f"({stat_result.st_size} bytes)"
+                    f"File is too large for this smoke test: {path} ({stat_result.st_size} bytes)"
                 )
             if len(files) > max_files:
                 errors.append(
@@ -177,8 +176,7 @@ def _precheck_external_rawdata(rawdata_dir: Path, original_text: str) -> dict[st
     errors.extend(file_errors)
 
     has_subject_dirs = any(
-        child.is_dir() and child.name.startswith("sub-")
-        for child in rawdata_dir.iterdir()
+        child.is_dir() and child.name.startswith("sub-") for child in rawdata_dir.iterdir()
     )
     has_dataset_description = (rawdata_dir / "dataset_description.json").is_file()
     if not has_subject_dirs:
@@ -213,11 +211,7 @@ def _precheck_external_rawdata(rawdata_dir: Path, original_text: str) -> dict[st
 
 def _relative_file_paths(rawdata_dir: Path, files: list[Path]) -> tuple[str, ...]:
     return tuple(
-        sorted(
-            path.relative_to(rawdata_dir).as_posix()
-            for path in files
-            if path.exists()
-        )
+        sorted(path.relative_to(rawdata_dir).as_posix() for path in files if path.exists())
     )
 
 
@@ -452,10 +446,7 @@ def external_rawdata(tmp_path: Path, monkeypatch):
     rawdata_dir = Path(rawdata_text).expanduser().resolve()
     precheck = _precheck_external_rawdata(rawdata_dir, rawdata_text)
     if not precheck.get("ok"):
-        pytest.fail(
-            "External BIDS smoke precheck failed: "
-            + "; ".join(precheck.get("errors", []))
-        )
+        pytest.fail("External BIDS smoke precheck failed: " + "; ".join(precheck.get("errors", [])))
 
     max_files = int(precheck["max_files"])
     hash_mode = os.environ.get(HASH_MODE_ENV, "sample-sha256").strip() or "sample-sha256"
@@ -505,8 +496,10 @@ def test_external_bids_safe_reviewed_execute_is_read_only(
     assert response.status_code == 200, response.text
     created = response.json()
     assert created["ok"] is True
-    assert Path(created["project_dir"]).resolve().is_relative_to(
-        (tmp_path / "outputs" / "projects").resolve()
+    assert (
+        Path(created["project_dir"])
+        .resolve()
+        .is_relative_to((tmp_path / "outputs" / "projects").resolve())
     )
     assert Path(created["rawdata_dir"]).resolve() == rawdata_dir
     assert Path(created["project_config_path"]).is_file()
@@ -515,18 +508,14 @@ def test_external_bids_safe_reviewed_execute_is_read_only(
 
     _set_scheduler_gpu_off(created["project_config_path"])
 
-    config = yaml.safe_load(
-        Path(created["project_config_path"]).read_text(encoding="utf-8")
-    )
+    config = yaml.safe_load(Path(created["project_config_path"]).read_text(encoding="utf-8"))
     assert config["data"]["copy_mode"] == "reference"
     assert Path(config["data"]["rawdata_dir"]).resolve() == rawdata_dir
     assert config["data"]["dataset_index"] == created["dataset_index_path"]
     assert config["safety"]["rawdata_readonly"] is True
     assert config["scheduler"]["gpu_mode"] == "off"
 
-    dataset_index = json.loads(
-        Path(created["dataset_index_path"]).read_text(encoding="utf-8")
-    )
+    dataset_index = json.loads(Path(created["dataset_index_path"]).read_text(encoding="utf-8"))
     assert dataset_index["dataset_root"] == str(rawdata_dir)
     assert "subjects" in dataset_index
     assert isinstance(created["diagnostics"], dict)
@@ -545,10 +534,7 @@ def test_external_bids_safe_reviewed_execute_is_read_only(
     assert "create_synthetic_bids" not in json.dumps(plan)
     assert Path(plan["nodes"][0]["params"]["rawdata_dir"]).resolve() == rawdata_dir
     assert plan["nodes"][0]["params"]["dataset_index"] == created["dataset_index_path"]
-    assert (
-        plan["nodes"][0]["params"]["project_config_path"]
-        == created["project_config_path"]
-    )
+    assert plan["nodes"][0]["params"]["project_config_path"] == created["project_config_path"]
 
     goal = "Inspect a user-selected external BIDS/rawdata directory safely"
     saved = client.post(
@@ -624,17 +610,13 @@ def test_external_bids_safe_reviewed_execute_is_read_only(
         assert Path(payload["pipeline_path"]).is_file()
         assert Path(payload["summary_path"]).is_file()
 
-        pipeline = yaml.safe_load(
-            Path(payload["pipeline_path"]).read_text(encoding="utf-8")
-        )
+        pipeline = yaml.safe_load(Path(payload["pipeline_path"]).read_text(encoding="utf-8"))
         assert [node["id"] for node in pipeline["nodes"]] == ["data_inspection"]
         assert pipeline["nodes"][0]["backend"] == "python"
         assert pipeline["nodes"][0]["gpu_supported"] is False
         assert pipeline["execution"]["run_id"] == payload["run_id"]
 
-        summary = json.loads(
-            Path(payload["summary_path"]).read_text(encoding="utf-8")
-        )
+        summary = json.loads(Path(payload["summary_path"]).read_text(encoding="utf-8"))
         assert summary["run_id"] == payload["run_id"]
         assert summary["status"] == "SUCCESS"
         assert summary["scheduler"]["gpu_mode"] == "off"
@@ -650,9 +632,7 @@ def test_external_bids_safe_reviewed_execute_is_read_only(
     }
 
     for payload in (first_payload, second_payload):
-        run_detail = client.get(
-            f"/api/projects/{created['project_id']}/runs/{payload['run_id']}"
-        )
+        run_detail = client.get(f"/api/projects/{created['project_id']}/runs/{payload['run_id']}")
         assert run_detail.status_code == 200
         run_link = run_detail.json()["run_link"]
         assert run_link["run_link_id"] == payload["run_link_id"]

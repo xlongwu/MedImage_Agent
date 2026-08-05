@@ -1,9 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deleteJson, getHealth, getJson, postJson, requestJson, toWebSocketUrl } from "../client";
+import {
+  ApiError,
+  deleteJson,
+  getHealth,
+  getJson,
+  postJson,
+  requestJson,
+  toWebSocketUrl,
+} from "../client";
 
-function response(body: string, ok = true): Response {
+function response(body: string, ok = true, status = ok ? 200 : 500): Response {
   return {
     ok,
+    status,
     text: () => Promise.resolve(body),
   } as Response;
 }
@@ -40,6 +49,51 @@ describe("getJson", () => {
     fetchMock.mockResolvedValue(response('{"detail":"server failed"}', false));
 
     await expect(getJson("/api/demo", { baseUrl: "http://api" })).rejects.toThrow("server failed");
+  });
+
+  it("retries one transient network failure for an idempotent GET", async () => {
+    const fetchMock = mockFetch();
+    fetchMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(response('{"ok":true}'));
+
+    await expect(getJson("/api/demo", { baseUrl: "http://api" })).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves the structured application error envelope without exposing raw JSON", async () => {
+    const fetchMock = mockFetch();
+    fetchMock.mockResolvedValue(
+      response(
+        JSON.stringify({
+          ok: false,
+          error: {
+            code: "AGENT_EXECUTION_BLOCKED",
+            message: "AGENT_EXECUTION_BLOCKED: REVIEWED_EXECUTION_DISABLED",
+            details: {
+              blocked_status: "REVIEWED_EXECUTION_DISABLED",
+              required_environment: ["MEDIMAGE_ENABLE_REVIEWED_EXECUTION"],
+            },
+          },
+          request_id: "request-1",
+        }),
+        false,
+        403,
+      ),
+    );
+
+    const promise = getJson("/api/demo", { baseUrl: "http://api" });
+
+    await expect(promise).rejects.toMatchObject({
+      code: "AGENT_EXECUTION_BLOCKED",
+      details: {
+        blocked_status: "REVIEWED_EXECUTION_DISABLED",
+        required_environment: ["MEDIMAGE_ENABLE_REVIEWED_EXECUTION"],
+      },
+      message: "AGENT_EXECUTION_BLOCKED: REVIEWED_EXECUTION_DISABLED",
+      requestId: "request-1",
+      status: 403,
+    } satisfies Partial<ApiError>);
   });
 
   it("handles empty response body", async () => {
@@ -80,6 +134,7 @@ describe("postJson", () => {
     fetchMock.mockRejectedValue(new Error("offline"));
 
     await expect(postJson("/api/items", {}, { baseUrl: "http://api" })).rejects.toThrow("offline");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

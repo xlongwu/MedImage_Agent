@@ -1,8 +1,30 @@
 .shell {
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
   min-height: 100vh;
+  overflow: hidden;
   background: var(--color-bg-app);
+}
+
+.workspace {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.railSlot {
+  width: var(--shell-global-rail-width);
+  min-width: var(--shell-global-rail-width);
+  min-height: 0;
+}
+
+.contentStack {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 .topBarSlot,
@@ -15,42 +37,110 @@
 
 .body {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-height: 0;
+  overflow: hidden;
+  background: var(--color-bg-app);
+}
+
+.body[data-context="open"] {
+  grid-template-columns: var(--shell-context-sidebar-width) minmax(0, 1fr);
+}
+
+.body[data-inspector="open"] {
+  grid-template-columns: minmax(0, 1fr) var(--shell-inspector-width);
+}
+
+.body[data-context="open"][data-inspector="open"] {
+  grid-template-columns:
+    var(--shell-context-sidebar-width) minmax(0, 1fr)
+    var(--shell-inspector-width);
 }
 
 .systemMessages {
-  padding: 10px clamp(20px, 4vw, 64px) 0;
+  padding: 8px clamp(16px, 3vw, 48px) 0;
 }
 
 .mainSlot,
+.contextSidebarSlot,
 .inspectorSlot {
   min-width: 0;
+  min-height: 0;
 }
 
 .mainSlot {
-  min-height: 0;
-  padding: 26px clamp(24px, 4.5vw, 72px) 92px;
+  padding: 24px clamp(22px, 3.5vw, 56px) 76px;
   overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.contextSidebarSlot,
+.inspectorSlot {
+  overflow: hidden;
+  border-right: 1px solid var(--color-divider-strong);
+  background: var(--color-material-sidebar);
 }
 
 .inspectorSlot {
-  position: fixed;
-  z-index: 70;
-  top: var(--shell-topbar-height);
-  right: 0;
-  bottom: 0;
-  width: min(380px, 38vw);
+  border-right: 0;
+  border-left: 1px solid var(--color-divider-strong);
+  padding: 12px;
 }
 
 .runActivitySlot {
-  position: sticky;
-  bottom: 0;
   z-index: 30;
 }
 
-@media (max-width: 1120px) {
+.shell[data-preset="image-workspace"] .mainSlot,
+.shell[data-preset="task-workspace"] .mainSlot {
+  padding: 14px 14px 72px;
+}
+
+.shell[data-preset="project-library"] .mainSlot {
+  padding-top: 30px;
+}
+
+@media (max-width: 1439px) {
+  .body[data-inspector="open"],
+  .body[data-context="open"][data-inspector="open"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .body[data-context="open"][data-inspector="open"] {
+    grid-template-columns: var(--shell-context-sidebar-width) minmax(0, 1fr);
+  }
+
+  .inspectorSlot {
+    position: fixed;
+    z-index: 70;
+    top: var(--shell-topbar-height);
+    right: 0;
+    bottom: 0;
+    width: min(var(--shell-inspector-width), 42vw);
+    box-shadow: var(--shadow-modal);
+  }
+}
+
+@media (max-width: 1179px) {
+  .body[data-context="open"],
+  .body[data-context="open"][data-inspector="open"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contextSidebarSlot {
+    display: none;
+  }
+
   .mainSlot {
-    padding-right: 24px;
-    padding-left: 24px;
+    padding-right: 20px;
+    padding-left: 20px;
+  }
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .contextSidebarSlot,
+  .inspectorSlot {
+    background: var(--color-bg-sidebar);
   }
 }

@@ -16,10 +16,11 @@ from typing import Any
 import nibabel as nib
 import numpy as np
 import pytest
+
 from src.backend.app.tools.spm_slice_timing_runner import run_spm_slice_timing_subject
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _subject_dirs(tmp_path: Path) -> dict[str, Path]:
     return {
@@ -84,15 +85,22 @@ def _fake_subprocess_run(
 # Sandbox input contract
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_synthetic_input_passes(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     bold = _make_synthetic_bold(tmp_path)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(bold),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(bold),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is True
 
@@ -110,10 +118,13 @@ def test_derivatives_input_passes_when_allowed(monkeypatch, tmp_path):
         encoding="utf-8",
     )
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(input_nii),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(input_nii),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
         approved=True,
         allow_derivative_input=True,
     )
@@ -126,11 +137,17 @@ def test_derivatives_rejected_when_not_allowed(tmp_path):
     input_nii = deriv / "rsub-001_bold.nii"
     input_nii.write_text("dummy")
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(input_nii),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(input_nii),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
         allow_derivative_input=False,
     )
     assert result["ok"] is False
@@ -138,11 +155,17 @@ def test_derivatives_rejected_when_not_allowed(tmp_path):
 
 def test_arbitrary_input_rejected(tmp_path):
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold="/etc/passwd",
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold="/etc/passwd",
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is False
 
@@ -152,22 +175,34 @@ def test_real_rawdata_rejected(tmp_path):
     raw.parent.mkdir(parents=True, exist_ok=True)
     raw.write_text("dummy")
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(raw),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(raw),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is False
 
 
 def test_path_traversal_rejected(tmp_path):
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold="/usr/../etc/passwd",
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold="/usr/../etc/passwd",
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is False
 
@@ -176,16 +211,23 @@ def test_path_traversal_rejected(tmp_path):
 # Output contract
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_output_in_derivatives(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     bold = _make_synthetic_bold(tmp_path)
     deriv_dir = str(tmp_path / "derivatives")
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(bold),
-        derivatives_dir=deriv_dir, work_dir=str(tmp_path / "work"),
-        log_dir=str(tmp_path / "logs"), approved=True,
-        tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(bold),
+        derivatives_dir=deriv_dir,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     for output in result.get("outputs", []):
         assert deriv_dir in output or "work" in output or "logs" in output
@@ -195,11 +237,17 @@ def test_output_no_rawdata(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     bold = _make_synthetic_bold(tmp_path)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(bold),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(bold),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     for output in result.get("outputs", []):
         parts = Path(output).parts
@@ -211,13 +259,20 @@ def test_output_no_rawdata(monkeypatch, tmp_path):
 # Approval + safety gate order
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_not_approved_blocks(tmp_path):
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=False, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=False,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is False
     assert "requires approved=true" in str(result["errors"])
@@ -225,14 +280,24 @@ def test_not_approved_blocks(tmp_path):
 
 def test_unsafe_matlab_blocks_before_subprocess(monkeypatch, tmp_path):
     called = []
-    def _track(*a, **kw): called.append(1); return subprocess.CompletedProcess([], 0)
+
+    def _track(*a, **kw):
+        called.append(1)
+        return subprocess.CompletedProcess([], 0)
+
     monkeypatch.setattr(subprocess, "run", _track)
     run_spm_slice_timing_subject(
-        matlab_command="matlab; evil", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab; evil",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert len(called) == 0
 
@@ -241,14 +306,21 @@ def test_unsafe_matlab_blocks_before_subprocess(monkeypatch, tmp_path):
 # Fake MATLAB: success, missing output, nonzero
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_fake_matlab_success(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is True
 
@@ -256,11 +328,17 @@ def test_fake_matlab_success(monkeypatch, tmp_path):
 def test_fake_matlab_success_has_corrected_file(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert "corrected_file" in result
 
@@ -268,11 +346,17 @@ def test_fake_matlab_success_has_corrected_file(monkeypatch, tmp_path):
 def test_fake_matlab_missing_output(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch, returncode=0, create_outputs=False)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is False
 
@@ -280,11 +364,17 @@ def test_fake_matlab_missing_output(monkeypatch, tmp_path):
 def test_fake_matlab_missing_output_message(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch, returncode=0, create_outputs=False)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     error_text = " ".join(result.get("errors", []))
     assert "not found" in error_text.lower() or "missing" in error_text.lower()
@@ -293,11 +383,17 @@ def test_fake_matlab_missing_output_message(monkeypatch, tmp_path):
 def test_fake_matlab_nonzero(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch, returncode=7)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result["ok"] is False
     assert result.get("returncode") == 7
@@ -306,11 +402,17 @@ def test_fake_matlab_nonzero(monkeypatch, tmp_path):
 def test_fake_matlab_logs_preserved(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert result.get("stdout_log") or result.get("stderr_log")
 
@@ -319,13 +421,20 @@ def test_fake_matlab_logs_preserved(monkeypatch, tmp_path):
 # Safety + misc
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_safety_errors_in_result(tmp_path):
     result = run_spm_slice_timing_subject(
-        matlab_command="python", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="python",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert "safety" in result
     assert len(result["safety"]["errors"]) >= 1
@@ -333,14 +442,24 @@ def test_safety_errors_in_result(tmp_path):
 
 def test_subprocess_not_called_on_safety_error(monkeypatch, tmp_path):
     calls = []
-    def _track(*a, **kw): calls.append(1); return subprocess.CompletedProcess([], 0)
+
+    def _track(*a, **kw):
+        calls.append(1)
+        return subprocess.CompletedProcess([], 0)
+
     monkeypatch.setattr(subprocess, "run", _track)
     run_spm_slice_timing_subject(
-        matlab_command="python", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="python",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     assert len(calls) == 0
 
@@ -348,11 +467,17 @@ def test_subprocess_not_called_on_safety_error(monkeypatch, tmp_path):
 def test_no_rawdata_written(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     rawdata = tmp_path / "data"
     assert not rawdata.exists() or list(rawdata.glob("*")) == []
@@ -361,11 +486,17 @@ def test_no_rawdata_written(monkeypatch, tmp_path):
 def test_result_json_serializable(monkeypatch, tmp_path):
     _fake_subprocess_run(monkeypatch)
     result = run_spm_slice_timing_subject(
-        matlab_command="matlab", spm_dir=str(tmp_path / "spm12"),
-        subject_id="sub-001", input_bold=str(_make_synthetic_bold(tmp_path)),
+        matlab_command="matlab",
+        spm_dir=str(tmp_path / "spm12"),
+        subject_id="sub-001",
+        input_bold=str(_make_synthetic_bold(tmp_path)),
         derivatives_dir=str(tmp_path / "derivatives"),
-        work_dir=str(tmp_path / "work"), log_dir=str(tmp_path / "logs"),
-        approved=True, tr=2.0, slice_order=[0, 1, 2, 3], reference_slice=2,
+        work_dir=str(tmp_path / "work"),
+        log_dir=str(tmp_path / "logs"),
+        approved=True,
+        tr=2.0,
+        slice_order=[0, 1, 2, 3],
+        reference_slice=2,
     )
     json.dumps(result, default=str)
 

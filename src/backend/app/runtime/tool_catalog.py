@@ -20,7 +20,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 # ── Dataclass ────────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
@@ -494,8 +493,7 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
         "requires_approval": False, "manual_required": False, "risk_level": "low",
         "inputs": ["preprocessing_plan_stub"],
         "outputs": ["report_plan_stub"],
-        "tags": ["contract", "stub", "report", "rsfmri"],
-        "tags": ["report", "validation"],
+        "tags": ["contract", "stub", "report", "rsfmri", "validation"],
     },
     "project_release_readiness": {
         "name": "Project Release Readiness",
@@ -547,6 +545,21 @@ TOOL_METADATA: dict[str, dict[str, Any]] = {
 
 TOOL_METADATA.update(
     {
+        "native_dicom_conversion_execute": {
+            "name": "Native DICOM Conversion Execute",
+            "backend": "medimage-native",
+            "parallel_level": "project",
+            "description": (
+                "Execute an already prepared and release-approved native DICOM conversion "
+                "through the reviewed ticket and gateway boundary. Rawdata remains read-only."
+            ),
+            "requires_approval": True,
+            "manual_required": False,
+            "risk_level": "medium",
+            "inputs": ["approved DICOM mapping package", "rawdata checksum snapshot"],
+            "outputs": ["converted NIfTI", "BIDS sidecars", "manifest", "provenance"],
+            "tags": ["dicom", "conversion", "execute", "requires-approval", "no-external-tools"],
+        },
         "native_preproc_full_dry_run": {
             "name": "Native Full Preprocessing Dry Run",
             "backend": "native_python",

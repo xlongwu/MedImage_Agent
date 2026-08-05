@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -7,10 +8,10 @@ import yaml
 from fastapi.testclient import TestClient
 
 from src.backend.app.api import dashboard_routes, project_routes
+from src.backend.app.api.dependencies import get_project_store
 from src.backend.app.main import app
 from src.backend.app.runtime import desktop_config
 from src.backend.app.services.mock_store import SQLiteDesktopStore
-
 
 # ── Helper ──────────────────────────────────────────────────────────
 
@@ -44,6 +45,14 @@ def _count_files_in_dir(directory: Path) -> int:
     if not directory.exists():
         return 0
     return sum(1 for _ in directory.rglob("*") if _.is_file())
+
+
+def _file_hashes(directory: Path) -> dict[str, str]:
+    return {
+        str(path.relative_to(directory)): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in sorted(directory.rglob("*"))
+        if path.is_file()
+    }
 
 
 # ── Test: successful creation ────────────────────────────────────────
@@ -84,6 +93,7 @@ def test_create_project_with_synthetic_bids_succeeds(tmp_path, monkeypatch):
     # Check diagnostics
     diag = data["diagnostics"]
     assert diag["subjects_total"] > 0
+    assert diag["nifti_file_count"] == 4
     assert diag["status"] == "READY"
 
     # Check next_actions
@@ -129,11 +139,82 @@ def test_created_project_persists_in_dashboard_project_api(tmp_path, monkeypatch
     assert detail_payload["metadata"]["source"] == "created"
     assert detail_payload["metadata"]["project_dir"] == created_payload["project_dir"]
     assert detail_payload["metadata"]["rawdata_dir"] == created_payload["rawdata_dir"]
-    assert detail_payload["metadata"]["project_config_path"] == created_payload["project_config_path"]
+    assert (
+        detail_payload["metadata"]["project_config_path"] == created_payload["project_config_path"]
+    )
     assert detail_payload["metadata"]["dataset_index_path"] == created_payload["dataset_index_path"]
     assert detail_payload["metadata"]["diagnostics"] == created_payload["diagnostics"]
     assert detail_payload["metadata"]["created_at"]
     assert detail_payload["metadata"]["updated_at"]
+
+
+def test_registered_bids_project_creates_persisted_read_only_preprocessing_run(
+    tmp_path, monkeypatch
+):
+    """The Preprocessing primary action must use registered BIDS without writing rawdata."""
+
+    store = _clean_desktop_config(tmp_path, monkeypatch)
+    app.dependency_overrides[get_project_store] = lambda: store
+    rawdata = Path("examples/synthetic_bids/rawdata").resolve()
+    rawdata_before = _file_hashes(rawdata)
+    project_dir = tmp_path / "preprocessing_project"
+    client = TestClient(app)
+    try:
+        created = client.post(
+            "/api/projects/create",
+            json=_make_project_request(
+                project_name="Preprocessing Integration",
+                project_dir=str(project_dir),
+            ),
+        )
+        assert created.status_code == 200, created.text
+        project_id = created.json()["project_id"]
+
+        blocked = client.post(
+            f"/api/projects/{project_id}/preprocessing/runs",
+            json={"confirm_use_converted_input": True},
+        )
+        assert blocked.status_code == 200, blocked.text
+        assert blocked.json()["ok"] is False
+        assert any(
+            "Missing registered BIDS read-only confirmations" in issue
+            for issue in blocked.json()["blocking_issues"]
+        )
+
+        response = client.post(
+            f"/api/projects/{project_id}/preprocessing/runs",
+            json={
+                "confirm_use_converted_input": True,
+                "confirm_no_rawdata_modification": True,
+                "confirm_python_only_execution": True,
+                "confirm_no_spm_matlab": True,
+            },
+        )
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["ok"] is True
+        assert payload["status"] == "created"
+        assert payload["preprocessing_input_dir"] == str(rawdata)
+        assert payload["input_inventory"]["nifti_count"] == 4
+        assert Path(payload["run_dir"]).is_relative_to(project_dir)
+        assert not Path(payload["run_dir"]).is_relative_to(rawdata)
+        assert rawdata_before == _file_hashes(rawdata)
+
+        detail = client.get(f"/api/projects/{project_id}")
+        assert detail.status_code == 200
+        metadata = detail.json()["metadata"]
+        assert metadata["latest_preprocessing_run_id"] == payload["preprocessing_run_id"]
+        assert metadata["preprocessing_input_source"] == "registered_bids_readonly"
+
+        restored = client.get(
+            f"/api/projects/{project_id}/preprocessing/runs/"
+            f"{payload['preprocessing_run_id']}"
+        )
+        assert restored.status_code == 200, restored.text
+        assert restored.json()["status"] == "created"
+    finally:
+        app.dependency_overrides.pop(get_project_store, None)
 
 
 def test_create_project_with_raw_dicom_directory_is_listed(tmp_path, monkeypatch):
@@ -238,6 +319,7 @@ def test_creates_project_config_yaml(tmp_path, monkeypatch):
 
     # Validate with ProjectSettings
     from src.backend.app.config import ProjectSettings
+
     settings = ProjectSettings.from_yaml(config_path)
     assert settings.runtime.work_dir
     assert settings.runtime.log_dir
@@ -639,9 +721,7 @@ def test_adds_authorized_data_dir(tmp_path, monkeypatch):
 
     cfg = desktop_config.get_desktop_config(redacted=False)
     assert len(cfg["authorized_data_dirs"]) >= 1
-    assert any(
-        d["path"] == str(rawdata.resolve()) for d in cfg["authorized_data_dirs"]
-    )
+    assert any(d["path"] == str(rawdata.resolve()) for d in cfg["authorized_data_dirs"])
 
 
 def test_old_desktop_config_gets_project_field_defaults(tmp_path, monkeypatch):

@@ -149,6 +149,11 @@ export type RunArtifactRecord = {
   previewable: boolean;
   warnings: string[];
   source?: string;
+  registered_artifact_id?: string;
+  artifact_type?: string;
+  stage_id?: string;
+  subject_id?: string;
+  registration_status?: string;
   suffix?: string;
   node_id?: string | null;
   category?: string | null;
@@ -529,7 +534,11 @@ export type PresetPlanDraft = {
   validation?: Record<string, unknown>;
   warnings?: string[];
   next_actions?: string[];
-  source: "pipeline_preset";
+  source: "pipeline_preset" | "reviewed_plan";
+  reviewed_plan_id?: string;
+  plan_hash?: string;
+  goal_contract_candidate?: Record<string, unknown>;
+  goal_contract_status?: string;
 };
 
 /** Motion QC readiness types */

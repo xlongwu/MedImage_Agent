@@ -9,7 +9,6 @@ import pytest
 
 from src.backend.app.native_preproc.io.dicom_to_nifti import convert_dicom_series
 
-
 pytest.importorskip("pydicom")
 pytest.importorskip("nibabel")
 
@@ -48,8 +47,12 @@ def test_native_converter_on_one_demo_subject_read_only(tmp_path: Path) -> None:
     func_output = tmp_path / "converted_bids" / "sub-001" / "func" / "sub-001_task-rest_bold.nii.gz"
     anat_output = tmp_path / "converted_bids" / "sub-001" / "anat" / "sub-001_T1w.nii.gz"
 
-    func_result = convert_dicom_series(func_root, func_output, subject_id="sub-001", modality="func")
-    anat_result = convert_dicom_series(anat_root, anat_output, subject_id="sub-001", modality="anat")
+    func_result = convert_dicom_series(
+        func_root, func_output, subject_id="sub-001", modality="func"
+    )
+    anat_result = convert_dicom_series(
+        anat_root, anat_output, subject_id="sub-001", modality="anat"
+    )
 
     assert _digest_tree(func_root) == before_func
     assert _digest_tree(anat_root) == before_anat
@@ -60,6 +63,8 @@ def test_native_converter_on_one_demo_subject_read_only(tmp_path: Path) -> None:
     assert nib.load(str(func_output)).header.get_zooms()[3] == pytest.approx(2.0)
 
     first_func_path = sorted(path for path in func_root.rglob("*") if path.is_file())[0]
-    reference = np.asarray(wrapper_from_data(pydicom.dcmread(str(first_func_path))).get_data(), dtype=np.float32)
+    reference = np.asarray(
+        wrapper_from_data(pydicom.dcmread(str(first_func_path))).get_data(), dtype=np.float32
+    )
     converted = np.asarray(nib.load(str(func_output)).dataobj[..., 0], dtype=np.float32)
     np.testing.assert_allclose(converted, reference, atol=0.0, rtol=0.0)

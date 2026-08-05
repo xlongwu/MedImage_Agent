@@ -18,6 +18,7 @@ def pydicom_available() -> bool:
     """Return True if pydicom can be imported."""
     try:
         import pydicom  # noqa: F401
+
         return True
     except ImportError:
         return False
@@ -38,9 +39,9 @@ def create_minimal_dicom_series(
 
     Requires ``pydicom``.  Raises ``ImportError`` if unavailable.
     """
-    import pydicom
-    from pydicom.dataset import Dataset, FileDataset, FileMetaDataset
     import numpy as np
+    import pydicom
+    from pydicom.dataset import FileDataset, FileMetaDataset
 
     series_dir = root / series_name
     series_dir.mkdir(parents=True, exist_ok=True)

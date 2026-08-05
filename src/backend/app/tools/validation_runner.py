@@ -12,8 +12,7 @@ def _run_command(cmd: list[str], cwd: str | None = None) -> dict[str, Any]:
     completed = subprocess.run(
         cmd,
         cwd=cwd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         check=False,
     )
@@ -39,33 +38,43 @@ def run_validation_suite(
 
     checks: list[dict[str, Any]] = []
 
-    checks.append({
-        "name": "pytest_unit",
-        **_run_command(["python", "-m", "pytest", "tests/unit", "-q"]),
-    })
+    checks.append(
+        {
+            "name": "pytest_unit",
+            **_run_command(["python", "-m", "pytest", "tests/unit", "-q"]),
+        }
+    )
 
-    checks.append({
-        "name": "pytest_integration",
-        **_run_command(["python", "-m", "pytest", "tests/integration", "-q"]),
-    })
+    checks.append(
+        {
+            "name": "pytest_integration",
+            **_run_command(["python", "-m", "pytest", "tests/integration", "-q"]),
+        }
+    )
 
     if include_api:
-        checks.append({
-            "name": "pytest_api",
-            **_run_command(["python", "-m", "pytest", "tests/api", "-q"]),
-        })
+        checks.append(
+            {
+                "name": "pytest_api",
+                **_run_command(["python", "-m", "pytest", "tests/api", "-q"]),
+            }
+        )
 
     if include_gpu_optional:
-        checks.append({
-            "name": "gpu_check_optional",
-            **_run_command(["python", "-m", "backend.app.tools.gpu_benchmark_cli"]),
-        })
+        checks.append(
+            {
+                "name": "gpu_check_optional",
+                **_run_command(["python", "-m", "backend.app.tools.gpu_benchmark_cli"]),
+            }
+        )
 
     if include_frontend:
-        checks.append({
-            "name": "frontend_build",
-            **_run_command(["npm", "run", "build"], cwd="frontend"),
-        })
+        checks.append(
+            {
+                "name": "frontend_build",
+                **_run_command(["npm", "run", "build"], cwd="frontend"),
+            }
+        )
 
     ok = all(item["ok"] for item in checks)
 

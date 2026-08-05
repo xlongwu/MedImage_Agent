@@ -30,9 +30,9 @@ from src.backend.app.runtime.gui_agent import (
 )
 from src.backend.app.runtime.gui_agent_guard import (
     create_gui_audit_record,
+    validate_gui_action_declaration,
     validate_gui_provider_policy,
     validate_gui_session_declaration,
-    validate_gui_action_declaration,
     validate_gui_stop_conditions,
 )
 
@@ -138,8 +138,9 @@ def api_gui_agent_step(session_id: str, request: GuiAgentStepRequest) -> dict[st
     _guard_action(request)
 
     # ── M9-GUI-GUARD-T005: read session for stop-condition + audit checks ──
-    from src.backend.app.runtime.gui_agent import _read_session
     import time as _time_module
+
+    from src.backend.app.runtime.gui_agent import _read_session
 
     session = _read_session(session_id)
     session_provider = session.get("provider", "mock")
@@ -147,6 +148,7 @@ def api_gui_agent_step(session_id: str, request: GuiAgentStepRequest) -> dict[st
 
     # ── M9-GUI-GUARD-T005: stop-condition checker ──
     from src.backend.app.runtime.gui_agent_guard import classify_gui_action_tier
+
     computed_tier, _ = classify_gui_action_tier(request.action)
     stop_result = validate_gui_stop_conditions(
         session_id=session_id,
@@ -213,11 +215,11 @@ def api_gui_agent_step(session_id: str, request: GuiAgentStepRequest) -> dict[st
     try:
         result = step_gui_agent_session(session_id, request.model_dump())
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         # Runtime guard raises ValueError for blocked providers
         detail = str(exc)
-        raise HTTPException(status_code=_GUARD_HTTP_STATUS, detail=detail)
+        raise HTTPException(status_code=_GUARD_HTTP_STATUS, detail=detail) from exc
     except Exception as exc:
         raise_api_error(exc)
     if not result.get("ok"):
@@ -235,9 +237,9 @@ def api_gui_agent_screenshot(session_id: str) -> dict[str, Any]:
     try:
         result = capture_gui_agent_screenshot(session_id)
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=_GUARD_HTTP_STATUS, detail=str(exc))
+        raise HTTPException(status_code=_GUARD_HTTP_STATUS, detail=str(exc)) from exc
     except Exception as exc:
         raise_api_error(exc)
     if not result.get("ok"):
@@ -250,7 +252,7 @@ def api_gui_agent_abort(session_id: str) -> dict[str, Any]:
     try:
         return abort_gui_agent_session(session_id)
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
         raise_api_error(exc)
 
@@ -270,6 +272,7 @@ def api_mock_adapter_fixtures() -> dict[str, Any]:
     from src.backend.app.runtime.gui_agent_mock_model_fixtures import (
         list_mock_model_fixtures,
     )
+
     fixtures = list_mock_model_fixtures()
     return {
         "ok": True,
@@ -302,7 +305,6 @@ def api_mock_adapter_step(request: MockAdapterStepRequest) -> dict[str, Any]:
     from src.backend.app.runtime.gui_agent_model_adapter import (
         validate_and_normalize_model_output,
     )
-    from src.backend.app.runtime.gui_agent_guard import validate_gui_action_declaration
 
     # ── 1. Fixture lookup ──
     try:

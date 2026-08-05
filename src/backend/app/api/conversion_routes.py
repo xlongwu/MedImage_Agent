@@ -13,27 +13,20 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
 
 from src.backend.app.api.dependencies import ProjectStore, get_project_store
 from src.backend.app.api.execution_contract import reject_execution_contract
 from src.backend.app.schemas.desktop import (
     ConversionDryRunRequest,
     ConversionDryRunResponse,
-    DicomPreflightResponse,
 )
 from src.backend.app.schemas.dicom_conversion_prepare import (
     DicomConversionPrepareRequest,
 )
-from src.backend.app.schemas.dicom_conversion_public_execution import (
-    DicomConversionPublicExecutionRequest,
-    DicomConversionPublicExecutionResponse,
-)
 from src.backend.app.services.dicom_conversion_service import (
     run_conversion_dry_run,
-    run_conversion_execute,
-    run_conversion_preflight,
     run_conversion_persist_plan,
+    run_conversion_preflight,
     run_export_conversion_review_package,
     run_get_conversion_release_readiness,
     run_get_conversion_review_package,

@@ -79,6 +79,7 @@ def _sid(resp):
 # A. Happy Path Integration
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_valid_session_returns_200():
     resp = _create_session()
     assert resp.status_code == 200
@@ -94,6 +95,7 @@ def test_session_stores_declaration_fields():
     resp = _create_session()
     sid = _sid(resp)
     from src.backend.app.runtime.gui_agent import _read_session
+
     s = _read_session(sid)
     assert s.get("step_limit") == 20
     assert s.get("step_count") == 0
@@ -102,8 +104,7 @@ def test_session_stores_declaration_fields():
 
 
 def test_valid_step_returns_200():
-    resp = client.post(f"/api/gui-agent/sessions/{_sid(_create_session())}/step",
-                       json=_VALID_STEP)
+    resp = client.post(f"/api/gui-agent/sessions/{_sid(_create_session())}/step", json=_VALID_STEP)
     assert resp.status_code == 200
     assert resp.json()["ok"] is True
 
@@ -142,16 +143,22 @@ def test_step_increments_count():
     _do_step(sid)
     _do_step(sid)
     from src.backend.app.runtime.gui_agent import _read_session
+
     s = _read_session(sid)
     assert s.get("step_count", 0) >= 2
 
 
 def test_mock_provider_called_once_per_step(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda self, s, a, p: calls.append(a) or {
-                            "executed": False, "provider_status": "MOCK_RECORDED"})
+    monkeypatch.setattr(
+        MockGuiProvider,
+        "perform_step",
+        lambda self, s, a, p: (
+            calls.append(a) or {"executed": False, "provider_status": "MOCK_RECORDED"}
+        ),
+    )
     sid = _sid(_create_session())
     resp = _do_step(sid)
     assert resp.status_code == 200
@@ -162,6 +169,7 @@ def test_mock_provider_called_once_per_step(monkeypatch):
 # ══════════════════════════════════════════════════════════════════════════════
 # B. Provider Gate Integration
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.parametrize("provider", ["pywinauto", "real", "desktop", "browser", "manual"])
 def test_blocked_provider_403(provider):
@@ -189,6 +197,7 @@ def test_blocked_provider_response_flags():
 # ══════════════════════════════════════════════════════════════════════════════
 # C. Session Declaration Integration
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_gui_sandbox_mode_false_blocked():
     resp = _create_session(gui_sandbox_mode=False)
@@ -269,6 +278,7 @@ def test_audit_log_required_false_blocked():
 # D. Action Declaration Integration
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_click_run_step_blocked():
     resp = _do_step(_sid(_create_session()), action="click_run", action_tier=3)
     assert resp.status_code == 403
@@ -346,9 +356,13 @@ def test_side_effects_not_none_blocked():
 
 def test_blocked_action_no_provider_call(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda self, s, a, p: calls.append(a) or {"executed": False})
+    monkeypatch.setattr(
+        MockGuiProvider,
+        "perform_step",
+        lambda self, s, a, p: calls.append(a) or {"executed": False},
+    )
     resp = _do_step(_sid(_create_session()), action="click_run", action_tier=3)
     assert resp.status_code == 403
     assert len(calls) == 0
@@ -364,6 +378,7 @@ def test_blocked_action_response_has_guard_error():
 # ══════════════════════════════════════════════════════════════════════════════
 # E. Stop-Condition Integration
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_step_limit_exceeded():
     sid = _sid(_create_session(step_limit=2))
@@ -388,7 +403,8 @@ def test_missing_stop_conditions_blocked():
     assert resp.status_code == 403
     # Caught by action validator (step 16: stop_conditions non-empty required)
     assert resp.json()["detail"]["error_code"] in (
-        "GUI_GUARD_ACTION_INVALID", "GUI_GUARD_STOP_CONDITION"
+        "GUI_GUARD_ACTION_INVALID",
+        "GUI_GUARD_STOP_CONDITION",
     )
 
 
@@ -402,9 +418,13 @@ def test_stop_blocked_includes_audit_id():
 
 def test_stop_blocked_no_provider_call(monkeypatch):
     from src.backend.app.runtime.gui_agent import MockGuiProvider
+
     calls = []
-    monkeypatch.setattr(MockGuiProvider, "perform_step",
-                        lambda self, s, a, p: calls.append(a) or {"executed": False})
+    monkeypatch.setattr(
+        MockGuiProvider,
+        "perform_step",
+        lambda self, s, a, p: calls.append(a) or {"executed": False},
+    )
     sid = _sid(_create_session())
     client.post(f"/api/gui-agent/sessions/{sid}/abort")
     resp = _do_step(sid)
@@ -415,6 +435,7 @@ def test_stop_blocked_no_provider_call(monkeypatch):
 # ══════════════════════════════════════════════════════════════════════════════
 # F. Screenshot / Abort Route Behavior
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_screenshot_mock_session_returns_200():
     sid = _sid(_create_session())
@@ -454,6 +475,7 @@ def test_abort_does_not_touch_desktop():
 # G. PyWinAuto Non-Call Assertions
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_pywinauto_never_constructed():
     """Confirm PyWinAutoGuiProvider is never instantiated during tests."""
     # All session creation goes through the provider gate which blocks pywinauto.
@@ -466,6 +488,7 @@ def test_pywinauto_never_constructed():
 
 def test_no_pywinauto_module_loaded():
     import sys
+
     assert "pywinauto" not in sys.modules, (
         "pywinauto module should not be imported during guarded API tests"
     )
@@ -475,49 +498,77 @@ def test_no_pywinauto_module_loaded():
 # H. Reviewed Execution Regression
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_gui_reviewed_execution_still_blocked():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "gui_t006_check", "depends_on": []},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {"id": "gui_t006_check", "depends_on": []},
+        ],
+    }
     policy = classify_plan_nodes(plan)
     assert "gui_t006_check" in policy["blocked_unknown_nodes"]
 
 
 def test_gui_executor_called_false():
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": {"pipeline_id": "t", "nodes": [
-            {"id": "gui_int_test", "backend": "gui-agent", "depends_on": [], "params": {}},
-        ]},
-        "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
-        "dry_run": True,
-    })
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": {
+                "pipeline_id": "t",
+                "nodes": [
+                    {"id": "gui_int_test", "backend": "gui-agent", "depends_on": [], "params": {}},
+                ],
+            },
+            "approval": {"approved": True, "approved_nodes": ["*"], "rejected_nodes": []},
+            "dry_run": True,
+        },
+    )
     assert resp.json()["execution"]["executor_called"] is False
 
 
 def test_spm_allowlist_still_works():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "spm_realign_subject", "depends_on": [],
-         "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {
+                "id": "spm_realign_subject",
+                "depends_on": [],
+                "params": {"sandbox_mode": True, "input_bold": "/tmp/bold.nii"},
+            },
+        ],
+    }
     policy = classify_plan_nodes(plan)
-    assert "spm_realign_subject" not in policy["allowed_spm_realign_sandbox_nodes"]  # blocked per current safety policy
+    assert (
+        "spm_realign_subject" not in policy["allowed_spm_realign_sandbox_nodes"]
+    )  # blocked per current safety policy
 
 
 def test_dpabi_allowlist_still_works():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {"id": "dpabi_capability_inspection", "depends_on": [], "params": {}},
+        ],
+    }
     policy = classify_plan_nodes(plan)
     assert "dpabi_capability_inspection" in policy["allowed_dpabi_metadata_nodes"]
 
 
 def test_gpu_allowlist_still_works():
     from src.backend.app.planner.plan_adapter import classify_plan_nodes
-    plan = {"pipeline_id": "t", "nodes": [
-        {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
-    ]}
+
+    plan = {
+        "pipeline_id": "t",
+        "nodes": [
+            {"id": "gpu_alff_subject", "depends_on": [], "params": {}},
+        ],
+    }
     policy = classify_plan_nodes(plan)
     assert "gpu_alff_subject" in policy["allowed_gpu_nodes"]

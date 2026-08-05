@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld("medimageDesktop", {
 });
 contextBridge.exposeInMainWorld("medimage", {
   getApiBaseUrl: () => ipcRenderer.invoke("medimage:get-api-base-url"),
+  getAgentApprovalToken: () => ipcRenderer.invoke("medimage:get-agent-approval-token"),
   getRuntime: () => ipcRenderer.invoke("medimage:get-runtime"),
   selectDirectory: () => ipcRenderer.invoke("medimage:select-directory"),
   selectFile: (filters) => ipcRenderer.invoke("medimage:select-file", filters),

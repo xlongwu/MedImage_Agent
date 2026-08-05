@@ -11,12 +11,12 @@ from src.backend.app.native_preproc.orchestrator.state import (
     utc_now_iso,
 )
 from src.backend.app.schemas.native_preproc import (
+    NativePreprocCapabilityLevel,
     NativePreprocProvenance,
     NativePreprocQC,
     NativePreprocStageId,
     NativePreprocStageResult,
     NativePreprocStageStatus,
-    NativePreprocCapabilityLevel,
 )
 
 
@@ -82,7 +82,9 @@ def stage_result(
     compute = parameters.get("compute") if isinstance(parameters.get("compute"), dict) else None
     if backend == "gpu" and compute is not None:
         try:
-            from src.backend.app.native_preproc.orchestrator.gpu_performance_model import record_gpu_measurement
+            from src.backend.app.native_preproc.orchestrator.gpu_performance_model import (
+                record_gpu_measurement,
+            )
 
             measurement = record_gpu_measurement(context.root_dir.parent, compute)
             if measurement is not None:

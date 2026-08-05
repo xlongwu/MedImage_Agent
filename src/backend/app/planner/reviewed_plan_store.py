@@ -2,28 +2,31 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from src.backend.app.planner.audit_record import stable_hash
+from src.backend.app.planner.goal_contract_builder import (
+    build_goal_contract_semantics,
+    finalize_goal_contract,
+    goal_contract_identity_payload,
+)
+from src.backend.app.planner.plan_validator import (
+    validate_goal_contract_reachability,
+    validate_plan,
+)
 from src.backend.app.planner.project_context import (
     ProjectContext,
     ProjectContextError,
     load_project_context,
     validate_plan_project_context,
 )
-from src.backend.app.planner.plan_validator import validate_plan
-from src.backend.app.planner.plan_validator import validate_goal_contract_reachability
-from src.backend.app.planner.goal_contract_builder import (
-    build_goal_contract_semantics,
-    finalize_goal_contract,
-    goal_contract_identity_payload,
-)
-from src.backend.app.schemas.goal_contract import GoalContract, GoalContractCandidate
 from src.backend.app.schemas.desktop import ReviewedPlanRecord, RunLinkRecord
+from src.backend.app.schemas.goal_contract import GoalContract, GoalContractCandidate
+from src.backend.app.schemas.memory import MemoryContext
+from src.backend.app.runtime.atomic_file import atomic_write_json
 from src.backend.app.services.mock_store import mock_store, utc_now_iso
 
 
@@ -42,6 +45,7 @@ def reviewed_plan_identity(
     project_id: str,
     plan: dict[str, Any],
     goal_contract_semantics: dict[str, Any] | None = None,
+    memory_context: MemoryContext | dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     normalized, _ = normalize_reviewed_plan(plan)
     identity_payload: dict[str, Any] = {"plan": normalized}
@@ -49,7 +53,17 @@ def reviewed_plan_identity(
         identity_payload["goal_contract"] = goal_contract_identity_payload(
             goal_contract_semantics
         )
-    plan_hash = stable_hash(identity_payload if goal_contract_semantics is not None else normalized)
+    if memory_context is not None:
+        identity_payload["memory_context"] = (
+            memory_context.model_dump(mode="json")
+            if isinstance(memory_context, MemoryContext)
+            else dict(memory_context)
+        )
+    plan_hash = stable_hash(
+        identity_payload
+        if goal_contract_semantics is not None or memory_context is not None
+        else normalized
+    )
     identity_hash = stable_hash({"project_id": project_id, "plan_hash": plan_hash})
     return f"reviewed_{identity_hash[:20]}", plan_hash
 
@@ -88,13 +102,7 @@ def write_reviewed_plan_snapshot(record: ReviewedPlanRecord, project_dir: Path) 
     target = _snapshot_path(project_dir, record.reviewed_plan_id)
     if target.exists():
         return target
-    target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_suffix(".tmp")
-    tmp.write_text(
-        json.dumps(record.model_dump(), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    tmp.replace(target)
+    atomic_write_json(target, record.model_dump(mode="json"), schema_version=1)
     return target
 
 
@@ -111,6 +119,7 @@ def save_reviewed_plan(
     goal_contract_candidate: GoalContractCandidate | dict[str, Any] | None = None,
     reviewed_actor: str | None = None,
     lineage: dict[str, Any] | None = None,
+    memory_context: MemoryContext | dict[str, Any] | None = None,
     store=None,
 ) -> ReviewedPlanRecord:
     """Upsert a stable SQLite plan index and write its immutable snapshot."""
@@ -162,6 +171,7 @@ def save_reviewed_plan(
         project_id,
         normalized_plan,
         identity_semantics,
+        memory_context,
     )
     goal_contract: GoalContract | None = None
     goal_contract_issues: list[str] = []
@@ -172,7 +182,7 @@ def save_reviewed_plan(
             reviewed_plan_id=reviewed_plan_id,
             plan_hash=plan_hash,
             reviewed_actor=reviewed_actor,
-            reviewed_at=datetime.now(timezone.utc) if reviewed_actor else None,
+            reviewed_at=datetime.now(UTC) if reviewed_actor else None,
         )
         goal_contract_issues = list(
             dict.fromkeys(
@@ -199,6 +209,24 @@ def save_reviewed_plan(
         ),
         rawdata_dir=str(context.rawdata_dir) if context.rawdata_dir else None,
         plan_hash=plan_hash,
+        memory_context_hash=(
+            memory_context.context_hash
+            if isinstance(memory_context, MemoryContext)
+            else str((memory_context or {}).get("context_hash") or "") or None
+        ),
+        memory_context_refs=(
+            [
+                item.model_dump(mode="json")
+                for item in memory_context.evidence_refs
+            ]
+            if isinstance(memory_context, MemoryContext)
+            else list((memory_context or {}).get("evidence_refs") or [])
+        ),
+        memory_retrieval_policy_version=(
+            memory_context.retrieval_policy_version
+            if isinstance(memory_context, MemoryContext)
+            else str((memory_context or {}).get("retrieval_policy_version") or "") or None
+        ),
         plan_path=str(plan_path),
         status=effective_status,
         created_at=now,
@@ -227,6 +255,11 @@ def save_reviewed_plan(
             ),
             "provider": provider,
             "lineage": dict(lineage or {}),
+            "memory_context": (
+                memory_context.model_dump(mode="json")
+                if isinstance(memory_context, MemoryContext)
+                else dict(memory_context or {})
+            ),
         },
     )
     stored = project_store.add_reviewed_plan(record)
@@ -335,12 +368,14 @@ def build_run_link(
     run_id: str,
     project_config_path: str,
     pipeline_path: str,
+    task_id: str | None = None,
 ) -> RunLinkRecord:
     now = utc_now_iso()
     return RunLinkRecord(
         run_link_id=run_link_id,
         project_id=project_id,
         reviewed_plan_id=reviewed_plan_id,
+        task_id=task_id,
         run_id=run_id,
         pipeline_path=pipeline_path,
         project_config_path=project_config_path,

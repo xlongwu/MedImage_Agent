@@ -12,12 +12,13 @@ from src.backend.app.native_preproc.io.dicom_to_nifti import (
     convert_dicom_series,
 )
 
-
 pytest.importorskip("pydicom")
 pytest.importorskip("nibabel")
 
 
-def _write_classic_series(root: Path, *, positions: tuple[float, ...] = (-5.0, 0.0, 5.0)) -> list[Path]:
+def _write_classic_series(
+    root: Path, *, positions: tuple[float, ...] = (-5.0, 0.0, 5.0)
+) -> list[Path]:
     import pydicom
     from pydicom.dataset import FileDataset, FileMetaDataset
 
@@ -63,12 +64,18 @@ def _write_classic_series(root: Path, *, positions: tuple[float, ...] = (-5.0, 0
 
 def _fingerprint(paths: list[Path]) -> list[tuple[str, int, int]]:
     return [
-        (hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size, path.stat().st_mtime_ns)
+        (
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+        )
         for path in paths
     ]
 
 
-def test_native_classic_conversion_persists_reloadable_artifacts_without_touching_source(tmp_path: Path) -> None:
+def test_native_classic_conversion_persists_reloadable_artifacts_without_touching_source(
+    tmp_path: Path,
+) -> None:
     import nibabel as nib
 
     source_paths = _write_classic_series(tmp_path / "raw")
@@ -129,6 +136,7 @@ def test_native_conversion_rejects_mixed_series(tmp_path: Path) -> None:
 
     with pytest.raises(NativeDicomConversionError, match="Mixed DICOM series"):
         convert_dicom_series(tmp_path / "raw", tmp_path / "out" / "image.nii.gz")
+
 
 def test_native_conversion_rejects_repeated_classic_slice_positions(tmp_path: Path) -> None:
     _write_classic_series(tmp_path / "raw", positions=(0.0, 0.0))

@@ -8,12 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from src.backend.app.schemas.dicom_conversion_safety import (
     DicomConversionRollbackRequest,
     classify_rollback_candidate,
-    validate_rollback_request,
 )
 
 
@@ -196,18 +193,20 @@ def test_protected_filename_identified():
 
 
 def test_user_conversion_still_disabled():
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
     )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
+    )
+
     result = run_conversion_execute("test", DicomConversionExecutionRequest())
     assert result.conversion_disabled is True
 
 
 def test_rollback_service_no_subprocess():
     import src.backend.app.services.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()
@@ -216,6 +215,7 @@ def test_rollback_service_no_subprocess():
 
 def test_rollback_schema_no_subprocess():
     import src.backend.app.schemas.dicom_conversion_safety as mod
+
     source = mod.__file__
     assert source is not None
     content = open(source, encoding="utf-8").read()

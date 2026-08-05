@@ -18,16 +18,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from src.backend.app.runtime.pipeline_executor import (
+    run_pipeline as real_run_pipeline,
+)
 from tests.integration.test_real_project_safe_smoke import (
     real_project_smoke,  # noqa: F401  — pytest fixture
 )
 
-from src.backend.app.runtime.pipeline_executor import (
-    run_pipeline as real_run_pipeline,
-)
 
-
-def test_full_run_lifecycle_smoke(real_project_smoke, monkeypatch, tmp_path):
+def test_full_run_lifecycle_smoke(real_project_smoke, monkeypatch, tmp_path):  # noqa: F811
     """Execute a reviewed plan with the real executor, then verify every API
     endpoint in the post-execution lifecycle.
 
@@ -116,15 +115,11 @@ def test_full_run_lifecycle_smoke(real_project_smoke, monkeypatch, tmp_path):
     # ══════════════════════════════════════════════════════════════════════
     # 7. Artifact discovery
     # ══════════════════════════════════════════════════════════════════════
-    artifacts_resp = client.get(
-        f"/api/projects/{project_id}/runs/{run_id}/artifacts"
-    )
+    artifacts_resp = client.get(f"/api/projects/{project_id}/runs/{run_id}/artifacts")
     assert artifacts_resp.status_code == 200, artifacts_resp.text
     artifacts = artifacts_resp.json()["artifacts"]
     assert isinstance(artifacts, list)
-    assert len(artifacts) >= 1, (
-        f"Expected at least 1 artifact, got {len(artifacts)}: {artifacts}"
-    )
+    assert len(artifacts) >= 1, f"Expected at least 1 artifact, got {len(artifacts)}: {artifacts}"
 
     # The data_inspection node produces dataset_index.json,
     # data_completeness_report.json, and subject_table.csv.
@@ -141,14 +136,18 @@ def test_full_run_lifecycle_smoke(real_project_smoke, monkeypatch, tmp_path):
     )
     target = previewable[0]
     preview_resp = client.get(
-        f"/api/projects/{project_id}/runs/{run_id}"
-        f"/artifacts/{target['artifact_id']}"
+        f"/api/projects/{project_id}/runs/{run_id}/artifacts/{target['artifact_id']}"
     )
     assert preview_resp.status_code == 200, preview_resp.text
     preview = preview_resp.json()
     assert preview["ok"] is True
     assert preview["preview_type"] in (
-        "json", "csv", "markdown", "text", "log", "metadata_only",
+        "json",
+        "csv",
+        "markdown",
+        "text",
+        "log",
+        "metadata_only",
     ), f"Unexpected preview_type: {preview['preview_type']}"
     assert preview["artifact_id"] == target["artifact_id"]
     assert preview["exists"] is True
@@ -172,30 +171,21 @@ def test_full_run_lifecycle_smoke(real_project_smoke, monkeypatch, tmp_path):
     second = second_resp.json()
 
     # Run detail must not leak across projects
-    wrong_detail = client.get(
-        f"/api/projects/{second['project_id']}/runs/{run_id}"
-    )
+    wrong_detail = client.get(f"/api/projects/{second['project_id']}/runs/{run_id}")
     assert wrong_detail.status_code == 404, (
         f"Expected 404, got {wrong_detail.status_code}: {wrong_detail.text}"
     )
 
     # Artifact list must not leak across projects
-    wrong_artifacts = client.get(
-        f"/api/projects/{second['project_id']}/runs/{run_id}/artifacts"
-    )
-    assert wrong_artifacts.status_code == 404, (
-        f"Expected 404, got {wrong_artifacts.status_code}"
-    )
+    wrong_artifacts = client.get(f"/api/projects/{second['project_id']}/runs/{run_id}/artifacts")
+    assert wrong_artifacts.status_code == 404, f"Expected 404, got {wrong_artifacts.status_code}"
 
     # Artifact preview must not leak across projects
     existing_artifact_id = artifacts[0]["artifact_id"]
     wrong_preview = client.get(
-        f"/api/projects/{second['project_id']}/runs/{run_id}"
-        f"/artifacts/{existing_artifact_id}"
+        f"/api/projects/{second['project_id']}/runs/{run_id}/artifacts/{existing_artifact_id}"
     )
-    assert wrong_preview.status_code == 404, (
-        f"Expected 404, got {wrong_preview.status_code}"
-    )
+    assert wrong_preview.status_code == 404, f"Expected 404, got {wrong_preview.status_code}"
 
     # The wrong project's own run list must not contain the original run
     second_runs = client.get(f"/api/projects/{second['project_id']}/runs")

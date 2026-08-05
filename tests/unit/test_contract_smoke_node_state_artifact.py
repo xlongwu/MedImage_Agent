@@ -21,8 +21,8 @@ from src.backend.app.main import app
 from src.backend.app.planner import project_context, reviewed_plan_store
 from src.backend.app.runtime import desktop_config
 from src.backend.app.schemas.execution_state import (
-    is_node_reuse_eligible,
     is_node_retry_eligible,
+    is_node_reuse_eligible,
     is_node_terminal,
 )
 from src.backend.app.services import (
@@ -32,26 +32,30 @@ from src.backend.app.services import (
 from src.backend.app.services.mock_store import SQLiteDesktopStore
 from tests.goal_contract_helpers import reviewed_goal_candidate
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _isolated_store(tmp_path: Path, monkeypatch) -> SQLiteDesktopStore:
     store = SQLiteDesktopStore(tmp_path / "db.sqlite")
-    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH",
-                        tmp_path / "cfg.json")
-    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT",
-                        tmp_path / "prj")
-    for mod in (project_routes, dashboard_routes, project_context,
-                reviewed_plan_store, project_history_routes,
-                execute_reviewed_routes, bold_reference_readiness,
-                motion_qc_readiness):
+    monkeypatch.setattr(desktop_config, "DESKTOP_CONFIG_PATH", tmp_path / "cfg.json")
+    monkeypatch.setattr(project_routes, "DEFAULT_PROJECTS_ROOT", tmp_path / "prj")
+    for mod in (
+        project_routes,
+        dashboard_routes,
+        project_context,
+        reviewed_plan_store,
+        project_history_routes,
+        execute_reviewed_routes,
+        bold_reference_readiness,
+        motion_qc_readiness,
+    ):
         monkeypatch.setattr(mod, "mock_store", store)
-    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR",
-                        tmp_path / "audit")
+    monkeypatch.setattr(execute_reviewed_routes, "AUDIT_RECORD_DIR", tmp_path / "audit")
     desktop_config.DESKTOP_CONFIG_PATH.write_text(
-        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8")
+        json.dumps(desktop_config.DEFAULT_DESKTOP_CONFIG), encoding="utf-8"
+    )
     return store
 
 
@@ -63,12 +67,17 @@ def _create_project(client: TestClient, tmp_path: Path) -> dict:
     rd = tmp_path / "rawdata"
     rd.mkdir(parents=True, exist_ok=True)
     (rd / "dataset_description.json").write_text(
-        '{"Name":"test","BIDSVersion":"1.8.0"}', encoding="utf-8")
+        '{"Name":"test","BIDSVersion":"1.8.0"}', encoding="utf-8"
+    )
     pj = tmp_path / "project"
-    resp = client.post("/api/projects/create", json={
-        "project_name": "NodeState Test",
-        "rawdata_dir": str(rd), "project_dir": str(pj),
-    })
+    resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "NodeState Test",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -85,8 +94,7 @@ def _make_plan(created: dict) -> dict:
             "diagnostics": created.get("diagnostics", {}),
         },
         "nodes": [
-            {"id": "contract_smoke", "backend": "python",
-             "depends_on": [], "params": {}},
+            {"id": "contract_smoke", "backend": "python", "depends_on": [], "params": {}},
         ],
     }
 
@@ -109,22 +117,26 @@ def _save_plan(client: TestClient, created: dict, plan: dict) -> str:
     return resp.json()["reviewed_plan"]["reviewed_plan_id"]
 
 
-def _execute(client: TestClient, created: dict, plan: dict,
-             reviewed_plan_id: str) -> dict:
-    resp = client.post("/api/plans/execute-reviewed", json={
-        "plan": plan,
-        "approval": {
-            "approved": True, "approved_by": "test",
-            "approved_nodes": ["*"], "rejected_nodes": [],
+def _execute(client: TestClient, created: dict, plan: dict, reviewed_plan_id: str) -> dict:
+    resp = client.post(
+        "/api/plans/execute-reviewed",
+        json={
+            "plan": plan,
+            "approval": {
+                "approved": True,
+                "approved_by": "test",
+                "approved_nodes": ["*"],
+                "rejected_nodes": [],
+            },
+            "project_id": created["project_id"],
+            "reviewed_plan_id": reviewed_plan_id,
+            "project_config_path": created["project_config_path"],
+            "dry_run": False,
+            "confirm_execution": True,
+            "persist_audit": True,
+            "write_pipeline_yaml": True,
         },
-        "project_id": created["project_id"],
-        "reviewed_plan_id": reviewed_plan_id,
-        "project_config_path": created["project_config_path"],
-        "dry_run": False,
-        "confirm_execution": True,
-        "persist_audit": True,
-        "write_pipeline_yaml": True,
-    })
+    )
     assert resp.status_code == 200, resp.text
     return resp.json()
 
@@ -150,6 +162,7 @@ def _get_artifacts(client, project_id, run_id) -> list:
 # Group 1 — Node-state artifact exists and is valid
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_contract_smoke_writes_node_state_artifact(tmp_path, monkeypatch):
     """contract_smoke execution produces contract_smoke_node_state.json."""
     _isolated_store(tmp_path, monkeypatch)
@@ -160,8 +173,7 @@ def test_contract_smoke_writes_node_state_artifact(tmp_path, monkeypatch):
 
     artifacts = _get_artifacts(client, created["project_id"], run_id)
     names = [a.get("name", "") for a in artifacts]
-    assert "contract_smoke_node_state.json" in names, \
-        f"Node-state not found in: {names}"
+    assert "contract_smoke_node_state.json" in names, f"Node-state not found in: {names}"
 
 
 def test_node_state_artifact_schema_fields(tmp_path, monkeypatch):
@@ -174,8 +186,7 @@ def test_node_state_artifact_schema_fields(tmp_path, monkeypatch):
 
     artifacts = _get_artifacts(client, created["project_id"], run_id)
     ns_art = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_node_state.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_node_state.json"),
         None,
     )
     assert ns_art is not None
@@ -199,8 +210,7 @@ def test_node_state_uses_execution_state_helpers(tmp_path, monkeypatch):
 
     artifacts = _get_artifacts(client, created["project_id"], run_id)
     ns_art = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_node_state.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_node_state.json"),
         None,
     )
     payload = json.loads(Path(ns_art["path"]).read_text(encoding="utf-8"))
@@ -215,6 +225,7 @@ def test_node_state_uses_execution_state_helpers(tmp_path, monkeypatch):
 # Group 2 — Output manifest integration
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def test_output_manifest_includes_node_state_artifact(tmp_path, monkeypatch):
     """Output manifest has an item for the node-state JSON."""
     _isolated_store(tmp_path, monkeypatch)
@@ -225,19 +236,14 @@ def test_output_manifest_includes_node_state_artifact(tmp_path, monkeypatch):
 
     artifacts = _get_artifacts(client, created["project_id"], run_id)
     manifest_art = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_output_manifest.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_output_manifest.json"),
         None,
     )
     assert manifest_art is not None
     manifest = json.loads(Path(manifest_art["path"]).read_text(encoding="utf-8"))
 
-    node_state_items = [
-        i for i in manifest.get("items", [])
-        if i.get("kind") == "node_state_json"
-    ]
-    assert len(node_state_items) >= 1, \
-        f"No node_state_json item in manifest items"
+    node_state_items = [i for i in manifest.get("items", []) if i.get("kind") == "node_state_json"]
+    assert len(node_state_items) >= 1, "No node_state_json item in manifest items"
 
 
 def test_node_state_artifact_previewable(tmp_path, monkeypatch):
@@ -250,8 +256,7 @@ def test_node_state_artifact_previewable(tmp_path, monkeypatch):
 
     artifacts = _get_artifacts(client, created["project_id"], run_id)
     ns_art = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_node_state.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_node_state.json"),
         None,
     )
     assert ns_art is not None
@@ -260,8 +265,7 @@ def test_node_state_artifact_previewable(tmp_path, monkeypatch):
 
     aid = ns_art["artifact_id"]
     preview_resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}"
-        f"/artifacts/{aid}"
+        f"/api/projects/{created['project_id']}/runs/{run_id}/artifacts/{aid}"
     )
     assert preview_resp.status_code == 200, preview_resp.text
 
@@ -269,6 +273,7 @@ def test_node_state_artifact_previewable(tmp_path, monkeypatch):
 # ═══════════════════════════════════════════════════════════════════════
 # Group 3 — Timeline integration
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_timeline_uses_node_state_artifact(tmp_path, monkeypatch):
     """Timeline includes contract_smoke node from normalized artifact."""
@@ -278,9 +283,7 @@ def test_timeline_uses_node_state_artifact(tmp_path, monkeypatch):
     created, exec_data = _setup_executed(tmp_path, monkeypatch, client)
     run_id = exec_data["run_id"]
 
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
     assert resp.status_code == 200
     data = resp.json()
 
@@ -293,7 +296,8 @@ def test_timeline_uses_node_state_artifact(tmp_path, monkeypatch):
 
 
 def test_malformed_node_state_artifact_does_not_crash_timeline(
-    tmp_path, monkeypatch,
+    tmp_path,
+    monkeypatch,
 ):
     """Corrupt node-state JSON produces warnings, not 500."""
     _isolated_store(tmp_path, monkeypatch)
@@ -305,17 +309,14 @@ def test_malformed_node_state_artifact_does_not_crash_timeline(
     # Corrupt the node-state file
     artifacts = _get_artifacts(client, created["project_id"], run_id)
     ns_art = next(
-        (a for a in artifacts
-         if a.get("name") == "contract_smoke_node_state.json"),
+        (a for a in artifacts if a.get("name") == "contract_smoke_node_state.json"),
         None,
     )
     if ns_art:
         Path(ns_art["path"]).write_text("not valid json {{{", encoding="utf-8")
 
     # Timeline should still return 200
-    resp = client.get(
-        f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline"
-    )
+    resp = client.get(f"/api/projects/{created['project_id']}/runs/{run_id}/state-timeline")
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["ok"] is True
@@ -324,6 +325,7 @@ def test_malformed_node_state_artifact_does_not_crash_timeline(
 # ═══════════════════════════════════════════════════════════════════════
 # Group 4 — Safety boundaries
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def test_node_state_does_not_modify_rawdata(tmp_path, monkeypatch):
     """Node-state artifact creation does not modify rawdata."""
@@ -338,10 +340,14 @@ def test_node_state_does_not_modify_rawdata(tmp_path, monkeypatch):
     mtime_before = sentinel.stat().st_mtime
 
     pj = tmp_path / "pj_ns"
-    create_resp = client.post("/api/projects/create", json={
-        "project_name": "NS Safety",
-        "rawdata_dir": str(rd), "project_dir": str(pj),
-    })
+    create_resp = client.post(
+        "/api/projects/create",
+        json={
+            "project_name": "NS Safety",
+            "rawdata_dir": str(rd),
+            "project_dir": str(pj),
+        },
+    )
     assert create_resp.status_code == 200
     created = create_resp.json()
     plan = _make_plan(created)
@@ -358,6 +364,7 @@ def test_no_external_subprocess_called(tmp_path, monkeypatch):
     _enable_env(monkeypatch)
 
     import subprocess
+
     original_run = subprocess.run
     called_matlab = []
 
@@ -381,6 +388,7 @@ def test_no_external_subprocess_called(tmp_path, monkeypatch):
 def test_spm_realign_still_not_executable():
     """spm_realign_subject remains not executable."""
     from src.backend.app.runtime.tool_catalog import get_tool_catalog_item
+
     item = get_tool_catalog_item("spm_realign_subject")
     assert item.manual_required is True
     assert item.risk_level == "high"

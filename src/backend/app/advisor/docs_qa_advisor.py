@@ -6,7 +6,6 @@ from typing import Any
 from src.backend.app.advisor.advisor_safety import (
     is_llm_enabled,
     wrap_advisor_response,
-    advisor_fallback,
 )
 
 
@@ -90,8 +89,8 @@ def _suggest_related(keywords: list[str]) -> list[str]:
 
 
 def _llm_docs_qa(question: str, docs_content: dict[str, str]) -> str:
-    from src.backend.app.advisor.protocol_advisor import _call_llm
     from src.backend.app.advisor.advisor_safety import get_llm_config
+    from src.backend.app.advisor.protocol_advisor import _call_llm
 
     config = get_llm_config()
     docs_summary = "\n---\n".join(f"{k}: {v[:500]}" for k, v in docs_content.items())

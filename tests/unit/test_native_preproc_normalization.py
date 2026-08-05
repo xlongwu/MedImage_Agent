@@ -8,10 +8,14 @@ import pytest
 nib = pytest.importorskip("nibabel")
 pytest.importorskip("scipy")
 
-from scipy.ndimage import shift
+from scipy.ndimage import shift  # noqa: E402
 
-from src.backend.app.native_preproc.orchestrator.validation import validate_stage_result_artifacts
-from src.backend.app.native_preproc.stages.normalization import run_affine_normalization
+from src.backend.app.native_preproc.orchestrator.validation import (  # noqa: E402
+    validate_stage_result_artifacts,  # noqa: E402
+)
+from src.backend.app.native_preproc.stages.normalization import (  # noqa: E402
+    run_affine_normalization,  # noqa: E402
+)
 
 
 def _phantom(shape: tuple[int, int, int] = (9, 9, 9)) -> np.ndarray:
@@ -22,12 +26,21 @@ def _phantom(shape: tuple[int, int, int] = (9, 9, 9)) -> np.ndarray:
 
 
 def _save(path: Path, data: np.ndarray, affine: np.ndarray | None = None) -> Path:
-    nib.save(nib.Nifti1Image(data.astype(np.float32), affine=np.eye(4) if affine is None else affine), str(path))
+    nib.save(
+        nib.Nifti1Image(data.astype(np.float32), affine=np.eye(4) if affine is None else affine),
+        str(path),
+    )
     return path
 
 
 def _artifact_path(result, artifact_type: str) -> Path:
-    return Path(next(artifact.path for artifact in result.output_artifacts if artifact.artifact_type == artifact_type))
+    return Path(
+        next(
+            artifact.path
+            for artifact in result.output_artifacts
+            if artifact.artifact_type == artifact_type
+        )
+    )
 
 
 def test_affine_normalization_resamples_bold_to_template_grid(tmp_path: Path) -> None:
@@ -72,13 +85,9 @@ def test_affine_normalization_resamples_tissue_probabilities_to_template_grid(
         template_affine,
     )
     t1_path = _save(tmp_path / "sub-01_T1w.nii.gz", t1_data, source_affine)
-    bold_path = _save(
-        tmp_path / "sub-01_task-rest_bold.nii.gz", bold_data, source_affine
-    )
+    bold_path = _save(tmp_path / "sub-01_task-rest_bold.nii.gz", bold_data, source_affine)
     wm_path = _save(tmp_path / "sub-01_desc-wm_probseg.nii.gz", tissue, source_affine)
-    csf_path = _save(
-        tmp_path / "sub-01_desc-csf_probseg.nii.gz", 1.0 - tissue, source_affine
-    )
+    csf_path = _save(tmp_path / "sub-01_desc-csf_probseg.nii.gz", 1.0 - tissue, source_affine)
 
     result = run_affine_normalization(
         t1_path,

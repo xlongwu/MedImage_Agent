@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 # Template library is intentionally restricted to smoothing-only for safety.
 # See dpabi_safety.ALLOWED_FUNCTIONS for the full function whitelist.
 ALLOWLISTED_TEMPLATE_FUNCTIONS = {"y_Smooth", "rest_Smooth"}
@@ -24,7 +23,7 @@ def _yaml_scalar(value: Any) -> str:
         return "true" if value else "false"
     if value is None:
         return "null"
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return str(value)
     return '"' + str(value).replace('"', '\\"') + '"'
 

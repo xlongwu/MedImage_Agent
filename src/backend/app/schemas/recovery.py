@@ -7,7 +7,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 RecoveryAction = Literal[
     "SAFE_RETRY",
     "RETRY_FAILED_SUBJECTS",
@@ -289,7 +288,7 @@ class RecoveryCandidate(BaseModel):
     rank_key: tuple[int, ...]
 
     @model_validator(mode="after")
-    def enforce_handoff_and_plan_actions(self) -> "RecoveryCandidate":
+    def enforce_handoff_and_plan_actions(self) -> RecoveryCandidate:
         if self.action == "HUMAN_HANDOFF" and self.executable:
             raise ValueError("HUMAN_HANDOFF never has execution capability")
         if self.action == "HUMAN_HANDOFF" and not self.safe_human_actions:
@@ -331,7 +330,7 @@ class RecoveryProposal(BaseModel):
     recovery_proposal_hash: str
 
     @model_validator(mode="after")
-    def recommended_candidate_must_be_eligible(self) -> "RecoveryProposal":
+    def recommended_candidate_must_be_eligible(self) -> RecoveryProposal:
         matches = [
             candidate
             for candidate in self.candidates

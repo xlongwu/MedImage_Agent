@@ -7,7 +7,6 @@ from src.backend.app.runtime import node_registry
 from src.backend.app.runtime.node_registry_plugins.base import merge_registries
 from src.backend.app.runtime.tool_catalog import build_tool_catalog
 
-
 EXPECTED_NATIVE_NODE_IDS = {
     "native_preproc_full_dry_run",
     "native_preproc_full_execute",
@@ -55,6 +54,7 @@ EXPECTED_NODE_IDS = {
     "gpu_temporal_filtering_subject",
     "group_dataset_summary",
     "motion_qc_dataset_report",
+    "native_dicom_conversion_execute",
     "motion_qc_subject",
     "normalization_qc_dataset_report",
     "nuisance_regression_qc_dataset_report",
@@ -86,7 +86,7 @@ EXPECTED_NODE_IDS = {
 
 def test_plugin_registry_preserves_exact_node_ids():
     assert set(node_registry.NODE_REGISTRY) == EXPECTED_NODE_IDS
-    assert len(node_registry.NODE_REGISTRY) == 92
+    assert len(node_registry.NODE_REGISTRY) == 93
 
 
 def test_get_node_runner_returns_registered_runner_identity():
@@ -111,4 +111,7 @@ def test_external_helper_aliases_are_not_exposed_by_runtime_registry():
     assert not hasattr(node_registry, "run_matlab_check")
     assert not hasattr(node_registry, "run_spm_smoke_test")
     assert not hasattr(node_registry, "run_dpabi_capability_inspection")
-    assert node_registry.NODE_REGISTRY["spm_realign_subject"].__name__ == "_external_legacy_node_blocker"
+    assert (
+        node_registry.NODE_REGISTRY["spm_realign_subject"].__name__
+        == "_external_legacy_node_blocker"
+    )

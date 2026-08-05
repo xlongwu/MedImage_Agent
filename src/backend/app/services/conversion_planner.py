@@ -7,7 +7,7 @@ without writing files, executing external tools, or modifying rawdata.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,12 +18,9 @@ from src.backend.app.schemas.desktop import (
     ConversionSourceSummary,
     DatasetImportRecord,
 )
-from src.backend.app.services.bids_validation import validate_bids
 from src.backend.app.services.dicom_preflight import build_dicom_preflight
 from src.backend.app.services.funraw_t1raw_detector import detect_funraw_t1raw_layout
-from src.backend.app.services.image_preview import list_image_sources
 from src.backend.app.services.mock_store import mock_store
-
 
 _NIFTI_EXT = (".nii", ".nii.gz")
 
@@ -44,7 +41,7 @@ _DICOM_DESC_DWI = {"DWI", "DTI", "DIFFUSION", "DIFF"}
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _parse_subject_id(name: str) -> str | None:
@@ -243,7 +240,7 @@ def plan_conversion(
                 source_warnings.append(f"DICOM_PREFLIGHT_FAILED: {exc}")
 
             for series in preflight.series:
-                subj = series.subject_id or f"sub-unknown"
+                subj = series.subject_id or "sub-unknown"
                 desc = series.series_description or series.protocol_name or ""
                 suffix = _bids_suffix_from_desc(desc)
                 session = None

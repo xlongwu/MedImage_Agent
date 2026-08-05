@@ -5,7 +5,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-
 NativeFullRunStatus = Literal[
     "planned",
     "queued",
@@ -44,7 +43,7 @@ class NativeCpuExecutionPolicy(BaseModel):
     adaptive_replanning: bool = True
 
     @model_validator(mode="after")
-    def validate_resource_bounds(self) -> "NativeCpuExecutionPolicy":
+    def validate_resource_bounds(self) -> NativeCpuExecutionPolicy:
         if self.memory_budget_bytes is not None and self.memory_budget_bytes < 64 * 1024 * 1024:
             raise ValueError("memory_budget_bytes must reserve at least 64 MiB.")
         return self
@@ -77,7 +76,7 @@ class NativeComputePolicy(BaseModel):
     stage_backends: dict[str, NativeComputeBackend] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_gpu_policy(self) -> "NativeComputePolicy":
+    def validate_gpu_policy(self) -> NativeComputePolicy:
         unknown = sorted(set(self.stage_backends) - _GPU_CAPABLE_NATIVE_STAGES)
         if unknown:
             raise ValueError(f"stage_backends contains unsupported or non-GPU stage IDs: {', '.join(unknown)}.")
@@ -97,6 +96,7 @@ class NativeFullPreprocRequest(BaseModel):
     output_dir: str = ""
 
     input_bold: str = ""
+    input_bids_dir: str = ""
     sidecar_json: str = ""
     t1w: str = ""
     template: str = ""

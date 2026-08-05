@@ -9,14 +9,10 @@ Tests skip gracefully when pydicom or dcm2niix are unavailable.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
 
-from src.backend.app.schemas.dicom_conversion_execution import (
-    DicomConversionSafetyFlags,
-)
 from src.backend.app.schemas.execution_manifest import (
     OutputManifest,
 )
@@ -207,9 +203,7 @@ def test_smoke_with_fake_runner_writes_manifest(tmp_path, monkeypatch):
         env=_ALL_SMOKE_FLAGS,
         runner=_fake_dcm2niix_runner,
     )
-    manifest = OutputManifest.model_validate_json(
-        Path(result.manifest_path).read_text()
-    )
+    manifest = OutputManifest.model_validate_json(Path(result.manifest_path).read_text())
     assert manifest.project_id == "synthetic_smoke"
     assert manifest.node_id == "dicom_to_nifti"
 
@@ -230,9 +224,7 @@ def test_smoke_with_fake_runner_writes_provenance(tmp_path, monkeypatch):
     )
     from src.backend.app.schemas.execution_manifest import ExecutionProvenance
 
-    prov = ExecutionProvenance.model_validate_json(
-        Path(result.provenance_path).read_text()
-    )
+    prov = ExecutionProvenance.model_validate_json(Path(result.provenance_path).read_text())
     assert prov.backend == "external"
     assert prov.command_template_id == "dcm2niix_smoke"
     assert "shell" not in prov.model_dump()
@@ -380,8 +372,7 @@ def test_smoke_service_never_uses_shell():
 
     source = inspect.getsource(run_synthetic_dcm2niix_smoke)
     lines = [
-        l for l in source.splitlines()
-        if not l.strip().startswith(("#", '"""', "``"))
+        line for line in source.splitlines() if not line.strip().startswith(("#", '"""', "``"))
     ]
     code = "\n".join(lines)
     assert "shell=True" not in code
@@ -401,11 +392,11 @@ def test_smoke_result_safety_flags(tmp_path):
 
 def test_run_conversion_execute_still_disabled():
     """The user-facing execute path must remain disabled."""
-    from src.backend.app.services.dicom_conversion_execution import (
-        run_conversion_execute,
-    )
     from src.backend.app.schemas.dicom_conversion_execution import (
         DicomConversionExecutionRequest,
+    )
+    from src.backend.app.services.dicom_conversion_execution import (
+        run_conversion_execute,
     )
 
     req = DicomConversionExecutionRequest(

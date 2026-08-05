@@ -7,12 +7,16 @@ GPU computation cannot create a sidecar pipeline or bypass run manifests.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
-from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import GpuStagePlan, gpu_device_lock
+from src.backend.app.native_preproc.orchestrator.gpu_resource_planner import (
+    GpuStagePlan,
+    gpu_device_lock,
+)
 from src.backend.app.tools.gpu_utils import configure_cupy_cache_dir
 
 

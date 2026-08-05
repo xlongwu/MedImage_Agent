@@ -2,20 +2,40 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
+
+from src.backend.app.schemas.desktop import ProjectDetail
+from src.backend.app.services.mock_store import SQLiteDesktopStore
 
 
 class _Store:
     def __init__(self, project_dir: Path, rawdata_dir: Path) -> None:
-        self._project = SimpleNamespace(
+        self._project = ProjectDetail(
+            id="project-001",
+            name="DICOM project",
+            study_id="study-001",
+            modality="rs-fMRI",
+            created_date="2026-07-16",
+            subjects_count=1,
+            current_pipeline_id="",
+            sequences=[],
+            scans_count=1,
+            total_size="1 MB",
+            current_model_id="",
             metadata={
                 "project_dir": str(project_dir),
                 "rawdata_dir": str(rawdata_dir),
-            }
+            },
         )
 
     def get_project(self, project_id: str):  # noqa: ANN001
         return self._project if project_id == "project-001" else None
+
+    def update_project_metadata(self, project_id, updates):  # noqa: ANN001
+        if project_id != self._project.id:
+            return None
+        metadata = {**self._project.metadata, **updates}
+        self._project = self._project.model_copy(update={"metadata": metadata})
+        return self._project
 
 
 def _all_confirmations():
@@ -94,10 +114,10 @@ def _fake_preflight(project_dir: Path, rawdata_dir: Path):
 
 
 def test_prepare_persists_release_approval_decision_for_execute_gate(tmp_path, monkeypatch):
+    import src.backend.app.services.dicom_conversion_execution as execution_module
     from src.backend.app.schemas.dicom_conversion_prepare import (
         DicomConversionPrepareRequest,
     )
-    import src.backend.app.services.dicom_conversion_execution as execution_module
     from src.backend.app.services.dicom_conversion_prepare import (
         run_dicom_conversion_prepare,
     )
@@ -142,8 +162,9 @@ def test_prepare_persists_release_approval_decision_for_execute_gate(tmp_path, m
         },
     )
 
+    store = _Store(project_dir, rawdata_dir)
     response = run_dicom_conversion_prepare(
-        _Store(project_dir, rawdata_dir),
+        store,
         "project-001",
         DicomConversionPrepareRequest(
             approved_by="operator",
@@ -157,6 +178,11 @@ def test_prepare_persists_release_approval_decision_for_execute_gate(tmp_path, m
     assert response.execution_ready is True
     assert response.release_approval_id.startswith("release-approval-")
     assert response.release_approval_decision_path
+    assert (
+        store.get_project("project-001").metadata["agent_conversion_run_id"]
+        == response.conversion_run_id
+    )
+    assert store.get_project("project-001").metadata["agent_conversion_execution_ready"] is True
     assert Path(response.release_approval_decision_path).exists()
     run_dirs = list((project_dir / "conversion_runs").iterdir())
     assert [path.name for path in run_dirs] == [response.conversion_run_id]
@@ -177,3 +203,39 @@ def test_prepare_persists_release_approval_decision_for_execute_gate(tmp_path, m
     )
     assert read_back.approved is True
     assert read_back.blocked is False
+
+
+def test_atomic_metadata_merge_preserves_dataset_health(tmp_path: Path) -> None:
+    store = SQLiteDesktopStore(tmp_path / "desktop.db")
+    project = ProjectDetail(
+        id="project-health",
+        name="Health-preserving metadata merge",
+        study_id="study-health",
+        modality="rs-fMRI",
+        created_date="2026-07-16",
+        subjects_count=1,
+        current_pipeline_id="",
+        sequences=[],
+        scans_count=1,
+        total_size="1 MB",
+        current_model_id="",
+        metadata={"project_dir": str(tmp_path / "project")},
+    )
+    store.add_project(
+        project,
+        health_status="Ready",
+        rawdata_dir=str(tmp_path / "rawdata"),
+    )
+
+    updated = store.update_project_metadata(
+        project.id,
+        {
+            "agent_conversion_run_id": "conversion-001",
+            "agent_conversion_execution_ready": True,
+        },
+    )
+
+    assert updated is not None
+    assert updated.metadata["agent_conversion_run_id"] == "conversion-001"
+    assert store.get_project(project.id).metadata["agent_conversion_execution_ready"] is True
+    assert store.get_dataset_summary(project.id).health_status == "Ready"

@@ -13,7 +13,7 @@ No subprocess. No rawdata modification. No external tools.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +24,7 @@ from src.backend.app.schemas.preprocessing_handoff import (
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _safety_flags() -> dict[str, bool]:
@@ -192,7 +192,7 @@ def register_conversion_result(
             ]
 
         # Mark converted BIDS as available for preprocessing input
-        project.metadata["converted_bids_available"] = execution_status in {"succeeded", "partial"}
+        project.metadata["converted_bids_available"] = execution_status == "succeeded"
         project.metadata["converted_bids_dir"] = output_root
         project.metadata["converted_bids_registered_at"] = now
         if project.metadata["converted_bids_available"] and discovered_nifti > 0:
@@ -207,7 +207,7 @@ def register_conversion_result(
         project.metadata["data_readiness_stale"] = True
         project.metadata["data_readiness_refreshed_at"] = now
 
-        if execution_status in {"succeeded", "partial"} and output_path.exists() and discovered_nifti > 0:
+        if execution_status == "succeeded" and output_path.exists() and discovered_nifti > 0:
             try:
                 from src.backend.app.services.preprocessing_artifact_registry import (
                     write_converted_input_registry,
@@ -260,11 +260,11 @@ def register_conversion_result(
 
     # ── Optionally register as preprocessing input ─────────────────────
     preprocessing_registered = (
-        execution_status in {"succeeded", "partial"}
+        execution_status == "succeeded"
         and output_path.exists()
         and discovered_nifti > 0
     )
-    if execution_status in {"succeeded", "partial"} and output_path.exists():
+    if execution_status == "succeeded" and output_path.exists():
         try:
             from src.backend.app.services.preprocessing_handoff import (
                 register_converted_bids_as_preprocessing_input,

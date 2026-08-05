@@ -5,7 +5,9 @@ from pathlib import Path
 import numpy as np
 
 from src.backend.app.native_preproc.orchestrator.validation import validate_stage_result_artifacts
-from src.backend.app.native_preproc.stages.functional_connectivity import run_functional_connectivity
+from src.backend.app.native_preproc.stages.functional_connectivity import (
+    run_functional_connectivity,
+)
 
 
 def test_functional_connectivity_outputs_reloadable_fc_and_fisher_z(tmp_path: Path) -> None:
@@ -36,7 +38,9 @@ def test_functional_connectivity_outputs_reloadable_fc_and_fisher_z(tmp_path: Pa
 
 def test_functional_connectivity_warns_for_constant_roi(tmp_path: Path) -> None:
     timepoints = 8
-    roi_ts = np.column_stack([np.arange(timepoints, dtype=np.float32), np.ones(timepoints, dtype=np.float32)])
+    roi_ts = np.column_stack(
+        [np.arange(timepoints, dtype=np.float32), np.ones(timepoints, dtype=np.float32)]
+    )
     tsv = tmp_path / "roi_timeseries.tsv"
     rows = ["roi_1_signal\troi_2_constant"]
     rows.extend("\t".join(f"{float(value):.8f}" for value in row) for row in roi_ts)

@@ -76,7 +76,6 @@ export {
 
 export {
   createPreprocessingRun,
-  executeNativeFullPreprocessing,
   executeNuisanceRegressionSandbox,
   executePreprocessingPythonPreflight,
   executeSpmSandboxSliceTimingRealign,

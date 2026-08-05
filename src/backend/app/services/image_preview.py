@@ -4,9 +4,9 @@ import base64
 import html
 import json
 import re
-from datetime import datetime, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable
 
 from src.backend.app.schemas.desktop import (
     ImagePlane,
@@ -17,7 +17,6 @@ from src.backend.app.schemas.desktop import (
     ImageValidationIssue,
     ImageValidationReport,
 )
-
 
 PREVIEW_SEARCH_ROOTS = [
     Path("examples/synthetic_bids/rawdata"),
@@ -162,7 +161,7 @@ def build_image_source_manifest_item(*, path: Path, root: Path, subject_id: str,
         relative_path=_relative_path(path, root),
         source_root=str(root),
         size_bytes=int(stat.st_size),
-        modified_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         dimensions=dimensions,
         voxel_spacing=voxel_spacing,
         plane_slice_counts=plane_slice_counts,
@@ -175,7 +174,7 @@ def write_image_source_manifest(response: ImageSourcesResponse) -> str:
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = output_dir / "image_source_manifest.json"
     payload = response.model_dump(exclude={"manifest_path"})
-    payload["generated_at"] = datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    payload["generated_at"] = datetime.now(tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(manifest_path)
 
@@ -477,7 +476,7 @@ def _safe_path_part(value: str) -> str:
 
 
 def _utc_now() -> str:
-    return datetime.now(tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _preview_search_roots(extra_roots: Iterable[str | Path] | None = None) -> list[Path]:

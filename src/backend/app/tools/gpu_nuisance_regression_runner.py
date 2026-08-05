@@ -5,8 +5,8 @@ Pure Python preflight — no torch import, no CUDA, no GPU allocation.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from src.backend.app.tools.gpu_utils import (
     apply_gpu_guard,
@@ -14,43 +14,68 @@ from src.backend.app.tools.gpu_utils import (
     write_gpu_provenance,
 )
 
-
 _ALLOWED_MODES = frozenset({"ols"})
 _MIN_CONF, _MAX_CONF = 1, 64
 
 
 def run_gpu_nuisance_regression_subject(
-    *, subject_id: str, input_functional: str | Path,
-    confounds_path: str | Path, derivatives_dir: str | Path, run_id: str,
+    *,
+    subject_id: str,
+    input_functional: str | Path,
+    confounds_path: str | Path,
+    derivatives_dir: str | Path,
+    run_id: str,
     confound_columns: list[str] | None = None,
-    regression_mode: str = "ols", include_intercept: bool = True,
-    standardize_confounds: bool = True, allow_global_signal: bool = False,
-    allow_scrubbing: bool = False, device: str = "auto",
-    functional_shape: Sequence[int] | None = None, timepoints: int | None = None,
-    n_confounds: int | None = None, dtype_bytes: int = 4, batch_size: int = 1,
-    timeout_seconds: int = 60, require_gpu: bool = False,
-    torch_cuda_available: bool | None = None, device_count: int | None = None,
-    active_jobs: int = 0, max_concurrent_jobs: int = 1,
-    approved: bool = True, dry_run: bool = False,
+    regression_mode: str = "ols",
+    include_intercept: bool = True,
+    standardize_confounds: bool = True,
+    allow_global_signal: bool = False,
+    allow_scrubbing: bool = False,
+    device: str = "auto",
+    functional_shape: Sequence[int] | None = None,
+    timepoints: int | None = None,
+    n_confounds: int | None = None,
+    dtype_bytes: int = 4,
+    batch_size: int = 1,
+    timeout_seconds: int = 60,
+    require_gpu: bool = False,
+    torch_cuda_available: bool | None = None,
+    device_count: int | None = None,
+    active_jobs: int = 0,
+    max_concurrent_jobs: int = 1,
+    approved: bool = True,
+    dry_run: bool = False,
 ) -> dict:
 
     result: dict = {
-        "ok": True, "node_id": "gpu_nuisance_regression_subject", "backend": "gpu",
-        "subject_id": subject_id, "run_id": run_id,
-        "cuda_called": False, "gpu_called": False, "tensor_allocated": False,
-        "runs_training": False, "runs_model_inference": False,
-        "runs_temporal_filtering": False, "runs_functional_connectivity": False,
-        "runs_alff": False, "runs_reho": False,
+        "ok": True,
+        "node_id": "gpu_nuisance_regression_subject",
+        "backend": "gpu",
+        "subject_id": subject_id,
+        "run_id": run_id,
+        "cuda_called": False,
+        "gpu_called": False,
+        "tensor_allocated": False,
+        "runs_training": False,
+        "runs_model_inference": False,
+        "runs_temporal_filtering": False,
+        "runs_functional_connectivity": False,
+        "runs_alff": False,
+        "runs_reho": False,
         "allow_global_signal": allow_global_signal,
         "allow_scrubbing": allow_scrubbing,
-        "writes_rawdata": False, "errors": [], "warnings": [],
+        "writes_rawdata": False,
+        "errors": [],
+        "warnings": [],
     }
 
     if not approved:
-        result["ok"] = False; result["errors"].append("GPU nuisance regression requires approved=true.")
+        result["ok"] = False
+        result["errors"].append("GPU nuisance regression requires approved=true.")
         return result
     if not subject_id or not isinstance(subject_id, str):
-        result["ok"] = False; result["errors"].append(f"Invalid subject_id: {subject_id!r}.")
+        result["ok"] = False
+        result["errors"].append(f"Invalid subject_id: {subject_id!r}.")
         return result
 
     derivatives = Path(derivatives_dir)
@@ -58,19 +83,23 @@ def run_gpu_nuisance_regression_subject(
     # Input
     for label, p in [("functional", input_functional), ("confounds", confounds_path)]:
         if not is_scoped_derivative_path(Path(p), derivatives):
-            result["ok"] = False; result["errors"].append(f"Input {label} not under derivatives_dir: {p}")
+            result["ok"] = False
+            result["errors"].append(f"Input {label} not under derivatives_dir: {p}")
             return result
 
     # Confound columns
     if confound_columns is not None:
         if not isinstance(confound_columns, list) or not confound_columns:
-            result["ok"] = False; result["errors"].append("confound_columns must be non-empty list.")
+            result["ok"] = False
+            result["errors"].append("confound_columns must be non-empty list.")
             return result
         if any(not isinstance(c, str) for c in confound_columns):
-            result["ok"] = False; result["errors"].append("confound_columns must contain strings.")
+            result["ok"] = False
+            result["errors"].append("confound_columns must contain strings.")
             return result
         if len(set(confound_columns)) != len(confound_columns):
-            result["ok"] = False; result["errors"].append("confound_columns must have unique names.")
+            result["ok"] = False
+            result["errors"].append("confound_columns must have unique names.")
             return result
         nc = len(confound_columns)
     elif n_confounds is not None:
@@ -79,32 +108,38 @@ def run_gpu_nuisance_regression_subject(
         nc = 0
 
     if not isinstance(nc, int) or nc > _MAX_CONF:
-        result["ok"] = False; result["errors"].append(f"n_confounds {nc} must be <= {_MAX_CONF}.")
+        result["ok"] = False
+        result["errors"].append(f"n_confounds {nc} must be <= {_MAX_CONF}.")
         return result
 
     # Design matrix
     if timepoints is not None:
         if not isinstance(timepoints, int) or timepoints <= 2:
-            result["ok"] = False; result["errors"].append(f"Invalid timepoints: {timepoints}.")
+            result["ok"] = False
+            result["errors"].append(f"Invalid timepoints: {timepoints}.")
             return result
         n_reg = nc + int(include_intercept)
         if n_reg >= timepoints:
-            result["ok"] = False; result["errors"].append(
-                f"n_regressors({n_reg}) >= timepoints({timepoints}).")
+            result["ok"] = False
+            result["errors"].append(f"n_regressors({n_reg}) >= timepoints({timepoints}).")
             return result
 
     # Regression mode + policies
     if regression_mode not in _ALLOWED_MODES:
-        result["ok"] = False; result["errors"].append(f"Invalid regression_mode: {regression_mode}. Allowed: ols.")
+        result["ok"] = False
+        result["errors"].append(f"Invalid regression_mode: {regression_mode}. Allowed: ols.")
         return result
     if not isinstance(include_intercept, bool) or not isinstance(standardize_confounds, bool):
-        result["ok"] = False; result["errors"].append("include_intercept and standardize_confounds must be bool.")
+        result["ok"] = False
+        result["errors"].append("include_intercept and standardize_confounds must be bool.")
         return result
     if allow_global_signal:
-        result["ok"] = False; result["errors"].append("Global signal regression blocked in first rollout.")
+        result["ok"] = False
+        result["errors"].append("Global signal regression blocked in first rollout.")
         return result
     if allow_scrubbing:
-        result["ok"] = False; result["errors"].append("Scrubbing/censoring blocked in first rollout.")
+        result["ok"] = False
+        result["errors"].append("Scrubbing/censoring blocked in first rollout.")
         return result
 
     # GPU guard
@@ -128,12 +163,18 @@ def run_gpu_nuisance_regression_subject(
     # Output
     output_dir = derivatives / "gpu" / "gpu_nuisance_regression_subject" / run_id / subject_id
     provenance = {
-        "subject_id": subject_id, "run_id": run_id,
-        "confound_columns": confound_columns, "n_confounds": nc,
-        "timepoints": timepoints, "regression_mode": regression_mode,
-        "include_intercept": include_intercept, "standardize_confounds": standardize_confounds,
-        "allow_global_signal": allow_global_signal, "allow_scrubbing": allow_scrubbing,
-        "device": device, "dry_run": dry_run,
+        "subject_id": subject_id,
+        "run_id": run_id,
+        "confound_columns": confound_columns,
+        "n_confounds": nc,
+        "timepoints": timepoints,
+        "regression_mode": regression_mode,
+        "include_intercept": include_intercept,
+        "standardize_confounds": standardize_confounds,
+        "allow_global_signal": allow_global_signal,
+        "allow_scrubbing": allow_scrubbing,
+        "device": device,
+        "dry_run": dry_run,
     }
     provenance_path = write_gpu_provenance(output_dir, provenance)
     outputs = {"output_dir": str(output_dir), "provenance": str(provenance_path)}

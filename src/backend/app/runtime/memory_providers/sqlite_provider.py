@@ -1,4 +1,5 @@
 """SQLiteMemoryProvider -- SessionDB-backed memory backend."""
+
 from __future__ import annotations
 
 import json
@@ -15,6 +16,7 @@ class SQLiteMemoryProvider:
     def _get_db(self):
         if self._db is None:
             from src.backend.app.memory.session_db import SessionDB
+
             self._db = SessionDB(self.db_path)
             self._db.stats()  # ensure tables exist
         return self._db
@@ -48,7 +50,7 @@ class SQLiteMemoryProvider:
             pass
 
     def read_project(self, project_name: str, key: str) -> str | None:
-        pkey = f"{project_name}/{key}"
+        _pkey = f"{project_name}/{key}"
         return self._projects.get(project_name, {}).get(key)
 
     def write_project(self, project_name: str, key: str, content: str) -> None:
@@ -66,15 +68,17 @@ class SQLiteMemoryProvider:
         safe.pop("phi", None)
         run_id = safe.get("run_id", "")
         try:
-            db.upsert_run({
-                "run_id": run_id,
-                "pipeline_id": safe.get("pipeline_id", ""),
-                "project_name": project_name,
-                "status": safe.get("status", "UNKNOWN"),
-                "started_at": safe.get("started_at"),
-                "finished_at": safe.get("finished_at"),
-                "source_path": safe.get("source_path", ""),
-            })
+            db.upsert_run(
+                {
+                    "run_id": run_id,
+                    "pipeline_id": safe.get("pipeline_id", ""),
+                    "project_name": project_name,
+                    "status": safe.get("status", "UNKNOWN"),
+                    "started_at": safe.get("started_at"),
+                    "finished_at": safe.get("finished_at"),
+                    "source_path": safe.get("source_path", ""),
+                }
+            )
         except Exception:
             pass
         try:
@@ -87,7 +91,9 @@ class SQLiteMemoryProvider:
         except Exception:
             pass
 
-    def query_events(self, project_name: str, filters: dict[str, Any] | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    def query_events(
+        self, project_name: str, filters: dict[str, Any] | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
         db = self._get_db()
         try:
             status = filters.get("status") if filters else None

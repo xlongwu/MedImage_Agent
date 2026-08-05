@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from src.backend.app.safety.gpu_safety import (
     check_cuda_availability,
